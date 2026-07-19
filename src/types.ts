@@ -1,0 +1,61 @@
+import type { AlignMode, VisualDeltaImage } from "./constants.js";
+
+export type OverlayInfo = {
+  iframe: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
+  overlay: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    translateX: number;
+    translateY: number;
+  } | null;
+  image: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    naturalWidth: number;
+    naturalHeight: number;
+    src: string;
+  } | null;
+  cropArea: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+};
+
+export type ChangeBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type DiffResultData = {
+  actualImage: string;
+  diffImage: string;
+  baselineImage: string;
+  /** Dimmed actual with neon-green changed pixels (Chromatic focus). */
+  focusImage: string;
+  /** Bounding box of changed pixels in image space, or null if none. */
+  changeBounds: ChangeBounds | null;
+  imageWidth: number;
+  imageHeight: number;
+  diffPixels: number;
+  totalPixels: number;
+  diffPercent: number;
+  passThresholdPercent: number;
+  passed: boolean;
+  /** Capture / baseline dimensions for diagnosing layout mismatch. */
+  sizeNote?: string;
+};
+
+export type { AlignMode, VisualDeltaImage };

@@ -1,33 +1,35 @@
-# Vendored: storybook-addon-visual-delta
+# Visual Delta (local package)
 
-Local copy of **`storybook-addon-visual-delta@0.1.5`** from the npm tarball
-(`npm pack storybook-addon-visual-delta@0.1.5`).
+Reimplemented from **`storybook-addon-visual-delta@0.1.5`** (npm tarball).
+Upstream GitHub is unavailable; edit **`src/`** like any other workspace package.
 
 | | |
 | --- | --- |
 | Upstream npm | `storybook-addon-visual-delta@0.1.5` |
 | License | MIT (see `LICENSE`) |
 | Original author | houjinlong |
-| npm `repository` field | `https://github.com/HouJinlong/storybook-addon-visual-delta` (404 / unavailable) |
 
-The published package only includes **prebuilt `dist/`** (no TypeScript `src/`).
-This workspace package is that runtime implementation so we can maintain overlays
-against Playwright baselines without relying on the missing GitHub repo.
+Storybook compiles the TypeScript/`tsx` entry points directly — there is no
+committed `dist/` build.
 
-Edit the JS under `dist/` (or replace with a future rebuild) when adapting behavior.
-
-## Local patches (on top of 0.1.5)
+## Local behavior (vs upstream 0.1.5)
 
 - **Viewport align** — Default `align: "viewport"` pins overlays to the iframe
-  origin (Playwright fullPage). Use `align: "canvas"` for the old
-  `#storybook-root` offset.
+  origin (Playwright fullPage). Use `align: "canvas"` for `#storybook-root` offset.
 - **Auto-select** — First baseline image is selected on `INIT_IMAGE`.
-- **Difference blend** — UI label for `mix-blend-mode: difference` (was
-  “Color inversion”).
-- **Pass threshold** — Configurable `%` (default `0.1`); was hardcoded `< 2`
-  with a mismatched comment.
+- **Difference blend** — `mix-blend-mode: difference`; defaults to off on load.
+- **Pass threshold** — Configurable `%` (default `0.1`).
 - **Diff fit** — Pad/crop actual → baseline size instead of stretching.
-- **Quiet preset** — Removed Vite/Webpack “enhancing config” console logs.
-- **Run Diff capture** — Replaced Chrome-extension screenshot bridge
-  (`HIYA_EXTENSION_*`, which never responds here) with same-origin
-  preview iframe capture via `html-to-image`.
+- **Quiet preset** — No Vite/Webpack console logs.
+- **Run Diff capture** — Same-origin preview iframe via `html-to-image`
+  (upstream Chrome-extension bridge is unused). Resizes the iframe to the
+  baseline PNG size before capture so layout matches Playwright (1280×N),
+  not the small manager preview pane. Still approximate vs real Chromium
+  screenshots — prefer the overlay for framing.
+- **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
+  Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
+  strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard
+  (`1`/`2`/`3` modes, `F` focus, `B` blink, `←`/`→` swipe nudge). Pass/fail
+  stats sit above the stage.
+- **Compact toolbar** — Small baseline thumbs + inline opacity/threshold/
+  blend controls; **Reset** restores overlay position after drag.
