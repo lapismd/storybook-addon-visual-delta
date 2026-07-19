@@ -1,0 +1,58 @@
+{
+  "name": "storybook-addon-visual-delta",
+  "version": "0.1.5",
+  "private": true,
+  "description": "Vendored Visual Delta Storybook addon (from npm storybook-addon-visual-delta@0.1.5). Overlay / side-by-side / heatmap diff against baseline images.",
+  "keywords": [
+    "storybook-addon",
+    "visual",
+    "overlay",
+    "diff"
+  ],
+  "license": "MIT",
+  "author": "houjinlong <1844041598@qq.com>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./preview": {
+      "types": "./dist/preview.d.ts",
+      "default": "./dist/preview.js"
+    },
+    "./preset": "./dist/preset.js",
+    "./manager": "./dist/manager.js",
+    "./manager-helpers": "./dist/manager-helpers.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "VENDOR.md",
+    "LICENSE",
+    "*.js"
+  ],
+  "dependencies": {
+    "html-to-image": "^1.11.13",
+    "pixelmatch": "^7.1.0",
+    "prop-types": "^15.8.1"
+  },
+  "peerDependencies": {
+    "storybook": "*"
+  },
+  "storybook": {
+    "displayName": "Visual Delta",
+    "supportedFrameworks": [
+      "react",
+      "vue",
+      "angular",
+      "web-components",
+      "ember",
+      "html",
+      "svelte",
+      "preact",
+      "react-native"
+    ]
+  }
+}
