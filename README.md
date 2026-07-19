@@ -1,6 +1,4 @@
-# storybook-addon-visual-delta (vendored)
+# storybook-addon-visual-delta
 
-Overlay / side-by-side / heatmap comparison for Storybook stories via
-`parameters.visualDelta`.
-
-See [VENDOR.md](./VENDOR.md). Wired from the root catalog through `.storybook/`.
+Private workspace package: overlay / heatmap compare of Storybook stories
+against baseline PNGs. Source lives in `src/` — see `VENDOR.md`.
