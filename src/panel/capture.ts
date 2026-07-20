@@ -108,6 +108,37 @@ function asHtmlElement(
 }
 
 /**
+ * Match Playwright visual suite settle: kill animations/transitions, hide caret,
+ * and drop play-function focus rings so live Diff matches chrome-free baselines.
+ * Returns a restore function.
+ */
+function preparePreviewForVisualCapture(doc: Document): () => void {
+  const view = doc.defaultView;
+  const style = doc.createElement("style");
+  style.setAttribute("data-visual-delta-capture", "1");
+  style.textContent = `
+    *, *::before, *::after {
+      animation-duration: 0s !important;
+      animation-delay: 0s !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
+      caret-color: transparent !important;
+    }
+  `;
+  doc.documentElement.appendChild(style);
+
+  const active = asHtmlElement(
+    doc.activeElement instanceof Element ? doc.activeElement : null,
+    view,
+  );
+  active?.blur();
+
+  return () => {
+    style.remove();
+  };
+}
+
+/**
  * Playwright element screenshots include the painted page background behind a
  * transparent subject. html-to-image does not — fill with the preview body's
  * computed background (sampled to rgb so canvas always accepts it).
@@ -187,29 +218,34 @@ export async function capturePreviewSubject(): Promise<CaptureResult> {
     throw new Error("Cannot access preview document (cross-origin or not ready)");
   }
 
-  await waitTwoFrames();
-  await new Promise((r) => setTimeout(r, 50));
-
-  const target = resolveCaptureTarget(doc);
-  const rect = target.getBoundingClientRect();
-  const width = Math.max(1, Math.ceil(rect.width));
-  const height = Math.max(1, Math.ceil(rect.height));
-
+  const restoreCapturePrep = preparePreviewForVisualCapture(doc);
   try {
-    const dataUrl = await toPng(target, {
-      width,
-      height,
-      canvasWidth: width,
-      canvasHeight: height,
-      pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
-      backgroundColor: resolveCaptureBackground(doc),
-      cacheBust: true,
-      skipAutoScale: true,
-    });
-    return { dataUrl, width, height };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to capture preview subject: ${message}`);
+    await waitTwoFrames();
+    await new Promise((r) => setTimeout(r, 50));
+
+    const target = resolveCaptureTarget(doc);
+    const rect = target.getBoundingClientRect();
+    const width = Math.max(1, Math.ceil(rect.width));
+    const height = Math.max(1, Math.ceil(rect.height));
+
+    try {
+      const dataUrl = await toPng(target, {
+        width,
+        height,
+        canvasWidth: width,
+        canvasHeight: height,
+        pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
+        backgroundColor: resolveCaptureBackground(doc),
+        cacheBust: true,
+        skipAutoScale: true,
+      });
+      return { dataUrl, width, height };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to capture preview subject: ${message}`);
+    }
+  } finally {
+    restoreCapturePrep();
   }
 }
 
@@ -261,6 +297,7 @@ export async function capturePreviewIframe(options?: {
   }
 
   applyPreviewViewport(width, height);
+  const restoreCapturePrep = preparePreviewForVisualCapture(doc);
 
   try {
     await waitTwoFrames();
@@ -282,11 +319,15 @@ export async function capturePreviewIframe(options?: {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to capture preview: ${message}`);
   } finally {
+    restoreCapturePrep();
     writeIframeSizeStyles(iframe, prev);
   }
 }
 
-/** Fit actual → baseline size without stretching (pad / crop). */
+/**
+ * Fit actual → baseline size without stretching (center pad / crop).
+ * Matches Playwright sidecar compare (`fitRgba` in compare-pixels.ts).
+ */
 export function fitImageData(
   imgData: ImageData,
   targetWidth: number,
@@ -307,7 +348,9 @@ export function fitImageData(
   const tempCtx = tempCanvas.getContext("2d");
   if (!tempCtx) throw new Error("Unable to get temp canvas context");
   tempCtx.putImageData(imgData, 0, 0);
-  ctx.drawImage(tempCanvas, 0, 0);
+  const ox = Math.floor((targetWidth - imgData.width) / 2);
+  const oy = Math.floor((targetHeight - imgData.height) / 2);
+  ctx.drawImage(tempCanvas, ox, oy);
   return ctx.getImageData(0, 0, targetWidth, targetHeight).data;
 }
 
