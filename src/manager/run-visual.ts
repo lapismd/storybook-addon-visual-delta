@@ -7,7 +7,10 @@ import {
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_RUN_PATH,
 } from "../constants.js";
-import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import {
+  PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
+  type VisualDiffSidecar,
+} from "../visual-diff-sidecar.js";
 
 export type VisualRunResultItem = {
   storyId: string;
@@ -51,10 +54,21 @@ export type VisualRunStreamEvent =
 
 export type VisualRunScope = "story" | "component" | "all";
 
+export type VisualLastRunSummary = {
+  finishedAt: number;
+  summary: VisualRunResponse["summary"];
+  error?: string;
+  scope?: VisualRunScope;
+};
+
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
 
 type ProgressListener = (progress: VisualRunProgress | null) => void;
 const progressListeners = new Set<ProgressListener>();
+
+type LastRunListener = (lastRun: VisualLastRunSummary | null) => void;
+const lastRunListeners = new Set<LastRunListener>();
+let latestLastRun: VisualLastRunSummary | null = null;
 
 /** Subscribe to live run progress from any `postVisualRun` caller. */
 export function subscribeVisualRunProgress(listener: ProgressListener) {
@@ -70,8 +84,47 @@ function emitVisualRunProgress(progress: VisualRunProgress | null) {
   }
 }
 
+/** Subscribe to finished-run summaries shared across panel / Testing Module. */
+export function subscribeVisualLastRun(listener: LastRunListener) {
+  lastRunListeners.add(listener);
+  if (latestLastRun) listener(latestLastRun);
+  return () => {
+    lastRunListeners.delete(listener);
+  };
+}
+
+export function publishVisualLastRun(lastRun: VisualLastRunSummary | null) {
+  latestLastRun = lastRun;
+  for (const listener of lastRunListeners) {
+    listener(lastRun);
+  }
+}
+
+/** Vitest-style progress copy for panel / Testing Module. */
+export function formatVisualProgressLabel(
+  progress: VisualRunProgress | null,
+): string {
+  if (!progress || progress.total <= 0) return "Starting...";
+  return `Testing... ${progress.completed}/${progress.total}`;
+}
+
+function isVisualFailed(item: VisualRunResultItem): boolean {
+  if (item.status === "skipped") return false;
+  if (item.status === "timedOut") return true;
+  const sc = item.sidecar;
+  if (sc) {
+    if (typeof sc.passed === "boolean") return !sc.passed;
+    if (typeof sc.diffPercent === "number") {
+      const threshold =
+        sc.passThresholdPercent ?? PLAYWRIGHT_PASS_THRESHOLD_PERCENT;
+      return sc.diffPercent >= threshold;
+    }
+  }
+  return item.status === "failed";
+}
+
 function statusDescription(item: VisualRunResultItem): string {
-  const failed = item.status === "failed" || item.status === "timedOut";
+  const failed = isVisualFailed(item);
   const sc = item.sidecar;
   if (sc && typeof sc.diffPercent === "number" && typeof sc.diffPixels === "number") {
     const pct = sc.diffPercent.toFixed(4);
@@ -88,8 +141,8 @@ function statusDescription(item: VisualRunResultItem): string {
 }
 
 function statusTitle(item: VisualRunResultItem): string {
-  const failed = item.status === "failed" || item.status === "timedOut";
   if (item.status === "skipped") return "Visual test skipped";
+  const failed = isVisualFailed(item);
   if (failed) {
     const pct = item.sidecar?.diffPercent;
     return pct != null
@@ -111,7 +164,7 @@ export function applyVisualStatuses(results: VisualRunResultItem[]) {
   }
   statusStore.set(
     results.map((item) => {
-      const failed = item.status === "failed" || item.status === "timedOut";
+      const failed = isVisualFailed(item);
       return {
         storyId: item.storyId,
         typeId: STATUS_TYPE_ID_VISUAL,
@@ -128,8 +181,85 @@ export function applyVisualStatuses(results: VisualRunResultItem[]) {
   );
 }
 
+/**
+ * Apply Playwright results, then clear any pending statuses for requested
+ * stories that never ran (e.g. `skip-visual`).
+ */
+export function applyVisualRunResults(
+  requestedStoryIds: string[] | undefined,
+  results: VisualRunResultItem[],
+) {
+  applyVisualStatuses(results);
+  if (!requestedStoryIds?.length) return;
+  const resultIds = new Set(results.map((item) => item.storyId));
+  const orphans = requestedStoryIds.filter((id) => !resultIds.has(id));
+  if (orphans.length) statusStore.unset(orphans);
+}
+
+/** Stories Playwright will actually exercise (excludes `skip-visual`). */
+export function visualRunnableStoryIds(api: API, storyIds: string[]): string[] {
+  return storyIds.filter((storyId) => {
+    const entry = api.resolveStory(storyId);
+    if (!entry || entry.type !== "story") return true;
+    return !(entry.tags ?? []).includes("skip-visual");
+  });
+}
+
+/** Mark stories as pending while a scoped visual run is starting. */
+export function applyPendingVisualStatuses(storyIds: string[]) {
+  if (!storyIds.length) return;
+  statusStore.unset(storyIds);
+  statusStore.set(
+    storyIds.map((storyId) => ({
+      storyId,
+      typeId: STATUS_TYPE_ID_VISUAL,
+      value: "status-value:pending" as const,
+      title: "Visual test pending",
+      description: "Waiting for visual compare",
+      sidebarContextMenu: false,
+    })),
+  );
+}
+
 export function clearVisualStatuses() {
   statusStore.unset();
+}
+
+/** Build a status item from a panel live Diff result. */
+export function visualResultFromLiveDiff(input: {
+  storyId: string;
+  diffPercent: number;
+  diffPixels: number;
+  totalPixels: number;
+  passThresholdPercent: number;
+  passed: boolean;
+}): VisualRunResultItem {
+  const {
+    storyId,
+    diffPercent,
+    diffPixels,
+    totalPixels,
+    passThresholdPercent,
+    passed,
+  } = input;
+  return {
+    storyId,
+    status: passed ? "passed" : "failed",
+    title: storyId,
+    sidecar: {
+      version: 1,
+      storyId,
+      snapshotRel: "",
+      status: passed ? "passed" : "failed",
+      generatedAt: new Date().toISOString(),
+      tool: "playwright",
+      diffPercent,
+      diffPixels,
+      totalPixels,
+      passThresholdPercent,
+      passed,
+    },
+  };
 }
 
 /** All leaf story ids for the component that owns `storyId`. */

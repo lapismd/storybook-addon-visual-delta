@@ -24,11 +24,19 @@ import {
   isSplitPlacement,
 } from "../constants.js";
 import {
+  applyPendingVisualStatuses,
+  applyVisualRunResults,
   applyVisualStatuses,
   cancelVisualRun,
+  clearVisualStatuses,
   componentStoryIdsFor,
+  formatVisualProgressLabel,
   postVisualRun,
+  publishVisualLastRun,
   subscribeVisualRunProgress,
+  visualResultFromLiveDiff,
+  visualRunnableStoryIds,
+  type VisualRunProgress,
 } from "../manager/run-visual.js";
 import {
   VisualRunSplitButton,
@@ -102,9 +110,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
   /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
   const [diffEpoch, setDiffEpoch] = useState(0);
+  const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
+    null,
+  );
   const isSplit = isSplitPlacement(placement);
   const busy = isDiffing || isUpdating || isRunningVisual;
   const baselineSrc = images[index]?.src;
+  const progressLabel =
+    isRunningVisual && !isDiffing
+      ? formatVisualProgressLabel(runProgress)
+      : null;
 
   useEffect(() => {
     setCaptureError(null);
@@ -124,10 +139,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     };
   }, [storyId, index, baselineSrc, diffEpoch]);
 
-  // Reload compare view when a visual run finishes (Testing Module or panel).
+  // Live progress + reload compare view when a visual run finishes.
   useEffect(() => {
     let sawProgress = false;
     return subscribeVisualRunProgress((next) => {
+      setRunProgress(next);
       if (next) {
         sawProgress = true;
         return;
@@ -239,6 +255,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       const diffPercent = (diffPixels / totalPixels) * 100;
       const threshold =
         passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
+      const passed = diffPercent < threshold;
       setDiffResult({
         actualImage: actualMaskedDataUrl,
         diffImage: diffCanvas.toDataURL("image/png"),
@@ -251,10 +268,22 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         totalPixels,
         diffPercent,
         passThresholdPercent: threshold,
-        passed: diffPercent < threshold,
+        passed,
         sizeNote,
         diffHistogram,
       });
+      if (storyId) {
+        applyVisualStatuses([
+          visualResultFromLiveDiff({
+            storyId,
+            diffPercent,
+            diffPixels,
+            totalPixels,
+            passThresholdPercent: threshold,
+            passed,
+          }),
+        ]);
+      }
     } catch (error) {
       setCaptureError(error instanceof Error ? error.message : "Diff failed");
     } finally {
@@ -263,6 +292,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [
     index,
     images,
+    storyId,
     passThresholdPercent,
     getOverlayInfo,
     waitForOverlayHidden,
@@ -305,8 +335,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [storyId, reloadBaselineImages]);
 
   const handleRunVisual = useCallback(
-    async (scope: "story" | "component") => {
-      if (!storyId) {
+    async (scope: "story" | "component" | "all") => {
+      if (scope !== "all" && !storyId) {
         setCaptureError("No story selected");
         return;
       }
@@ -314,13 +344,40 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError(null);
       try {
         const storyIds =
-          scope === "story" ? [storyId] : componentStoryIdsFor(api, storyId);
+          scope === "all"
+            ? undefined
+            : visualRunnableStoryIds(
+                api,
+                scope === "story"
+                  ? [storyId!]
+                  : componentStoryIdsFor(api, storyId!),
+              );
         await testProviderStore.runWithState(async () => {
+          if (storyIds?.length) {
+            applyPendingVisualStatuses(storyIds);
+          } else {
+            clearVisualStatuses();
+          }
           const data = await postVisualRun({ storyIds, rebuild: false });
           if (data.crashed) {
+            publishVisualLastRun({
+              finishedAt: Date.now(),
+              summary: data.summary,
+              error: data.error ?? "Visual test run crashed",
+              scope,
+            });
             throw new Error(data.error ?? "Visual test run crashed");
           }
-          applyVisualStatuses(data.results);
+          applyVisualRunResults(storyIds, data.results);
+          publishVisualLastRun({
+            finishedAt: Date.now(),
+            summary: data.summary,
+            error:
+              data.summary.failed > 0
+                ? `${data.summary.failed} failed`
+                : undefined,
+            scope,
+          });
           setDiffEpoch(Date.now());
           if (data.summary.failed > 0) {
             setCaptureError(
@@ -433,9 +490,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   panel
                   compact
                   isRunning={isRunningVisual || isDiffing}
-                  disabled={
-                    (busy && !isRunningVisual && !isDiffing) || !storyId
-                  }
+                  progressLabel={progressLabel}
+                  disabled={busy && !isRunningVisual && !isDiffing}
+                  storyMissing={!storyId}
                   diffDisabled={index === -1}
                   allowStory
                   onRun={handleSplitAction}

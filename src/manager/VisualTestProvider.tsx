@@ -16,22 +16,21 @@ import {
   TEST_PROVIDER_ID,
 } from "../constants.js";
 import {
+  applyPendingVisualStatuses,
+  applyVisualRunResults,
   applyVisualStatuses,
   cancelVisualRun,
   clearVisualStatuses,
+  formatVisualProgressLabel,
   postVisualRun,
+  publishVisualLastRun,
+  subscribeVisualLastRun,
   subscribeVisualRunProgress,
+  visualRunnableStoryIds,
+  type VisualLastRunSummary,
   type VisualRunProgress,
-  type VisualRunResponse,
   type VisualRunScope,
 } from "./run-visual.js";
-
-type LastRun = {
-  finishedAt: number;
-  summary: VisualRunResponse["summary"];
-  error?: string;
-  scope: VisualRunScope;
-};
 
 type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
 
@@ -134,13 +133,9 @@ function openVisualPanel(
 function progressDescription(
   isRunning: boolean,
   progress: VisualRunProgress | null,
-  lastRun: LastRun | null,
+  lastRun: VisualLastRunSummary | null,
 ): string {
-  if (isRunning) {
-    if (!progress || progress.total === 0) return "Starting...";
-    if (progress.completed === 0) return "Starting...";
-    return `Testing... ${progress.completed}/${progress.total}`;
-  }
+  if (isRunning) return formatVisualProgressLabel(progress);
   if (lastRun) {
     const total = lastRun.summary.total;
     return `Ran ${total} ${total === 1 ? "test" : "tests"}`;
@@ -152,12 +147,12 @@ function chipLabel(
   status: ChipStatus,
   isRunning: boolean,
   progress: VisualRunProgress | null,
-  lastRun: LastRun | null,
+  lastRun: VisualLastRunSummary | null,
   counts: { passed: number; failed: number },
 ): string {
   if (isRunning) {
-    if (!progress || progress.completed === 0) return "Visual tests starting";
-    return `Testing... ${progress.completed}/${progress.total}`;
+    if (!progress || progress.total <= 0) return "Visual tests starting";
+    return formatVisualProgressLabel(progress);
   }
   if (status === "critical") {
     return lastRun?.error ?? "Visual tests crashed";
@@ -185,7 +180,7 @@ export function VisualTestProviderRender({
     (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
   );
   const allStatuses = experimental_useStatusStore();
-  const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  const [lastRun, setLastRun] = useState<VisualLastRunSummary | null>(null);
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
 
   const entryStoryIds = useMemo(() => {
@@ -219,22 +214,30 @@ export function VisualTestProviderRender({
   const run = useCallback(
     async (scope: VisualRunScope, ids?: string[]) => {
       await testProviderStore.runWithState(async () => {
-        clearVisualStatuses();
+        const runnable = ids?.length
+          ? visualRunnableStoryIds(api, ids)
+          : undefined;
+        if (runnable?.length) {
+          applyPendingVisualStatuses(runnable);
+        } else if (!ids?.length) {
+          clearVisualStatuses();
+        }
         const data = await postVisualRun({
-          storyIds: ids,
+          storyIds: runnable ?? ids,
           rebuild: false,
         });
         if (data.crashed) {
-          setLastRun({
+          const summary: VisualLastRunSummary = {
             finishedAt: Date.now(),
             summary: data.summary,
             error: data.error ?? "Visual test run crashed",
             scope,
-          });
+          };
+          publishVisualLastRun(summary);
           throw new Error(data.error ?? "Visual test run crashed");
         }
-        applyVisualStatuses(data.results);
-        setLastRun({
+        applyVisualRunResults(runnable ?? ids, data.results);
+        publishVisualLastRun({
           finishedAt: Date.now(),
           summary: data.summary,
           error:
@@ -245,7 +248,7 @@ export function VisualTestProviderRender({
         });
       });
     },
-    [],
+    [api],
   );
 
   const runRef = useRef(run);
@@ -254,11 +257,6 @@ export function VisualTestProviderRender({
   useEffect(() => {
     return subscribeVisualRunProgress((next) => {
       setProgress(next);
-      // `start` event — reset sidebar dots for panel or Testing Module runs.
-      if (next && next.completed === 0 && !next.storyId) {
-        clearVisualStatuses();
-        return;
-      }
       if (next?.storyId && next.status) {
         applyVisualStatuses([
           {
@@ -272,13 +270,17 @@ export function VisualTestProviderRender({
   }, []);
 
   useEffect(() => {
+    return subscribeVisualLastRun(setLastRun);
+  }, []);
+
+  useEffect(() => {
     if (entry) return;
     const offRunAll = testProviderStore.onRunAll(() => {
       void runRef.current("all", undefined);
     });
     const offClear = testProviderStore.onClearAll(() => {
       clearVisualStatuses();
-      setLastRun(null);
+      publishVisualLastRun(null);
       setProgress(null);
     });
     const offSelect = statusStore.onSelect((selected) => {

@@ -12,13 +12,13 @@ import {
 } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 
-/** Sidebar scopes. Panel also allows `diff`. */
+/** Sidebar scopes. Panel also allows `diff` and `all`. */
 export type ScopedRunMode = "component" | "story";
-export type PanelRunMode = ScopedRunMode | "diff";
+export type PanelRunMode = ScopedRunMode | "diff" | "all";
 export type VisualRunMode = PanelRunMode;
 
 const SIDEBAR_SCOPE_KEY = "storybook-addon-visual-delta/run-scope-v2";
-const PANEL_SCOPE_KEY = "storybook-addon-visual-delta/panel-run-scope-v1";
+const PANEL_SCOPE_KEY = "storybook-addon-visual-delta/panel-run-scope-v2";
 
 const Split = styled.div<{ $compact?: boolean }>(({ theme, $compact }) => ({
   display: "inline-flex",
@@ -109,6 +109,7 @@ function saveMode(key: string, mode: VisualRunMode) {
 export function modeActionLabel(mode: VisualRunMode): string {
   if (mode === "diff") return "Diff";
   if (mode === "story") return "Story";
+  if (mode === "all") return "All";
   return "Component";
 }
 
@@ -116,6 +117,7 @@ export function modeActionLabel(mode: VisualRunMode): string {
 export function modeActionTooltip(mode: VisualRunMode): string {
   if (mode === "diff") return "Compare live preview to the selected baseline";
   if (mode === "story") return "Run visual test for this story";
+  if (mode === "all") return "Run all visual tests";
   return "Run visual tests for this component";
 }
 
@@ -128,26 +130,32 @@ export function VisualRunSplitButton({
   isRunning,
   disabled,
   diffDisabled,
+  storyMissing,
   onRun,
   onStop,
   allowStory = true,
   /** Visual Delta panel: include Diff, show label, default Diff. */
   panel = false,
   compact = true,
+  /** Shown next to Stop while a Playwright visual run is in progress. */
+  progressLabel,
 }: {
   isRunning: boolean;
   disabled?: boolean;
   /** When Diff is selected, disable play if no baseline is selected. */
   diffDisabled?: boolean;
+  /** Story/Component need a selected story; All does not. */
+  storyMissing?: boolean;
   onRun: (mode: VisualRunMode) => void;
   onStop: () => void;
   allowStory?: boolean;
   panel?: boolean;
   /** Match GhostButton / Reset settings scale (default true). */
   compact?: boolean;
+  progressLabel?: string | null;
 }) {
   const allowed = useMemo((): readonly VisualRunMode[] => {
-    if (panel) return ["diff", "story", "component"] as const;
+    if (panel) return ["diff", "story", "component", "all"] as const;
     if (allowStory) return ["story", "component"] as const;
     return ["component"] as const;
   }, [panel, allowStory]);
@@ -177,6 +185,7 @@ export function VisualRunSplitButton({
   );
 
   if (isRunning) {
+    const runningLabel = progressLabel?.trim() || "Stop";
     return (
       <Split $compact={compact}>
         <MainButton
@@ -184,12 +193,12 @@ export function VisualRunSplitButton({
           variant="ghost"
           padding="small"
           $compact={compact}
-          ariaLabel="Stop"
-          title="Stop"
+          ariaLabel={progressLabel ? `${progressLabel}. Stop` : "Stop"}
+          title={progressLabel ? `${progressLabel} — click to stop` : "Stop"}
           onClick={onStop}
         >
           <StopAltIcon />
-          {panel ? <ActionLabel>Stop</ActionLabel> : null}
+          {panel ? <ActionLabel>{runningLabel}</ActionLabel> : null}
         </MainButton>
       </Split>
     );
@@ -197,8 +206,11 @@ export function VisualRunSplitButton({
 
   const tip = modeActionTooltip(mode);
   const label = modeActionLabel(mode);
+  const needsStory = mode === "story" || mode === "component" || mode === "diff";
   const playDisabled =
-    Boolean(disabled) || (mode === "diff" && Boolean(diffDisabled));
+    Boolean(disabled) ||
+    (mode === "diff" && Boolean(diffDisabled)) ||
+    (needsStory && Boolean(storyMissing));
 
   const menuItems = allowed.map((item) => (
     <ActionList.Item key={item} active={mode === item}>
@@ -268,7 +280,7 @@ export function VisualRunSplitButton({
           $compact={compact}
           ariaLabel={
             panel
-              ? "Choose Diff, Story, or Component"
+              ? "Choose Diff, Story, Component, or All"
               : "Choose Story or Component"
           }
           title="Choose action"
