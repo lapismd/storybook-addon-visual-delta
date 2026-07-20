@@ -13,8 +13,11 @@ import {
 
 const OVERLAY_ID = "visual-delta-overlay";
 const SPLIT_ID = "visual-delta-split";
+const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
 const BASELINE_PANE_ID = "visual-delta-baseline-pane";
+const SCROLL_RAIL_ID = "visual-delta-scroll-rail";
+const SCROLL_SPACER_ID = "visual-delta-scroll-spacer";
 
 /** Device-scale PNGs display at CSS size so they match the live subject. */
 function sizeOverlayImageToCss(img: HTMLImageElement) {
@@ -25,6 +28,8 @@ function sizeOverlayImageToCss(img: HTMLImageElement) {
 
 let dragCleanupRef: (() => void) | null = null;
 let layoutObserverRef: ResizeObserver | null = null;
+let sharedScrollCleanupRef: (() => void) | null = null;
+let sharedScrollRefreshRef: (() => void) | null = null;
 let lastSelection: {
   index: number;
   images: VisualDeltaImage[];
@@ -150,6 +155,7 @@ function paneStyle(): string {
     overflow: auto;
     position: relative;
     box-sizing: border-box;
+    scrollbar-width: none;
   `;
 }
 
@@ -174,7 +180,121 @@ function syncBaselinePaneInset(
   baselinePane.style.borderColor = "transparent";
 }
 
+const HIDE_PANE_SCROLLBAR_STYLE_ID = "visual-delta-hide-pane-scrollbars";
+
+function ensurePaneScrollbarStyles() {
+  if (document.getElementById(HIDE_PANE_SCROLLBAR_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = HIDE_PANE_SCROLLBAR_STYLE_ID;
+  style.textContent = `
+    #${LIVE_PANE_ID},
+    #${BASELINE_PANE_ID} {
+      scrollbar-width: none;
+    }
+    #${LIVE_PANE_ID}::-webkit-scrollbar,
+    #${BASELINE_PANE_ID}::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function unbindSharedScroll() {
+  sharedScrollCleanupRef?.();
+  sharedScrollCleanupRef = null;
+  sharedScrollRefreshRef = null;
+}
+
+/**
+ * One visible scrollbar (rail) drives both panes' scroll positions. Pane
+ * scrollbars stay hidden so the compare reads as a single scroll surface.
+ */
+function bindSharedScrollRail(
+  split: HTMLElement,
+  livePane: HTMLElement,
+  baselinePane: HTMLElement,
+  rail: HTMLElement,
+  spacer: HTMLElement,
+) {
+  unbindSharedScroll();
+
+  const applyScroll = (top: number, left: number) => {
+    livePane.scrollTop = top;
+    livePane.scrollLeft = left;
+    baselinePane.scrollTop = top;
+    baselinePane.scrollLeft = left;
+  };
+
+  const refreshSpacer = () => {
+    const maxScrollHeight = Math.max(
+      livePane.scrollHeight,
+      baselinePane.scrollHeight,
+    );
+    spacer.style.height = `${maxScrollHeight}px`;
+    spacer.style.width = "1px";
+    rail.style.display =
+      maxScrollHeight > livePane.clientHeight + 1 ? "" : "none";
+    if (rail.scrollTop !== livePane.scrollTop) {
+      rail.scrollTop = livePane.scrollTop;
+    }
+  };
+
+  const onRailScroll = () => {
+    applyScroll(rail.scrollTop, livePane.scrollLeft);
+  };
+
+  const onWheel = (event: WheelEvent) => {
+    // Drive both panes from one gesture; keep the rail thumb in sync.
+    event.preventDefault();
+    const maxTop = Math.max(
+      0,
+      Math.max(livePane.scrollHeight, baselinePane.scrollHeight) -
+        livePane.clientHeight,
+    );
+    const maxLeft = Math.max(
+      0,
+      Math.max(livePane.scrollWidth, baselinePane.scrollWidth) -
+        livePane.clientWidth,
+    );
+    const nextTop = Math.max(
+      0,
+      Math.min(maxTop, livePane.scrollTop + event.deltaY),
+    );
+    const nextLeft = Math.max(
+      0,
+      Math.min(maxLeft, livePane.scrollLeft + event.deltaX),
+    );
+    applyScroll(nextTop, nextLeft);
+    if (rail.style.display !== "none") {
+      rail.scrollTop = nextTop;
+    }
+  };
+
+  rail.addEventListener("scroll", onRailScroll, { passive: true });
+  split.addEventListener("wheel", onWheel, { passive: false });
+
+  const ro = new ResizeObserver(() => refreshSpacer());
+  ro.observe(livePane);
+  ro.observe(baselinePane);
+  const liveChild = livePane.querySelector(":scope > *");
+  const baselineChild = baselinePane.querySelector(":scope > *");
+  if (liveChild instanceof HTMLElement) ro.observe(liveChild);
+  if (baselineChild instanceof HTMLElement) ro.observe(baselineChild);
+  refreshSpacer();
+
+  sharedScrollRefreshRef = refreshSpacer;
+  sharedScrollCleanupRef = () => {
+    rail.removeEventListener("scroll", onRailScroll);
+    split.removeEventListener("wheel", onWheel);
+    ro.disconnect();
+    sharedScrollRefreshRef = null;
+  };
+}
+
 function teardownSplit(canvasElement: HTMLElement) {
+  unbindSharedScroll();
   const split = document.getElementById(SPLIT_ID);
   if (!(split instanceof HTMLElement)) return;
   const host = split.parentElement;
@@ -195,33 +315,52 @@ function ensureSplit(
   }
 
   let split = document.getElementById(SPLIT_ID);
+  let panesWrap = document.getElementById(PANES_WRAP_ID);
   let livePane = document.getElementById(LIVE_PANE_ID);
   let baselinePane = document.getElementById(BASELINE_PANE_ID);
+  let rail = document.getElementById(SCROLL_RAIL_ID);
+  let spacer = document.getElementById(SCROLL_SPACER_ID);
 
-  if (
+  const needsBuild =
     !(split instanceof HTMLElement) ||
+    !(panesWrap instanceof HTMLElement) ||
     !(livePane instanceof HTMLElement) ||
-    !(baselinePane instanceof HTMLElement)
-  ) {
+    !(baselinePane instanceof HTMLElement) ||
+    !(rail instanceof HTMLElement) ||
+    !(spacer instanceof HTMLElement);
+
+  if (needsBuild) {
+    unbindSharedScroll();
     split?.remove();
     split = document.createElement("div");
     split.id = SPLIT_ID;
+    panesWrap = document.createElement("div");
+    panesWrap.id = PANES_WRAP_ID;
     livePane = document.createElement("div");
     livePane.id = LIVE_PANE_ID;
     baselinePane = document.createElement("div");
     baselinePane.id = BASELINE_PANE_ID;
+    rail = document.createElement("div");
+    rail.id = SCROLL_RAIL_ID;
+    spacer = document.createElement("div");
+    spacer.id = SCROLL_SPACER_ID;
     host.style.position = "relative";
     host.insertBefore(split, canvasElement);
     livePane.appendChild(canvasElement);
-    split.appendChild(livePane);
-    split.appendChild(baselinePane);
+    panesWrap.appendChild(livePane);
+    panesWrap.appendChild(baselinePane);
+    rail.appendChild(spacer);
+    split.appendChild(panesWrap);
+    split.appendChild(rail);
   }
+
+  ensurePaneScrollbarStyles();
 
   const horizontal = placement === "left" || placement === "right";
   host.style.minHeight = "100vh";
   split.style.cssText = `
     display: flex;
-    flex-direction: ${horizontal ? "row" : "column"};
+    flex-direction: row;
     position: absolute;
     inset: 0;
     width: auto;
@@ -229,9 +368,27 @@ function ensureSplit(
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.12);
+  `;
+  panesWrap.style.cssText = `
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: ${horizontal ? "row" : "column"};
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
     gap: 1px;
     background: rgba(0, 0, 0, 0.12);
   `;
+  rail.style.cssText = `
+    flex: 0 0 auto;
+    width: 12px;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    background: var(--sb-color-bg, #fff);
+  `;
+  spacer.style.cssText = `width: 1px; height: 1px;`;
+
   livePane.style.cssText = `${paneStyle()} background: var(--sb-color-bg, #fff);`;
   baselinePane.style.cssText = `${paneStyle()} background: var(--sb-color-bg, #fff);`;
   // Live story keeps padding on `#storybook-root`; mirror it for the baseline.
@@ -242,11 +399,16 @@ function ensureSplit(
   const baselineFirst = placement === "left" || placement === "above";
   const first = baselineFirst ? baselinePane : livePane;
   const second = baselineFirst ? livePane : baselinePane;
-  if (split.firstElementChild !== first) {
-    split.appendChild(first);
-    split.appendChild(second);
+  if (panesWrap.firstElementChild !== first) {
+    panesWrap.appendChild(first);
+    panesWrap.appendChild(second);
   }
 
+  if (needsBuild || !sharedScrollCleanupRef) {
+    bindSharedScrollRail(split, livePane, baselinePane, rail, spacer);
+  } else {
+    sharedScrollRefreshRef?.();
+  }
   return { livePane, baselinePane };
 }
 

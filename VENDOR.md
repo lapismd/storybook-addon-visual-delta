@@ -44,14 +44,14 @@ committed `dist/` build.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module shows a Vitest-style **Visual Tests** checklist row with live
-  `Testing... 1/N` progress (NDJSON stream from middleware), an orange status
+  `Testing... N/M` progress (NDJSON stream from middleware), an orange status
   chip while running, and a failure-count badge beside the chip; the panel
-  keeps a Diff / Story / Component split run control. Results map to per-story
-  status dots (enriched with pixel `%` from ephemeral JSON sidecars written
-  next to baselines during the run — gitignored `*.json` / `*.actual.png` /
-  `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`). The Visual
-  Delta panel hydrates its compare view from those artifacts when present.
-  Never writes baselines from Run Visual Tests.
+  split button shows the same progress while running. Results map to per-story
+  sidebar status dots from compare metrics (sidecar `%` / threshold, or panel
+  live Diff). Ephemeral artifacts: gitignored `*.json` / `*.actual.png` /
+  `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`. The panel
+  hydrates its compare view from those artifacts when present. Never writes
+  baselines from Run Visual Tests.
 - **Hi-DPI baselines** — PNGs are captured at `deviceScaleFactor: 3` with
   Playwright `scale: "device"`; the overlay sizes them to CSS pixels so they
   still align with the live subject.
