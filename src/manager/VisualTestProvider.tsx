@@ -1,0 +1,405 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PlayHollowIcon, StopAltIcon } from "@storybook/icons";
+import { ActionList, Button, Form } from "storybook/internal/components";
+import type { API_HashEntry } from "storybook/internal/types";
+import {
+  experimental_getStatusStore,
+  experimental_getTestProviderStore,
+  experimental_useStatusStore,
+  experimental_useTestProviderStore,
+  useStorybookApi,
+} from "storybook/manager-api";
+import { styled } from "storybook/theming";
+import {
+  PANEL_ID,
+  STATUS_TYPE_ID_VISUAL,
+  TEST_PROVIDER_ID,
+} from "../constants.js";
+import {
+  applyVisualStatuses,
+  cancelVisualRun,
+  clearVisualStatuses,
+  postVisualRun,
+  subscribeVisualRunProgress,
+  type VisualRunProgress,
+  type VisualRunResponse,
+  type VisualRunScope,
+} from "./run-visual.js";
+
+type LastRun = {
+  finishedAt: number;
+  summary: VisualRunResponse["summary"];
+  error?: string;
+  scope: VisualRunScope;
+};
+
+type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
+
+const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
+const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
+
+const Container = styled.div({
+  display: "flex",
+  flexDirection: "column",
+  paddingBottom: 1,
+});
+
+const Heading = styled.div({
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "8px 0",
+  gap: 12,
+});
+
+const Info = styled.div({
+  display: "flex",
+  flexDirection: "column",
+  marginLeft: 8,
+  minWidth: 0,
+});
+
+const Title = styled.div(({ theme }) => ({
+  fontSize: theme.typography.size.s1,
+  color: theme.color.defaultText,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+}));
+
+const Description = styled.div(({ theme }) => ({
+  fontSize: theme.typography.size.s1 - 1,
+  color: theme.textMutedColor,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+}));
+
+const Actions = styled.div({
+  display: "flex",
+  gap: 4,
+  alignItems: "center",
+  flexShrink: 0,
+});
+
+const StyledActionList = styled(ActionList)({
+  padding: 0,
+});
+
+const BorderedPlay = styled(Button)(({ theme }) => ({
+  border: `1px solid ${theme.appBorderColor}`,
+  borderRadius: theme.appBorderRadius ?? 4,
+}));
+
+const TestStatusIcon = styled.div<{
+  status: ChipStatus;
+  isRunning?: boolean;
+}>(({ status, isRunning, theme }) => ({
+  width: 6,
+  height: 6,
+  margin: 4,
+  borderRadius: "50%",
+  background: "var(--status-color)",
+  ...(isRunning
+    ? { animation: `${theme.animation.glow} 1.5s ease-in-out infinite` }
+    : null),
+  ...(status === "positive"
+    ? { "--status-color": theme.color.positive }
+    : null),
+  ...(status === "warning"
+    ? { "--status-color": theme.color.gold }
+    : null),
+  ...(status === "negative"
+    ? { "--status-color": theme.color.negative }
+    : null),
+  ...(status === "critical"
+    ? { "--status-color": theme.color.defaultText }
+    : null),
+  ...(status === "unknown"
+    ? { "--status-color": theme.textMutedColor }
+    : null),
+}));
+
+function openVisualPanel(
+  api: ReturnType<typeof useStorybookApi>,
+  storyId?: string,
+) {
+  if (storyId) api.selectStory(storyId);
+  api.setSelectedPanel(PANEL_ID);
+  api.togglePanel(true);
+}
+
+function progressDescription(
+  isRunning: boolean,
+  progress: VisualRunProgress | null,
+  lastRun: LastRun | null,
+): string {
+  if (isRunning) {
+    if (!progress || progress.total === 0) return "Starting...";
+    if (progress.completed === 0) return "Starting...";
+    return `Testing... ${progress.completed}/${progress.total}`;
+  }
+  if (lastRun) {
+    const total = lastRun.summary.total;
+    return `Ran ${total} ${total === 1 ? "test" : "tests"}`;
+  }
+  return "Not run";
+}
+
+function chipLabel(
+  status: ChipStatus,
+  isRunning: boolean,
+  progress: VisualRunProgress | null,
+  lastRun: LastRun | null,
+  counts: { passed: number; failed: number },
+): string {
+  if (isRunning) {
+    if (!progress || progress.completed === 0) return "Visual tests starting";
+    return `Testing... ${progress.completed}/${progress.total}`;
+  }
+  if (status === "critical") {
+    return lastRun?.error ?? "Visual tests crashed";
+  }
+  if (status === "negative") {
+    return `${counts.failed} failed · ${counts.passed} passed`;
+  }
+  if (status === "positive") {
+    return `${counts.passed} passed`;
+  }
+  if (lastRun) {
+    const { summary } = lastRun;
+    return `${summary.passed} passed · ${summary.failed} failed`;
+  }
+  return "Run tests to see results";
+}
+
+export function VisualTestProviderRender({
+  entry,
+}: {
+  entry?: API_HashEntry;
+}) {
+  const api = useStorybookApi();
+  const testProviderState = experimental_useTestProviderStore(
+    (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
+  );
+  const allStatuses = experimental_useStatusStore();
+  const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  const [progress, setProgress] = useState<VisualRunProgress | null>(null);
+
+  const entryStoryIds = useMemo(() => {
+    if (!entry) return undefined;
+    if (entry.type === "story") return [entry.id];
+    if ("id" in entry) return api.findAllLeafStoryIds(entry.id);
+    return undefined;
+  }, [api, entry]);
+
+  const statusIds = useMemo(() => {
+    let passedIds: string[] = [];
+    let failedIds: string[] = [];
+    const ids = entryStoryIds ?? Object.keys(allStatuses);
+    for (const id of ids) {
+      const status = allStatuses[id]?.[STATUS_TYPE_ID_VISUAL];
+      if (!status) continue;
+      if (status.value === "status-value:error") failedIds.push(id);
+      else if (status.value === "status-value:success") passedIds.push(id);
+    }
+    return { passedIds, failedIds };
+  }, [allStatuses, entryStoryIds]);
+
+  const counts = {
+    passed: statusIds.passedIds.length,
+    failed: statusIds.failedIds.length,
+  };
+
+  const isRunning = testProviderState === "test-provider-state:running";
+  const crashed = testProviderState === "test-provider-state:crashed";
+
+  const run = useCallback(
+    async (scope: VisualRunScope, ids?: string[]) => {
+      await testProviderStore.runWithState(async () => {
+        clearVisualStatuses();
+        const data = await postVisualRun({
+          storyIds: ids,
+          rebuild: false,
+        });
+        if (data.crashed) {
+          setLastRun({
+            finishedAt: Date.now(),
+            summary: data.summary,
+            error: data.error ?? "Visual test run crashed",
+            scope,
+          });
+          throw new Error(data.error ?? "Visual test run crashed");
+        }
+        applyVisualStatuses(data.results);
+        setLastRun({
+          finishedAt: Date.now(),
+          summary: data.summary,
+          error:
+            data.summary.failed > 0
+              ? `${data.summary.failed} failed`
+              : undefined,
+          scope,
+        });
+      });
+    },
+    [],
+  );
+
+  const runRef = useRef(run);
+  runRef.current = run;
+
+  useEffect(() => {
+    return subscribeVisualRunProgress((next) => {
+      setProgress(next);
+      // `start` event — reset sidebar dots for panel or Testing Module runs.
+      if (next && next.completed === 0 && !next.storyId) {
+        clearVisualStatuses();
+        return;
+      }
+      if (next?.storyId && next.status) {
+        applyVisualStatuses([
+          {
+            storyId: next.storyId,
+            status: next.status,
+            title: next.storyId,
+          },
+        ]);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (entry) return;
+    const offRunAll = testProviderStore.onRunAll(() => {
+      void runRef.current("all", undefined);
+    });
+    const offClear = testProviderStore.onClearAll(() => {
+      clearVisualStatuses();
+      setLastRun(null);
+      setProgress(null);
+    });
+    const offSelect = statusStore.onSelect((selected) => {
+      const storyId = selected[0]?.storyId;
+      openVisualPanel(api, storyId);
+    });
+    return () => {
+      offRunAll();
+      offClear();
+      offSelect();
+    };
+  }, [api, entry]);
+
+  const chipStatus: ChipStatus = isRunning
+    ? "warning"
+    : crashed
+      ? "critical"
+      : counts.failed > 0 || (lastRun?.summary.failed ?? 0) > 0
+        ? "negative"
+        : counts.passed > 0 || (lastRun?.summary.passed ?? 0) > 0
+          ? "positive"
+          : "unknown";
+
+  const label = chipLabel(chipStatus, isRunning, progress, lastRun, counts);
+  const failedCount = isRunning
+    ? (progress?.failed ?? 0)
+    : counts.failed > 0
+      ? counts.failed
+      : (lastRun?.summary.failed ?? 0);
+  const chipCount = failedCount > 0 ? failedCount : null;
+  const hasResults = counts.passed > 0 || counts.failed > 0 || Boolean(lastRun);
+  const description = progressDescription(isRunning, progress, lastRun);
+
+  // Sidebar context menu: simple play/stop for that entry
+  if (entry) {
+    const canPlay = Boolean(entryStoryIds?.length);
+    return (
+      <Container>
+        <Heading>
+          <Info>
+            <Title>Run visual tests</Title>
+            <Description>{description}</Description>
+          </Info>
+          <Actions>
+            {isRunning ? (
+              <BorderedPlay
+                size="medium"
+                variant="ghost"
+                padding="small"
+                ariaLabel="Stop visual test run"
+                title="Stop visual test run"
+                onClick={() => void cancelVisualRun()}
+              >
+                <StopAltIcon />
+              </BorderedPlay>
+            ) : (
+              <BorderedPlay
+                size="medium"
+                variant="ghost"
+                padding="small"
+                ariaLabel="Run visual tests for this item"
+                title="Run visual tests for this item"
+                disabled={!canPlay}
+                onClick={() => {
+                  if (!entryStoryIds?.length) return;
+                  void run(
+                    entry.type === "story" ? "story" : "component",
+                    entryStoryIds,
+                  );
+                }}
+              >
+                <PlayHollowIcon />
+              </BorderedPlay>
+            )}
+          </Actions>
+        </Heading>
+      </Container>
+    );
+  }
+
+  // Global Testing Module: checklist row + Vitest-style `Testing... 1/N`
+  return (
+    <Container>
+      <Description
+        id="visual-testing-module-description"
+        style={{ margin: "4px 0 4px 8px" }}
+      >
+        {description}
+      </Description>
+      <StyledActionList>
+        <ActionList.Item>
+          <ActionList.Action as="label" readOnly ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
+                name="Visual Tests"
+                checked
+                disabled
+              />
+            </ActionList.Icon>
+            <ActionList.Text>Visual Tests</ActionList.Text>
+          </ActionList.Action>
+          <ActionList.Button
+            ariaLabel={
+              chipCount != null
+                ? `${label} (${chipCount} failed)`
+                : label
+            }
+            tooltip={label}
+            disabled={!hasResults && !crashed && !isRunning}
+            onClick={() => {
+              openVisualPanel(
+                api,
+                statusIds.failedIds[0] ?? statusIds.passedIds[0],
+              );
+            }}
+          >
+            {chipCount}
+            <TestStatusIcon status={chipStatus} isRunning={isRunning} />
+          </ActionList.Button>
+        </ActionList.Item>
+      </StyledActionList>
+    </Container>
+  );
+}

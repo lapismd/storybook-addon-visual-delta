@@ -1,66 +1,143 @@
 import React, { memo, useCallback, useEffect, useState } from "react";
+import {
+  EllipsisIcon,
+  SyncIcon,
+  UndoIcon,
+} from "@storybook/icons";
 import pixelmatch from "pixelmatch";
-import { AddonPanel } from "storybook/internal/components";
+import {
+  ActionList,
+  AddonPanel,
+  IconButton,
+  PopoverProvider,
+  ToggleButton,
+} from "storybook/internal/components";
+import {
+  experimental_getTestProviderStore,
+  useStorybookApi,
+} from "storybook/manager-api";
 import { useTheme } from "storybook/theming";
-import { DEFAULT_PASS_THRESHOLD_PERCENT } from "../constants.js";
+import {
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+  TEST_PROVIDER_ID,
+  VISUAL_DELTA_UPDATE_PATH,
+  isSplitPlacement,
+} from "../constants.js";
+import {
+  applyVisualStatuses,
+  cancelVisualRun,
+  componentStoryIdsFor,
+  postVisualRun,
+  subscribeVisualRunProgress,
+} from "../manager/run-visual.js";
+import {
+  VisualRunSplitButton,
+  type VisualRunMode,
+} from "../manager/VisualRunSplitButton.js";
 import type { DiffResultData } from "../types.js";
 import {
-  capturePreviewIframe,
+  capturePreviewSubject,
   fitImageData,
   loadImage,
   maskTransparentRegions,
 } from "./capture.js";
-import { buildFocusAssets } from "./diff-assets.js";
+import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
 import { DiffResult } from "./DiffResult.js";
 import {
   useOverlayHidden,
   useOverlayInfo,
   useStoryData,
 } from "./hooks.js";
+import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
 import { ImageGallery } from "./ImageGallery.js";
+import { PlacementPad } from "./PlacementPad.js";
 import {
   Actions,
+  ButtonGroup,
   Checkbox,
   CheckboxContainer,
-  ControlsRow,
-  DiffButton,
   EmptyState,
   EmptyStateContainer,
   ErrorText,
-  GhostButton,
   InlineControl,
   Slider,
   Toolbar,
+  ToolbarRow,
+  ToolbarSpacer,
   ValueDisplay,
 } from "./styled.js";
 
+const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
+
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const theme = useTheme();
+  const api = useStorybookApi();
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const {
     images,
     index,
     storyId,
     opacity,
     colorInversion,
+    placement,
     passThresholdPercent,
     setIndex,
     setOpacity,
     setColorInversion,
+    togglePlacement,
     setPassThresholdPercent,
     hideOverlay,
     showOverlay,
     resetOverlay,
+    resetSettings,
+    reloadBaselineImages,
   } = useStoryData();
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isRunningVisual, setIsRunningVisual] = useState(false);
+  const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
+  /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
+  const [diffEpoch, setDiffEpoch] = useState(0);
+  const isSplit = isSplitPlacement(placement);
+  const busy = isDiffing || isUpdating || isRunningVisual;
+  const baselineSrc = images[index]?.src;
 
   useEffect(() => {
-    setDiffResult(null);
     setCaptureError(null);
-  }, [index, storyId]);
+    if (!baselineSrc) {
+      setDiffResult(null);
+      return;
+    }
+    let cancelled = false;
+    setDiffResult(null);
+    void loadPlaywrightDiffResult(baselineSrc, diffEpoch || Date.now()).then(
+      (result) => {
+        if (!cancelled) setDiffResult(result);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [storyId, index, baselineSrc, diffEpoch]);
+
+  // Reload compare view when a visual run finishes (Testing Module or panel).
+  useEffect(() => {
+    let sawProgress = false;
+    return subscribeVisualRunProgress((next) => {
+      if (next) {
+        sawProgress = true;
+        return;
+      }
+      if (sawProgress) {
+        sawProgress = false;
+        setDiffEpoch(Date.now());
+      }
+    });
+  }, []);
 
   const handleDiff = useCallback(async () => {
     if (index === -1 || !images[index]) {
@@ -81,13 +158,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       const overlayHidden = waitForOverlayHidden();
       hideOverlay();
       await overlayHidden;
-      let capture: Awaited<ReturnType<typeof capturePreviewIframe>>;
+      let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
       try {
-        // Match Playwright baseline viewport so layout isn't the manager pane size.
-        capture = await capturePreviewIframe({
-          width: baseline.width,
-          height: baseline.height,
-        });
+        capture = await capturePreviewSubject();
       } finally {
         showOverlay();
       }
@@ -155,6 +228,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         width,
         height,
       );
+      const diffHistogram = buildDiffHistogram(
+        baselineForDiff,
+        actualForDiff,
+        diffData,
+        width,
+        height,
+      );
       const totalPixels = width * height;
       const diffPercent = (diffPixels / totalPixels) * 100;
       const threshold =
@@ -173,6 +253,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         passThresholdPercent: threshold,
         passed: diffPercent < threshold,
         sizeNote,
+        diffHistogram,
       });
     } catch (error) {
       setCaptureError(error instanceof Error ? error.message : "Diff failed");
@@ -189,6 +270,88 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     showOverlay,
   ]);
 
+  const handleUpdateBaselines = useCallback(async () => {
+    if (!storyId) {
+      setCaptureError("No story selected");
+      return;
+    }
+    setIsUpdating(true);
+    setCaptureError(null);
+    setUpdateLog(null);
+    try {
+      const response = await fetch(VISUAL_DELTA_UPDATE_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyId }),
+      });
+      const text = await response.text();
+      setUpdateLog(text.trim() || null);
+      if (!response.ok) {
+        throw new Error(text.trim() || `Update failed (${response.status})`);
+      }
+      const exitMatch = text.match(/\[exit (\d+)\]/);
+      if (exitMatch && exitMatch[1] !== "0") {
+        throw new Error(`Baseline update exited with code ${exitMatch[1]}`);
+      }
+      reloadBaselineImages();
+      setDiffResult(null);
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error ? error.message : "Baseline update failed",
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [storyId, reloadBaselineImages]);
+
+  const handleRunVisual = useCallback(
+    async (scope: "story" | "component") => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      setIsRunningVisual(true);
+      setCaptureError(null);
+      try {
+        const storyIds =
+          scope === "story" ? [storyId] : componentStoryIdsFor(api, storyId);
+        await testProviderStore.runWithState(async () => {
+          const data = await postVisualRun({ storyIds, rebuild: false });
+          if (data.crashed) {
+            throw new Error(data.error ?? "Visual test run crashed");
+          }
+          applyVisualStatuses(data.results);
+          setDiffEpoch(Date.now());
+          if (data.summary.failed > 0) {
+            setCaptureError(
+              `Visual: ${data.summary.failed} failed · ${data.summary.passed} passed`,
+            );
+          } else {
+            setUpdateLog(`Visual: ${data.summary.passed} passed (${scope})`);
+          }
+        });
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error ? error.message : "Visual test run failed",
+        );
+      } finally {
+        setIsRunningVisual(false);
+      }
+    },
+    [api, storyId],
+  );
+
+  const handleSplitAction = useCallback(
+    (mode: VisualRunMode) => {
+      if (mode === "diff") {
+        void handleDiff();
+        return;
+      }
+      void handleRunVisual(mode);
+    },
+    [handleDiff, handleRunVisual],
+  );
+
   return (
     <AddonPanel active={props.active ?? false}>
       {images.length === 0 ? (
@@ -200,24 +363,57 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       ) : (
         <>
           <Toolbar>
-            <ImageGallery
-              images={images}
-              selectedIndex={index}
-              onSelect={setIndex}
-            />
-            <ControlsRow>
-              <InlineControl title="Overlay opacity">
-                <span>Opacity</span>
-                <Slider
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={opacity}
-                  onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                />
-                <ValueDisplay>{Math.round(opacity * 100)}%</ValueDisplay>
-              </InlineControl>
+            <ToolbarRow>
+              <ImageGallery
+                images={images}
+                selectedIndex={index}
+                onSelect={setIndex}
+              />
+              <PlacementPad
+                value={placement}
+                active={index >= 0}
+                onToggle={togglePlacement}
+                disabled={images.length === 0}
+              />
+              {!isSplit ? (
+                <ButtonGroup role="group" aria-label="Overlay controls">
+                  <ToggleButton
+                    size="small"
+                    pressed={false}
+                    disabled={index === -1}
+                    onClick={resetOverlay}
+                    aria-label="Reset overlay position after drag"
+                    title="Reset overlay position after drag"
+                  >
+                    Reset
+                  </ToggleButton>
+                </ButtonGroup>
+              ) : null}
+              <ToolbarSpacer />
+              {!isSplit ? (
+                <>
+                  <InlineControl title="Overlay opacity">
+                    <span>Opacity</span>
+                    <Slider
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={opacity}
+                      onChange={(e) => setOpacity(parseFloat(e.target.value))}
+                    />
+                    <ValueDisplay>{Math.round(opacity * 100)}%</ValueDisplay>
+                  </InlineControl>
+                  <CheckboxContainer>
+                    <Checkbox
+                      type="checkbox"
+                      checked={colorInversion}
+                      onChange={(e) => setColorInversion(e.target.checked)}
+                    />
+                    <span>Blend</span>
+                  </CheckboxContainer>
+                </>
+              ) : null}
               <InlineControl title="Pass if diff % is below this">
                 <span>Thresh</span>
                 <Slider
@@ -232,33 +428,92 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 />
                 <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
               </InlineControl>
-              <CheckboxContainer>
-                <Checkbox
-                  type="checkbox"
-                  checked={colorInversion}
-                  onChange={(e) => setColorInversion(e.target.checked)}
-                />
-                <span>Blend</span>
-              </CheckboxContainer>
               <Actions>
-                <GhostButton
-                  type="button"
-                  onClick={resetOverlay}
-                  disabled={index === -1}
-                  title="Reset overlay position after drag"
+                <VisualRunSplitButton
+                  panel
+                  compact
+                  isRunning={isRunningVisual || isDiffing}
+                  disabled={
+                    (busy && !isRunningVisual && !isDiffing) || !storyId
+                  }
+                  diffDisabled={index === -1}
+                  allowStory
+                  onRun={handleSplitAction}
+                  onStop={() => void cancelVisualRun()}
+                />
+                <PopoverProvider
+                  ariaLabel="More actions"
+                  placement="bottom-end"
+                  padding={0}
+                  visible={moreMenuOpen}
+                  onVisibleChange={setMoreMenuOpen}
+                  popover={() => (
+                    <div style={{ minWidth: 190 }}>
+                      <ActionList>
+                        <ActionList.Item>
+                          <ActionList.Action
+                            ariaLabel="Update baselines"
+                            disabled={busy || !storyId}
+                            onClick={() => {
+                              setMoreMenuOpen(false);
+                              void handleUpdateBaselines();
+                            }}
+                          >
+                            <ActionList.Icon>
+                              <SyncIcon />
+                            </ActionList.Icon>
+                            <ActionList.Text>
+                              {isUpdating
+                                ? "Updating…"
+                                : "Update baselines"}
+                            </ActionList.Text>
+                          </ActionList.Action>
+                        </ActionList.Item>
+                        <ActionList.Item>
+                          <ActionList.Action
+                            ariaLabel="Reset settings"
+                            onClick={() => {
+                              setMoreMenuOpen(false);
+                              resetSettings();
+                            }}
+                          >
+                            <ActionList.Icon>
+                              <UndoIcon />
+                            </ActionList.Icon>
+                            <ActionList.Text>Reset settings</ActionList.Text>
+                          </ActionList.Action>
+                        </ActionList.Item>
+                      </ActionList>
+                    </div>
+                  )}
                 >
-                  Reset
-                </GhostButton>
-                <DiffButton
-                  type="button"
-                  onClick={handleDiff}
-                  disabled={isDiffing || index === -1}
-                >
-                  {isDiffing ? "Diffing…" : "Run Diff"}
-                </DiffButton>
+                  <IconButton
+                    size="small"
+                    variant="ghost"
+                    padding="small"
+                    ariaLabel="More actions"
+                    title="More actions"
+                  >
+                    <EllipsisIcon />
+                  </IconButton>
+                </PopoverProvider>
               </Actions>
-              {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-            </ControlsRow>
+            </ToolbarRow>
+            {captureError ? <ErrorText>{captureError}</ErrorText> : null}
+            {updateLog && !captureError ? (
+              <pre
+                style={{
+                  margin: 0,
+                  color: theme.color.positive,
+                  whiteSpace: "pre-wrap",
+                  maxHeight: 120,
+                  overflow: "auto",
+                  fontSize: 11,
+                }}
+              >
+                {updateLog.slice(-800)}
+              </pre>
+            ) : null}
           </Toolbar>
           {diffResult && <DiffResult result={diffResult} />}
         </>

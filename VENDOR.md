@@ -14,22 +14,46 @@ committed `dist/` build.
 
 ## Local behavior (vs upstream 0.1.5)
 
-- **Viewport align** — Default `align: "viewport"` pins overlays to the iframe
-  origin (Playwright fullPage). Use `align: "canvas"` for `#storybook-root` offset.
+- **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +
+  baseline in a shared 50:50 scrollable split; center stacks a ghost overlay
+  (opacity / difference blend). Legacy `beside`/`over` map to `right`/`center`.
+- **Canvas align** — Shadcn baselines use `align: "canvas"` so component-clipped
+  PNGs pin (via CSS transform) to the story subject (`#storybook-root > *`),
+  matching Playwright clips. Legacy `align: "viewport"` pins to the iframe
+  origin with transforms only — no iframe resize.
 - **Auto-select** — First baseline image is selected on `INIT_IMAGE`.
-- **Difference blend** — `mix-blend-mode: difference`; defaults to off on load.
+- **Difference blend** — `mix-blend-mode: difference`; defaults to off on load;
+  only applies in `over` placement.
 - **Pass threshold** — Configurable `%` (default `0.1`).
 - **Diff fit** — Pad/crop actual → baseline size instead of stretching.
 - **Quiet preset** — No Vite/Webpack console logs.
-- **Run Diff capture** — Same-origin preview iframe via `html-to-image`
-  (upstream Chrome-extension bridge is unused). Resizes the iframe to the
-  baseline PNG size before capture so layout matches Playwright (1280×N),
-  not the small manager preview pane. Still approximate vs real Chromium
-  screenshots — prefer the overlay for framing.
+- **Run Diff capture** — Same-origin preview via `html-to-image` of the story
+  subject (`#storybook-root > *`, or body when portals are open), matching
+  Playwright component clips. Still approximate vs real Chromium screenshots.
 - **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard
   (`1`/`2`/`3` modes, `F` focus, `B` blink, `←`/`→` swipe nudge). Pass/fail
   stats sit above the stage.
-- **Compact toolbar** — Small baseline thumbs + inline opacity/threshold/
-  blend controls; **Reset** restores overlay position after drag.
+- **Compact toolbar** — Baseline thumbs + Beside/Over on the first row;
+  opacity/threshold/blend on the second. **Reset** restores drag position;
+  **Reset settings** clears localStorage prefs.
+- **Update baselines** — Dev-only button posts to
+  `/__visual-delta/update-baseline`, which runs the guarded visual-update
+  pipeline for the current component (rebuilds Storybook, writes PNGs).
+- **Testing module target** — Registers a Storybook `test-provider` that shells
+  out to the existing Playwright visual suite (`pnpm test:visual`). Global
+  Testing Module shows a Vitest-style **Visual Tests** checklist row with live
+  `Testing... 1/N` progress (NDJSON stream from middleware), an orange status
+  chip while running, and a failure-count badge beside the chip; the panel
+  keeps a Diff / Story / Component split run control. Results map to per-story
+  status dots (enriched with pixel `%` from ephemeral JSON sidecars written
+  next to baselines during the run — gitignored `*.json` / `*.actual.png` /
+  `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`). The Visual
+  Delta panel hydrates its compare view from those artifacts when present.
+  Never writes baselines from Run Visual Tests.
+- **Hi-DPI baselines** — PNGs are captured at `deviceScaleFactor: 3` with
+  Playwright `scale: "device"`; the overlay sizes them to CSS pixels so they
+  still align with the live subject.
+- **Persisted prefs** — Overlay on/off, placement, opacity, blend, and
+  threshold are stored in `localStorage` and reapplied across stories.

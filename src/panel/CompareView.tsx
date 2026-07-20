@@ -5,25 +5,74 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ToggleButton } from "storybook/internal/components";
+import { CollapseIcon, ExpandAltIcon } from "@storybook/icons";
+import {
+  TabList,
+  ToggleButton,
+  useTabsState,
+} from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { ChangeBounds } from "../types.js";
+import { ButtonGroup } from "./styled.js";
 
-type CompareMode = "swipe" | "sidebyside" | "diff" | "focus" | "blink";
+type CompareTab = "sidebyside" | "swipe" | "diff" | "focus" | "blink";
 
 const LOUPE_SIZE = 120;
 const LOUPE_ZOOM = 2.5;
 const BLINK_MS = 280;
 const SWIPE_NUDGE = 5;
+const STAGE_MAX_HEIGHT = 420;
+const TWO_UP_MAX_HEIGHT = 520;
+const VIEW_ZOOM_MIN = 0.5;
+const VIEW_ZOOM_MAX = 3;
+const VIEW_ZOOM_STEP = 0.25;
+const VIEW_ZOOM_STORAGE_KEY =
+  "storybook-addon-visual-delta/compare-view-zoom";
+
+const TAB_DEFS: { id: CompareTab; title: string }[] = [
+  { id: "sidebyside", title: "2-up" },
+  { id: "swipe", title: "Swipe" },
+  { id: "diff", title: "Diff" },
+  { id: "focus", title: "Focus" },
+  { id: "blink", title: "Blink" },
+];
+
+function clampViewZoom(value: number): number {
+  const stepped = Math.round(value / VIEW_ZOOM_STEP) * VIEW_ZOOM_STEP;
+  return Math.min(VIEW_ZOOM_MAX, Math.max(VIEW_ZOOM_MIN, stepped));
+}
+
+function loadViewZoom(): number {
+  if (typeof localStorage === "undefined") return 1;
+  try {
+    const raw = localStorage.getItem(VIEW_ZOOM_STORAGE_KEY);
+    if (raw == null) return 1;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 1;
+    return clampViewZoom(n);
+  } catch {
+    return 1;
+  }
+}
+
+function saveViewZoom(zoom: number): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(VIEW_ZOOM_STORAGE_KEY, String(clampViewZoom(zoom)));
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 const Root = styled.div({
   display: "flex",
   flexDirection: "column",
   gap: "0.5rem",
   outline: "none",
+  overflow: "auto",
 });
 
-const ModeRow = styled.div({
+const Toolbar = styled.div({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -31,9 +80,10 @@ const ModeRow = styled.div({
   flexWrap: "wrap",
 });
 
-const ModeGroup = styled.div({
+const TabTools = styled.div({
   display: "flex",
-  gap: "0.25rem",
+  alignItems: "center",
+  gap: "0.35rem",
   flexWrap: "wrap",
 });
 
@@ -58,29 +108,31 @@ const checkerboard = {
   backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
 };
 
-const Stage = styled.div(({ theme }) => ({
+const Stage = styled.div({
   position: "relative",
-  width: "100%",
-  maxHeight: "420px",
+  maxWidth: "none",
+  margin: "0 auto",
   overflow: "hidden",
-  border: `1px solid ${theme.appBorderColor}`,
   userSelect: "none",
   touchAction: "none",
-  ...checkerboard,
-}));
+});
 
-const StageInner = styled.div({
+const Stack = styled.div(({ theme }) => ({
   position: "relative",
   width: "100%",
-  willChange: "transform",
-});
+  lineHeight: 0,
+  overflow: "hidden",
+  outline: `1px solid ${theme.appBorderColor}`,
+  outlineOffset: 0,
+  boxSizing: "border-box",
+  ...checkerboard,
+}));
 
 const LayerImg = styled.img({
   display: "block",
   width: "100%",
-  height: "auto",
-  maxHeight: "420px",
-  objectFit: "contain",
+  height: "100%",
+  objectFit: "fill",
   pointerEvents: "none",
 });
 
@@ -94,7 +146,7 @@ const TopImg = styled.img({
   display: "block",
   width: "100%",
   height: "100%",
-  objectFit: "contain",
+  objectFit: "fill",
   pointerEvents: "none",
 });
 
@@ -120,30 +172,41 @@ const Handle = styled.div(({ theme }) => ({
   },
 }));
 
-const Hint = styled.p(({ theme }) => ({
-  margin: 0,
-  fontSize: "11px",
-  color: theme.color.mediumdark,
-}));
-
 const SideBySide = styled.div({
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "0.5rem",
+  gap: "0.75rem",
+  width: "100%",
+  alignItems: "start",
 });
 
-const SidePane = styled.div(({ theme }) => ({
+const SideColumn = styled.div({
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.35rem",
+  minWidth: 0,
+});
+
+const SidePane = styled.div<{ $maxHeight: number }>(({ theme, $maxHeight }) => ({
   ...checkerboard,
   border: `1px solid ${theme.appBorderColor}`,
-  overflow: "hidden",
-  maxHeight: "420px",
+  overflow: "auto",
+  maxHeight: `${$maxHeight}px`,
+  width: "100%",
 }));
 
+const SideImg = styled.img({
+  display: "block",
+  width: "100%",
+  height: "auto",
+  objectFit: "contain",
+  pointerEvents: "none",
+});
+
 const SideLabel = styled.div(({ theme }) => ({
-  fontSize: "11px",
-  fontWeight: 600,
-  color: theme.color.mediumdark,
-  marginBottom: "0.25rem",
+  fontSize: "12px",
+  fontWeight: 700,
+  color: theme.color.defaultText,
 }));
 
 const Loupe = styled.div(({ theme }) => ({
@@ -158,29 +221,6 @@ const Loupe = styled.div(({ theme }) => ({
   backgroundRepeat: "no-repeat",
   overflow: "hidden",
 }));
-
-const ActionRow = styled.div({
-  display: "flex",
-  gap: "0.25rem",
-  alignItems: "center",
-});
-
-function modeHint(mode: CompareMode, focused: boolean): string {
-  switch (mode) {
-    case "swipe":
-      return "Drag divider · ←/→ nudge · 1–3 modes · F focus · B blink";
-    case "sidebyside":
-      return "Baseline vs actual · 1 Swipe · 3 Diff · F Focus · B Blink";
-    case "diff":
-      return "Pixelmatch heatmap · hover for loupe";
-    case "focus":
-      return focused
-        ? "Spotlight + zoom to change · hover for loupe · F toggles zoom"
-        : "Spotlight on changes · hover for loupe";
-    case "blink":
-      return "Strobe baseline ↔ actual";
-  }
-}
 
 export function CompareView({
   baselineSrc,
@@ -199,10 +239,11 @@ export function CompareView({
   imageWidth: number;
   imageHeight: number;
 }) {
-  const [mode, setMode] = useState<CompareMode>("swipe");
+  const [tab, setTab] = useState<CompareTab>("sidebyside");
   const [position, setPosition] = useState(50);
   const [blinkShowActual, setBlinkShowActual] = useState(true);
   const [zoomToChange, setZoomToChange] = useState(true);
+  const [viewZoom, setViewZoom] = useState(loadViewZoom);
   const [loupe, setLoupe] = useState<{
     x: number;
     y: number;
@@ -213,9 +254,57 @@ export function CompareView({
     src: string;
   } | null>(null);
 
+  const tabsState = useTabsState({
+    selected: tab,
+    onSelectionChange: (key) => setTab(key as CompareTab),
+    tabs: TAB_DEFS,
+  });
+
   const stageRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    saveViewZoom(viewZoom);
+  }, [viewZoom]);
+
+  const stageMaxHeight = STAGE_MAX_HEIGHT * viewZoom;
+  const twoUpMaxHeight = TWO_UP_MAX_HEIGHT * viewZoom;
+  const isFocusTab = tab === "focus";
+
+  const stageSizeStyle = useMemo(
+    () => ({
+      width: `calc((100% - 0.5rem) / 2 * ${viewZoom})`,
+    }),
+    [viewZoom],
+  );
+
+  const sideBySideSizeStyle = useMemo(
+    () => ({
+      width: viewZoom === 1 ? "100%" : `calc(100% * ${viewZoom})`,
+    }),
+    [viewZoom],
+  );
+
+  const stackStyle = useMemo(() => {
+    if (imageWidth < 1 || imageHeight < 1) {
+      return { width: "100%" as const, maxHeight: stageMaxHeight };
+    }
+    return {
+      width: "100%" as const,
+      height: "auto" as const,
+      maxHeight: stageMaxHeight,
+      aspectRatio: `${imageWidth} / ${imageHeight}`,
+    };
+  }, [imageWidth, imageHeight, stageMaxHeight]);
+
+  const nudgeViewZoom = useCallback((delta: number) => {
+    setViewZoom((z) => clampViewZoom(z + delta));
+  }, []);
+
+  const resetViewZoom = useCallback(() => {
+    setViewZoom(1);
+  }, []);
 
   const setFromClientX = useCallback((clientX: number) => {
     const el = stageRef.current;
@@ -228,12 +317,12 @@ export function CompareView({
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (mode !== "swipe") return;
+      if (tab !== "swipe") return;
       dragging.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
       setFromClientX(e.clientX);
     },
-    [mode, setFromClientX],
+    [tab, setFromClientX],
   );
 
   const onPointerMove = useCallback(
@@ -248,25 +337,23 @@ export function CompareView({
     dragging.current = false;
   }, []);
 
-  // Blink strobe
   useEffect(() => {
-    if (mode !== "blink") return;
+    if (tab !== "blink") return;
     const id = window.setInterval(() => {
       setBlinkShowActual((v) => !v);
     }, BLINK_MS);
     return () => window.clearInterval(id);
-  }, [mode]);
+  }, [tab]);
 
-  // Auto-enable zoom when entering focus with a change box
   useEffect(() => {
-    if (mode === "focus" && changeBounds) {
+    if (isFocusTab && changeBounds) {
       setZoomToChange(true);
     }
-  }, [mode, changeBounds]);
+  }, [isFocusTab, changeBounds]);
 
   const focusFrame = useMemo(() => {
     if (
-      mode !== "focus" ||
+      !isFocusTab ||
       !zoomToChange ||
       !changeBounds ||
       imageWidth < 1 ||
@@ -285,13 +372,12 @@ export function CompareView({
       transform: `scale(${scale})`,
       transformOrigin: `${ox}% ${oy}%`,
     };
-  }, [mode, zoomToChange, changeBounds, imageWidth, imageHeight]);
+  }, [isFocusTab, zoomToChange, changeBounds, imageWidth, imageHeight]);
 
-  // Loupe maps stage coords → image; skip while Focus zoom is active.
   const loupeSrc =
-    mode === "diff"
+    tab === "diff"
       ? diffSrc
-      : mode === "focus" && !zoomToChange
+      : tab === "focus" && !zoomToChange
         ? focusSrc
         : null;
 
@@ -344,100 +430,77 @@ export function CompareView({
       }
 
       if (e.key === "1") {
-        setMode("swipe");
+        setTab("sidebyside");
         e.preventDefault();
       } else if (e.key === "2") {
-        setMode("sidebyside");
+        setTab("swipe");
         e.preventDefault();
       } else if (e.key === "3") {
-        setMode("diff");
+        setTab("diff");
         e.preventDefault();
-      } else if (e.key === "f" || e.key === "F") {
-        if (mode === "focus") {
-          setZoomToChange((z) => !z);
-        } else {
-          setMode("focus");
-        }
+      } else if (e.key === "4") {
+        setTab("focus");
         e.preventDefault();
-      } else if (e.key === "b" || e.key === "B") {
-        setMode("blink");
+      } else if (e.key === "5") {
+        setTab("blink");
         e.preventDefault();
-      } else if (mode === "swipe" && e.key === "ArrowLeft") {
+      } else if ((e.key === "f" || e.key === "F") && tab === "focus") {
+        setZoomToChange((z) => !z);
+        e.preventDefault();
+      } else if (tab === "swipe" && e.key === "ArrowLeft") {
         setPosition((p) => Math.max(0, p - SWIPE_NUDGE));
         e.preventDefault();
-      } else if (mode === "swipe" && e.key === "ArrowRight") {
+      } else if (tab === "swipe" && e.key === "ArrowRight") {
         setPosition((p) => Math.min(100, p + SWIPE_NUDGE));
+        e.preventDefault();
+      } else if (e.key === "+" || e.key === "=") {
+        nudgeViewZoom(VIEW_ZOOM_STEP);
+        e.preventDefault();
+      } else if (e.key === "-" || e.key === "_") {
+        nudgeViewZoom(-VIEW_ZOOM_STEP);
+        e.preventDefault();
+      } else if (e.key === "0") {
+        resetViewZoom();
         e.preventDefault();
       }
     },
-    [mode],
+    [tab, nudgeViewZoom, resetViewZoom],
   );
 
   const stageCursor =
-    mode === "swipe" ? "ew-resize" : loupeSrc ? "none" : "default";
+    tab === "swipe" ? "ew-resize" : loupeSrc ? "none" : "default";
 
   return (
     <Root
       ref={rootRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      aria-label="Visual compare. Keyboard: 1 swipe, 2 side by side, 3 diff, F focus, B blink, arrows nudge swipe"
+      aria-label="Visual compare. Keyboard: 1 two-up, 2 swipe, 3 diff, 4 focus, 5 blink, F toggles focus zoom, arrows nudge swipe, +/− view zoom, 0 reset zoom"
     >
-      <ModeRow>
-        <ModeGroup>
-          <ToggleButton
-            size="small"
-            pressed={mode === "swipe"}
-            onClick={() => setMode("swipe")}
-            aria-label="Swipe compare baseline and actual"
-          >
-            Swipe
-          </ToggleButton>
-          <ToggleButton
-            size="small"
-            pressed={mode === "sidebyside"}
-            onClick={() => setMode("sidebyside")}
-            aria-label="Side by side baseline and actual"
-          >
-            2-up
-          </ToggleButton>
-          <ToggleButton
-            size="small"
-            pressed={mode === "diff"}
-            onClick={() => setMode("diff")}
-            aria-label="Show superimposed diff heatmap"
-          >
-            Diff
-          </ToggleButton>
-          <ToggleButton
-            size="small"
-            pressed={mode === "focus"}
-            onClick={() => setMode("focus")}
-            aria-label="Focus spotlight on changed pixels"
-          >
-            Focus
-          </ToggleButton>
-          <ToggleButton
-            size="small"
-            pressed={mode === "blink"}
-            onClick={() => setMode("blink")}
-            aria-label="Blink strobe between baseline and actual"
-          >
-            Blink
-          </ToggleButton>
-        </ModeGroup>
-        <ActionRow>
-          {mode === "focus" && changeBounds ? (
+      <Toolbar>
+        <TabList state={tabsState} aria-label="Compare view" />
+        <TabTools>
+          {tab === "focus" ? (
             <ToggleButton
               size="small"
               pressed={zoomToChange}
+              disabled={!changeBounds}
               onClick={() => setZoomToChange((z) => !z)}
-              aria-label="Zoom to first change"
+              aria-label={
+                zoomToChange
+                  ? "Fit full image (exit zoom to change)"
+                  : "Zoom to first change"
+              }
+              title={
+                zoomToChange
+                  ? "Fit full image"
+                  : "Zoom to first change"
+              }
             >
-              Zoom
+              {zoomToChange ? <CollapseIcon /> : <ExpandAltIcon />}
             </ToggleButton>
           ) : null}
-          {mode === "swipe" && Math.abs(position - 50) > 0.5 ? (
+          {tab === "swipe" && Math.abs(position - 50) > 0.5 ? (
             <ToggleButton
               size="small"
               pressed={false}
@@ -447,19 +510,75 @@ export function CompareView({
               Reset
             </ToggleButton>
           ) : null}
-          <Hint>{modeHint(mode, zoomToChange && !!changeBounds)}</Hint>
-        </ActionRow>
-      </ModeRow>
+          <ButtonGroup role="group" aria-label="View zoom">
+            <ToggleButton
+              size="small"
+              pressed={false}
+              disabled={viewZoom <= VIEW_ZOOM_MIN}
+              onClick={() => nudgeViewZoom(-VIEW_ZOOM_STEP)}
+              aria-label="Zoom out compare view"
+              title="Zoom out (−)"
+            >
+              −
+            </ToggleButton>
+            <ToggleButton
+              size="small"
+              pressed={false}
+              disabled={viewZoom === 1}
+              onClick={resetViewZoom}
+              aria-label="Reset view zoom"
+              title={
+                viewZoom === 1
+                  ? "View zoom 100%"
+                  : "Reset zoom to 100% (0)"
+              }
+              style={{
+                minWidth: "3.25rem",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {Math.round(viewZoom * 100)}%
+            </ToggleButton>
+            <ToggleButton
+              size="small"
+              pressed={false}
+              disabled={viewZoom >= VIEW_ZOOM_MAX}
+              onClick={() => nudgeViewZoom(VIEW_ZOOM_STEP)}
+              aria-label="Zoom in compare view"
+              title="Zoom in (+)"
+            >
+              +
+            </ToggleButton>
+          </ButtonGroup>
+        </TabTools>
+      </Toolbar>
 
-      {mode === "swipe" ? (
+      {tab === "sidebyside" ? (
+        <SideBySide style={sideBySideSizeStyle}>
+          <SideColumn>
+            <SideLabel>Baseline</SideLabel>
+            <SidePane $maxHeight={twoUpMaxHeight}>
+              <SideImg src={baselineSrc} alt="Baseline" draggable={false} />
+            </SidePane>
+          </SideColumn>
+          <SideColumn>
+            <SideLabel>New</SideLabel>
+            <SidePane $maxHeight={twoUpMaxHeight}>
+              <SideImg src={actualSrc} alt="New" draggable={false} />
+            </SidePane>
+          </SideColumn>
+        </SideBySide>
+      ) : null}
+
+      {tab === "swipe" ? (
         <>
-          <Labels>
+          <Labels style={{ ...stageSizeStyle, margin: "0 auto" }}>
             <span>Baseline</span>
-            <span>Actual</span>
+            <span>New</span>
           </Labels>
           <Stage
             ref={stageRef}
-            style={{ cursor: stageCursor }}
+            style={{ ...stageSizeStyle, cursor: stageCursor }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -467,48 +586,29 @@ export function CompareView({
             role="img"
             aria-label={`Swipe comparison, ${Math.round(position)}% baseline revealed`}
           >
-            <LayerImg src={actualSrc} alt="" draggable={false} />
-            <TopLayer style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
-              <TopImg src={baselineSrc} alt="" draggable={false} />
-            </TopLayer>
-            <Handle style={{ left: `${position}%` }} />
+            <Stack style={stackStyle}>
+              <LayerImg src={actualSrc} alt="" draggable={false} />
+              <TopLayer style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
+                <TopImg src={baselineSrc} alt="" draggable={false} />
+              </TopLayer>
+              <Handle style={{ left: `${position}%` }} />
+            </Stack>
           </Stage>
         </>
       ) : null}
 
-      {mode === "sidebyside" ? (
-        <SideBySide>
-          <div>
-            <SideLabel>Baseline</SideLabel>
-            <SidePane>
-              <LayerImg src={baselineSrc} alt="Baseline" draggable={false} />
-            </SidePane>
-          </div>
-          <div>
-            <SideLabel>Actual</SideLabel>
-            <SidePane>
-              <LayerImg src={actualSrc} alt="Actual" draggable={false} />
-            </SidePane>
-          </div>
-        </SideBySide>
-      ) : null}
-
-      {mode === "diff" || mode === "focus" ? (
+      {tab === "diff" ? (
         <Stage
           ref={stageRef}
-          style={{ cursor: stageCursor }}
+          style={{ ...stageSizeStyle, cursor: stageCursor }}
           onMouseMove={onStageMouseMove}
           onMouseLeave={onStageMouseLeave}
           role="img"
-          aria-label={mode === "diff" ? "Diff heatmap" : "Focus spotlight"}
+          aria-label="Diff heatmap"
         >
-          <StageInner style={mode === "focus" ? focusFrame : undefined}>
-            <LayerImg
-              src={mode === "diff" ? diffSrc : focusSrc}
-              alt={mode === "diff" ? "Diff heatmap" : "Focus spotlight"}
-              draggable={false}
-            />
-          </StageInner>
+          <Stack style={stackStyle}>
+            <LayerImg src={diffSrc} alt="Diff heatmap" draggable={false} />
+          </Stack>
           {loupe ? (
             <Loupe
               style={{
@@ -523,13 +623,52 @@ export function CompareView({
         </Stage>
       ) : null}
 
-      {mode === "blink" ? (
-        <Stage style={{ cursor: "default" }} role="img" aria-label="Blink compare">
-          <LayerImg
-            src={blinkShowActual ? actualSrc : baselineSrc}
-            alt={blinkShowActual ? "Actual" : "Baseline"}
-            draggable={false}
-          />
+      {tab === "focus" ? (
+        <Stage
+          ref={stageRef}
+          style={{ ...stageSizeStyle, cursor: stageCursor }}
+          onMouseMove={onStageMouseMove}
+          onMouseLeave={onStageMouseLeave}
+          role="img"
+          aria-label="Focus spotlight"
+        >
+          <Stack
+            style={{
+              ...stackStyle,
+              willChange: "transform",
+              ...focusFrame,
+            }}
+          >
+            <LayerImg src={focusSrc} alt="Focus spotlight" draggable={false} />
+          </Stack>
+          {loupe ? (
+            <Loupe
+              style={{
+                left: loupe.x,
+                top: loupe.y,
+                backgroundImage: `url(${loupe.src})`,
+                backgroundSize: `${loupe.bgW}px ${loupe.bgH}px`,
+                backgroundPosition: `${loupe.bgX}px ${loupe.bgY}px`,
+              }}
+            />
+          ) : null}
+        </Stage>
+      ) : null}
+
+      {tab === "blink" ? (
+        <Stage
+          ref={stageRef}
+          style={{ ...stageSizeStyle, cursor: "default" }}
+          role="img"
+          aria-label="Blink compare"
+        >
+          <Stack style={stackStyle}>
+            <LayerImg
+              src={blinkShowActual ? actualSrc : baselineSrc}
+              alt={blinkShowActual ? "New" : "Baseline"}
+              draggable={false}
+            />
+          </Stack>
           <Labels
             style={{
               position: "absolute",
@@ -539,7 +678,7 @@ export function CompareView({
               pointerEvents: "none",
             }}
           >
-            <span>{blinkShowActual ? "Actual" : "Baseline"}</span>
+            <span>{blinkShowActual ? "New" : "Baseline"}</span>
             <span />
           </Labels>
         </Stage>
