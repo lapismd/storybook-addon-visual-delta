@@ -91,3 +91,43 @@ function isDiffPixel(r: number, g: number, b: number, a: number): boolean {
   const isGreen = g > 200 && r < 80 && b < 80;
   return isRed || isGreen;
 }
+
+export const DIFF_HISTOGRAM_BINS = 32;
+
+/**
+ * Histogram of max-channel RGB delta for pixels pixelmatch marked as changed.
+ * Bucket 0 = smallest deltas, last bucket = largest (up to 255).
+ */
+export function buildDiffHistogram(
+  baselineData: Uint8ClampedArray,
+  actualData: Uint8ClampedArray,
+  diffData: Uint8ClampedArray,
+  width: number,
+  height: number,
+  bins = DIFF_HISTOGRAM_BINS,
+): number[] {
+  const counts = new Array<number>(bins).fill(0);
+  const binSize = 256 / bins;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (
+        !isDiffPixel(
+          diffData[i],
+          diffData[i + 1],
+          diffData[i + 2],
+          diffData[i + 3],
+        )
+      ) {
+        continue;
+      }
+      const dr = Math.abs((actualData[i] ?? 0) - (baselineData[i] ?? 0));
+      const dg = Math.abs((actualData[i + 1] ?? 0) - (baselineData[i + 1] ?? 0));
+      const db = Math.abs((actualData[i + 2] ?? 0) - (baselineData[i + 2] ?? 0));
+      const delta = Math.max(dr, dg, db);
+      const bin = Math.min(bins - 1, Math.floor(delta / binSize));
+      counts[bin] += 1;
+    }
+  }
+  return counts;
+}

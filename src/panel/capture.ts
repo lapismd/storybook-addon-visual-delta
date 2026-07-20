@@ -1,9 +1,19 @@
 import { toPng } from "html-to-image";
+import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
 
 export type CaptureResult = {
   dataUrl: string;
   width: number;
   height: number;
+};
+
+type IframeSizeStyles = {
+  width: string;
+  height: string;
+  maxWidth: string;
+  maxHeight: string;
+  minWidth: string;
+  minHeight: string;
 };
 
 function waitTwoFrames(): Promise<void> {
@@ -12,6 +22,195 @@ function waitTwoFrames(): Promise<void> {
       requestAnimationFrame(() => resolve());
     });
   });
+}
+
+function getPreviewIframe(): HTMLIFrameElement | null {
+  const iframe = document.getElementById("storybook-preview-iframe");
+  return iframe instanceof HTMLIFrameElement ? iframe : null;
+}
+
+function readIframeSizeStyles(iframe: HTMLIFrameElement): IframeSizeStyles {
+  return {
+    width: iframe.style.width,
+    height: iframe.style.height,
+    maxWidth: iframe.style.maxWidth,
+    maxHeight: iframe.style.maxHeight,
+    minWidth: iframe.style.minWidth,
+    minHeight: iframe.style.minHeight,
+  };
+}
+
+function writeIframeSizeStyles(
+  iframe: HTMLIFrameElement,
+  styles: IframeSizeStyles,
+) {
+  iframe.style.width = styles.width;
+  iframe.style.height = styles.height;
+  iframe.style.maxWidth = styles.maxWidth;
+  iframe.style.maxHeight = styles.maxHeight;
+  iframe.style.minWidth = styles.minWidth;
+  iframe.style.minHeight = styles.minHeight;
+}
+
+/**
+ * Force the Storybook preview iframe to a fixed CSS size (Playwright baseline
+ * viewport). Returns a restore function for the previous inline size styles.
+ */
+export function applyPreviewViewport(
+  width: number,
+  height: number,
+): (() => void) | null {
+  const iframe = getPreviewIframe();
+  if (!iframe || width < 1 || height < 1) return null;
+  const prev = readIframeSizeStyles(iframe);
+  writeIframeSizeStyles(iframe, {
+    width: `${width}px`,
+    height: `${height}px`,
+    maxWidth: "none",
+    maxHeight: "none",
+    minWidth: `${width}px`,
+    minHeight: `${height}px`,
+  });
+  return () => writeIframeSizeStyles(iframe, prev);
+}
+
+/** Load natural pixel size of a baseline image (device-scale PNG pixels). */
+export function loadImageSize(
+  src: string,
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () =>
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error(`Failed to load image size: ${src}`));
+    img.src = src;
+  });
+}
+
+const PORTAL_SELECTORS = [
+  '[role="dialog"]',
+  '[role="listbox"]',
+  '[role="menu"]',
+  '[data-state="open"]',
+].join(", ");
+
+/**
+ * `instanceof HTMLElement` fails across iframe realms (parent window vs preview
+ * document). Compare against the owning window's constructor instead.
+ */
+function asHtmlElement(
+  node: Element | null | undefined,
+  view: Window | null,
+): HTMLElement | null {
+  if (!node) return null;
+  const Ctor = view?.HTMLElement ?? HTMLElement;
+  return node instanceof Ctor ? node : null;
+}
+
+/**
+ * Playwright element screenshots include the painted page background behind a
+ * transparent subject. html-to-image does not — fill with the preview body's
+ * computed background (sampled to rgb so canvas always accepts it).
+ */
+function resolveCaptureBackground(doc: Document): string {
+  const view = doc.defaultView;
+  const fallback = "#ffffff";
+  if (!view) return fallback;
+
+  const candidates = [doc.body, doc.documentElement];
+  let cssColor = "";
+  for (const el of candidates) {
+    if (!el) continue;
+    const bg = view.getComputedStyle(el).backgroundColor;
+    if (!bg || bg === "transparent" || bg === "rgba(0, 0, 0, 0)") continue;
+    cssColor = bg;
+    break;
+  }
+  if (!cssColor) return fallback;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return fallback;
+    ctx.fillStyle = cssColor;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    if ((a ?? 0) < 1) return fallback;
+    return `rgb(${r}, ${g}, ${b})`;
+  } catch {
+    return fallback;
+  }
+}
+
+function resolveCaptureTarget(doc: Document): HTMLElement {
+  const view = doc.defaultView;
+  const root = asHtmlElement(doc.querySelector("#storybook-root"), view);
+  if (!root) {
+    throw new Error("#storybook-root not found in preview");
+  }
+  const portals: HTMLElement[] = [];
+  for (const el of doc.querySelectorAll(PORTAL_SELECTORS)) {
+    const portal = asHtmlElement(el, view);
+    if (!portal) continue;
+    if (root.contains(portal)) continue;
+    const r = portal.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    const style = getComputedStyle(portal);
+    if (style.visibility === "hidden" || style.display === "none") continue;
+    portals.push(portal);
+  }
+  if (portals.length === 0) {
+    return asHtmlElement(root.firstElementChild, view) ?? root;
+  }
+  // Capture the root wrapper when portals are open so html-to-image can include
+  // in-tree content; portals outside root are drawn via a union clip on body.
+  const body = asHtmlElement(doc.body, view);
+  if (!body) {
+    throw new Error("Preview document body not found");
+  }
+  return body;
+}
+
+/**
+ * Capture the story subject (first #storybook-root child, or body when portals
+ * are open) — matches Playwright component-clipped baselines.
+ */
+export async function capturePreviewSubject(): Promise<CaptureResult> {
+  const iframe = getPreviewIframe();
+  if (!iframe) {
+    throw new Error("Storybook preview iframe not found");
+  }
+  const doc = iframe.contentDocument;
+  if (!doc?.documentElement) {
+    throw new Error("Cannot access preview document (cross-origin or not ready)");
+  }
+
+  await waitTwoFrames();
+  await new Promise((r) => setTimeout(r, 50));
+
+  const target = resolveCaptureTarget(doc);
+  const rect = target.getBoundingClientRect();
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
+
+  try {
+    const dataUrl = await toPng(target, {
+      width,
+      height,
+      canvasWidth: width,
+      canvasHeight: height,
+      pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
+      backgroundColor: resolveCaptureBackground(doc),
+      cacheBust: true,
+      skipAutoScale: true,
+    });
+    return { dataUrl, width, height };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to capture preview subject: ${message}`);
+  }
 }
 
 /**
@@ -26,8 +225,8 @@ export async function capturePreviewIframe(options?: {
   width?: number;
   height?: number;
 }): Promise<CaptureResult> {
-  const iframe = document.getElementById("storybook-preview-iframe");
-  if (!(iframe instanceof HTMLIFrameElement)) {
+  const iframe = getPreviewIframe();
+  if (!iframe) {
     throw new Error("Storybook preview iframe not found");
   }
   const doc = iframe.contentDocument;
@@ -36,14 +235,7 @@ export async function capturePreviewIframe(options?: {
     throw new Error("Cannot access preview document (cross-origin or not ready)");
   }
 
-  const prev = {
-    width: iframe.style.width,
-    height: iframe.style.height,
-    maxWidth: iframe.style.maxWidth,
-    maxHeight: iframe.style.maxHeight,
-    minWidth: iframe.style.minWidth,
-    minHeight: iframe.style.minHeight,
-  };
+  const prev = readIframeSizeStyles(iframe);
 
   const width =
     options?.width ??
@@ -68,12 +260,7 @@ export async function capturePreviewIframe(options?: {
     throw new Error("Preview document has zero size");
   }
 
-  iframe.style.width = `${width}px`;
-  iframe.style.height = `${height}px`;
-  iframe.style.maxWidth = "none";
-  iframe.style.maxHeight = "none";
-  iframe.style.minWidth = `${width}px`;
-  iframe.style.minHeight = `${height}px`;
+  applyPreviewViewport(width, height);
 
   try {
     await waitTwoFrames();
@@ -85,7 +272,8 @@ export async function capturePreviewIframe(options?: {
       height,
       canvasWidth: width,
       canvasHeight: height,
-      pixelRatio: 1,
+      pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
+      backgroundColor: resolveCaptureBackground(doc),
       cacheBust: true,
       skipAutoScale: true,
     });
@@ -94,12 +282,7 @@ export async function capturePreviewIframe(options?: {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to capture preview: ${message}`);
   } finally {
-    iframe.style.width = prev.width;
-    iframe.style.height = prev.height;
-    iframe.style.maxWidth = prev.maxWidth;
-    iframe.style.maxHeight = prev.maxHeight;
-    iframe.style.minWidth = prev.minWidth;
-    iframe.style.minHeight = prev.minHeight;
+    writeIframeSizeStyles(iframe, prev);
   }
 }
 

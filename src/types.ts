@@ -56,6 +56,11 @@ export type DiffResultData = {
   passed: boolean;
   /** Capture / baseline dimensions for diagnosing layout mismatch. */
   sizeNote?: string;
+  /**
+   * Counts of changed pixels by max-channel delta magnitude (0…255),
+   * bucketed for the Difference distribution chart.
+   */
+  diffHistogram: number[];
 };
 
 export type { AlignMode, VisualDeltaImage };

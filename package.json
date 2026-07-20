@@ -3,7 +3,12 @@
   "version": "0.1.5",
   "private": true,
   "description": "Local Visual Delta Storybook addon (reimplemented from npm storybook-addon-visual-delta@0.1.5). Overlay / heatmap diff against baseline images.",
-  "keywords": ["storybook-addon", "visual", "overlay", "diff"],
+  "keywords": [
+    "storybook-addon",
+    "visual",
+    "overlay",
+    "diff"
+  ],
   "license": "MIT",
   "author": "houjinlong <1844041598@qq.com>",
   "type": "module",
@@ -14,8 +19,14 @@
     "./manager": "./src/manager.tsx",
     "./package.json": "./package.json"
   },
-  "files": ["src/**/*", "README.md", "VENDOR.md", "LICENSE"],
+  "files": [
+    "src/**/*",
+    "README.md",
+    "VENDOR.md",
+    "LICENSE"
+  ],
   "dependencies": {
+    "@storybook/icons": "^2.1.0",
     "html-to-image": "^1.11.13",
     "pixelmatch": "^7.1.0"
   },

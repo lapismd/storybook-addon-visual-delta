@@ -1,6 +1,17 @@
 import React from "react";
-import { addons, types } from "storybook/manager-api";
-import { ADDON_ID, PANEL_ID } from "./constants.js";
+import {
+  addons,
+  experimental_getStatusStore,
+  types,
+} from "storybook/manager-api";
+import { Addon_TypesEnum, type API_HashEntry } from "storybook/internal/types";
+import {
+  ADDON_ID,
+  PANEL_ID,
+  STATUS_TYPE_ID_VISUAL,
+  TEST_PROVIDER_ID,
+} from "./constants.js";
+import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
 addons.register(ADDON_ID, () => {
@@ -10,4 +21,22 @@ addons.register(ADDON_ID, () => {
     match: ({ viewMode }) => viewMode === "story",
     render: ({ active }) => <Panel active={active} />,
   });
+
+  // Local Playwright visual suite — only available while the Storybook
+  // Vite dev server can shell out via middleware.
+  if (globalThis.CONFIG_TYPE === "DEVELOPMENT") {
+    const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
+    addons.add(TEST_PROVIDER_ID, {
+      type: Addon_TypesEnum.experimental_TEST_PROVIDER,
+      id: TEST_PROVIDER_ID,
+      clear: () => {
+        statusStore.unset();
+      },
+      render: () => <VisualTestProviderRender />,
+      sidebarContextMenu: ({ context }: { context: API_HashEntry }) => {
+        if (context.type === "docs") return null;
+        return <VisualTestProviderRender entry={context} />;
+      },
+    });
+  }
 });
