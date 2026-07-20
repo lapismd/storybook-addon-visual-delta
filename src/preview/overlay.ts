@@ -10,6 +10,7 @@ import {
   type VisualDeltaImage,
   type VisualDeltaParams,
 } from "../constants.js";
+import { resolvePaintedBackground } from "../shared/preview-background.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
 const SPLIT_ID = "visual-delta-split";
@@ -357,6 +358,8 @@ function ensureSplit(
   ensurePaneScrollbarStyles();
 
   const horizontal = placement === "left" || placement === "right";
+  // Match the live story canvas / page fill — not Storybook chrome `--sb-color-bg`.
+  const paneBackground = resolvePaintedBackground(document, canvasElement);
   host.style.minHeight = "100vh";
   split.style.cssText = `
     display: flex;
@@ -368,7 +371,7 @@ function ensureSplit(
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
-    background: rgba(0, 0, 0, 0.12);
+    background: ${paneBackground};
   `;
   panesWrap.style.cssText = `
     display: flex;
@@ -385,12 +388,12 @@ function ensureSplit(
     width: 12px;
     overflow-y: scroll;
     overflow-x: hidden;
-    background: var(--sb-color-bg, #fff);
+    background: ${paneBackground};
   `;
   spacer.style.cssText = `width: 1px; height: 1px;`;
 
-  livePane.style.cssText = `${paneStyle()} background: var(--sb-color-bg, #fff);`;
-  baselinePane.style.cssText = `${paneStyle()} background: var(--sb-color-bg, #fff);`;
+  livePane.style.cssText = `${paneStyle()} background: ${paneBackground};`;
+  baselinePane.style.cssText = `${paneStyle()} background: ${paneBackground};`;
   // Live story keeps padding on `#storybook-root`; mirror it for the baseline.
   livePane.style.padding = "0";
   syncBaselinePaneInset(canvasElement, baselinePane);

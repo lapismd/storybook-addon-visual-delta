@@ -17,6 +17,8 @@ committed `dist/` build.
 - **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +
   baseline in a shared 50:50 scrollable split; center stacks a ghost overlay
   (opacity / difference blend). Legacy `beside`/`over` map to `right`/`center`.
+  Split panes / scroll rail use the live preview’s painted background (canvas →
+  body → `--background`), not Storybook chrome `--sb-color-bg`.
 - **Canvas align** — Shadcn baselines use `align: "canvas"` so component-clipped
   PNGs pin (via CSS transform) to the story subject (`#storybook-root > *`),
   matching Playwright clips. Legacy `align: "viewport"` pins to the iframe

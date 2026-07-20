@@ -1,5 +1,9 @@
 import { toPng } from "html-to-image";
 import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
+import {
+  resolvePaintedBackground,
+  toOpaqueRgb,
+} from "../shared/preview-background.js";
 
 export type CaptureResult = {
   dataUrl: string;
@@ -144,35 +148,7 @@ function preparePreviewForVisualCapture(doc: Document): () => void {
  * computed background (sampled to rgb so canvas always accepts it).
  */
 function resolveCaptureBackground(doc: Document): string {
-  const view = doc.defaultView;
-  const fallback = "#ffffff";
-  if (!view) return fallback;
-
-  const candidates = [doc.body, doc.documentElement];
-  let cssColor = "";
-  for (const el of candidates) {
-    if (!el) continue;
-    const bg = view.getComputedStyle(el).backgroundColor;
-    if (!bg || bg === "transparent" || bg === "rgba(0, 0, 0, 0)") continue;
-    cssColor = bg;
-    break;
-  }
-  if (!cssColor) return fallback;
-
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return fallback;
-    ctx.fillStyle = cssColor;
-    ctx.fillRect(0, 0, 1, 1);
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    if ((a ?? 0) < 1) return fallback;
-    return `rgb(${r}, ${g}, ${b})`;
-  } catch {
-    return fallback;
-  }
+  return toOpaqueRgb(resolvePaintedBackground(doc), document);
 }
 
 function resolveCaptureTarget(doc: Document): HTMLElement {
