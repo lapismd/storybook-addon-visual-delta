@@ -52,6 +52,11 @@ committed `dist/` build.
   `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`. The panel
   hydrates its compare view from those artifacts when present. Never writes
   baselines from Run Visual Tests.
+- **Capture parity with Playwright** — Live Diff blurs the preview's active
+  element and temporarily disables animations/transitions/caret (same prep as
+  `tests/visual/storybook.spec.ts`) before `html-to-image` capture, so play
+  focus rings (e.g. Accordion) do not inflate the pixelmatch %. Size mismatch
+  uses center pad/crop to match sidecar `fitRgba`.
 - **Hi-DPI baselines** — PNGs are captured at `deviceScaleFactor: 3` with
   Playwright `scale: "device"`; the overlay sizes them to CSS pixels so they
   still align with the live subject.
