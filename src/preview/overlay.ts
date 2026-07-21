@@ -10,6 +10,10 @@ import {
   type VisualDeltaImage,
   type VisualDeltaParams,
 } from "../constants.js";
+import {
+  baselineCompareSizesFromNatural,
+  type BaselineCompareSizes,
+} from "../shared/compare-viewport.js";
 import { resolvePaintedBackground } from "../shared/preview-background.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
@@ -17,8 +21,12 @@ const SPLIT_ID = "visual-delta-split";
 const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
 const BASELINE_PANE_ID = "visual-delta-baseline-pane";
-const SCROLL_RAIL_ID = "visual-delta-scroll-rail";
-const SCROLL_SPACER_ID = "visual-delta-scroll-spacer";
+const SCROLL_RAIL_V_ID = "visual-delta-scroll-rail-v";
+const SCROLL_SPACER_V_ID = "visual-delta-scroll-spacer-v";
+const SCROLL_RAIL_H_ID = "visual-delta-scroll-rail-h";
+const SCROLL_SPACER_H_ID = "visual-delta-scroll-spacer-h";
+const SCROLL_CORNER_ID = "visual-delta-scroll-corner";
+const RAIL_THICKNESS_PX = 12;
 
 /** Device-scale PNGs display at CSS size so they match the live subject. */
 function sizeOverlayImageToCss(img: HTMLImageElement) {
@@ -31,6 +39,8 @@ let dragCleanupRef: (() => void) | null = null;
 let layoutObserverRef: ResizeObserver | null = null;
 let sharedScrollCleanupRef: (() => void) | null = null;
 let sharedScrollRefreshRef: (() => void) | null = null;
+let liveContentWidthRestoreRef: (() => void) | null = null;
+let lastCompareSizes: BaselineCompareSizes | null = null;
 let lastSelection: {
   index: number;
   images: VisualDeltaImage[];
@@ -148,9 +158,9 @@ function resolveSubjectRect(canvasElement: HTMLElement): DOMRect {
   return canvasElement.getBoundingClientRect();
 }
 
-function paneStyle(): string {
+function paneStyleBase(): string {
   return `
-    flex: 1 1 50%;
+    flex: 0 0 auto;
     min-width: 0;
     min-height: 0;
     overflow: auto;
@@ -181,6 +191,39 @@ function syncBaselinePaneInset(
   baselinePane.style.borderColor = "transparent";
 }
 
+/**
+ * Lock the story subject to the baseline CSS width so left/right split does not
+ * reflow/wrap differently from the Playwright clip.
+ */
+function lockLiveContentWidth(canvasElement: HTMLElement, contentWidth: number) {
+  liveContentWidthRestoreRef?.();
+  liveContentWidthRestoreRef = null;
+  const subject = canvasElement.querySelector(":scope > *");
+  if (!(subject instanceof HTMLElement) || contentWidth < 1) return;
+  const prev = {
+    width: subject.style.width,
+    maxWidth: subject.style.maxWidth,
+    minWidth: subject.style.minWidth,
+    boxSizing: subject.style.boxSizing,
+  };
+  subject.style.boxSizing = "border-box";
+  subject.style.width = `${contentWidth}px`;
+  subject.style.maxWidth = `${contentWidth}px`;
+  subject.style.minWidth = `${contentWidth}px`;
+  liveContentWidthRestoreRef = () => {
+    subject.style.width = prev.width;
+    subject.style.maxWidth = prev.maxWidth;
+    subject.style.minWidth = prev.minWidth;
+    subject.style.boxSizing = prev.boxSizing;
+    liveContentWidthRestoreRef = null;
+  };
+}
+
+function unlockLiveContentWidth() {
+  liveContentWidthRestoreRef?.();
+  liveContentWidthRestoreRef = null;
+}
+
 const HIDE_PANE_SCROLLBAR_STYLE_ID = "visual-delta-hide-pane-scrollbars";
 
 function ensurePaneScrollbarStyles() {
@@ -209,85 +252,151 @@ function unbindSharedScroll() {
 }
 
 /**
- * One visible scrollbar (rail) drives both panes' scroll positions. Pane
- * scrollbars stay hidden so the compare reads as a single scroll surface.
+ * Vertical + horizontal rails drive both panes. Pane scrollbars stay hidden.
+ * Pane `scroll` events are mirrored with a re-entrancy lock so touch / trackpad
+ * gestures stay synchronized on both axes.
  */
-function bindSharedScrollRail(
+function bindSharedScrollRails(
   split: HTMLElement,
   livePane: HTMLElement,
   baselinePane: HTMLElement,
-  rail: HTMLElement,
-  spacer: HTMLElement,
+  vRail: HTMLElement,
+  vSpacer: HTMLElement,
+  hRail: HTMLElement,
+  hSpacer: HTMLElement,
 ) {
   unbindSharedScroll();
+  let syncing = false;
 
   const applyScroll = (top: number, left: number) => {
+    syncing = true;
     livePane.scrollTop = top;
     livePane.scrollLeft = left;
     baselinePane.scrollTop = top;
     baselinePane.scrollLeft = left;
+    if (vRail.style.display !== "none" && vRail.scrollTop !== top) {
+      vRail.scrollTop = top;
+    }
+    if (hRail.style.display !== "none" && hRail.scrollLeft !== left) {
+      hRail.scrollLeft = left;
+    }
+    syncing = false;
   };
 
-  const refreshSpacer = () => {
+  const clientWidth = () =>
+    Math.min(livePane.clientWidth, baselinePane.clientWidth) ||
+    livePane.clientWidth ||
+    baselinePane.clientWidth;
+  const clientHeight = () =>
+    Math.min(livePane.clientHeight, baselinePane.clientHeight) ||
+    livePane.clientHeight ||
+    baselinePane.clientHeight;
+
+  const refreshSpacers = () => {
     const maxScrollHeight = Math.max(
       livePane.scrollHeight,
       baselinePane.scrollHeight,
     );
-    spacer.style.height = `${maxScrollHeight}px`;
-    spacer.style.width = "1px";
-    rail.style.display =
-      maxScrollHeight > livePane.clientHeight + 1 ? "" : "none";
-    if (rail.scrollTop !== livePane.scrollTop) {
-      rail.scrollTop = livePane.scrollTop;
+    const maxScrollWidth = Math.max(
+      livePane.scrollWidth,
+      baselinePane.scrollWidth,
+    );
+    const ch = clientHeight();
+    const cw = clientWidth();
+    const overflowY = maxScrollHeight > ch + 1;
+    const overflowX = maxScrollWidth > cw + 1;
+
+    vSpacer.style.height = `${maxScrollHeight}px`;
+    vSpacer.style.width = "1px";
+    hSpacer.style.width = `${maxScrollWidth}px`;
+    hSpacer.style.height = "1px";
+
+    vRail.style.display = overflowY ? "" : "none";
+    hRail.style.display = overflowX ? "" : "none";
+    const corner = document.getElementById(SCROLL_CORNER_ID);
+    if (corner instanceof HTMLElement) {
+      corner.style.display = overflowX && overflowY ? "" : "none";
+    }
+
+    // When only one rail shows, reclaim the grid track.
+    split.style.gridTemplateColumns = overflowY
+      ? `1fr ${RAIL_THICKNESS_PX}px`
+      : "1fr 0px";
+    split.style.gridTemplateRows = overflowX
+      ? `1fr ${RAIL_THICKNESS_PX}px`
+      : "1fr 0px";
+
+    if (overflowY && vRail.scrollTop !== livePane.scrollTop) {
+      vRail.scrollTop = livePane.scrollTop;
+    }
+    if (overflowX && hRail.scrollLeft !== livePane.scrollLeft) {
+      hRail.scrollLeft = livePane.scrollLeft;
     }
   };
 
-  const onRailScroll = () => {
-    applyScroll(rail.scrollTop, livePane.scrollLeft);
+  const onVRailScroll = () => {
+    if (syncing) return;
+    applyScroll(vRail.scrollTop, livePane.scrollLeft);
+  };
+  const onHRailScroll = () => {
+    if (syncing) return;
+    applyScroll(livePane.scrollTop, hRail.scrollLeft);
+  };
+
+  const onPaneScroll = (source: HTMLElement) => {
+    if (syncing) return;
+    applyScroll(source.scrollTop, source.scrollLeft);
   };
 
   const onWheel = (event: WheelEvent) => {
-    // Drive both panes from one gesture; keep the rail thumb in sync.
     event.preventDefault();
     const maxTop = Math.max(
       0,
       Math.max(livePane.scrollHeight, baselinePane.scrollHeight) -
-        livePane.clientHeight,
+        clientHeight(),
     );
     const maxLeft = Math.max(
       0,
-      Math.max(livePane.scrollWidth, baselinePane.scrollWidth) -
-        livePane.clientWidth,
+      Math.max(livePane.scrollWidth, baselinePane.scrollWidth) - clientWidth(),
     );
+    const deltaX =
+      event.deltaX !== 0 ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+    const deltaY = event.shiftKey && event.deltaX === 0 ? 0 : event.deltaY;
     const nextTop = Math.max(
       0,
-      Math.min(maxTop, livePane.scrollTop + event.deltaY),
+      Math.min(maxTop, livePane.scrollTop + deltaY),
     );
     const nextLeft = Math.max(
       0,
-      Math.min(maxLeft, livePane.scrollLeft + event.deltaX),
+      Math.min(maxLeft, livePane.scrollLeft + deltaX),
     );
     applyScroll(nextTop, nextLeft);
-    if (rail.style.display !== "none") {
-      rail.scrollTop = nextTop;
-    }
   };
 
-  rail.addEventListener("scroll", onRailScroll, { passive: true });
+  const onLiveScroll = () => onPaneScroll(livePane);
+  const onBaselineScroll = () => onPaneScroll(baselinePane);
+
+  vRail.addEventListener("scroll", onVRailScroll, { passive: true });
+  hRail.addEventListener("scroll", onHRailScroll, { passive: true });
+  livePane.addEventListener("scroll", onLiveScroll, { passive: true });
+  baselinePane.addEventListener("scroll", onBaselineScroll, { passive: true });
   split.addEventListener("wheel", onWheel, { passive: false });
 
-  const ro = new ResizeObserver(() => refreshSpacer());
+  const ro = new ResizeObserver(() => refreshSpacers());
   ro.observe(livePane);
   ro.observe(baselinePane);
   const liveChild = livePane.querySelector(":scope > *");
   const baselineChild = baselinePane.querySelector(":scope > *");
   if (liveChild instanceof HTMLElement) ro.observe(liveChild);
   if (baselineChild instanceof HTMLElement) ro.observe(baselineChild);
-  refreshSpacer();
+  refreshSpacers();
 
-  sharedScrollRefreshRef = refreshSpacer;
+  sharedScrollRefreshRef = refreshSpacers;
   sharedScrollCleanupRef = () => {
-    rail.removeEventListener("scroll", onRailScroll);
+    vRail.removeEventListener("scroll", onVRailScroll);
+    hRail.removeEventListener("scroll", onHRailScroll);
+    livePane.removeEventListener("scroll", onLiveScroll);
+    baselinePane.removeEventListener("scroll", onBaselineScroll);
     split.removeEventListener("wheel", onWheel);
     ro.disconnect();
     sharedScrollRefreshRef = null;
@@ -296,6 +405,8 @@ function bindSharedScrollRail(
 
 function teardownSplit(canvasElement: HTMLElement) {
   unbindSharedScroll();
+  unlockLiveContentWidth();
+  lastCompareSizes = null;
   const split = document.getElementById(SPLIT_ID);
   if (!(split instanceof HTMLElement)) return;
   const host = split.parentElement;
@@ -306,9 +417,67 @@ function teardownSplit(canvasElement: HTMLElement) {
   split.remove();
 }
 
+/**
+ * Size both panes to the same viewport (baseline CSS + pad), capped to the
+ * available host so they stay equal; lock live subject width to content CSS.
+ */
+function applyEqualPaneViewports(
+  canvasElement: HTMLElement,
+  livePane: HTMLElement,
+  baselinePane: HTMLElement,
+  panesWrap: HTMLElement,
+  placement: PlacementMode,
+  sizes: BaselineCompareSizes,
+) {
+  lastCompareSizes = sizes;
+  const split = document.getElementById(SPLIT_ID);
+  const hostEl =
+    (split instanceof HTMLElement ? split.parentElement : null) ??
+    canvasElement.parentElement;
+  const horizontal = placement === "left" || placement === "right";
+  const availW = Math.max(
+    0,
+    (hostEl?.clientWidth ?? sizes.viewport.width * 2) - RAIL_THICKNESS_PX,
+  );
+  const availH = Math.max(
+    0,
+    (hostEl?.clientHeight ?? sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
+  );
+
+  let paneW: number;
+  let paneH: number;
+  if (horizontal) {
+    paneW = Math.min(
+      sizes.viewport.width,
+      Math.max(1, Math.floor((availW - 1) / 2)),
+    );
+    paneH = Math.min(sizes.viewport.height, Math.max(1, availH));
+  } else {
+    paneW = Math.min(sizes.viewport.width, Math.max(1, availW));
+    paneH = Math.min(
+      sizes.viewport.height,
+      Math.max(1, Math.floor((availH - 1) / 2)),
+    );
+  }
+
+  for (const pane of [livePane, baselinePane]) {
+    pane.style.width = `${paneW}px`;
+    pane.style.height = `${paneH}px`;
+    pane.style.flex = "0 0 auto";
+  }
+
+  panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
+  panesWrap.style.height = horizontal ? `${paneH}px` : `${paneH * 2 + 1}px`;
+
+  lockLiveContentWidth(canvasElement, sizes.content.width);
+  syncBaselinePaneInset(canvasElement, baselinePane);
+  sharedScrollRefreshRef?.();
+}
+
 function ensureSplit(
   canvasElement: HTMLElement,
   placement: PlacementMode,
+  sizes?: BaselineCompareSizes | null,
 ): { livePane: HTMLElement; baselinePane: HTMLElement } {
   const host = canvasElement.parentElement;
   if (!host) {
@@ -319,16 +488,22 @@ function ensureSplit(
   let panesWrap = document.getElementById(PANES_WRAP_ID);
   let livePane = document.getElementById(LIVE_PANE_ID);
   let baselinePane = document.getElementById(BASELINE_PANE_ID);
-  let rail = document.getElementById(SCROLL_RAIL_ID);
-  let spacer = document.getElementById(SCROLL_SPACER_ID);
+  let vRail = document.getElementById(SCROLL_RAIL_V_ID);
+  let vSpacer = document.getElementById(SCROLL_SPACER_V_ID);
+  let hRail = document.getElementById(SCROLL_RAIL_H_ID);
+  let hSpacer = document.getElementById(SCROLL_SPACER_H_ID);
+  let corner = document.getElementById(SCROLL_CORNER_ID);
 
   const needsBuild =
     !(split instanceof HTMLElement) ||
     !(panesWrap instanceof HTMLElement) ||
     !(livePane instanceof HTMLElement) ||
     !(baselinePane instanceof HTMLElement) ||
-    !(rail instanceof HTMLElement) ||
-    !(spacer instanceof HTMLElement);
+    !(vRail instanceof HTMLElement) ||
+    !(vSpacer instanceof HTMLElement) ||
+    !(hRail instanceof HTMLElement) ||
+    !(hSpacer instanceof HTMLElement) ||
+    !(corner instanceof HTMLElement);
 
   if (needsBuild) {
     unbindSharedScroll();
@@ -341,29 +516,38 @@ function ensureSplit(
     livePane.id = LIVE_PANE_ID;
     baselinePane = document.createElement("div");
     baselinePane.id = BASELINE_PANE_ID;
-    rail = document.createElement("div");
-    rail.id = SCROLL_RAIL_ID;
-    spacer = document.createElement("div");
-    spacer.id = SCROLL_SPACER_ID;
+    vRail = document.createElement("div");
+    vRail.id = SCROLL_RAIL_V_ID;
+    vSpacer = document.createElement("div");
+    vSpacer.id = SCROLL_SPACER_V_ID;
+    hRail = document.createElement("div");
+    hRail.id = SCROLL_RAIL_H_ID;
+    hSpacer = document.createElement("div");
+    hSpacer.id = SCROLL_SPACER_H_ID;
+    corner = document.createElement("div");
+    corner.id = SCROLL_CORNER_ID;
     host.style.position = "relative";
     host.insertBefore(split, canvasElement);
     livePane.appendChild(canvasElement);
     panesWrap.appendChild(livePane);
     panesWrap.appendChild(baselinePane);
-    rail.appendChild(spacer);
+    vRail.appendChild(vSpacer);
+    hRail.appendChild(hSpacer);
     split.appendChild(panesWrap);
-    split.appendChild(rail);
+    split.appendChild(vRail);
+    split.appendChild(hRail);
+    split.appendChild(corner);
   }
 
   ensurePaneScrollbarStyles();
 
   const horizontal = placement === "left" || placement === "right";
-  // Match the live story canvas / page fill — not Storybook chrome `--sb-color-bg`.
   const paneBackground = resolvePaintedBackground(document, canvasElement);
   host.style.minHeight = "100vh";
   split.style.cssText = `
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr ${RAIL_THICKNESS_PX}px;
+    grid-template-rows: 1fr ${RAIL_THICKNESS_PX}px;
     position: absolute;
     inset: 0;
     width: auto;
@@ -374,31 +558,45 @@ function ensureSplit(
     background: ${paneBackground};
   `;
   panesWrap.style.cssText = `
+    grid-column: 1;
+    grid-row: 1;
     display: flex;
-    flex: 1 1 auto;
     flex-direction: ${horizontal ? "row" : "column"};
+    align-items: flex-start;
+    justify-content: flex-start;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
     gap: 1px;
     background: rgba(0, 0, 0, 0.12);
   `;
-  rail.style.cssText = `
-    flex: 0 0 auto;
-    width: 12px;
+  vRail.style.cssText = `
+    grid-column: 2;
+    grid-row: 1;
     overflow-y: scroll;
     overflow-x: hidden;
     background: ${paneBackground};
   `;
-  spacer.style.cssText = `width: 1px; height: 1px;`;
+  hRail.style.cssText = `
+    grid-column: 1;
+    grid-row: 2;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    background: ${paneBackground};
+  `;
+  corner.style.cssText = `
+    grid-column: 2;
+    grid-row: 2;
+    background: ${paneBackground};
+  `;
+  vSpacer.style.cssText = `width: 1px; height: 1px;`;
+  hSpacer.style.cssText = `width: 1px; height: 1px;`;
 
-  livePane.style.cssText = `${paneStyle()} background: ${paneBackground};`;
-  baselinePane.style.cssText = `${paneStyle()} background: ${paneBackground};`;
-  // Live story keeps padding on `#storybook-root`; mirror it for the baseline.
+  livePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
+  baselinePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
   livePane.style.padding = "0";
   syncBaselinePaneInset(canvasElement, baselinePane);
 
-  // Pane order: baseline first for left/above, live first for right/below.
   const baselineFirst = placement === "left" || placement === "above";
   const first = baselineFirst ? baselinePane : livePane;
   const second = baselineFirst ? livePane : baselinePane;
@@ -407,8 +605,28 @@ function ensureSplit(
     panesWrap.appendChild(second);
   }
 
+  const compareSizes = sizes ?? lastCompareSizes;
+  if (compareSizes) {
+    applyEqualPaneViewports(
+      canvasElement,
+      livePane,
+      baselinePane,
+      panesWrap,
+      placement,
+      compareSizes,
+    );
+  }
+
   if (needsBuild || !sharedScrollCleanupRef) {
-    bindSharedScrollRail(split, livePane, baselinePane, rail, spacer);
+    bindSharedScrollRails(
+      split,
+      livePane,
+      baselinePane,
+      vRail,
+      vSpacer,
+      hRail,
+      hSpacer,
+    );
   } else {
     sharedScrollRefreshRef?.();
   }
@@ -534,6 +752,7 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
   const applyOverlayPosition = (
     overlay: HTMLElement,
     imageItem: VisualDeltaImage,
+    sizes?: BaselineCompareSizes | null,
   ) => {
     const placement = effectivePlacement(imageItem);
     currentPlacement = placement;
@@ -541,7 +760,28 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
     updateOverlayStyle(overlay);
 
     if (isSplitPlacement(placement)) {
-      const { baselinePane } = ensureSplit(canvasElement, placement);
+      const compareSizes =
+        sizes ??
+        lastCompareSizes ??
+        (() => {
+          const img = overlay.querySelector("img");
+          if (
+            img instanceof HTMLImageElement &&
+            img.naturalWidth > 0 &&
+            img.naturalHeight > 0
+          ) {
+            return baselineCompareSizesFromNatural(
+              img.naturalWidth,
+              img.naturalHeight,
+            );
+          }
+          return null;
+        })();
+      const { baselinePane } = ensureSplit(
+        canvasElement,
+        placement,
+        compareSizes,
+      );
       if (overlay.parentElement !== baselinePane) {
         baselinePane.appendChild(overlay);
       }
@@ -563,11 +803,14 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
   const scheduleOverlayPosition = (
     overlay: HTMLElement,
     imageItem: VisualDeltaImage,
+    sizes?: BaselineCompareSizes | null,
   ) => {
-    applyOverlayPosition(overlay, imageItem);
+    applyOverlayPosition(overlay, imageItem, sizes);
     requestAnimationFrame(() => {
-      applyOverlayPosition(overlay, imageItem);
-      requestAnimationFrame(() => applyOverlayPosition(overlay, imageItem));
+      applyOverlayPosition(overlay, imageItem, sizes);
+      requestAnimationFrame(() =>
+        applyOverlayPosition(overlay, imageItem, sizes),
+      );
     });
   };
 
@@ -631,7 +874,11 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       if (img) {
         const onReady = () => {
           sizeOverlayImageToCss(img);
-          scheduleOverlayPosition(overlay, selectedImageItem);
+          const sizes = baselineCompareSizesFromNatural(
+            img.naturalWidth,
+            img.naturalHeight,
+          );
+          scheduleOverlayPosition(overlay, selectedImageItem, sizes);
           watchLayout(overlay);
         };
         if (img.src === selectedImageItem.src && img.complete) {

@@ -48,6 +48,7 @@ import {
   fitImageData,
   loadImage,
   maskTransparentRegions,
+  withPlaywrightPreviewViewport,
 } from "./capture.js";
 import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
 import { DiffResult } from "./DiffResult.js";
@@ -176,7 +177,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       await overlayHidden;
       let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
       try {
-        capture = await capturePreviewSubject();
+        capture = await withPlaywrightPreviewViewport(() =>
+          capturePreviewSubject(),
+        );
       } finally {
         showOverlay();
       }
