@@ -14,6 +14,11 @@ export type VisualDeltaSettings = {
   placement: PlacementMode;
   opacity: number;
   colorInversion: boolean;
+  /**
+   * When false, hide the live story and show only the baseline image
+   * (center overlay). Default true = live visible.
+   */
+  liveVisible: boolean;
   passThresholdPercent: number;
 };
 
@@ -22,6 +27,7 @@ export const DEFAULT_SETTINGS: VisualDeltaSettings = {
   placement: DEFAULT_PLACEMENT,
   opacity: 1,
   colorInversion: false,
+  liveVisible: true,
   passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
 };
 
@@ -57,6 +63,10 @@ export function loadSettings(): VisualDeltaSettings {
         typeof parsed.colorInversion === "boolean"
           ? parsed.colorInversion
           : DEFAULT_SETTINGS.colorInversion,
+      liveVisible:
+        typeof parsed.liveVisible === "boolean"
+          ? parsed.liveVisible
+          : DEFAULT_SETTINGS.liveVisible,
       passThresholdPercent,
     };
   } catch {

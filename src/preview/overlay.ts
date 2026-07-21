@@ -12,6 +12,10 @@ import {
   type VisualDeltaParams,
 } from "../constants.js";
 import {
+  baselinePanePaddingPx,
+  canvasCompareInsetsPx,
+} from "../shared/compare-insets.js";
+import {
   baselineCompareSizesFromNatural,
   sharedScrollExtentSize,
   type BaselineCompareSizes,
@@ -51,6 +55,43 @@ let lastSelection: {
   images: VisualDeltaImage[];
 } | null = null;
 let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
+/** False = image-only: hide live story, show baseline PNG (center + drag). */
+let currentLiveVisible = true;
+
+const MODE_BADGE_ID = "visual-delta-mode-badge";
+
+function syncModeBadge(imageOnly: boolean) {
+  let badge = document.getElementById(MODE_BADGE_ID);
+  if (!imageOnly) {
+    badge?.remove();
+    return;
+  }
+  if (!(badge instanceof HTMLElement)) {
+    badge = document.createElement("div");
+    badge.id = MODE_BADGE_ID;
+    badge.textContent = "Image only";
+    document.documentElement.appendChild(badge);
+  }
+  badge.style.cssText = `
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 10000;
+    padding: 3px 8px;
+    font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+    color: #fff;
+    background: rgba(2, 97, 198, 0.92);
+    border-radius: 4px;
+    pointer-events: none;
+    user-select: none;
+  `;
+}
+
+function applyLiveVisibility(canvasElement: HTMLElement) {
+  const imageOnly = !currentLiveVisible;
+  canvasElement.style.visibility = imageOnly ? "hidden" : "";
+  syncModeBadge(imageOnly);
+}
 
 function getCanvasScale(element: Element): number {
   const bodyStyle = window.getComputedStyle(document.body);
@@ -177,17 +218,23 @@ function paneStyleBase(): string {
 
 /**
  * Baselines are component-clipped (no canvas chrome). Mirror `#storybook-root`
- * padding onto the baseline pane so the PNG lines up with the live subject.
+ * padding **plus** the story subject's margins onto the baseline pane so the
+ * PNG lines up with the live subject (e.g. `my-2` on a full-width control).
  */
 function syncBaselinePaneInset(
   canvasElement: HTMLElement,
   baselinePane: HTMLElement,
 ) {
   const style = getComputedStyle(canvasElement);
-  baselinePane.style.paddingTop = style.paddingTop;
-  baselinePane.style.paddingRight = style.paddingRight;
-  baselinePane.style.paddingBottom = style.paddingBottom;
-  baselinePane.style.paddingLeft = style.paddingLeft;
+  const subject = canvasElement.querySelector(":scope > *");
+  const subjectStyle =
+    subject instanceof Element ? getComputedStyle(subject) : null;
+  const pad = baselinePanePaddingPx(style, subjectStyle);
+
+  baselinePane.style.paddingTop = `${pad.top}px`;
+  baselinePane.style.paddingRight = `${pad.right}px`;
+  baselinePane.style.paddingBottom = `${pad.bottom}px`;
+  baselinePane.style.paddingLeft = `${pad.left}px`;
   baselinePane.style.borderTopWidth = style.borderTopWidth;
   baselinePane.style.borderRightWidth = style.borderRightWidth;
   baselinePane.style.borderBottomWidth = style.borderBottomWidth;
@@ -197,8 +244,8 @@ function syncBaselinePaneInset(
 }
 
 /**
- * Lock the story subject to the baseline CSS width so left/right split does not
- * reflow/wrap differently from the Playwright clip.
+ * Lock the story subject to the baseline CSS width so split and center overlay
+ * do not reflow/wrap differently from the Playwright clip.
  */
 function lockLiveContentWidth(canvasElement: HTMLElement, contentWidth: number) {
   liveContentWidthRestoreRef?.();
@@ -234,20 +281,10 @@ function measureCanvasInsets(canvasElement: HTMLElement): {
   y: number;
 } {
   const style = getComputedStyle(canvasElement);
-  const x =
-    parseFloat(style.paddingLeft) +
-    parseFloat(style.paddingRight) +
-    parseFloat(style.borderLeftWidth) +
-    parseFloat(style.borderRightWidth);
-  const y =
-    parseFloat(style.paddingTop) +
-    parseFloat(style.paddingBottom) +
-    parseFloat(style.borderTopWidth) +
-    parseFloat(style.borderBottomWidth);
-  return {
-    x: Number.isFinite(x) ? x : 0,
-    y: Number.isFinite(y) ? y : 0,
-  };
+  const subject = canvasElement.querySelector(":scope > *");
+  const subjectStyle =
+    subject instanceof Element ? getComputedStyle(subject) : null;
+  return canvasCompareInsetsPx(style, subjectStyle);
 }
 
 /**
@@ -563,6 +600,7 @@ function teardownSplit(canvasElement: HTMLElement) {
     host.insertBefore(canvasElement, split);
   }
   split.remove();
+  applyLiveVisibility(canvasElement);
 }
 
 /**
@@ -949,18 +987,43 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
         baselinePane.appendChild(overlay);
       }
       overlay.style.transform = "none";
+      applyLiveVisibility(canvasElement);
       return;
     }
 
     teardownSplit(canvasElement);
     const canvasParent = canvasElement.parentElement;
     if (!canvasParent) return;
+    // Match split compare: pin live subject to baseline CSS width so the
+    // overlay is not compared against a narrower reflowed layout.
+    const compareSizes =
+      sizes ??
+      lastCompareSizes ??
+      (() => {
+        const img = overlay.querySelector("img");
+        if (
+          img instanceof HTMLImageElement &&
+          img.naturalWidth > 0 &&
+          img.naturalHeight > 0
+        ) {
+          return baselineCompareSizesFromNatural(
+            img.naturalWidth,
+            img.naturalHeight,
+          );
+        }
+        return null;
+      })();
+    if (compareSizes) {
+      lastCompareSizes = compareSizes;
+      lockLiveContentWidth(canvasElement, compareSizes.content.width);
+    }
     canvasParent.style.position = "relative";
     if (overlay.parentElement !== canvasParent) {
       canvasParent.appendChild(overlay);
     }
     const { x, y } = calculateCenterPosition(imageItem, canvasParent);
     overlay.style.transform = `translate(${x}px, ${y}px)`;
+    applyLiveVisibility(canvasElement);
   };
 
   const scheduleOverlayPosition = (
@@ -1008,6 +1071,8 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       overlay.remove();
     }
     teardownSplit(canvasElement);
+    canvasElement.style.visibility = "";
+    syncModeBadge(false);
   };
 
   const emit = useChannel({
@@ -1065,9 +1130,13 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       opacity: number;
       colorInversion: boolean;
       placement?: PlacementMode;
+      liveVisible?: boolean;
     }) => {
       currentOpacity = data.opacity;
       currentColorInversion = data.colorInversion;
+      if (typeof data.liveVisible === "boolean") {
+        currentLiveVisible = data.liveVisible;
+      }
       if (data.placement) {
         currentPlacement = normalizePlacement(data.placement);
         if (lastSelection) {
@@ -1088,25 +1157,37 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       if (overlay && lastSelection) {
         const imageItem = lastSelection.images[lastSelection.index];
         if (imageItem) scheduleOverlayPosition(overlay, imageItem);
+      } else {
+        applyLiveVisibility(canvasElement);
       }
     },
     [EVENTS.HIDE_OVERLAY]: () => {
+      // Soft-hide only — keep split panes + width lock so the live subject
+      // does not reflow when the placement pad toggles the overlay off.
       const overlay = document.getElementById(OVERLAY_ID);
       if (overlay) {
-        overlay.style.display = "none";
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            emit(EVENTS.OVERLAY_HIDDEN, {});
-          });
-        });
-      } else {
-        emit(EVENTS.OVERLAY_HIDDEN, {});
+        overlay.style.visibility = "hidden";
+        overlay.style.pointerEvents = "none";
       }
+      const baselinePane = document.getElementById(BASELINE_PANE_ID);
+      if (baselinePane instanceof HTMLElement) {
+        baselinePane.style.visibility = "hidden";
+      }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          emit(EVENTS.OVERLAY_HIDDEN, {});
+        });
+      });
     },
     [EVENTS.SHOW_OVERLAY]: () => {
       const overlay = document.getElementById(OVERLAY_ID);
       if (overlay) {
-        overlay.style.display = "";
+        overlay.style.visibility = "";
+        overlay.style.pointerEvents = "";
+      }
+      const baselinePane = document.getElementById(BASELINE_PANE_ID);
+      if (baselinePane instanceof HTMLElement) {
+        baselinePane.style.visibility = "";
       }
     },
   });

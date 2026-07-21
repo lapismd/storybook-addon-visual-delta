@@ -6,6 +6,12 @@ import {
   type PlacementMode,
   type VisualDeltaImage,
 } from "../constants.js";
+import {
+  opacityForPlacementChange,
+  placementToggleAction,
+  revealCenteredOverlayPatch,
+  shouldSoftShowOverlay,
+} from "../shared/overlay-session.js";
 import type { OverlayInfo } from "../types.js";
 import {
   clearSettings,
@@ -21,9 +27,17 @@ type StoryData = {
   storyId: string;
   storyName: string;
   index: number;
+  /**
+   * Whether the baseline overlay / split chrome is visible. Distinct from
+   * `index`: hiding via the placement pad keeps the selected baseline so the
+   * preview layout (width lock, split panes) does not jump.
+   */
+  overlayOn: boolean;
   opacity: number;
   colorInversion: boolean;
   placement: PlacementMode;
+  /** False = image-only (live hidden, center overlay). Default true. */
+  liveVisible: boolean;
   passThresholdPercent: number;
 };
 
@@ -103,35 +117,55 @@ function withPlacement(
   return images.map((img) => ({ ...img, placement }));
 }
 
-function settingsFromStory(data: StoryData): VisualDeltaSettings {
-  return {
-    overlayOn: data.index >= 0,
-    placement: data.placement,
-    opacity: data.opacity,
-    colorInversion: data.colorInversion,
-    passThresholdPercent: data.passThresholdPercent,
-  };
-}
-
 export function useStoryData() {
   const prefsRef = useRef<VisualDeltaSettings>(loadSettings());
+  /** Compare prefs to restore when leaving image-only. */
+  const placementBeforeImageOnlyRef = useRef<PlacementMode | null>(null);
+  const styleBeforeImageOnlyRef = useRef<{
+    opacity: number;
+    colorInversion: boolean;
+  } | null>(null);
   const [storyData, setStoryData] = useState<StoryData>(() => {
     const prefs = prefsRef.current;
+    const liveVisible = prefs.liveVisible;
+    if (!liveVisible) {
+      placementBeforeImageOnlyRef.current = prefs.placement;
+      styleBeforeImageOnlyRef.current = {
+        opacity: prefs.opacity,
+        colorInversion: prefs.colorInversion,
+      };
+    }
     return {
       images: [],
       storyId: "",
       storyName: "",
       index: -1,
+      overlayOn: false,
       opacity: prefs.opacity,
       colorInversion: prefs.colorInversion,
-      placement: prefs.placement,
+      placement: liveVisible ? prefs.placement : "center",
+      liveVisible,
       passThresholdPercent: prefs.passThresholdPercent,
     };
   });
   const emitRef = useRef<ReturnType<typeof useChannel> | null>(null);
 
   const persist = useCallback((next: StoryData) => {
-    const settings = settingsFromStory(next);
+    const priorStyle = styleBeforeImageOnlyRef.current;
+    const settings: VisualDeltaSettings = {
+      overlayOn: next.overlayOn,
+      placement: next.liveVisible
+        ? next.placement
+        : (placementBeforeImageOnlyRef.current ?? next.placement),
+      opacity: next.liveVisible
+        ? next.opacity
+        : (priorStyle?.opacity ?? next.opacity),
+      colorInversion: next.liveVisible
+        ? next.colorInversion
+        : (priorStyle?.colorInversion ?? next.colorInversion),
+      liveVisible: next.liveVisible,
+      passThresholdPercent: next.passThresholdPercent,
+    };
     prefsRef.current = settings;
     saveSettings(settings);
   }, []);
@@ -161,28 +195,51 @@ export function useStoryData() {
         ? data.images
         : [data.images];
       const prefs = prefsRef.current;
-      const placement = prefs.placement;
-      const images = withPlacement(imagesArray, placement);
-      const hasImages = images.length > 0;
-      const initialIndex =
-        hasImages && prefs.overlayOn ? 0 : -1;
-      const next: StoryData = {
-        images,
-        storyId: data.storyId,
-        storyName: data.storyName,
-        index: initialIndex,
-        opacity: prefs.opacity,
-        colorInversion: prefs.colorInversion,
-        placement,
-        passThresholdPercent: prefs.passThresholdPercent,
-      };
-      setStoryData(next);
-      emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
-        opacity: next.opacity,
-        colorInversion: next.colorInversion,
-        placement: next.placement,
+      const liveVisible = prefs.liveVisible;
+      const placement = liveVisible ? prefs.placement : "center";
+      if (!liveVisible) {
+        placementBeforeImageOnlyRef.current = prefs.placement;
+        styleBeforeImageOnlyRef.current = {
+          opacity: prefs.opacity,
+          colorInversion: prefs.colorInversion,
+        };
+      }
+      setStoryData((prev) => {
+        // Create/unskip can HMR an empty parameters payload after the panel
+        // already hydrated the new PNG — don't wipe the gallery for that race.
+        if (
+          imagesArray.length === 0 &&
+          prev.images.length > 0 &&
+          prev.storyId === data.storyId
+        ) {
+          return { ...prev, storyName: data.storyName };
+        }
+        const images = withPlacement(imagesArray, placement);
+        const hasImages = images.length > 0;
+        // Image-only always shows the overlay; otherwise respect overlayOn.
+        const initialIndex =
+          hasImages && (prefs.overlayOn || !liveVisible) ? 0 : -1;
+        const next: StoryData = {
+          images,
+          storyId: data.storyId,
+          storyName: data.storyName,
+          index: initialIndex,
+          overlayOn: initialIndex >= 0,
+          opacity: liveVisible ? prefs.opacity : 1,
+          colorInversion: liveVisible ? prefs.colorInversion : false,
+          placement,
+          liveVisible,
+          passThresholdPercent: prefs.passThresholdPercent,
+        };
+        emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
+          opacity: next.opacity,
+          colorInversion: next.colorInversion,
+          placement: next.placement,
+          liveVisible: next.liveVisible,
+        });
+        void selectImage(initialIndex, images);
+        return next;
       });
-      void selectImage(initialIndex, images);
     },
   });
   emitRef.current = emit;
@@ -200,7 +257,7 @@ export function useStoryData() {
   const setIndex = useCallback(
     (index: number) => {
       setStoryData((prev) => {
-        const next = { ...prev, index };
+        const next = { ...prev, index, overlayOn: index >= 0 };
         persist(next);
         void selectImage(index, prev.images);
         return next;
@@ -209,14 +266,26 @@ export function useStoryData() {
     [persist, selectImage],
   );
 
+  const hideOverlay = useCallback(() => {
+    emitRef.current?.(EVENTS.HIDE_OVERLAY, {});
+  }, []);
+
+  const showOverlay = useCallback(() => {
+    emitRef.current?.(EVENTS.SHOW_OVERLAY, {});
+  }, []);
+
   const emitStyle = useCallback(
     (
-      next: Pick<StoryData, "opacity" | "colorInversion" | "placement">,
+      next: Pick<
+        StoryData,
+        "opacity" | "colorInversion" | "placement" | "liveVisible"
+      >,
     ) => {
       emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
         opacity: next.opacity,
         colorInversion: next.colorInversion,
         placement: next.placement,
+        liveVisible: next.liveVisible,
       });
     },
     [],
@@ -250,15 +319,11 @@ export function useStoryData() {
     (placement: PlacementMode) => {
       setStoryData((prev) => {
         const images = withPlacement(prev.images, placement);
-        const opacity = isSplitPlacement(placement)
-          ? isSplitPlacement(prev.placement)
-            ? prev.opacity
-            : 1
-          : prev.placement === "center"
-            ? prev.opacity
-            : prev.opacity === 1
-              ? 0.5
-              : prev.opacity;
+        const opacity = opacityForPlacementChange(
+          prev.placement,
+          placement,
+          prev.opacity,
+        );
         const next = { ...prev, placement, images, opacity };
         persist(next);
         emitStyle(next);
@@ -271,39 +336,121 @@ export function useStoryData() {
 
   /**
    * Direction pad: pick a position (shows overlay), or click the active
-   * position again to hide the overlay.
+   * position again to soft-hide the overlay without tearing down compare
+   * layout (width lock / split panes) so the live subject does not jump.
    */
   const togglePlacement = useCallback(
     (placement: PlacementMode) => {
       setStoryData((prev) => {
-        const overlayOn = prev.index >= 0;
-        if (overlayOn && prev.placement === placement) {
-          const next = { ...prev, index: -1 };
+        const action = placementToggleAction(
+          {
+            overlayOn: prev.overlayOn,
+            placement: prev.placement,
+            index: prev.index,
+            imageCount: prev.images.length,
+            opacity: prev.opacity,
+          },
+          placement,
+        );
+        if (action.type === "soft-hide") {
+          const next = { ...prev, overlayOn: false };
           persist(next);
-          void selectImage(-1, prev.images);
+          hideOverlay();
           return next;
         }
 
-        const images = withPlacement(prev.images, placement);
-        const opacity = isSplitPlacement(placement)
-          ? isSplitPlacement(prev.placement)
-            ? prev.opacity
-            : 1
-          : prev.placement === "center"
-            ? prev.opacity
-            : prev.opacity === 1
-              ? 0.5
-              : prev.opacity;
-        const index =
-          overlayOn && prev.index >= 0
-            ? prev.index
-            : images.length > 0
-              ? 0
-              : -1;
-        const next = { ...prev, placement, images, opacity, index };
+        const images = withPlacement(prev.images, action.placement);
+        const softShow = shouldSoftShowOverlay(
+          {
+            overlayOn: prev.overlayOn,
+            placement: prev.placement,
+            index: prev.index,
+            imageCount: prev.images.length,
+            opacity: prev.opacity,
+          },
+          action.placement,
+          action.index,
+        );
+        const next = {
+          ...prev,
+          placement: action.placement,
+          images,
+          opacity: action.opacity,
+          index: action.index,
+          overlayOn: action.index >= 0,
+        };
         persist(next);
         emitStyle(next);
-        void selectImage(index, images);
+        if (softShow) {
+          showOverlay();
+        } else {
+          void selectImage(action.index, images);
+        }
+        return next;
+      });
+    },
+    [emitStyle, hideOverlay, persist, selectImage, showOverlay],
+  );
+
+  /**
+   * Eye toggle: live story visible (default) vs image-only.
+   * Image-only forces center overlay on and hides the live canvas.
+   */
+  const setLiveVisible = useCallback(
+    (liveVisible: boolean) => {
+      setStoryData((prev) => {
+        if (liveVisible === prev.liveVisible) return prev;
+
+        if (!liveVisible) {
+          placementBeforeImageOnlyRef.current = prev.placement;
+          styleBeforeImageOnlyRef.current = {
+            opacity: prev.opacity,
+            colorInversion: prev.colorInversion,
+          };
+          const images = withPlacement(prev.images, "center");
+          const index =
+            prev.images.length > 0
+              ? prev.index >= 0
+                ? prev.index
+                : 0
+              : -1;
+          const next: StoryData = {
+            ...prev,
+            liveVisible: false,
+            placement: "center",
+            images,
+            index,
+            overlayOn: index >= 0,
+            opacity: 1,
+            colorInversion: false,
+          };
+          persist(next);
+          emitStyle(next);
+          void selectImage(index, images);
+          return next;
+        }
+
+        const restored =
+          placementBeforeImageOnlyRef.current ?? prev.placement;
+        const priorStyle = styleBeforeImageOnlyRef.current;
+        placementBeforeImageOnlyRef.current = null;
+        styleBeforeImageOnlyRef.current = null;
+        const images = withPlacement(prev.images, restored);
+        const opacity = isSplitPlacement(restored)
+          ? 1
+          : (priorStyle?.opacity ?? prev.opacity);
+        const next: StoryData = {
+          ...prev,
+          liveVisible: true,
+          placement: restored,
+          images,
+          opacity,
+          colorInversion: priorStyle?.colorInversion ?? prev.colorInversion,
+          overlayOn: prev.index >= 0,
+        };
+        persist(next);
+        emitStyle(next);
+        void selectImage(prev.index, images);
         return next;
       });
     },
@@ -321,14 +468,6 @@ export function useStoryData() {
     [persist],
   );
 
-  const hideOverlay = useCallback(() => {
-    emitRef.current?.(EVENTS.HIDE_OVERLAY, {});
-  }, []);
-
-  const showOverlay = useCallback(() => {
-    emitRef.current?.(EVENTS.SHOW_OVERLAY, {});
-  }, []);
-
   const resetOverlay = useCallback(() => {
     emitRef.current?.(EVENTS.RESET_OVERLAY, {});
   }, []);
@@ -341,13 +480,17 @@ export function useStoryData() {
       const images = withPlacement(prev.images, defaults.placement);
       const index =
         defaults.overlayOn && images.length > 0 ? 0 : -1;
+      placementBeforeImageOnlyRef.current = null;
+      styleBeforeImageOnlyRef.current = null;
       const next: StoryData = {
         ...prev,
         images,
         index,
+        overlayOn: index >= 0,
         opacity: defaults.opacity,
         colorInversion: defaults.colorInversion,
         placement: defaults.placement,
+        liveVisible: defaults.liveVisible,
         passThresholdPercent: defaults.passThresholdPercent,
       };
       emitStyle(next);
@@ -370,6 +513,87 @@ export function useStoryData() {
     });
   }, [selectImage]);
 
+  /**
+   * After create/update: bust image cache, force center overlay on, and show
+   * the live story under it for review. When images are not loaded yet (create
+   * empty-state), still persist center + overlayOn for the next INIT_IMAGE.
+   */
+  const revealCenteredOverlay = useCallback(() => {
+    const bust = `t=${Date.now()}`;
+    setStoryData((prev) => {
+      const patch = revealCenteredOverlayPatch({
+        index: prev.index,
+        imageCount: prev.images.length,
+        placement: prev.placement,
+        opacity: prev.opacity,
+      });
+      if (prev.images.length === 0) {
+        const next: StoryData = { ...prev, ...patch };
+        persist(next);
+        return next;
+      }
+      const images = withPlacement(
+        prev.images.map((img) => {
+          const base = img.src.split("?")[0] ?? img.src;
+          return { ...img, src: `${base}?${bust}` };
+        }),
+        "center",
+      );
+      const next: StoryData = {
+        ...prev,
+        ...patch,
+        images,
+      };
+      persist(next);
+      emitStyle(next);
+      void selectImage(patch.index, images);
+      return next;
+    });
+  }, [emitStyle, persist, selectImage]);
+
+  /**
+   * Seed gallery/overlay from known baseline URLs when CSF HMR has not yet
+   * re-emitted INIT_IMAGE (create no-op patch / already-wired stories).
+   */
+  const hydrateBaselineImages = useCallback(
+    (srcs: string[]) => {
+      if (srcs.length === 0) return;
+      const bust = `t=${Date.now()}`;
+      setStoryData((prev) => {
+        const images = withPlacement(
+          srcs.map((src) => {
+            const base = src.split("?")[0] ?? src;
+            return {
+              src: `${base}?${bust}`,
+              offsetX: 0,
+              offsetY: 0,
+              align: "canvas" as const,
+              placement: "center" as const,
+            };
+          }),
+          "center",
+        );
+        const patch = revealCenteredOverlayPatch({
+          index: 0,
+          imageCount: images.length,
+          placement: "center",
+          opacity: prev.opacity,
+        });
+        const next: StoryData = {
+          ...prev,
+          ...patch,
+          images,
+          placement: "center",
+        };
+        persist(next);
+        emitStyle(next);
+        void selectImage(patch.index, images);
+        return next;
+      });
+    },
+    [emitStyle, persist, selectImage],
+  );
+
   return {
     ...storyData,
     setIndex,
@@ -377,11 +601,14 @@ export function useStoryData() {
     setColorInversion,
     setPlacement,
     togglePlacement,
+    setLiveVisible,
     setPassThresholdPercent,
     hideOverlay,
     showOverlay,
     resetOverlay,
     resetSettings,
     reloadBaselineImages,
+    revealCenteredOverlay,
+    hydrateBaselineImages,
   };
 }

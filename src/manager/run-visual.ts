@@ -8,6 +8,7 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
+  VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
 } from "../constants.js";
 import {
@@ -442,9 +443,13 @@ export async function postVisualReviewStatus(body: {
   return data;
 }
 
+export type VisualBaselineJobKind = "create" | "update";
+
 export type VisualCreateProgress = {
   running: boolean;
   label: string;
+  /** Which baseline write endpoint produced this progress. */
+  kind: VisualBaselineJobKind;
   error?: string;
   logTail?: string;
 };
@@ -453,7 +458,7 @@ type CreateProgressListener = (progress: VisualCreateProgress | null) => void;
 const createProgressListeners = new Set<CreateProgressListener>();
 let latestCreateProgress: VisualCreateProgress | null = null;
 
-/** Subscribe to create-baseline progress from panel or sidebar. */
+/** Subscribe to create/update baseline progress from panel or sidebar. */
 export function subscribeVisualCreateProgress(listener: CreateProgressListener) {
   createProgressListeners.add(listener);
   if (latestCreateProgress) listener(latestCreateProgress);
@@ -474,6 +479,130 @@ export type VisualCreateResponse = {
   log: string;
 };
 
+async function postVisualBaselineWrite(
+  kind: VisualBaselineJobKind,
+  body: { storyId: string },
+): Promise<VisualCreateResponse> {
+  const path =
+    kind === "create" ? VISUAL_DELTA_CREATE_PATH : VISUAL_DELTA_UPDATE_PATH;
+  const runningLabel = kind === "create" ? "Creating…" : "Updating…";
+  const failedLabel = kind === "create" ? "Create failed" : "Update failed";
+  const failVerb =
+    kind === "create" ? "Create baselines failed" : "Update baselines failed";
+  const exitVerb =
+    kind === "create" ? "Baseline create" : "Baseline update";
+
+  emitVisualCreateProgress({
+    running: true,
+    label: runningLabel,
+    kind,
+    logTail: "",
+  });
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    let log = "";
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        log += decoder.decode(value, { stream: true });
+        emitVisualCreateProgress({
+          running: true,
+          label: runningLabel,
+          kind,
+          logTail: log.slice(-12_000),
+        });
+      }
+      log += decoder.decode();
+    } else {
+      log = await response.text();
+    }
+    log = log.trim();
+
+    if (!response.ok) {
+      const error = log || `${failVerb} (${response.status})`;
+      emitVisualCreateProgress({
+        running: false,
+        label: failedLabel,
+        kind,
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    const exitMatch = log.match(/\[exit (\d+)\]/);
+    if (exitMatch && exitMatch[1] !== "0") {
+      const detail =
+        /Address already in use|was not able to start/i.test(log)
+          ? "Playwright static server failed to start (port 6007 busy or stale)."
+          : /No recipe for/i.test(log)
+            ? log.match(/No recipe for[^\n]+/)?.[0]
+            : undefined;
+      const error =
+        detail ?? `${exitVerb} exited with code ${exitMatch[1]}`;
+      emitVisualCreateProgress({
+        running: false,
+        label: failedLabel,
+        kind,
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+
+    let label: string;
+    if (kind === "create") {
+      const patchMatch = log.match(
+        /Story visualDelta patch:\s*(\d+)\s*updated(?:,\s*(\d+)\s*already wired)?/i,
+      );
+      const patchedCount = patchMatch ? Number(patchMatch[1]) : 0;
+      const alreadyWiredCount = patchMatch?.[2] ? Number(patchMatch[2]) : 0;
+      const wiredCount = patchedCount + alreadyWiredCount;
+      label =
+        wiredCount > 0
+          ? `Created (${wiredCount} stor${wiredCount === 1 ? "y" : "ies"} wired)`
+          : /skip-visual/i.test(body.storyId) ||
+              body.storyId.endsWith("--closed")
+            ? "Created — open a visual story (not skip-visual) to review"
+            : "Created";
+    } else {
+      label = "Updated";
+    }
+
+    emitVisualCreateProgress({
+      running: false,
+      label,
+      kind,
+      logTail: log || undefined,
+    });
+    return { ok: true, log };
+  } catch (error) {
+    if (
+      latestCreateProgress?.running === false &&
+      latestCreateProgress.error &&
+      latestCreateProgress.kind === kind
+    ) {
+      throw error;
+    }
+    const message =
+      error instanceof Error ? error.message : failVerb;
+    emitVisualCreateProgress({
+      running: false,
+      label: failedLabel,
+      kind,
+      error: message,
+    });
+    throw error instanceof Error ? error : new Error(message);
+  }
+}
+
 /**
  * Create missing Playwright baselines for a story's component family
  * (`visual-update --create-only`). Shares progress across panel + sidebar.
@@ -481,57 +610,15 @@ export type VisualCreateResponse = {
 export async function postVisualCreateBaseline(body: {
   storyId: string;
 }): Promise<VisualCreateResponse> {
-  emitVisualCreateProgress({ running: true, label: "Creating…" });
-  try {
-    const response = await fetch(VISUAL_DELTA_CREATE_PATH, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const text = await response.text();
-    const log = text.trim();
-    if (!response.ok) {
-      const error =
-        log || `Create baselines failed (${response.status})`;
-      emitVisualCreateProgress({
-        running: false,
-        label: "Create failed",
-        error,
-        logTail: log || undefined,
-      });
-      throw new Error(error);
-    }
-    const exitMatch = text.match(/\[exit (\d+)\]/);
-    if (exitMatch && exitMatch[1] !== "0") {
-      const error = `Baseline create exited with code ${exitMatch[1]}`;
-      emitVisualCreateProgress({
-        running: false,
-        label: "Create failed",
-        error,
-        logTail: log || undefined,
-      });
-      throw new Error(error);
-    }
-    emitVisualCreateProgress({
-      running: false,
-      label: "Created",
-      logTail: log || undefined,
-    });
-    return { ok: true, log };
-  } catch (error) {
-    if (
-      latestCreateProgress?.running === false &&
-      latestCreateProgress.error
-    ) {
-      throw error;
-    }
-    const message =
-      error instanceof Error ? error.message : "Baseline create failed";
-    emitVisualCreateProgress({
-      running: false,
-      label: "Create failed",
-      error: message,
-    });
-    throw error instanceof Error ? error : new Error(message);
-  }
+  return postVisualBaselineWrite("create", body);
+}
+
+/**
+ * Overwrite Playwright baselines for a story's component family
+ * (`visual-update` with approval). Streams logs like create.
+ */
+export async function postVisualUpdateBaseline(body: {
+  storyId: string;
+}): Promise<VisualCreateResponse> {
+  return postVisualBaselineWrite("update", body);
 }

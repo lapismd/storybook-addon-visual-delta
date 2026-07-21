@@ -108,7 +108,7 @@ export function PlacementPad({
         if (!btn) return <Cell key={`empty-${i}`} />;
         const pressed = active && value === btn.placement;
         const label = pressed
-          ? `Hide baseline (${btn.label})`
+          ? `Hide overlay (${btn.label})`
           : btn.label;
         return (
           <PadButton

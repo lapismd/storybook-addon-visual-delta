@@ -1,4 +1,10 @@
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   EllipsisIcon,
   SyncIcon,
@@ -22,7 +28,6 @@ import { useTheme } from "storybook/theming";
 import {
   DEFAULT_PASS_THRESHOLD_PERCENT,
   TEST_PROVIDER_ID,
-  VISUAL_DELTA_UPDATE_PATH,
   isSplitPlacement,
   visualReviewStatusFromTags,
   type VisualReviewStatus,
@@ -38,6 +43,7 @@ import {
   postVisualCreateBaseline,
   postVisualReviewStatus,
   postVisualRun,
+  postVisualUpdateBaseline,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
   subscribeVisualRunProgress,
@@ -67,8 +73,10 @@ import {
 } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
 import { ImageGallery } from "./ImageGallery.js";
+import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
 import { PlacementPad } from "./PlacementPad.js";
 import { ReviewStatusPad } from "./ReviewStatusPad.js";
+import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import {
   Actions,
   ButtonGroup,
@@ -100,42 +108,54 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const {
     images,
     index,
+    overlayOn,
     storyId,
     opacity,
     colorInversion,
     placement,
+    liveVisible,
     passThresholdPercent,
     setIndex,
     setOpacity,
     setColorInversion,
     togglePlacement,
+    setLiveVisible,
     setPassThresholdPercent,
     hideOverlay,
     showOverlay,
     resetOverlay,
     resetSettings,
-    reloadBaselineImages,
+    revealCenteredOverlay,
+    hydrateBaselineImages,
   } = useStoryData();
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [optimisticReview, setOptimisticReview] =
     useState<VisualReviewStatus | null>(null);
   const [isRunningVisual, setIsRunningVisual] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
+  const updateLogRef = useRef<HTMLPreElement | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
   /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
   const [diffEpoch, setDiffEpoch] = useState(0);
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
     null,
   );
-  const [createProgress, setCreateProgress] =
-    useState<VisualCreateProgress | null>(null);
-  const isCreating = Boolean(createProgress?.running);
+  const [baselineJob, setBaselineJob] = useState<VisualCreateProgress | null>(
+    null,
+  );
+  const isCreating = Boolean(
+    baselineJob?.running && baselineJob.kind === "create",
+  );
+  const isUpdating = Boolean(
+    baselineJob?.running && baselineJob.kind === "update",
+  );
+  const createProgress =
+    baselineJob?.kind === "create" ? baselineJob : null;
   const isSplit = isSplitPlacement(placement);
   const busy =
     isDiffing || isUpdating || isCreating || isRunningVisual || isReviewing;
@@ -147,6 +167,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   useEffect(() => {
     setOptimisticReview(null);
   }, [storyId, storyTagsKey]);
+
+  // Keep the create/update log pinned to the latest lines while streaming.
+  useEffect(() => {
+    const el = updateLogRef.current;
+    if (!el || !updateLog) return;
+    el.scrollTop = el.scrollHeight;
+  }, [updateLog]);
+
   const baselineSrc = images[index]?.src;
   const progressLabel =
     isRunningVisual && !isDiffing
@@ -187,28 +215,53 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     });
   }, []);
 
-  // Create baseline progress (panel empty-state CTA or sidebar).
+  // Create/update baseline progress — stream logs; on success show center overlay.
   useEffect(() => {
     let wasRunning = false;
     return subscribeVisualCreateProgress((next) => {
-      setCreateProgress(next);
+      setBaselineJob(next);
       if (next?.running) {
         wasRunning = true;
         setCaptureError(null);
-        setUpdateLog(null);
+        setUpdateLog(next.logTail ?? null);
         return;
       }
       if (!wasRunning || !next) return;
       wasRunning = false;
+      if (next.logTail) setUpdateLog(next.logTail);
       if (next.error) {
         setCaptureError(next.error);
         return;
       }
-      if (next.logTail) setUpdateLog(next.logTail);
-      reloadBaselineImages();
+      // CSF may already be wired (no HMR) or index tags still say skip-visual —
+      // hydrate from the known PNG path so the empty-state panel fills.
+      const entry = currentStoryId
+        ? api.getData(currentStoryId)
+        : undefined;
+      const url = baselineUrlForStoryRef(
+        {
+          id: currentStoryId,
+          importPath: entry?.importPath,
+          tags: entry?.tags,
+        },
+        { allowSkipVisual: next.kind === "create" },
+      );
+      if (url) {
+        // Prefer hydrate over remount: remount can re-emit INIT_IMAGE with
+        // stale empty parameters before CSF HMR lands and wipe the gallery.
+        hydrateBaselineImages([url]);
+      } else {
+        revealCenteredOverlay();
+      }
       setDiffResult(null);
+      setDiffEpoch(Date.now());
     });
-  }, [reloadBaselineImages]);
+  }, [
+    api,
+    currentStoryId,
+    hydrateBaselineImages,
+    revealCenteredOverlay,
+  ]);
 
   const handleDiff = useCallback(async () => {
     if (index === -1 || !images[index]) {
@@ -362,38 +415,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError("No story selected");
       return;
     }
-    setIsUpdating(true);
     setCaptureError(null);
     setUpdateLog(null);
     try {
-      const response = await fetch(VISUAL_DELTA_UPDATE_PATH, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyId }),
-      });
-      const text = await response.text();
-      setUpdateLog(text.trim() || null);
-      if (!response.ok) {
-        throw new Error(
-          text.trim() || `Update failed (${response.status})`,
-        );
-      }
-      const exitMatch = text.match(/\[exit (\d+)\]/);
-      if (exitMatch && exitMatch[1] !== "0") {
-        throw new Error(
-          `Baseline update exited with code ${exitMatch[1]}`,
-        );
-      }
-      reloadBaselineImages();
-      setDiffResult(null);
-    } catch (error) {
-      setCaptureError(
-        error instanceof Error ? error.message : "Baseline update failed",
-      );
-    } finally {
-      setIsUpdating(false);
+      await postVisualUpdateBaseline({ storyId });
+    } catch {
+      // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [storyId, reloadBaselineImages]);
+  }, [storyId]);
 
   const handleCreateBaselines = useCallback(async () => {
     if (!storyId) {
@@ -567,21 +596,26 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               </EmptyState>
             ) : null}
             {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-            {updateLog && !captureError ? (
+            {updateLog ? (
               <pre
+                ref={updateLogRef}
+                className="font-mono"
                 style={{
                   margin: 0,
                   width: "100%",
-                  maxWidth: 480,
-                  color: theme.color.positive,
+                  maxWidth: 560,
+                  color: captureError
+                    ? theme.color.negative
+                    : theme.color.positive,
                   whiteSpace: "pre-wrap",
-                  maxHeight: 160,
+                  maxHeight: 220,
                   overflow: "auto",
                   fontSize: 11,
                   textAlign: "left",
+                  fontFamily: theme.typography.fonts.mono,
                 }}
               >
-                {updateLog.slice(-800)}
+                {updateLog.slice(-4000)}
               </pre>
             ) : null}
           </EmptyCreateWrap>
@@ -590,28 +624,36 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         <>
           <Toolbar>
             <ToolbarRow>
-              <ImageGallery
-                images={images}
-                selectedIndex={index}
-                onSelect={setIndex}
-              />
-              <PlacementPad
-                value={placement}
-                active={index >= 0}
-                onToggle={togglePlacement}
+              {liveVisible ? (
+                <ImageGallery
+                  images={images}
+                  selectedIndex={index}
+                  onSelect={setIndex}
+                />
+              ) : null}
+              <LiveVisibilityToggle
+                liveVisible={liveVisible}
+                onToggle={setLiveVisible}
                 disabled={images.length === 0}
               />
+              {liveVisible ? (
+                <PlacementPad
+                  value={placement}
+                  active={overlayOn}
+                  onToggle={togglePlacement}
+                  disabled={images.length === 0}
+                />
+              ) : null}
               <ReviewStatusPad
                 value={reviewStatus}
                 disabled={busy || !storyId}
                 onSelect={(status) => void handleSetReviewStatus(status)}
               />
-              {!isSplit ? (
+              {index >= 0 && (!isSplit || !liveVisible) ? (
                 <ButtonGroup role="group" aria-label="Overlay controls">
                   <ToggleButton
                     size="small"
                     pressed={false}
-                    disabled={index === -1}
                     onClick={resetOverlay}
                     aria-label="Reset overlay position after drag"
                     title="Reset overlay position after drag"
@@ -621,7 +663,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 </ButtonGroup>
               ) : null}
               <ToolbarSpacer />
-              {!isSplit ? (
+              {liveVisible && index >= 0 && !isSplit ? (
                 <>
                   <InlineControl title="Overlay opacity">
                     <span>Opacity</span>
@@ -731,18 +773,23 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               </Actions>
             </ToolbarRow>
             {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-            {updateLog && !captureError ? (
+            {updateLog ? (
               <pre
+                ref={updateLogRef}
+                className="font-mono"
                 style={{
                   margin: 0,
-                  color: theme.color.positive,
+                  color: captureError
+                    ? theme.color.negative
+                    : theme.color.positive,
                   whiteSpace: "pre-wrap",
-                  maxHeight: 120,
+                  maxHeight: isUpdating || isCreating ? 220 : 120,
                   overflow: "auto",
                   fontSize: 11,
+                  fontFamily: theme.typography.fonts.mono,
                 }}
               >
-                {updateLog.slice(-800)}
+                {updateLog.slice(-(isUpdating || isCreating ? 4000 : 800))}
               </pre>
             ) : null}
           </Toolbar>
