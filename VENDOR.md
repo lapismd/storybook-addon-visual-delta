@@ -10,7 +10,13 @@ Upstream GitHub is unavailable; edit **`src/`** like any other workspace package
 | Original author | houjinlong |
 
 Storybook compiles the TypeScript/`tsx` entry points directly — there is no
-committed `dist/` build.
+committed `dist/` build. The catalog loads the addon via
+`.storybook/visual-delta-preset.ts` (absolute `src/manager.tsx` +
+`src/preview.ts`), not the `node_modules` package name, so edits are not
+masked by Storybook/Vite ignoring `node_modules`. `pnpm storybook` runs
+`scripts/storybook-run.mjs`, which restarts on manager/panel (and related
+`.storybook` plugin) changes — the manager builder is a one-shot esbuild
+bundle and does not HMR. Preview overlay edits reload via Vite.
 
 ## Local behavior (vs upstream 0.1.5)
 
