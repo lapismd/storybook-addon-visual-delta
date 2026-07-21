@@ -196,7 +196,9 @@ export function VisualTestProviderRender({
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
-  const isCreating = Boolean(createProgress?.running);
+  const isCreating = Boolean(
+    createProgress?.running && createProgress.kind === "create",
+  );
 
   const entryStoryIds = useMemo(() => {
     if (!entry) return undefined;
@@ -295,18 +297,25 @@ export function VisualTestProviderRender({
   }, []);
 
   useEffect(() => {
-    return subscribeVisualCreateProgress(setCreateProgress);
+    return subscribeVisualCreateProgress((next) => {
+      // Update jobs are panel-only; ignore so sidebar create UI stays stable.
+      if (next?.kind === "update") return;
+      setCreateProgress(next);
+    });
   }, []);
 
   const createBaseline = useCallback(async () => {
-    const storyId = entryStoryIds?.[0];
+    if (!entryStoryIds?.length) return;
+    // Prefer a non-skip-visual leaf so create scopes to a real capture story.
+    const runnable = visualRunnableStoryIds(api, entryStoryIds);
+    const storyId = runnable[0] ?? entryStoryIds[0];
     if (!storyId) return;
     try {
       await postVisualCreateBaseline({ storyId });
     } catch {
       // Progress/error surfaces via subscribeVisualCreateProgress.
     }
-  }, [entryStoryIds]);
+  }, [api, entryStoryIds]);
 
   useEffect(() => {
     if (entry) return;
