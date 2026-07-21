@@ -20,7 +20,7 @@ export type AlignMode = "viewport" | "canvas";
 
 /**
  * Where the baseline sits relative to the live story:
- * - left/right/above/below — shared 50:50 scrollable split
+ * - left/right/above/below — equal viewports (baseline CSS + pad) with 2D scroll
  * - center — stacked ghost overlay (legacy "over")
  *
  * Legacy values `"beside"` → `"right"`, `"over"` → `"center"`.
@@ -89,6 +89,19 @@ export const BESIDE_GAP_PX = 24;
  * (naturalWidth / this factor).
  */
 export const VISUAL_DEVICE_SCALE_FACTOR = 3;
+
+/**
+ * Must match `scripts/ui-generator/visual/capture-config.ts`.
+ * Playwright CSS viewport used when capturing baselines — live Diff forces
+ * the preview iframe to this size before subject capture so wrapping matches.
+ */
+export const VISUAL_VIEWPORT = { width: 1280, height: 900 } as const;
+
+/**
+ * Padding (each side) added to baseline CSS size when sizing equal compare
+ * panes in the overlay split.
+ */
+export const VISUAL_COMPARE_PANE_PAD_PX = 16;
 
 /** Storybook-dev middleware that regenerates on-disk baselines. */
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";

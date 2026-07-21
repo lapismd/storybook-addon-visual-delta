@@ -1,5 +1,5 @@
 import { toPng } from "html-to-image";
-import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
+import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import {
   resolvePaintedBackground,
   toOpaqueRgb,
@@ -20,7 +20,7 @@ type IframeSizeStyles = {
   minHeight: string;
 };
 
-function waitTwoFrames(): Promise<void> {
+export function waitTwoFrames(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => resolve());
@@ -76,6 +76,26 @@ export function applyPreviewViewport(
     minHeight: `${height}px`,
   });
   return () => writeIframeSizeStyles(iframe, prev);
+}
+
+/**
+ * Run `fn` with the preview iframe forced to the Playwright visual viewport
+ * (`1280×900`) so subject capture matches baseline layout/wrapping.
+ */
+export async function withPlaywrightPreviewViewport<T>(
+  fn: () => Promise<T>,
+): Promise<T> {
+  const restore = applyPreviewViewport(
+    VISUAL_VIEWPORT.width,
+    VISUAL_VIEWPORT.height,
+  );
+  try {
+    await waitTwoFrames();
+    await new Promise((r) => setTimeout(r, 50));
+    return await fn();
+  } finally {
+    restore?.();
+  }
 }
 
 /** Load natural pixel size of a baseline image (device-scale PNG pixels). */

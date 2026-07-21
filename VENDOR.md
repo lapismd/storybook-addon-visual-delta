@@ -21,10 +21,14 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
 ## Local behavior (vs upstream 0.1.5)
 
 - **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +
-  baseline in a shared 50:50 scrollable split; center stacks a ghost overlay
-  (opacity / difference blend). Legacy `beside`/`over` map to `right`/`center`.
-  Split panes / scroll rail use the live preview’s painted background (canvas →
-  body → `--background`), not Storybook chrome `--sb-color-bg`.
+  baseline in equal compare panes sized from the baseline CSS dimensions plus
+  pad (`VISUAL_COMPARE_PANE_PAD_PX`), with shared 2D scroll (vertical +
+  horizontal rails, pane scroll mirroring, shift+wheel → X). Live subject width
+  is locked to the baseline CSS width so wrapping matches the clip. Center
+  stacks a ghost overlay (opacity / difference blend). Legacy `beside`/`over`
+  map to `right`/`center`. Split panes / scroll rails use the live preview’s
+  painted background (canvas → body → `--background`), not Storybook chrome
+  `--sb-color-bg`.
 - **Canvas align** — Shadcn baselines use `align: "canvas"` so component-clipped
   PNGs pin (via CSS transform) to the story subject (`#storybook-root > *`),
   matching Playwright clips. Legacy `align: "viewport"` pins to the iframe
@@ -35,9 +39,10 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
 - **Pass threshold** — Configurable `%` (default `0.1`).
 - **Diff fit** — Pad/crop actual → baseline size instead of stretching.
 - **Quiet preset** — No Vite/Webpack console logs.
-- **Run Diff capture** — Same-origin preview via `html-to-image` of the story
-  subject (`#storybook-root > *`, or body when portals are open), matching
-  Playwright component clips. Still approximate vs real Chromium screenshots.
+- **Run Diff capture** — Forces the preview iframe to the Playwright viewport
+  (`1280×900`) before `html-to-image` of the story subject
+  (`#storybook-root > *`, or body when portals are open), so layout/wrapping
+  matches baselines. Still approximate vs real Chromium screenshots.
 - **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard
