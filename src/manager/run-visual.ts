@@ -6,7 +6,9 @@ import {
   STATUS_TYPE_ID_VISUAL,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CREATE_PATH,
+  VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
+  type VisualReviewStatus,
 } from "../constants.js";
 import {
   PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
@@ -412,6 +414,32 @@ export async function postVisualRun(
 
 export async function cancelVisualRun() {
   await fetch(VISUAL_DELTA_CANCEL_PATH, { method: "POST" });
+}
+
+export type VisualReviewResponse = {
+  ok: boolean;
+  storyId: string;
+  status: VisualReviewStatus;
+  error?: string;
+};
+
+/** Persist `visual-pending` / `visual-approved` on the story CSF via middleware. */
+export async function postVisualReviewStatus(body: {
+  storyId: string;
+  status: VisualReviewStatus;
+}): Promise<VisualReviewResponse> {
+  const response = await fetch(VISUAL_DELTA_REVIEW_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json()) as VisualReviewResponse;
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      data.error || `Review status update failed (${response.status})`,
+    );
+  }
+  return data;
 }
 
 export type VisualCreateProgress = {

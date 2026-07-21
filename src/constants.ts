@@ -111,3 +111,44 @@ export const VISUAL_DELTA_CREATE_PATH = "/__visual-delta/create-baseline";
 export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
 /** Storybook-dev middleware that cancels an in-flight visual run. */
 export const VISUAL_DELTA_CANCEL_PATH = "/__visual-delta/cancel-tests";
+/** Storybook-dev middleware that sets visual review tags on a story. */
+export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
+
+/** CSF tag: baseline exists but has not been human-reviewed. */
+export const VISUAL_REVIEW_PENDING_TAG = "visual-pending";
+/** CSF tag: baseline has been reviewed and accepted. */
+export const VISUAL_REVIEW_APPROVED_TAG = "visual-approved";
+/** CSF tag: baseline review failed / rejected. */
+export const VISUAL_REVIEW_FAILED_TAG = "visual-failed";
+
+export type VisualReviewStatus = "pending" | "approved" | "failed";
+
+export const VISUAL_REVIEW_TAGS = [
+  VISUAL_REVIEW_PENDING_TAG,
+  VISUAL_REVIEW_APPROVED_TAG,
+  VISUAL_REVIEW_FAILED_TAG,
+] as const;
+
+export function visualReviewTagFor(
+  status: VisualReviewStatus,
+): (typeof VISUAL_REVIEW_TAGS)[number] {
+  if (status === "approved") return VISUAL_REVIEW_APPROVED_TAG;
+  if (status === "failed") return VISUAL_REVIEW_FAILED_TAG;
+  return VISUAL_REVIEW_PENDING_TAG;
+}
+
+export function visualReviewStatusFromTags(
+  tags: readonly string[] | undefined,
+): VisualReviewStatus | null {
+  if (!tags?.length) return null;
+  if (tags.includes(VISUAL_REVIEW_APPROVED_TAG)) return "approved";
+  if (tags.includes(VISUAL_REVIEW_FAILED_TAG)) return "failed";
+  if (tags.includes(VISUAL_REVIEW_PENDING_TAG)) return "pending";
+  return null;
+}
+
+export function isVisualReviewStatus(
+  value: unknown,
+): value is VisualReviewStatus {
+  return value === "pending" || value === "approved" || value === "failed";
+}
