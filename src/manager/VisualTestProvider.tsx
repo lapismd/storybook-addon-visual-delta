@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PlayHollowIcon, StopAltIcon } from "@storybook/icons";
+import { PlayHollowIcon, StopAltIcon, SyncIcon } from "@storybook/icons";
 import { ActionList, Button, Form } from "storybook/internal/components";
 import type { API_HashEntry } from "storybook/internal/types";
 import {
@@ -22,11 +22,14 @@ import {
   cancelVisualRun,
   clearVisualStatuses,
   formatVisualProgressLabel,
+  postVisualCreateBaseline,
   postVisualRun,
   publishVisualLastRun,
+  subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
   visualRunnableStoryIds,
+  type VisualCreateProgress,
   type VisualLastRunSummary,
   type VisualRunProgress,
   type VisualRunScope,
@@ -42,6 +45,20 @@ const Container = styled.div({
   flexDirection: "column",
   paddingBottom: 1,
 });
+
+/** Testing Module section: separate Visual Tests from Vitest / a11y above. */
+const ModuleContainer = styled(Container)(({ theme }) => ({
+  borderTop: `1px solid ${theme.appBorderColor}`,
+  paddingTop: 8,
+  marginTop: 4,
+}));
+
+/** Sidebar story/component context menu: divider above visual actions. */
+const ContextMenuContainer = styled(Container)(({ theme }) => ({
+  borderTop: `1px solid ${theme.appBorderColor}`,
+  paddingTop: 4,
+  marginTop: 4,
+}));
 
 const Heading = styled.div({
   display: "flex",
@@ -86,11 +103,6 @@ const Actions = styled.div({
 const StyledActionList = styled(ActionList)({
   padding: 0,
 });
-
-const BorderedPlay = styled(Button)(({ theme }) => ({
-  border: `1px solid ${theme.appBorderColor}`,
-  borderRadius: theme.appBorderRadius ?? 4,
-}));
 
 const TestStatusIcon = styled.div<{
   status: ChipStatus;
@@ -182,6 +194,9 @@ export function VisualTestProviderRender({
   const allStatuses = experimental_useStatusStore();
   const [lastRun, setLastRun] = useState<VisualLastRunSummary | null>(null);
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
+  const [createProgress, setCreateProgress] =
+    useState<VisualCreateProgress | null>(null);
+  const isCreating = Boolean(createProgress?.running);
 
   const entryStoryIds = useMemo(() => {
     if (!entry) return undefined;
@@ -214,16 +229,22 @@ export function VisualTestProviderRender({
   const run = useCallback(
     async (scope: VisualRunScope, ids?: string[]) => {
       await testProviderStore.runWithState(async () => {
-        const runnable = ids?.length
+        const scoped = Array.isArray(ids);
+        const runnable = scoped
           ? visualRunnableStoryIds(api, ids)
           : undefined;
+        if (scoped && !runnable?.length) {
+          throw new Error(
+            "No runnable visual stories in this scope (all skip-visual)",
+          );
+        }
         if (runnable?.length) {
           applyPendingVisualStatuses(runnable);
-        } else if (!ids?.length) {
+        } else if (!scoped) {
           clearVisualStatuses();
         }
         const data = await postVisualRun({
-          storyIds: runnable ?? ids,
+          storyIds: runnable,
           rebuild: false,
         });
         if (data.crashed) {
@@ -236,7 +257,7 @@ export function VisualTestProviderRender({
           publishVisualLastRun(summary);
           throw new Error(data.error ?? "Visual test run crashed");
         }
-        applyVisualRunResults(runnable ?? ids, data.results);
+        applyVisualRunResults(runnable, data.results);
         publishVisualLastRun({
           finishedAt: Date.now(),
           summary: data.summary,
@@ -272,6 +293,20 @@ export function VisualTestProviderRender({
   useEffect(() => {
     return subscribeVisualLastRun(setLastRun);
   }, []);
+
+  useEffect(() => {
+    return subscribeVisualCreateProgress(setCreateProgress);
+  }, []);
+
+  const createBaseline = useCallback(async () => {
+    const storyId = entryStoryIds?.[0];
+    if (!storyId) return;
+    try {
+      await postVisualCreateBaseline({ storyId });
+    } catch {
+      // Progress/error surfaces via subscribeVisualCreateProgress.
+    }
+  }, [entryStoryIds]);
 
   useEffect(() => {
     if (entry) return;
@@ -314,11 +349,18 @@ export function VisualTestProviderRender({
   const hasResults = counts.passed > 0 || counts.failed > 0 || Boolean(lastRun);
   const description = progressDescription(isRunning, progress, lastRun);
 
-  // Sidebar context menu: simple play/stop for that entry
+  // Sidebar context menu: run + create for that story/component
   if (entry) {
     const canPlay = Boolean(entryStoryIds?.length);
+    const createDescription = isCreating
+      ? (createProgress?.label ?? "Creating…")
+      : createProgress?.error
+        ? "Create failed"
+        : createProgress?.label === "Created"
+          ? "Created"
+          : "Not run";
     return (
-      <Container>
+      <ContextMenuContainer>
         <Heading>
           <Info>
             <Title>Run visual tests</Title>
@@ -326,7 +368,7 @@ export function VisualTestProviderRender({
           </Info>
           <Actions>
             {isRunning ? (
-              <BorderedPlay
+              <Button
                 size="medium"
                 variant="ghost"
                 padding="small"
@@ -335,15 +377,15 @@ export function VisualTestProviderRender({
                 onClick={() => void cancelVisualRun()}
               >
                 <StopAltIcon />
-              </BorderedPlay>
+              </Button>
             ) : (
-              <BorderedPlay
+              <Button
                 size="medium"
                 variant="ghost"
                 padding="small"
                 ariaLabel="Run visual tests for this item"
                 title="Run visual tests for this item"
-                disabled={!canPlay}
+                disabled={!canPlay || isCreating}
                 onClick={() => {
                   if (!entryStoryIds?.length) return;
                   void run(
@@ -353,17 +395,49 @@ export function VisualTestProviderRender({
                 }}
               >
                 <PlayHollowIcon />
-              </BorderedPlay>
+              </Button>
             )}
           </Actions>
         </Heading>
-      </Container>
+        <Heading>
+          <Info>
+            <Title>Create baseline</Title>
+            <Description>{createDescription}</Description>
+          </Info>
+          <Actions>
+            {isCreating ? (
+              <Button
+                size="medium"
+                variant="ghost"
+                padding="small"
+                ariaLabel="Stop baseline create"
+                title="Stop baseline create"
+                onClick={() => void cancelVisualRun()}
+              >
+                <StopAltIcon />
+              </Button>
+            ) : (
+              <Button
+                size="medium"
+                variant="ghost"
+                padding="small"
+                ariaLabel="Create baseline for this item"
+                title="Create baseline for this item"
+                disabled={!canPlay || isRunning}
+                onClick={() => void createBaseline()}
+              >
+                <SyncIcon />
+              </Button>
+            )}
+          </Actions>
+        </Heading>
+      </ContextMenuContainer>
     );
   }
 
   // Global Testing Module: checklist row + Vitest-style `Testing... 1/N`
   return (
-    <Container>
+    <ModuleContainer>
       <Description
         id="visual-testing-module-description"
         style={{ margin: "4px 0 4px 8px" }}
@@ -402,6 +476,6 @@ export function VisualTestProviderRender({
           </ActionList.Button>
         </ActionList.Item>
       </StyledActionList>
-    </Container>
+    </ModuleContainer>
   );
 }

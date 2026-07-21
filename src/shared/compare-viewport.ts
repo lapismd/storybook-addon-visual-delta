@@ -37,3 +37,18 @@ export function baselineCompareSizesFromNatural(
     },
   };
 }
+
+/**
+ * Shared pane scroll extent: max of either side's content, floored by an
+ * optional minimum (usually baseline CSS content size).
+ */
+export function sharedScrollExtentSize(
+  a: CompareSize,
+  b: CompareSize,
+  min?: Partial<CompareSize>,
+): CompareSize {
+  return {
+    width: Math.max(a.width, b.width, min?.width ?? 0),
+    height: Math.max(a.height, b.height, min?.height ?? 0),
+  };
+}

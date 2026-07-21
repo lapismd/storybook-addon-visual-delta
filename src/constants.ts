@@ -105,6 +105,8 @@ export const VISUAL_COMPARE_PANE_PAD_PX = 16;
 
 /** Storybook-dev middleware that regenerates on-disk baselines. */
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";
+/** Storybook-dev middleware that creates missing baselines only (no overwrite). */
+export const VISUAL_DELTA_CREATE_PATH = "/__visual-delta/create-baseline";
 /** Storybook-dev middleware that runs the Playwright visual suite. */
 export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
 /** Storybook-dev middleware that cancels an in-flight visual run. */

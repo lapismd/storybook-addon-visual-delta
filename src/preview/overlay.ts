@@ -12,6 +12,7 @@ import {
 } from "../constants.js";
 import {
   baselineCompareSizesFromNatural,
+  sharedScrollExtentSize,
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
 import { resolvePaintedBackground } from "../shared/preview-background.js";
@@ -26,6 +27,8 @@ const SCROLL_SPACER_V_ID = "visual-delta-scroll-spacer-v";
 const SCROLL_RAIL_H_ID = "visual-delta-scroll-rail-h";
 const SCROLL_SPACER_H_ID = "visual-delta-scroll-spacer-h";
 const SCROLL_CORNER_ID = "visual-delta-scroll-corner";
+/** Invisible box that forces equal scrollWidth/scrollHeight on both panes. */
+const SCROLL_EXTENT_ATTR = "data-visual-delta-scroll-extent";
 const RAIL_THICKNESS_PX = 12;
 
 /** Device-scale PNGs display at CSS size so they match the live subject. */
@@ -251,6 +254,62 @@ function unbindSharedScroll() {
   sharedScrollRefreshRef = null;
 }
 
+function getOrCreateScrollExtent(pane: HTMLElement): HTMLElement {
+  for (const child of pane.children) {
+    if (
+      child instanceof HTMLElement &&
+      child.hasAttribute(SCROLL_EXTENT_ATTR)
+    ) {
+      return child;
+    }
+  }
+  const el = document.createElement("div");
+  el.setAttribute(SCROLL_EXTENT_ATTR, "");
+  el.style.cssText =
+    "position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;visibility:hidden;z-index:0;";
+  pane.appendChild(el);
+  return el;
+}
+
+/**
+ * Natural scrollable size of a pane ignoring the equalizing extent shim.
+ */
+function measurePaneScrollSize(pane: HTMLElement): {
+  width: number;
+  height: number;
+} {
+  const extent = getOrCreateScrollExtent(pane);
+  const prevWidth = extent.style.width;
+  const prevHeight = extent.style.height;
+  extent.style.width = "0px";
+  extent.style.height = "0px";
+  const width = pane.scrollWidth;
+  const height = pane.scrollHeight;
+  extent.style.width = prevWidth;
+  extent.style.height = prevHeight;
+  return { width, height };
+}
+
+/**
+ * Force both panes to the same scrollWidth/scrollHeight (max of either side,
+ * at least the baseline CSS content box). Stops the shorter/narrower side from
+ * clamping shared scroll before you can reach the larger content.
+ */
+function equalizePaneScrollExtents(
+  livePane: HTMLElement,
+  baselinePane: HTMLElement,
+) {
+  const live = measurePaneScrollSize(livePane);
+  const baseline = measurePaneScrollSize(baselinePane);
+  const target = sharedScrollExtentSize(live, baseline, lastCompareSizes?.content);
+  for (const pane of [livePane, baselinePane]) {
+    const extent = getOrCreateScrollExtent(pane);
+    extent.style.width = `${target.width}px`;
+    extent.style.height = `${target.height}px`;
+  }
+  return target;
+}
+
 /**
  * Vertical + horizontal rails drive both panes. Pane scrollbars stay hidden.
  * Pane `scroll` events are mirrored with a re-entrancy lock so touch / trackpad
@@ -267,9 +326,15 @@ function bindSharedScrollRails(
 ) {
   unbindSharedScroll();
   let syncing = false;
+  let syncGeneration = 0;
+  let desiredTop = 0;
+  let desiredLeft = 0;
 
   const applyScroll = (top: number, left: number) => {
+    desiredTop = top;
+    desiredLeft = left;
     syncing = true;
+    const generation = ++syncGeneration;
     livePane.scrollTop = top;
     livePane.scrollLeft = left;
     baselinePane.scrollTop = top;
@@ -280,7 +345,18 @@ function bindSharedScrollRails(
     if (hRail.style.display !== "none" && hRail.scrollLeft !== left) {
       hRail.scrollLeft = left;
     }
-    syncing = false;
+    // A clamped pane can emit a late `scroll` after we clear syncing; re-assert
+    // the desired position on the next frame so the larger side stays reachable.
+    requestAnimationFrame(() => {
+      if (generation !== syncGeneration) return;
+      livePane.scrollTop = desiredTop;
+      livePane.scrollLeft = desiredLeft;
+      baselinePane.scrollTop = desiredTop;
+      baselinePane.scrollLeft = desiredLeft;
+      if (vRail.style.display !== "none") vRail.scrollTop = desiredTop;
+      if (hRail.style.display !== "none") hRail.scrollLeft = desiredLeft;
+      syncing = false;
+    });
   };
 
   const clientWidth = () =>
@@ -293,11 +369,14 @@ function bindSharedScrollRails(
     baselinePane.clientHeight;
 
   const refreshSpacers = () => {
+    const extent = equalizePaneScrollExtents(livePane, baselinePane);
     const maxScrollHeight = Math.max(
+      extent.height,
       livePane.scrollHeight,
       baselinePane.scrollHeight,
     );
     const maxScrollWidth = Math.max(
+      extent.width,
       livePane.scrollWidth,
       baselinePane.scrollWidth,
     );
@@ -326,21 +405,31 @@ function bindSharedScrollRails(
       ? `1fr ${RAIL_THICKNESS_PX}px`
       : "1fr 0px";
 
-    if (overflowY && vRail.scrollTop !== livePane.scrollTop) {
-      vRail.scrollTop = livePane.scrollTop;
+    if (overflowY && vRail.scrollTop !== desiredTop) {
+      vRail.scrollTop = desiredTop;
     }
-    if (overflowX && hRail.scrollLeft !== livePane.scrollLeft) {
-      hRail.scrollLeft = livePane.scrollLeft;
+    if (overflowX && hRail.scrollLeft !== desiredLeft) {
+      hRail.scrollLeft = desiredLeft;
+    }
+
+    // Keep panes on the shared position after extent changes.
+    if (
+      livePane.scrollTop !== desiredTop ||
+      livePane.scrollLeft !== desiredLeft ||
+      baselinePane.scrollTop !== desiredTop ||
+      baselinePane.scrollLeft !== desiredLeft
+    ) {
+      applyScroll(desiredTop, desiredLeft);
     }
   };
 
   const onVRailScroll = () => {
     if (syncing) return;
-    applyScroll(vRail.scrollTop, livePane.scrollLeft);
+    applyScroll(vRail.scrollTop, desiredLeft);
   };
   const onHRailScroll = () => {
     if (syncing) return;
-    applyScroll(livePane.scrollTop, hRail.scrollLeft);
+    applyScroll(desiredTop, hRail.scrollLeft);
   };
 
   const onPaneScroll = (source: HTMLElement) => {
@@ -364,11 +453,11 @@ function bindSharedScrollRails(
     const deltaY = event.shiftKey && event.deltaX === 0 ? 0 : event.deltaY;
     const nextTop = Math.max(
       0,
-      Math.min(maxTop, livePane.scrollTop + deltaY),
+      Math.min(maxTop, desiredTop + deltaY),
     );
     const nextLeft = Math.max(
       0,
-      Math.min(maxLeft, livePane.scrollLeft + deltaX),
+      Math.min(maxLeft, desiredLeft + deltaX),
     );
     applyScroll(nextTop, nextLeft);
   };
@@ -393,12 +482,23 @@ function bindSharedScrollRails(
 
   sharedScrollRefreshRef = refreshSpacers;
   sharedScrollCleanupRef = () => {
+    syncGeneration += 1;
     vRail.removeEventListener("scroll", onVRailScroll);
     hRail.removeEventListener("scroll", onHRailScroll);
     livePane.removeEventListener("scroll", onLiveScroll);
     baselinePane.removeEventListener("scroll", onBaselineScroll);
     split.removeEventListener("wheel", onWheel);
     ro.disconnect();
+    for (const pane of [livePane, baselinePane]) {
+      for (const child of Array.from(pane.children)) {
+        if (
+          child instanceof HTMLElement &&
+          child.hasAttribute(SCROLL_EXTENT_ATTR)
+        ) {
+          child.remove();
+        }
+      }
+    }
     sharedScrollRefreshRef = null;
   };
 }

@@ -5,6 +5,7 @@ import {
 import {
   STATUS_TYPE_ID_VISUAL,
   VISUAL_DELTA_CANCEL_PATH,
+  VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_RUN_PATH,
 } from "../constants.js";
 import {
@@ -411,4 +412,98 @@ export async function postVisualRun(
 
 export async function cancelVisualRun() {
   await fetch(VISUAL_DELTA_CANCEL_PATH, { method: "POST" });
+}
+
+export type VisualCreateProgress = {
+  running: boolean;
+  label: string;
+  error?: string;
+  logTail?: string;
+};
+
+type CreateProgressListener = (progress: VisualCreateProgress | null) => void;
+const createProgressListeners = new Set<CreateProgressListener>();
+let latestCreateProgress: VisualCreateProgress | null = null;
+
+/** Subscribe to create-baseline progress from panel or sidebar. */
+export function subscribeVisualCreateProgress(listener: CreateProgressListener) {
+  createProgressListeners.add(listener);
+  if (latestCreateProgress) listener(latestCreateProgress);
+  return () => {
+    createProgressListeners.delete(listener);
+  };
+}
+
+function emitVisualCreateProgress(progress: VisualCreateProgress | null) {
+  latestCreateProgress = progress;
+  for (const listener of createProgressListeners) {
+    listener(progress);
+  }
+}
+
+export type VisualCreateResponse = {
+  ok: boolean;
+  log: string;
+};
+
+/**
+ * Create missing Playwright baselines for a story's component family
+ * (`visual-update --create-only`). Shares progress across panel + sidebar.
+ */
+export async function postVisualCreateBaseline(body: {
+  storyId: string;
+}): Promise<VisualCreateResponse> {
+  emitVisualCreateProgress({ running: true, label: "Creating…" });
+  try {
+    const response = await fetch(VISUAL_DELTA_CREATE_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    const log = text.trim();
+    if (!response.ok) {
+      const error =
+        log || `Create baselines failed (${response.status})`;
+      emitVisualCreateProgress({
+        running: false,
+        label: "Create failed",
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    const exitMatch = text.match(/\[exit (\d+)\]/);
+    if (exitMatch && exitMatch[1] !== "0") {
+      const error = `Baseline create exited with code ${exitMatch[1]}`;
+      emitVisualCreateProgress({
+        running: false,
+        label: "Create failed",
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    emitVisualCreateProgress({
+      running: false,
+      label: "Created",
+      logTail: log || undefined,
+    });
+    return { ok: true, log };
+  } catch (error) {
+    if (
+      latestCreateProgress?.running === false &&
+      latestCreateProgress.error
+    ) {
+      throw error;
+    }
+    const message =
+      error instanceof Error ? error.message : "Baseline create failed";
+    emitVisualCreateProgress({
+      running: false,
+      label: "Create failed",
+      error: message,
+    });
+    throw error instanceof Error ? error : new Error(message);
+  }
 }

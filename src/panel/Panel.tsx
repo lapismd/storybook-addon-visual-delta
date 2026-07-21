@@ -8,6 +8,7 @@ import pixelmatch from "pixelmatch";
 import {
   ActionList,
   AddonPanel,
+  Button,
   IconButton,
   PopoverProvider,
   ToggleButton,
@@ -15,6 +16,7 @@ import {
 import {
   experimental_getTestProviderStore,
   useStorybookApi,
+  useStorybookState,
 } from "storybook/manager-api";
 import { useTheme } from "storybook/theming";
 import {
@@ -31,11 +33,14 @@ import {
   clearVisualStatuses,
   componentStoryIdsFor,
   formatVisualProgressLabel,
+  postVisualCreateBaseline,
   postVisualRun,
   publishVisualLastRun,
+  subscribeVisualCreateProgress,
   subscribeVisualRunProgress,
   visualResultFromLiveDiff,
   visualRunnableStoryIds,
+  type VisualCreateProgress,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
 import {
@@ -65,10 +70,14 @@ import {
   ButtonGroup,
   Checkbox,
   CheckboxContainer,
+  EmptyCreateWrap,
   EmptyState,
   EmptyStateContainer,
   ErrorText,
   InlineControl,
+  SkeletonBone,
+  SkeletonRoot,
+  SkeletonToolbar,
   Slider,
   Toolbar,
   ToolbarRow,
@@ -81,6 +90,7 @@ const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const theme = useTheme();
   const api = useStorybookApi();
+  const { storyId: currentStoryId } = useStorybookState();
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const {
@@ -102,6 +112,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     resetSettings,
     reloadBaselineImages,
   } = useStoryData();
+  /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
+  const storyReady = Boolean(storyId) && storyId === currentStoryId;
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
@@ -114,8 +126,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
     null,
   );
+  const [createProgress, setCreateProgress] =
+    useState<VisualCreateProgress | null>(null);
+  const isCreating = Boolean(createProgress?.running);
   const isSplit = isSplitPlacement(placement);
-  const busy = isDiffing || isUpdating || isRunningVisual;
+  const busy = isDiffing || isUpdating || isCreating || isRunningVisual;
   const baselineSrc = images[index]?.src;
   const progressLabel =
     isRunningVisual && !isDiffing
@@ -155,6 +170,29 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
     });
   }, []);
+
+  // Create baseline progress (panel empty-state CTA or sidebar).
+  useEffect(() => {
+    let wasRunning = false;
+    return subscribeVisualCreateProgress((next) => {
+      setCreateProgress(next);
+      if (next?.running) {
+        wasRunning = true;
+        setCaptureError(null);
+        setUpdateLog(null);
+        return;
+      }
+      if (!wasRunning || !next) return;
+      wasRunning = false;
+      if (next.error) {
+        setCaptureError(next.error);
+        return;
+      }
+      if (next.logTail) setUpdateLog(next.logTail);
+      reloadBaselineImages();
+      setDiffResult(null);
+    });
+  }, [reloadBaselineImages]);
 
   const handleDiff = useCallback(async () => {
     if (index === -1 || !images[index]) {
@@ -320,11 +358,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       const text = await response.text();
       setUpdateLog(text.trim() || null);
       if (!response.ok) {
-        throw new Error(text.trim() || `Update failed (${response.status})`);
+        throw new Error(
+          text.trim() || `Update failed (${response.status})`,
+        );
       }
       const exitMatch = text.match(/\[exit (\d+)\]/);
       if (exitMatch && exitMatch[1] !== "0") {
-        throw new Error(`Baseline update exited with code ${exitMatch[1]}`);
+        throw new Error(
+          `Baseline update exited with code ${exitMatch[1]}`,
+        );
       }
       reloadBaselineImages();
       setDiffResult(null);
@@ -336,6 +378,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setIsUpdating(false);
     }
   }, [storyId, reloadBaselineImages]);
+
+  const handleCreateBaselines = useCallback(async () => {
+    if (!storyId) {
+      setCaptureError("No story selected");
+      return;
+    }
+    setCaptureError(null);
+    setUpdateLog(null);
+    try {
+      await postVisualCreateBaseline({ storyId });
+    } catch {
+      // Error/log surface via subscribeVisualCreateProgress.
+    }
+  }, [storyId]);
 
   const handleRunVisual = useCallback(
     async (scope: "story" | "component" | "all") => {
@@ -355,6 +411,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   ? [storyId!]
                   : componentStoryIdsFor(api, storyId!),
               );
+        if (scope !== "all" && !storyIds?.length) {
+          throw new Error(
+            "No runnable visual stories in this scope (all skip-visual)",
+          );
+        }
         await testProviderStore.runWithState(async () => {
           if (storyIds?.length) {
             applyPendingVisualStatuses(storyIds);
@@ -414,11 +475,70 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   return (
     <AddonPanel active={props.active ?? false}>
-      {images.length === 0 ? (
+      {!storyReady ? (
+        <SkeletonRoot
+          role="status"
+          aria-busy="true"
+          aria-label="Loading Visual Delta"
+        >
+          <SkeletonToolbar>
+            <SkeletonBone width={56} height={40} radius={6} />
+            <SkeletonBone width={56} height={40} radius={6} />
+            <SkeletonBone width={56} height={40} radius={6} />
+            <SkeletonBone width={88} height={28} radius={6} />
+            <div style={{ flex: 1, minWidth: 12 }} />
+            <SkeletonBone width={72} height={12} radius={4} />
+            <SkeletonBone width={96} height={28} radius={6} />
+            <SkeletonBone width={28} height={28} radius={6} />
+          </SkeletonToolbar>
+          <SkeletonBone width="100%" height={180} radius={8} />
+          <SkeletonBone width="40%" height={12} radius={4} />
+        </SkeletonRoot>
+      ) : images.length === 0 ? (
         <EmptyStateContainer>
-          <EmptyState style={{ color: theme.color.mediumdark }}>
-            Configure images in the story parameters.visualDelta.images
-          </EmptyState>
+          <EmptyCreateWrap>
+            <EmptyState style={{ color: theme.color.mediumdark }}>
+              Configure images in the story parameters.visualDelta.images
+            </EmptyState>
+            <Button
+              size="medium"
+              disabled={!storyId || busy}
+              ariaLabel="Create baseline"
+              onClick={() => void handleCreateBaselines()}
+            >
+              {isCreating
+                ? (createProgress?.label ?? "Creating…")
+                : "Create Baseline"}
+            </Button>
+            {isCreating ? (
+              <EmptyState
+                style={{
+                  color: theme.textMutedColor,
+                  fontSize: theme.typography.size.s1,
+                }}
+              >
+                {createProgress?.label ?? "Creating…"}
+              </EmptyState>
+            ) : null}
+            {captureError ? <ErrorText>{captureError}</ErrorText> : null}
+            {updateLog && !captureError ? (
+              <pre
+                style={{
+                  margin: 0,
+                  width: "100%",
+                  maxWidth: 480,
+                  color: theme.color.positive,
+                  whiteSpace: "pre-wrap",
+                  maxHeight: 160,
+                  overflow: "auto",
+                  fontSize: 11,
+                  textAlign: "left",
+                }}
+              >
+                {updateLog.slice(-800)}
+              </pre>
+            ) : null}
+          </EmptyCreateWrap>
         </EmptyStateContainer>
       ) : (
         <>
