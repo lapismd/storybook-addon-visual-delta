@@ -3,6 +3,7 @@ import type { DecoratorFunction } from "storybook/internal/types";
 import {
   DEFAULT_PLACEMENT,
   EVENTS,
+  VISUAL_COMPARE_PANE_PAD_PX,
   VISUAL_DEVICE_SCALE_FACTOR,
   isSplitPlacement,
   normalizePlacement,
@@ -43,6 +44,7 @@ let layoutObserverRef: ResizeObserver | null = null;
 let sharedScrollCleanupRef: (() => void) | null = null;
 let sharedScrollRefreshRef: (() => void) | null = null;
 let liveContentWidthRestoreRef: (() => void) | null = null;
+let liveCanvasSplitRestoreRef: (() => void) | null = null;
 let lastCompareSizes: BaselineCompareSizes | null = null;
 let lastSelection: {
   index: number;
@@ -225,6 +227,51 @@ function lockLiveContentWidth(canvasElement: HTMLElement, contentWidth: number) 
 function unlockLiveContentWidth() {
   liveContentWidthRestoreRef?.();
   liveContentWidthRestoreRef = null;
+}
+
+function measureCanvasInsets(canvasElement: HTMLElement): {
+  x: number;
+  y: number;
+} {
+  const style = getComputedStyle(canvasElement);
+  const x =
+    parseFloat(style.paddingLeft) +
+    parseFloat(style.paddingRight) +
+    parseFloat(style.borderLeftWidth) +
+    parseFloat(style.borderRightWidth);
+  const y =
+    parseFloat(style.paddingTop) +
+    parseFloat(style.paddingBottom) +
+    parseFloat(style.borderTopWidth) +
+    parseFloat(style.borderBottomWidth);
+  return {
+    x: Number.isFinite(x) ? x : 0,
+    y: Number.isFinite(y) ? y : 0,
+  };
+}
+
+/**
+ * `#storybook-root` uses `min-height: 100vh`, which forces tall scrollable
+ * content inside short compare panes. Collapse that while split is active.
+ */
+function lockLiveCanvasForSplit(canvasElement: HTMLElement) {
+  liveCanvasSplitRestoreRef?.();
+  const prev = {
+    minHeight: canvasElement.style.minHeight,
+    height: canvasElement.style.height,
+  };
+  canvasElement.style.minHeight = "0";
+  canvasElement.style.height = "auto";
+  liveCanvasSplitRestoreRef = () => {
+    canvasElement.style.minHeight = prev.minHeight;
+    canvasElement.style.height = prev.height;
+    liveCanvasSplitRestoreRef = null;
+  };
+}
+
+function unlockLiveCanvasForSplit() {
+  liveCanvasSplitRestoreRef?.();
+  liveCanvasSplitRestoreRef = null;
 }
 
 const HIDE_PANE_SCROLLBAR_STYLE_ID = "visual-delta-hide-pane-scrollbars";
@@ -506,6 +553,7 @@ function bindSharedScrollRails(
 function teardownSplit(canvasElement: HTMLElement) {
   unbindSharedScroll();
   unlockLiveContentWidth();
+  unlockLiveCanvasForSplit();
   lastCompareSizes = null;
   const split = document.getElementById(SPLIT_ID);
   if (!(split instanceof HTMLElement)) return;
@@ -518,8 +566,11 @@ function teardownSplit(canvasElement: HTMLElement) {
 }
 
 /**
- * Size both panes to the same viewport (baseline CSS + pad), capped to the
- * available host so they stay equal; lock live subject width to content CSS.
+ * Size both panes equally for compare:
+ * - Free axis fills the host (left/right → full height; above/below → full width)
+ *   so unused preview space is used instead of short panes + scroll rails.
+ * - Constrained axis fits baseline CSS content plus canvas insets (storybook-root
+ *   padding), not only the small compare pad — otherwise padding forces scroll.
  */
 function applyEqualPaneViewports(
   canvasElement: HTMLElement,
@@ -543,19 +594,30 @@ function applyEqualPaneViewports(
     0,
     (hostEl?.clientHeight ?? sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
   );
+  const insets = measureCanvasInsets(canvasElement);
+  const minPaneW = Math.ceil(
+    sizes.content.width +
+      Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.x),
+  );
+  const minPaneH = Math.ceil(
+    sizes.content.height +
+      Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.y),
+  );
 
   let paneW: number;
   let paneH: number;
   if (horizontal) {
     paneW = Math.min(
-      sizes.viewport.width,
+      Math.max(minPaneW, sizes.viewport.width),
       Math.max(1, Math.floor((availW - 1) / 2)),
     );
-    paneH = Math.min(sizes.viewport.height, Math.max(1, availH));
+    // Use the iframe height — short baseline-sized panes left empty space below
+    // while `#storybook-root { min-height: 100vh }` still scrolled inside.
+    paneH = Math.max(1, availH);
   } else {
-    paneW = Math.min(sizes.viewport.width, Math.max(1, availW));
+    paneW = Math.max(1, availW);
     paneH = Math.min(
-      sizes.viewport.height,
+      Math.max(minPaneH, sizes.viewport.height),
       Math.max(1, Math.floor((availH - 1) / 2)),
     );
   }
@@ -569,6 +631,7 @@ function applyEqualPaneViewports(
   panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
   panesWrap.style.height = horizontal ? `${paneH}px` : `${paneH * 2 + 1}px`;
 
+  lockLiveCanvasForSplit(canvasElement);
   lockLiveContentWidth(canvasElement, sizes.content.width);
   syncBaselinePaneInset(canvasElement, baselinePane);
   sharedScrollRefreshRef?.();

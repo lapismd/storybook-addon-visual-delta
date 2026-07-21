@@ -24,6 +24,8 @@ import {
   TEST_PROVIDER_ID,
   VISUAL_DELTA_UPDATE_PATH,
   isSplitPlacement,
+  visualReviewStatusFromTags,
+  type VisualReviewStatus,
 } from "../constants.js";
 import {
   applyPendingVisualStatuses,
@@ -34,6 +36,7 @@ import {
   componentStoryIdsFor,
   formatVisualProgressLabel,
   postVisualCreateBaseline,
+  postVisualReviewStatus,
   postVisualRun,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
@@ -65,6 +68,7 @@ import {
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
 import { ImageGallery } from "./ImageGallery.js";
 import { PlacementPad } from "./PlacementPad.js";
+import { ReviewStatusPad } from "./ReviewStatusPad.js";
 import {
   Actions,
   ButtonGroup,
@@ -118,6 +122,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [optimisticReview, setOptimisticReview] =
+    useState<VisualReviewStatus | null>(null);
   const [isRunningVisual, setIsRunningVisual] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
@@ -130,7 +137,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     useState<VisualCreateProgress | null>(null);
   const isCreating = Boolean(createProgress?.running);
   const isSplit = isSplitPlacement(placement);
-  const busy = isDiffing || isUpdating || isCreating || isRunningVisual;
+  const busy =
+    isDiffing || isUpdating || isCreating || isRunningVisual || isReviewing;
+  const storyEntry = storyId ? api.getData(storyId) : undefined;
+  const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
+  const reviewFromStory = visualReviewStatusFromTags(storyEntry?.tags);
+  const reviewStatus = optimisticReview ?? reviewFromStory;
+
+  useEffect(() => {
+    setOptimisticReview(null);
+  }, [storyId, storyTagsKey]);
   const baselineSrc = images[index]?.src;
   const progressLabel =
     isRunningVisual && !isDiffing
@@ -393,6 +409,36 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     }
   }, [storyId]);
 
+  const handleSetReviewStatus = useCallback(
+    async (status: VisualReviewStatus) => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      setIsReviewing(true);
+      setCaptureError(null);
+      try {
+        await postVisualReviewStatus({ storyId, status });
+        setOptimisticReview(status);
+        const messages: Record<VisualReviewStatus, string> = {
+          pending: "Marked baseline as pending review (visual-pending).",
+          approved: "Marked baseline as approved (visual-approved).",
+          failed: "Marked baseline as failed (visual-failed).",
+        };
+        setUpdateLog(messages[status]);
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error
+            ? error.message
+            : "Failed to update review status",
+        );
+      } finally {
+        setIsReviewing(false);
+      }
+    },
+    [storyId],
+  );
+
   const handleRunVisual = useCallback(
     async (scope: "story" | "component" | "all") => {
       if (scope !== "all" && !storyId) {
@@ -554,6 +600,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 active={index >= 0}
                 onToggle={togglePlacement}
                 disabled={images.length === 0}
+              />
+              <ReviewStatusPad
+                value={reviewStatus}
+                disabled={busy || !storyId}
+                onSelect={(status) => void handleSetReviewStatus(status)}
               />
               {!isSplit ? (
                 <ButtonGroup role="group" aria-label="Overlay controls">

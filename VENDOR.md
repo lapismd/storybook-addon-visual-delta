@@ -26,11 +26,14 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
   horizontal rails, pane scroll mirroring, shift+wheel → X). Both panes get a
   matching min scroll extent (max of live vs baseline content, at least the
   baseline CSS box) so a short/narrow side cannot clamp scroll before the larger
-  side is fully reachable. Live subject width is locked to the baseline CSS
-  width so wrapping matches the clip. Center stacks a ghost overlay (opacity /
-  difference blend). Legacy `beside`/`over` map to `right`/`center`. Split
-  panes / scroll rails use the live preview’s painted background (canvas → body
-  → `--background`), not Storybook chrome `--sb-color-bg`.
+  side is fully reachable. Side-by-side panes fill the preview height (stacked
+  panes fill width) and size for storybook-root padding, so unused iframe space
+  is not left empty while inner scroll rails appear. Live `#storybook-root`
+  `min-height: 100vh` is suppressed in split mode; subject width stays locked to
+  the baseline CSS width. Center stacks a ghost overlay (opacity / difference
+  blend). Legacy `beside`/`over` map to `right`/`center`. Split panes / scroll
+  rails use the live preview’s painted background (canvas → body →
+  `--background`), not Storybook chrome `--sb-color-bg`.
 - **Canvas align** — Shadcn baselines use `align: "canvas"` so component-clipped
   PNGs pin (via CSS transform) to the story subject (`#storybook-root > *`),
   matching Playwright clips. Legacy `align: "viewport"` pins to the iframe
@@ -63,6 +66,12 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
 - **Update baselines** — Dev-only kebab action posts to
   `/__visual-delta/update-baseline`, which runs the guarded visual-update
   pipeline for the current component (rebuilds Storybook, overwrites PNGs).
+- **Review tags** — When baselines are configured, a button group after the
+  placement pad sets mutually exclusive CSF tags via
+  `/__visual-delta/review-status`: `visual-pending` (orange clock),
+  `visual-approved` (green shield), `visual-failed` (red ✕). Create-baseline
+  also stamps `visual-pending` on newly wired stories that are not already
+  approved.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module shows a Vitest-style **Visual Tests** checklist row with live
