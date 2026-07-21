@@ -23,12 +23,14 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
 - **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +
   baseline in equal compare panes sized from the baseline CSS dimensions plus
   pad (`VISUAL_COMPARE_PANE_PAD_PX`), with shared 2D scroll (vertical +
-  horizontal rails, pane scroll mirroring, shift+wheel → X). Live subject width
-  is locked to the baseline CSS width so wrapping matches the clip. Center
-  stacks a ghost overlay (opacity / difference blend). Legacy `beside`/`over`
-  map to `right`/`center`. Split panes / scroll rails use the live preview’s
-  painted background (canvas → body → `--background`), not Storybook chrome
-  `--sb-color-bg`.
+  horizontal rails, pane scroll mirroring, shift+wheel → X). Both panes get a
+  matching min scroll extent (max of live vs baseline content, at least the
+  baseline CSS box) so a short/narrow side cannot clamp scroll before the larger
+  side is fully reachable. Live subject width is locked to the baseline CSS
+  width so wrapping matches the clip. Center stacks a ghost overlay (opacity /
+  difference blend). Legacy `beside`/`over` map to `right`/`center`. Split
+  panes / scroll rails use the live preview’s painted background (canvas → body
+  → `--background`), not Storybook chrome `--sb-color-bg`.
 - **Canvas align** — Shadcn baselines use `align: "canvas"` so component-clipped
   PNGs pin (via CSS transform) to the story subject (`#storybook-root > *`),
   matching Playwright clips. Legacy `align: "viewport"` pins to the iframe
@@ -51,9 +53,16 @@ bundle and does not HMR. Preview overlay edits reload via Vite.
 - **Compact toolbar** — Baseline thumbs + Beside/Over on the first row;
   opacity/threshold/blend on the second. **Reset** restores drag position;
   **Reset settings** clears localStorage prefs.
-- **Update baselines** — Dev-only button posts to
+- **Create baselines** — When the panel has no configured images, a centered
+  **Create Baseline** CTA posts to `/__visual-delta/create-baseline` (also on
+  the sidebar story/component context menu under **Run visual tests**). Runs
+  `visual-update --create-only` (`updateSnapshots: "missing"` — never overwrites
+  existing PNGs), then patches the matching `.stories.svelte` so
+  `parameters.visualDelta.images` includes the new `/visual-baselines/…` URL when
+  missing. Progress shows as **Creating…** while the job runs.
+- **Update baselines** — Dev-only kebab action posts to
   `/__visual-delta/update-baseline`, which runs the guarded visual-update
-  pipeline for the current component (rebuilds Storybook, writes PNGs).
+  pipeline for the current component (rebuilds Storybook, overwrites PNGs).
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module shows a Vitest-style **Visual Tests** checklist row with live

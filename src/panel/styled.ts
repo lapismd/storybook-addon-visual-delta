@@ -212,7 +212,8 @@ export const ThumbImage = styled.img({
 
 export const EmptyState = styled.p({
   textAlign: "center",
-  padding: "2rem",
+  padding: "0",
+  margin: 0,
 });
 
 export const EmptyStateContainer = styled.div({
@@ -223,6 +224,51 @@ export const EmptyStateContainer = styled.div({
   backgroundColor: "#ffffff",
   minHeight: "100%",
 });
+
+/** Centered empty-state CTA when no baseline images are configured. */
+export const EmptyCreateWrap = styled.div({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "1rem",
+  flex: 1,
+  minHeight: 220,
+  padding: "2rem 1.5rem",
+  textAlign: "center",
+});
+
+/** Panel placeholder while waiting for preview INIT_IMAGE. */
+export const SkeletonRoot = styled.div(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+  padding: "0.75rem 1rem 1rem",
+  minHeight: "100%",
+  backgroundColor: theme.background.content,
+  cursor: "progress",
+}));
+
+export const SkeletonToolbar = styled.div({
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  flexWrap: "wrap",
+});
+
+export const SkeletonBone = styled.div<{
+  width?: number | string;
+  height?: number | string;
+  radius?: number | string;
+}>(({ theme, width = "100%", height = 12, radius = 4 }) => ({
+  display: "block",
+  flex: "0 0 auto",
+  width,
+  height,
+  borderRadius: radius,
+  backgroundColor: theme.appBorderColor,
+  ...theme.animation.inlineGlow,
+}));
 
 export const InlineControl = styled.label(({ theme }) => ({
   display: "inline-flex",
