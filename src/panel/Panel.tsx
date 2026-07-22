@@ -1,4 +1,11 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import pixelmatch from "pixelmatch";
 import {
   AddonPanel,
@@ -8,14 +15,17 @@ import {
 } from "storybook/internal/components";
 import {
   experimental_getTestProviderStore,
+  useChannel,
   useStorybookApi,
   useStorybookState,
 } from "storybook/manager-api";
 import {
   DEFAULT_PASS_THRESHOLD_PERCENT,
+  EVENTS,
   TEST_PROVIDER_ID,
   isSplitPlacement,
   visualReviewStatusFromTags,
+  type VisualDeltaInteraction,
   type VisualReviewStatus,
 } from "../constants.js";
 import {
@@ -68,8 +78,10 @@ import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import {
   endPlayDebug,
   gotoPlayStep,
+  lookupPlayStepCallId,
   mergeInteractionRows,
-  remountStory,
+  runUntilStep,
+  setPlayParkTarget,
   usePlaySteps,
   type PlayStepInfo,
 } from "./usePlaySteps.js";
@@ -79,6 +91,8 @@ import {
   CheckboxContainer,
   ErrorText,
   InlineControl,
+  VD_HEADER_STICKY_TOP_VAR,
+  VISUAL_DELTA_HEADER_HEIGHT,
   PanelBody,
   PanelScroll,
   PanelShell,
@@ -97,6 +111,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
   const { storyId: currentStoryId } = useStorybookState();
   const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
+  const [headerStickyTop, setHeaderStickyTop] = useState(
+    VISUAL_DELTA_HEADER_HEIGHT,
+  );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
     images,
@@ -121,6 +138,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     resetSettings,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    seedStoryFromManager,
     hydrateInteractions,
     selectInteractionBaseline,
     restorePrimaryBaselines,
@@ -140,6 +158,115 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [selectedInteractionId, setSelectedInteractionId] = useState<
     string | null
   >(null);
+  /** Stem → last loaded compare; avoids blank flash when switching accordions. */
+  const diffResultCacheRef = useRef(new Map<string, DiffResultData | null>());
+  /** Play park currently targeted by accordion selection (`null` = Default). */
+  const parkedStepRef = useRef<string | null>(null);
+  const pinTimersRef = useRef<number[]>([]);
+  const clearPinTimers = useCallback(() => {
+    for (const timer of pinTimersRef.current) {
+      window.clearTimeout(timer);
+    }
+    pinTimersRef.current = [];
+  }, []);
+
+  const emit = useChannel({
+    [EVENTS.VISUAL_CAPTURE_PARKED]: (payload: {
+      storyId?: string;
+      stepId?: string;
+    }) => {
+      if (!payload.stepId) return;
+      if (
+        payload.storyId &&
+        currentStoryId &&
+        payload.storyId !== currentStoryId
+      ) {
+        return;
+      }
+      const wired = interactions.find((item) => item.id === payload.stepId);
+      if (!wired) return;
+      parkedStepRef.current = payload.stepId;
+      setExpandedId(payload.stepId);
+      setSelectedInteractionId(payload.stepId);
+      selectInteractionBaseline(wired.src);
+    },
+  });
+
+  // New story — drop park / pin bookkeeping so the next expand remounts cleanly.
+  useEffect(() => {
+    parkedStepRef.current = null;
+    clearPinTimers();
+    diffResultCacheRef.current.clear();
+  }, [currentStoryId, clearPinTimers]);
+
+  // Preview INIT_IMAGE can be missed (panel mounts before iframe, Storybook
+  // restart, park remount). Retry until ready; seed from the manager index if
+  // the preview channel never answers so we don't spin on Loading forever.
+  useEffect(() => {
+    if (storyReady || !currentStoryId) return;
+    let attempts = 0;
+    const requestOrSeed = () => {
+      emit(EVENTS.REQUEST_INIT_IMAGE, { storyId: currentStoryId });
+      attempts += 1;
+      // After a few misses, unblock the panel from manager story data.
+      if (attempts < 4) return;
+      const entry = api.getData(currentStoryId);
+      const storyName =
+        entry && "name" in entry && entry.name
+          ? String(entry.name)
+          : currentStoryId;
+      const params =
+        entry && "parameters" in entry
+          ? (entry.parameters as {
+              visualDelta?: {
+                images?: Array<string | { src?: string }>;
+                interactions?: VisualDeltaInteraction[];
+              };
+            })
+          : undefined;
+      const fromParams = (params?.visualDelta?.images ?? [])
+        .map((image) => (typeof image === "string" ? image : image?.src))
+        .filter((src): src is string => Boolean(src));
+      const fromConvention = baselineUrlForStoryRef(
+        {
+          id: currentStoryId,
+          importPath:
+            entry && "importPath" in entry
+              ? String(entry.importPath)
+              : undefined,
+          tags: entry?.tags,
+        },
+        { allowSkipVisual: true },
+      );
+      const imageSrcs =
+        fromParams.length > 0
+          ? fromParams
+          : fromConvention
+            ? [fromConvention]
+            : undefined;
+      seedStoryFromManager({
+        storyId: currentStoryId,
+        storyName,
+        imageSrcs,
+      });
+      const interactions = params?.visualDelta?.interactions;
+      if (interactions?.length) hydrateInteractions(interactions);
+    };
+    const initial = window.setTimeout(requestOrSeed, 300);
+    const interval = window.setInterval(requestOrSeed, 700);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [
+    api,
+    currentStoryId,
+    emit,
+    hydrateInteractions,
+    seedStoryFromManager,
+    storyReady,
+  ]);
+
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
@@ -244,26 +371,54 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       setExpandedId(id);
       if (id === "default") {
+        const alreadyDefault = parkedStepRef.current === null;
         setSelectedInteractionId(null);
         restorePrimaryBaselines();
-        if (storyId) endPlayDebug(storyId);
+        // Skip END remount when we're already on the primary end-of-play park.
+        if (storyId && !alreadyDefault) {
+          parkedStepRef.current = null;
+          endPlayDebug(storyId);
+        }
         return;
       }
       if (!storyId) return;
       const step = interactionSteps.find((item) => item.stepId === id);
       if (!step) return;
       setSelectedInteractionId(step.stepId);
-      if (step.callId) {
-        gotoPlayStep(storyId, step.callId);
-      } else {
-        remountStory(storyId);
-      }
+      // Pin the interaction baseline before GOTO remount so INIT_IMAGE keeps it.
       const wired = interactions.find((item) => item.id === step.stepId);
       if (wired) {
         selectInteractionBaseline(wired.src);
       }
+      // Already parked here — expand UI only; avoid FORCE_REMOUNT / GOTO flicker.
+      if (parkedStepRef.current === step.stepId) {
+        return;
+      }
+      parkedStepRef.current = step.stepId;
+      // Prefer GOTO when we have a callId (single remount); otherwise FORCE_REMOUNT.
+      const callId =
+        step.callId || lookupPlayStepCallId(storyId, step.stepId) || "";
+      if (callId) {
+        setPlayParkTarget(storyId, step.stepId);
+        gotoPlayStep(storyId, callId);
+      } else {
+        runUntilStep(storyId, step.stepId);
+      }
+      // Remount/GOTO tears down the preview overlay decorator — re-pin after
+      // the new canvas attaches (and again after play parks).
+      clearPinTimers();
+      if (wired) {
+        for (const delay of [400, 1000]) {
+          pinTimersRef.current.push(
+            window.setTimeout(() => {
+              selectInteractionBaseline(wired.src);
+            }, delay),
+          );
+        }
+      }
     },
     [
+      clearPinTimers,
       expandedId,
       interactionSteps,
       interactions,
@@ -340,6 +495,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   );
 
   const baselineSrc = images[index]?.src;
+  const baselineStem = baselineSrc?.split("?")[0] ?? "";
   const progressLabel =
     isRunningVisual && !isDiffing
       ? formatVisualProgressLabel(runProgress)
@@ -360,21 +516,36 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   useEffect(() => {
     setCaptureError(null);
-    if (!baselineSrc) {
+    if (!baselineStem) {
       setDiffResult(null);
       return;
     }
+    // Prefer cached compare for this stem (accordion switches). Cache miss
+    // clears once; cache-bust query changes alone never wipe the view.
+    const cached = diffResultCacheRef.current.get(baselineStem);
+    if (cached !== undefined) {
+      setDiffResult(cached);
+    } else {
+      setDiffResult(null);
+    }
     let cancelled = false;
-    setDiffResult(null);
-    void loadPlaywrightDiffResult(baselineSrc, diffEpoch || Date.now()).then(
-      (result) => {
-        if (!cancelled) setDiffResult(result);
-      },
-    );
+    void loadPlaywrightDiffResult(
+      baselineStem,
+      diffEpoch || Date.now(),
+    ).then((result) => {
+      diffResultCacheRef.current.set(baselineStem, result);
+      if (!cancelled) setDiffResult(result);
+    });
     return () => {
       cancelled = true;
     };
-  }, [storyId, index, baselineSrc, diffEpoch]);
+  }, [storyId, index, baselineStem, diffEpoch]);
+
+  // Fresh visual-run artifacts invalidate the per-baseline cache.
+  useEffect(() => {
+    if (!diffEpoch) return;
+    diffResultCacheRef.current.clear();
+  }, [diffEpoch]);
 
   // Live progress + reload compare view when a visual run finishes.
   useEffect(() => {
@@ -853,7 +1024,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   return (
     <AddonPanel active={props.active ?? false}>
       <PanelShell ref={setShellEl}>
-        <PanelScroll>
+        <PanelScroll
+          style={
+            {
+              [VD_HEADER_STICKY_TOP_VAR]: `${headerStickyTop}px`,
+            } as React.CSSProperties
+          }
+        >
           <VisualDeltaHeader
             badgeStatus={loading ? null : badgeStatus}
             empty={loading ? false : isEmpty}
@@ -874,6 +1051,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             onStop={() => void cancelVisualRun()}
             onReviewStatus={(status) => void handleSetReviewStatus(status)}
             isUpdating={isUpdating}
+            onHeightChange={setHeaderStickyTop}
           />
           <PanelBody>
             {loading ? (
@@ -915,6 +1093,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 onUpdate={(step) =>
                   void handleCreateInteraction(step, true)
                 }
+                onUpdateDefault={() => void handleUpdateBaselines()}
                 onToggleDistribution={() =>
                   setShowDistribution((value) => !value)
                 }

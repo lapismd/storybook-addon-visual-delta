@@ -1,20 +1,37 @@
 import React, { memo, useMemo } from "react";
 import {
+  AddIcon,
   CheckIcon,
   ChevronSmallDownIcon,
   CrossIcon,
   GraphBarIcon,
+  SyncIcon,
 } from "@storybook/icons";
-import { Button, Collapsible, ToggleButton } from "storybook/internal/components";
+import {
+  IconButton,
+  ToggleButton,
+  TooltipNote,
+  WithTooltip,
+} from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { PlayStepInfo } from "./usePlaySteps.js";
-import { DiffToolLabel } from "./styled.js";
+import {
+  VD_HEADER_STICKY_TOP_VAR,
+  VISUAL_DELTA_HEADER_HEIGHT,
+  panelCanvasBackground,
+} from "./styled.js";
 
 const List = styled.div({
   display: "flex",
   flexDirection: "column",
   marginBottom: "0.5rem",
+});
+
+/** Per-section wrapper so sticky summaries are constrained to their body. */
+const Section = styled.div({
+  display: "flex",
+  flexDirection: "column",
 });
 
 const SummaryButton = styled.button<{ $expanded?: boolean }>(
@@ -27,11 +44,17 @@ const SummaryButton = styled.button<{ $expanded?: boolean }>(
     textAlign: "left",
     border: "none",
     borderBottom: `1px solid ${theme.appBorderColor}`,
-    background: $expanded ? theme.background.hoverable : "transparent",
+    background: $expanded
+      ? theme.background.hoverable
+      : panelCanvasBackground(theme),
     color: theme.color.defaultText,
     padding: "4px 12px",
     cursor: "pointer",
     font: "inherit",
+    position: "sticky",
+    // Sit flush under the Pass/Diff toolbar (live height via CSS var).
+    top: `var(${VD_HEADER_STICKY_TOP_VAR}, ${VISUAL_DELTA_HEADER_HEIGHT}px)`,
+    zIndex: 1,
     "&:hover": {
       cursor: "pointer",
       background: theme.background.hoverable,
@@ -117,7 +140,10 @@ const SummaryActions = styled.div({
 const SectionBody = styled.div(({ theme }) => ({
   padding: "8px 12px 12px",
   borderBottom: `1px solid ${theme.appBorderColor}`,
-  background: theme.background.content,
+  background: panelCanvasBackground(theme),
+  boxSizing: "border-box",
+  display: "flex",
+  flexDirection: "column",
 }));
 
 export type BaselineSectionId = "default" | string;
@@ -168,6 +194,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onExpand,
   onCreate,
   onUpdate,
+  onUpdateDefault,
   onToggleDistribution,
   renderBody,
 }: {
@@ -178,6 +205,8 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onExpand: (id: BaselineSectionId) => void;
   onCreate: (step: PlayStepInfo) => void;
   onUpdate: (step: PlayStepInfo) => void;
+  /** Rewrite the story's primary (Default) baseline. */
+  onUpdateDefault: () => void;
   onToggleDistribution: () => void;
   renderBody: (section: BaselineSection) => React.ReactNode;
 }) {
@@ -196,89 +225,103 @@ export const BaselineAccordion = memo(function BaselineAccordion({
         const expanded = expandedId === section.id;
         const hasDiff = Boolean(section.status && section.stats);
         return (
-          <Collapsible
-            key={section.id}
-            collapsed={!expanded}
-            summary={() => (
-              <SummaryButton
-                type="button"
-                $expanded={expanded}
-                aria-expanded={expanded}
-                onClick={() => onExpand(section.id)}
+          <Section key={section.id}>
+            {/*
+              Avoid Storybook Collapsible’s opacity/translate transition —
+              swapping sections animated both collapse + expand and felt like
+              the whole Visual Delta panel flickering.
+            */}
+            <SummaryButton
+              type="button"
+              $expanded={expanded}
+              aria-expanded={expanded}
+              onClick={() => onExpand(section.id)}
+            >
+              <Chevron $expanded={expanded} aria-hidden>
+                <ChevronSmallDownIcon />
+              </Chevron>
+              <StatusSlot>
+                {section.status ? (
+                  <StatusIcon
+                    $passed={section.status === "pass"}
+                    aria-label={
+                      section.status === "pass" ? "Passed" : "Failed"
+                    }
+                  >
+                    {section.status === "pass" ? (
+                      <CheckIcon />
+                    ) : (
+                      <CrossIcon />
+                    )}
+                  </StatusIcon>
+                ) : null}
+              </StatusSlot>
+              <Meta $labelWidth={labelWidth}>
+                <Label title={section.label}>{section.label}</Label>
+                <Hint title={section.hint}>{section.hint}</Hint>
+              </Meta>
+              <SummaryRight
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
               >
-                <Chevron $expanded={expanded} aria-hidden>
-                  <ChevronSmallDownIcon />
-                </Chevron>
-                <StatusSlot>
-                  {section.status ? (
-                    <StatusIcon
-                      $passed={section.status === "pass"}
-                      aria-label={
-                        section.status === "pass" ? "Passed" : "Failed"
+                {section.stats ? <Stats>{section.stats}</Stats> : null}
+                <SummaryActions>
+                  {expanded && hasDiff ? (
+                    <WithTooltip
+                      hasChrome={false}
+                      placement="top"
+                      trigger="hover"
+                      tooltip={
+                        <TooltipNote note="Difference distribution" />
                       }
                     >
-                      {section.status === "pass" ? (
-                        <CheckIcon />
-                      ) : (
-                        <CrossIcon />
-                      )}
-                    </StatusIcon>
-                  ) : null}
-                </StatusSlot>
-                <Meta $labelWidth={labelWidth}>
-                  <Label title={section.label}>{section.label}</Label>
-                  <Hint title={section.hint}>{section.hint}</Hint>
-                </Meta>
-                <SummaryRight
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  {section.stats ? <Stats>{section.stats}</Stats> : null}
-                  <SummaryActions>
-                    {expanded && hasDiff ? (
                       <ToggleButton
                         size="small"
+                        padding="small"
                         pressed={showDistribution}
                         onClick={onToggleDistribution}
-                        aria-label="Toggle difference distribution"
+                        aria-label="Difference distribution"
                         aria-expanded={showDistribution}
-                        title="Difference distribution"
                       >
-                        <DiffToolLabel>
-                          <GraphBarIcon />
-                          Distribution
-                        </DiffToolLabel>
+                        <GraphBarIcon />
                       </ToggleButton>
-                    ) : null}
-                    {section.step ? (
-                      section.wired ? (
-                        <Button
-                          size="small"
-                          disabled={busy}
-                          onClick={() => onUpdate(section.step!)}
-                        >
-                          Update
-                        </Button>
-                      ) : (
-                        <Button
-                          size="small"
-                          disabled={busy}
-                          onClick={() => onCreate(section.step!)}
-                        >
-                          Create
-                        </Button>
-                      )
-                    ) : null}
-                  </SummaryActions>
-                </SummaryRight>
-              </SummaryButton>
-            )}
-          >
+                    </WithTooltip>
+                  ) : null}
+                  {section.id === "default" || section.wired ? (
+                    <IconButton
+                      size="small"
+                      padding="small"
+                      disabled={busy}
+                      ariaLabel="Update baseline"
+                      onClick={() => {
+                        if (section.id === "default") {
+                          onUpdateDefault();
+                          return;
+                        }
+                        if (section.step) onUpdate(section.step);
+                      }}
+                    >
+                      <SyncIcon />
+                    </IconButton>
+                  ) : section.step ? (
+                    <IconButton
+                      size="small"
+                      padding="small"
+                      disabled={busy}
+                      ariaLabel="Create baseline"
+                      onClick={() => onCreate(section.step!)}
+                    >
+                      <AddIcon />
+                    </IconButton>
+                  ) : null}
+                </SummaryActions>
+              </SummaryRight>
+            </SummaryButton>
             {expanded ? (
               <SectionBody>{renderBody(section)}</SectionBody>
             ) : null}
-          </Collapsible>
+          </Section>
         );
       })}
     </List>

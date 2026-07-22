@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useLayoutEffect, useRef } from "react";
 import { EllipsisIcon, SyncIcon, UndoIcon } from "@storybook/icons";
 import {
   ActionList,
@@ -7,6 +7,8 @@ import {
   PopoverProvider,
   Separator,
   Toolbar,
+  TooltipNote,
+  WithTooltip,
 } from "storybook/internal/components";
 import { styled, useTheme } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
@@ -15,6 +17,7 @@ import {
   type VisualRunMode,
 } from "../manager/VisualRunSplitButton.js";
 import { ReviewStatusPad } from "./ReviewStatusPad.js";
+import { VISUAL_DELTA_HEADER_HEIGHT } from "./styled.js";
 import {
   BadgeActionButton,
   VisualStatusBadge,
@@ -26,7 +29,9 @@ const HeaderWrap = styled.div(({ theme }) => ({
   background: theme.background.app,
   position: "sticky",
   top: 0,
-  zIndex: 1,
+  zIndex: 2,
+  minHeight: VISUAL_DELTA_HEADER_HEIGHT,
+  boxSizing: "border-box",
 }));
 
 const ControlsGroup = styled.div({
@@ -61,6 +66,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onStop,
   onReviewStatus,
   isUpdating,
+  onHeightChange,
 }: {
   badgeStatus: VisualBadgeStatus | null;
   empty: boolean;
@@ -77,12 +83,28 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onStop: () => void;
   onReviewStatus: (status: VisualReviewStatus) => void;
   isUpdating: boolean;
+  /** Reports sticky Pass/Diff toolbar height for accordion offset. */
+  onHeightChange?: (height: number) => void;
 }) {
   const theme = useTheme();
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el || !onHeightChange) return;
+    const publish = () => {
+      const next = Math.round(el.getBoundingClientRect().height);
+      if (next > 0) onHeightChange(next);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeightChange]);
 
   return (
-    <HeaderWrap>
+    <HeaderWrap ref={headerRef} data-vd-header="controls">
       <Toolbar
         backgroundColor={theme.background.app}
         innerStyle={{ gap: 6, paddingInline: 15 }}
@@ -93,14 +115,21 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
             <>
               <VisualStatusBadge status={badgeStatus} />
               <Separator />
-              <BadgeActionButton
-                type="button"
-                disabled={busy || storyMissing}
-                onClick={() => onRunDiff("diff")}
-                aria-label="Re-run Diff"
+              <WithTooltip
+                hasChrome={false}
+                placement="top"
+                trigger="hover"
+                tooltip={<TooltipNote note="Re-run Diff" />}
               >
-                Re-run Diff
-              </BadgeActionButton>
+                <BadgeActionButton
+                  type="button"
+                  disabled={busy || storyMissing}
+                  onClick={() => onRunDiff("diff")}
+                  aria-label="Re-run Diff"
+                >
+                  Diff
+                </BadgeActionButton>
+              </WithTooltip>
             </>
           ) : (
             <VisualRunSplitButton

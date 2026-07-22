@@ -23,6 +23,35 @@ import {
   type VisualDeltaSettings,
 } from "./settings.js";
 
+const PINNED_INTERACTION_SRC_KEY = "visual-delta/pinned-interaction-src";
+
+function readPinnedInteractionSrc(): string | null {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    return sessionStorage.getItem(PINNED_INTERACTION_SRC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePinnedInteractionSrc(src: string | null): void {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (src) sessionStorage.setItem(PINNED_INTERACTION_SRC_KEY, src);
+    else sessionStorage.removeItem(PINNED_INTERACTION_SRC_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function pinInteractionSrc(
+  ref: { current: string | null },
+  src: string | null,
+): void {
+  ref.current = src;
+  writePinnedInteractionSrc(src);
+}
+
 type StoryData = {
   images: VisualDeltaImage[];
   /** Opted-in mid-play captures from `parameters.visualDelta.interactions`. */
@@ -152,6 +181,15 @@ export function useStoryData() {
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
   const primaryImagesRef = useRef<VisualDeltaImage[]>([]);
+  /**
+   * Mid-play interaction baseline currently pinned in the overlay. Survives
+   * story remount / INIT_IMAGE (GOTO) so selecting an interaction does not
+   * snap back to the primary gallery or drop the overlay.
+   * Mirrored to sessionStorage so a remount cannot race a React ref reset.
+   */
+  const activeInteractionSrcRef = useRef<string | null>(
+    readPinnedInteractionSrc(),
+  );
   const emitRef = useRef<ReturnType<typeof useChannel> | null>(null);
 
   const persist = useCallback((next: StoryData) => {
@@ -179,6 +217,10 @@ export function useStoryData() {
       emitRef.current?.(EVENTS.SELECT_IMAGE, { index, images });
       if (index >= 0) {
         await waitTwoFrames();
+        // Remount / soft-hide can leave the overlay missing or hidden — show
+        // again after the canvas has had a chance to attach.
+        emitRef.current?.(EVENTS.SELECT_IMAGE, { index, images });
+        emitRef.current?.(EVENTS.SHOW_OVERLAY, {});
         emitRef.current?.(EVENTS.RESET_OVERLAY, {});
       }
     },
@@ -201,8 +243,19 @@ export function useStoryData() {
         : [data.images];
       const interactions = data.interactions ?? [];
       const prefs = prefsRef.current;
-      const liveVisible = prefs.liveVisible;
-      const placement = liveVisible ? prefs.placement : "center";
+      const interactionSrcEarly =
+        activeInteractionSrcRef.current ?? readPinnedInteractionSrc();
+      if (interactionSrcEarly) {
+        activeInteractionSrcRef.current = interactionSrcEarly;
+      }
+      const liveVisible =
+        interactionSrcEarly != null ? true : prefs.liveVisible;
+      const placement =
+        interactionSrcEarly != null
+          ? "center"
+          : liveVisible
+            ? prefs.placement
+            : "center";
       if (!liveVisible) {
         placementBeforeImageOnlyRef.current = prefs.placement;
         styleBeforeImageOnlyRef.current = {
@@ -225,12 +278,42 @@ export function useStoryData() {
               interactions.length > 0 ? interactions : prev.interactions,
           };
         }
-        const images = withPlacement(imagesArray, placement);
-        primaryImagesRef.current = images;
+        if (prev.storyId && prev.storyId !== data.storyId) {
+          pinInteractionSrc(activeInteractionSrcRef, null);
+        }
+        const primaryImages = withPlacement(imagesArray, placement);
+        primaryImagesRef.current = primaryImages;
+        const interactionSrc =
+          activeInteractionSrcRef.current ?? readPinnedInteractionSrc();
+        if (interactionSrc) activeInteractionSrcRef.current = interactionSrc;
+        const wiredInteraction = interactionSrc
+          ? interactions.find(
+              (item) => (item.src.split("?")[0] ?? item.src) === interactionSrc,
+            )
+          : undefined;
+        const images =
+          interactionSrc != null
+            ? withPlacement(
+                [
+                  {
+                    src: `${(wiredInteraction?.src.split("?")[0] ?? interactionSrc)}?t=${Date.now()}`,
+                    offsetX: 0,
+                    offsetY: 0,
+                    align: "canvas" as const,
+                    placement,
+                  },
+                ],
+                placement,
+              )
+            : primaryImages;
         const hasImages = images.length > 0;
         // Image-only always shows the overlay; otherwise respect overlayOn.
+        // Interaction pins always re-show the overlay after remount.
         const initialIndex =
-          hasImages && (prefs.overlayOn || !liveVisible) ? 0 : -1;
+          hasImages &&
+          (interactionSrc != null || prefs.overlayOn || !liveVisible)
+            ? 0
+            : -1;
         const next: StoryData = {
           images,
           interactions,
@@ -252,6 +335,30 @@ export function useStoryData() {
         });
         void selectImage(initialIndex, images);
         return next;
+      });
+    },
+    [EVENTS.OVERLAY_LISTENER_READY]: (payload?: { storyId?: string }) => {
+      // Decorator remounted after GOTO / FORCE_REMOUNT — push current selection
+      // again now that the preview listener is subscribed.
+      setStoryData((prev) => {
+        if (payload?.storyId && prev.storyId && payload.storyId !== prev.storyId) {
+          return prev;
+        }
+        // Preview just came up without INIT reaching us — ask again.
+        if (!prev.storyId || (payload?.storyId && prev.storyId !== payload.storyId)) {
+          emitRef.current?.(EVENTS.REQUEST_INIT_IMAGE, {
+            storyId: payload?.storyId,
+          });
+        }
+        if (prev.index < 0 || prev.images.length === 0) return prev;
+        emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
+          opacity: prev.opacity,
+          colorInversion: prev.colorInversion,
+          placement: prev.placement,
+          liveVisible: prev.liveVisible,
+        });
+        void selectImage(prev.index, prev.images);
+        return prev;
       });
     },
   });
@@ -603,38 +710,130 @@ export function useStoryData() {
   );
 
   /**
-   * Show a mid-play interaction PNG in the overlay (Interactions tab).
+   * Unblock the panel when preview INIT_IMAGE is missed (slow iframe, channel
+   * race after Storybook restart). Sets story identity and optionally hydrates
+   * baseline URLs from the manager index.
+   */
+  const seedStoryFromManager = useCallback(
+    (args: { storyId: string; storyName: string; imageSrcs?: string[] }) => {
+      const { storyId, storyName, imageSrcs } = args;
+      if (!storyId) return;
+      setStoryData((prev) => {
+        if (prev.storyId === storyId && (prev.images.length > 0 || !imageSrcs?.length)) {
+          return prev.storyName === storyName
+            ? prev
+            : { ...prev, storyName };
+        }
+        const bust = `t=${Date.now()}`;
+        const images =
+          imageSrcs && imageSrcs.length > 0
+            ? withPlacement(
+                imageSrcs.map((src) => {
+                  const base = src.split("?")[0] ?? src;
+                  return {
+                    src: `${base}?${bust}`,
+                    offsetX: 0,
+                    offsetY: 0,
+                    align: "canvas" as const,
+                    placement: "center" as const,
+                  };
+                }),
+                "center",
+              )
+            : prev.storyId === storyId
+              ? prev.images
+              : [];
+        if (images.length > 0) primaryImagesRef.current = images;
+        const hasImages = images.length > 0;
+        const patch = hasImages
+          ? revealCenteredOverlayPatch({
+              index: 0,
+              imageCount: images.length,
+              placement: "center",
+              opacity: prev.opacity,
+            })
+          : null;
+        const next: StoryData = {
+          ...prev,
+          ...(patch ?? {}),
+          storyId,
+          storyName,
+          images,
+          placement: hasImages ? "center" : prev.placement,
+          index: patch ? patch.index : prev.storyId === storyId ? prev.index : -1,
+          overlayOn: patch ? patch.overlayOn : prev.storyId === storyId ? prev.overlayOn : false,
+        };
+        persist(next);
+        if (hasImages) {
+          emitStyle(next);
+          void selectImage(next.index, images);
+        }
+        return next;
+      });
+    },
+    [emitStyle, persist, selectImage],
+  );
+
+  /**
+   * Show a mid-play interaction PNG in the overlay.
+   * Force center placement so the (often short) interaction capture is visible
+   * over the live canvas — split panes sized for the primary baseline leave a
+   * short strip looking like a missing overlay.
    * Primary end-of-play gallery is kept in `primaryImagesRef`.
    */
   const selectInteractionBaseline = useCallback(
     (src: string) => {
+      const base = src.split("?")[0] ?? src;
+      pinInteractionSrc(activeInteractionSrcRef, base);
       setStoryData((prev) => {
+        const currentBase = prev.images[0]?.src?.split("?")[0] ?? "";
+        // Already pinned on this PNG — skip cache-bust churn (accordion
+        // re-pins after GOTO would otherwise reload overlay + panel diffs).
+        if (
+          currentBase === base &&
+          prev.index === 0 &&
+          prev.images.length === 1 &&
+          prev.overlayOn &&
+          prev.placement === "center"
+        ) {
+          return prev;
+        }
         const bust = `t=${Date.now()}`;
-        const base = src.split("?")[0] ?? src;
+        const placement: PlacementMode = "center";
+        const opacity = opacityForPlacementChange(
+          prev.placement,
+          placement,
+          prev.opacity,
+        );
         const image: VisualDeltaImage = {
           src: `${base}?${bust}`,
           offsetX: 0,
           offsetY: 0,
           align: "canvas",
-          placement: prev.placement,
+          placement,
         };
-        const images = withPlacement([image], prev.placement);
+        const images = withPlacement([image], placement);
         const next: StoryData = {
           ...prev,
           images,
           index: 0,
           overlayOn: true,
+          liveVisible: true,
+          placement,
+          opacity,
         };
         persist(next);
+        emitStyle(next);
         void selectImage(0, images);
         return next;
       });
     },
-    [persist, selectImage],
+    [emitStyle, persist, selectImage],
   );
 
   /** Restore end-of-play gallery images (Default tab). */
   const restorePrimaryBaselines = useCallback(() => {
+    pinInteractionSrc(activeInteractionSrcRef, null);
     setStoryData((prev) => {
       const images = withPlacement(primaryImagesRef.current, prev.placement);
       const hasImages = images.length > 0;
@@ -645,10 +844,11 @@ export function useStoryData() {
         overlayOn: hasImages,
       };
       persist(next);
+      emitStyle(next);
       void selectImage(next.index, images);
       return next;
     });
-  }, [persist, selectImage]);
+  }, [emitStyle, persist, selectImage]);
 
   const hydrateInteractions = useCallback((next: VisualDeltaInteraction[]) => {
     setStoryData((prev) => ({ ...prev, interactions: next }));
@@ -671,6 +871,7 @@ export function useStoryData() {
     reloadBaselineImages,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    seedStoryFromManager,
     selectInteractionBaseline,
     restorePrimaryBaselines,
     hydrateInteractions,

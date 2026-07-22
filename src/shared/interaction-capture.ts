@@ -96,4 +96,38 @@ export function setVisualCaptureUntilSession(stepId: string | null): void {
   } catch {
     /* ignore */
   }
+  notifyVisualCaptureParkWaiters();
+}
+
+type ParkWaiter = {
+  stepId: string;
+  resolve: () => void;
+};
+
+const parkWaiters: ParkWaiter[] = [];
+
+function notifyVisualCaptureParkWaiters(): void {
+  const until = readVisualCaptureUntil();
+  for (let i = parkWaiters.length - 1; i >= 0; i -= 1) {
+    const waiter = parkWaiters[i];
+    if (!waiter) continue;
+    if (until !== waiter.stepId) {
+      parkWaiters.splice(i, 1);
+      waiter.resolve();
+    }
+  }
+}
+
+/**
+ * Pause play while the panel session park targets `stepId`.
+ * Resolves when the park target changes or clears (another step / Default /
+ * story change) so Interactions UI is not stuck forever.
+ */
+export function waitWhileSessionParkedAt(stepId: string): Promise<void> {
+  if (readVisualCaptureUntil() !== stepId) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    parkWaiters.push({ stepId, resolve });
+  });
 }

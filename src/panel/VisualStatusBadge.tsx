@@ -19,7 +19,7 @@ const StatusNoteMapping = {
   fail: "Live compare exceeds the pass threshold",
 } as const;
 
-/** Shared chip typography — PASS badge and Re-run Diff action. */
+/** Shared chip typography — PASS badge and Diff action. */
 export const badgeChipStyles = {
   display: "inline-flex",
   alignItems: "center",
@@ -45,7 +45,7 @@ const StyledBadge = styled.div<{ status: VisualBadgeStatus }>(
   }),
 );
 
-/** Action chip matching PASS/FAIL typography (e.g. Re-run Diff). */
+/** Action chip matching PASS/FAIL typography (e.g. Diff). */
 export const BadgeActionButton = styled.button(({ theme }) => ({
   ...badgeChipStyles,
   backgroundColor: theme.color.secondary,

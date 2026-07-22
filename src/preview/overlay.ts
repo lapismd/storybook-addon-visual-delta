@@ -1,4 +1,4 @@
-import { useChannel, useEffect } from "storybook/preview-api";
+import { addons, useEffect } from "storybook/preview-api";
 import type { DecoratorFunction } from "storybook/internal/types";
 import {
   DEFAULT_PLACEMENT,
@@ -36,6 +36,32 @@ const SCROLL_CORNER_ID = "visual-delta-scroll-corner";
 const SCROLL_EXTENT_ATTR = "data-visual-delta-scroll-extent";
 const RAIL_THICKNESS_PX = 12;
 
+/**
+ * Prefer the live `#storybook-root` over a decorator-closed `canvasElement`.
+ * After FORCE_REMOUNT / GOTO the closed-over node can be detached while
+ * SELECT_IMAGE is still delivered to a handler that early-returns.
+ */
+function resolveStoryCanvas(
+  fallback?: HTMLElement | null,
+): HTMLElement | null {
+  const root = document.getElementById("storybook-root");
+  if (
+    root instanceof HTMLElement &&
+    root.isConnected &&
+    root.parentElement
+  ) {
+    return root;
+  }
+  if (
+    fallback instanceof HTMLElement &&
+    fallback.isConnected &&
+    fallback.parentElement
+  ) {
+    return fallback;
+  }
+  return null;
+}
+
 /** Device-scale PNGs display at CSS size so they match the live subject. */
 function sizeOverlayImageToCss(img: HTMLImageElement) {
   if (!img.naturalWidth || !img.naturalHeight) return;
@@ -57,6 +83,10 @@ let lastSelection: {
 let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
 /** False = image-only: hide live story, show baseline PNG (center + drag). */
 let currentLiveVisible = true;
+let currentOpacity = 0.5;
+let currentColorInversion = false;
+/** Survives FORCE_REMOUNT — decorator useChannel does not. */
+let overlayChannelInstalled = false;
 
 const MODE_BADGE_ID = "visual-delta-mode-badge";
 
@@ -884,116 +914,72 @@ function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
   }
 }
 
-export const withSelectImage: DecoratorFunction = (storyFn, context) => {
-  const canvasElement = context.canvasElement as HTMLElement;
-  const visualDeltaParams = context.parameters?.visualDelta as
-    | VisualDeltaParams
-    | undefined;
-  currentPlacement = normalizePlacement(visualDeltaParams?.placement);
-  let currentOpacity =
-    visualDeltaParams?.opacity ??
-    (isSplitPlacement(currentPlacement) ? 1 : 0.5);
-  let currentColorInversion = visualDeltaParams?.colorInversion ?? false;
 
-  const effectivePlacement = (imageItem: VisualDeltaImage): PlacementMode =>
-    normalizePlacement(
-      imageItem.placement ?? currentPlacement ?? DEFAULT_PLACEMENT,
-    );
+function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
+  return normalizePlacement(
+    imageItem.placement ?? currentPlacement ?? DEFAULT_PLACEMENT,
+  );
+}
 
-  const updateOverlayStyle = (overlay: HTMLElement | null) => {
-    if (!overlay) return;
-    const placement = currentPlacement;
-    if (isSplitPlacement(placement)) {
-      overlay.style.mixBlendMode = "normal";
-      overlay.style.opacity = "1";
-    } else {
-      overlay.style.mixBlendMode = currentColorInversion
-        ? "difference"
-        : "normal";
-      overlay.style.opacity = String(currentOpacity);
-    }
-  };
+function updateOverlayStyle(overlay: HTMLElement | null) {
+  if (!overlay) return;
+  if (isSplitPlacement(currentPlacement)) {
+    overlay.style.mixBlendMode = "normal";
+    overlay.style.opacity = "1";
+  } else {
+    overlay.style.mixBlendMode = currentColorInversion ? "difference" : "normal";
+    overlay.style.opacity = String(currentOpacity);
+  }
+}
 
-  const calculateCenterPosition = (
-    imageItem: VisualDeltaImage,
-    canvasParent: HTMLElement,
-  ) => {
-    let x = imageItem.offsetX ?? 0;
-    let y = imageItem.offsetY ?? 0;
-    const scale = getCanvasScale(canvasParent);
-    const parentRect = canvasParent.getBoundingClientRect();
+function calculateCenterPosition(
+  imageItem: VisualDeltaImage,
+  canvasParent: HTMLElement,
+  canvasElement: HTMLElement,
+) {
+  let x = imageItem.offsetX ?? 0;
+  let y = imageItem.offsetY ?? 0;
+  const scale = getCanvasScale(canvasParent);
+  const parentRect = canvasParent.getBoundingClientRect();
 
-    if (imageItem.align === "canvas") {
-      const subjectRect = resolveSubjectRect(canvasElement);
-      x += (subjectRect.left - parentRect.left) / scale;
-      y += (subjectRect.top - parentRect.top) / scale;
-      return { x, y };
-    }
-
-    if (imageItem.anchor) {
-      const anchorElement = document.querySelector(imageItem.anchor);
-      if (anchorElement) {
-        const anchorRect = anchorElement.getBoundingClientRect();
-        x += (anchorRect.left - parentRect.left) / scale;
-        y += (anchorRect.top - parentRect.top) / scale;
-      }
-    } else if (imageItem.align === "viewport") {
-      x += -parentRect.left / scale;
-      y += -parentRect.top / scale;
-    } else {
-      const subjectRect = resolveSubjectRect(canvasElement);
-      x += (subjectRect.left - parentRect.left) / scale;
-      y += (subjectRect.top - parentRect.top) / scale;
-    }
+  if (imageItem.align === "canvas") {
+    const subjectRect = resolveSubjectRect(canvasElement);
+    x += (subjectRect.left - parentRect.left) / scale;
+    y += (subjectRect.top - parentRect.top) / scale;
     return { x, y };
-  };
+  }
 
-  const applyOverlayPosition = (
-    overlay: HTMLElement,
-    imageItem: VisualDeltaImage,
-    sizes?: BaselineCompareSizes | null,
-  ) => {
-    const placement = effectivePlacement(imageItem);
-    currentPlacement = placement;
-    styleOverlayForMode(overlay, placement);
-    updateOverlayStyle(overlay);
-
-    if (isSplitPlacement(placement)) {
-      const compareSizes =
-        sizes ??
-        lastCompareSizes ??
-        (() => {
-          const img = overlay.querySelector("img");
-          if (
-            img instanceof HTMLImageElement &&
-            img.naturalWidth > 0 &&
-            img.naturalHeight > 0
-          ) {
-            return baselineCompareSizesFromNatural(
-              img.naturalWidth,
-              img.naturalHeight,
-            );
-          }
-          return null;
-        })();
-      const { baselinePane } = ensureSplit(
-        canvasElement,
-        placement,
-        compareSizes,
-      );
-      if (overlay.parentElement !== baselinePane) {
-        baselinePane.appendChild(overlay);
-      }
-      overlay.style.transform = "none";
-      applyLiveVisibility(canvasElement);
-      return;
+  if (imageItem.anchor) {
+    const anchorElement = document.querySelector(imageItem.anchor);
+    if (anchorElement) {
+      const anchorRect = anchorElement.getBoundingClientRect();
+      x += (anchorRect.left - parentRect.left) / scale;
+      y += (anchorRect.top - parentRect.top) / scale;
     }
+  } else if (imageItem.align === "viewport") {
+    x += -parentRect.left / scale;
+    y += -parentRect.top / scale;
+  } else {
+    const subjectRect = resolveSubjectRect(canvasElement);
+    x += (subjectRect.left - parentRect.left) / scale;
+    y += (subjectRect.top - parentRect.top) / scale;
+  }
+  return { x, y };
+}
 
-    teardownSplit(canvasElement);
-    const canvasParent = canvasElement.parentElement;
-    if (!canvasParent) return;
-    // Match split compare: pin live subject to baseline CSS width so the
-    // overlay is not compared against a narrower reflowed layout.
+function applyOverlayPosition(
+  overlay: HTMLElement,
+  imageItem: VisualDeltaImage,
+  sizes?: BaselineCompareSizes | null,
+) {
+  const canvasElement = resolveStoryCanvas();
+  if (!canvasElement) return;
+  const placement = effectivePlacement(imageItem);
+  currentPlacement = placement;
+  styleOverlayForMode(overlay, placement);
+  updateOverlayStyle(overlay);
+
+  if (isSplitPlacement(placement)) {
     const compareSizes =
       sizes ??
       lastCompareSizes ??
@@ -1011,73 +997,173 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
         }
         return null;
       })();
-    if (compareSizes) {
-      lastCompareSizes = compareSizes;
-      lockLiveContentWidth(canvasElement, compareSizes.content.width);
+    const { baselinePane } = ensureSplit(canvasElement, placement, compareSizes);
+    if (overlay.parentElement !== baselinePane) {
+      baselinePane.appendChild(overlay);
     }
-    canvasParent.style.position = "relative";
-    if (overlay.parentElement !== canvasParent) {
-      canvasParent.appendChild(overlay);
-    }
-    const { x, y } = calculateCenterPosition(imageItem, canvasParent);
-    overlay.style.transform = `translate(${x}px, ${y}px)`;
+    overlay.style.transform = "none";
     applyLiveVisibility(canvasElement);
-  };
+    return;
+  }
 
-  const scheduleOverlayPosition = (
-    overlay: HTMLElement,
-    imageItem: VisualDeltaImage,
-    sizes?: BaselineCompareSizes | null,
-  ) => {
-    applyOverlayPosition(overlay, imageItem, sizes);
-    requestAnimationFrame(() => {
-      applyOverlayPosition(overlay, imageItem, sizes);
-      requestAnimationFrame(() =>
-        applyOverlayPosition(overlay, imageItem, sizes),
-      );
-    });
-  };
-
-  const watchLayout = (overlay: HTMLElement) => {
-    const canvasParent = canvasElement.parentElement;
-    if (!canvasParent) return;
-    layoutObserverRef?.disconnect();
-    layoutObserverRef = new ResizeObserver(() => {
-      if (!lastSelection) return;
-      const item = lastSelection.images[lastSelection.index];
-      if (!item) return;
-      applyOverlayPosition(overlay, item);
-    });
-    layoutObserverRef.observe(canvasParent);
-    layoutObserverRef.observe(canvasElement);
-    const subject = canvasElement.querySelector(":scope > *");
-    if (subject instanceof HTMLElement) {
-      layoutObserverRef.observe(subject);
-    }
-  };
-
-  const clearOverlay = () => {
-    lastSelection = null;
-    layoutObserverRef?.disconnect();
-    layoutObserverRef = null;
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) {
-      if (dragCleanupRef) {
-        dragCleanupRef();
-        dragCleanupRef = null;
+  teardownSplit(canvasElement);
+  const canvasParent = canvasElement.parentElement;
+  if (!canvasParent) return;
+  const compareSizes =
+    sizes ??
+    lastCompareSizes ??
+    (() => {
+      const img = overlay.querySelector("img");
+      if (
+        img instanceof HTMLImageElement &&
+        img.naturalWidth > 0 &&
+        img.naturalHeight > 0
+      ) {
+        return baselineCompareSizesFromNatural(
+          img.naturalWidth,
+          img.naturalHeight,
+        );
       }
-      overlay.remove();
+      return null;
+    })();
+  if (compareSizes) {
+    lastCompareSizes = compareSizes;
+    lockLiveContentWidth(canvasElement, compareSizes.content.width);
+  }
+  canvasParent.style.position = "relative";
+  if (overlay.parentElement !== canvasParent) {
+    canvasParent.appendChild(overlay);
+  }
+  const { x, y } = calculateCenterPosition(
+    imageItem,
+    canvasParent,
+    canvasElement,
+  );
+  overlay.style.transform = `translate(${x}px, ${y}px)`;
+  applyLiveVisibility(canvasElement);
+}
+
+function scheduleOverlayPosition(
+  overlay: HTMLElement,
+  imageItem: VisualDeltaImage,
+  sizes?: BaselineCompareSizes | null,
+) {
+  applyOverlayPosition(overlay, imageItem, sizes);
+  requestAnimationFrame(() => {
+    applyOverlayPosition(overlay, imageItem, sizes);
+    requestAnimationFrame(() =>
+      applyOverlayPosition(overlay, imageItem, sizes),
+    );
+  });
+}
+
+function watchLayout(overlay: HTMLElement) {
+  const canvasElement = resolveStoryCanvas();
+  const canvasParent = canvasElement?.parentElement;
+  if (!canvasElement || !canvasParent) return;
+  layoutObserverRef?.disconnect();
+  layoutObserverRef = new ResizeObserver(() => {
+    if (!lastSelection) return;
+    const item = lastSelection.images[lastSelection.index];
+    if (!item) return;
+    applyOverlayPosition(overlay, item);
+  });
+  layoutObserverRef.observe(canvasParent);
+  layoutObserverRef.observe(canvasElement);
+  const subject = canvasElement.querySelector(":scope > *");
+  if (subject instanceof HTMLElement) {
+    layoutObserverRef.observe(subject);
+  }
+}
+
+function removeOverlayDom(retainSelection: boolean) {
+  if (!retainSelection) {
+    lastSelection = null;
+  }
+  layoutObserverRef?.disconnect();
+  layoutObserverRef = null;
+  const overlay = document.getElementById(OVERLAY_ID);
+  if (overlay) {
+    if (dragCleanupRef) {
+      dragCleanupRef();
+      dragCleanupRef = null;
     }
+    overlay.remove();
+  }
+  const canvasElement = resolveStoryCanvas();
+  if (canvasElement) {
     teardownSplit(canvasElement);
     canvasElement.style.visibility = "";
-    syncModeBadge(false);
-  };
+  }
+  syncModeBadge(false);
+}
 
-  const emit = useChannel({
-    [EVENTS.SELECT_IMAGE]: (data: {
-      index: number;
-      images?: VisualDeltaImage[];
-    }) => {
+function clearOverlay() {
+  removeOverlayDom(false);
+}
+
+function applySelection(attempt: number) {
+  if (!lastSelection || lastSelection.index < 0) return;
+  const selectedImageItem = lastSelection.images[lastSelection.index];
+  if (!selectedImageItem) return;
+
+  const canvasElement = resolveStoryCanvas();
+  if (!canvasElement?.parentElement) {
+    if (attempt < 40) {
+      window.setTimeout(() => applySelection(attempt + 1), 50);
+    }
+    return;
+  }
+
+  currentPlacement = effectivePlacement(selectedImageItem);
+  const overlay = ensureOverlayElement();
+  styleOverlayForMode(overlay, currentPlacement);
+  updateOverlayStyle(overlay);
+  overlay.style.visibility = "";
+  overlay.style.pointerEvents = isSplitPlacement(currentPlacement)
+    ? "none"
+    : "auto";
+  const baselinePane = document.getElementById(BASELINE_PANE_ID);
+  if (baselinePane instanceof HTMLElement) {
+    baselinePane.style.visibility = "";
+  }
+
+  const img = overlay.querySelector("img");
+  if (img) {
+    const onReady = () => {
+      sizeOverlayImageToCss(img);
+      const sizes = baselineCompareSizesFromNatural(
+        img.naturalWidth,
+        img.naturalHeight,
+      );
+      scheduleOverlayPosition(overlay, selectedImageItem, sizes);
+      watchLayout(overlay);
+    };
+    if (img.getAttribute("src") === selectedImageItem.src && img.complete) {
+      onReady();
+    } else {
+      img.addEventListener("load", onReady, { once: true });
+      img.src = selectedImageItem.src;
+    }
+  }
+  scheduleOverlayPosition(overlay, selectedImageItem);
+  watchLayout(overlay);
+}
+
+/**
+ * Permanent channel listener — must outlive FORCE_REMOUNT / GOTO.
+ * Decorator `useChannel` unsubscribes on unmount, which is exactly when the
+ * panel re-emits SELECT_IMAGE for interaction baselines.
+ */
+export function ensureOverlayChannel(): void {
+  if (overlayChannelInstalled) return;
+  if (typeof window === "undefined") return;
+  overlayChannelInstalled = true;
+  const channel = addons.getChannel();
+
+  channel.on(
+    EVENTS.SELECT_IMAGE,
+    (data: { index: number; images?: VisualDeltaImage[] }) => {
       if (
         data.index === -1 ||
         !data.images ||
@@ -1089,42 +1175,21 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       const selectedImageItem = data.images[data.index];
       if (!selectedImageItem) return;
       lastSelection = { index: data.index, images: data.images };
-      currentPlacement = effectivePlacement(selectedImageItem);
-      if (!canvasElement.parentElement) return;
-
-      const overlay = ensureOverlayElement();
-      styleOverlayForMode(overlay, currentPlacement);
-      updateOverlayStyle(overlay);
-
-      const img = overlay.querySelector("img");
-      if (img) {
-        const onReady = () => {
-          sizeOverlayImageToCss(img);
-          const sizes = baselineCompareSizesFromNatural(
-            img.naturalWidth,
-            img.naturalHeight,
-          );
-          scheduleOverlayPosition(overlay, selectedImageItem, sizes);
-          watchLayout(overlay);
-        };
-        if (img.src === selectedImageItem.src && img.complete) {
-          onReady();
-        } else {
-          img.addEventListener("load", onReady, { once: true });
-          img.src = selectedImageItem.src;
-        }
-      }
-      scheduleOverlayPosition(overlay, selectedImageItem);
-      watchLayout(overlay);
+      applySelection(0);
     },
-    [EVENTS.RESET_OVERLAY]: () => {
-      const overlay = document.getElementById(OVERLAY_ID);
-      if (!overlay || !lastSelection) return;
-      const imageItem = lastSelection.images[lastSelection.index];
-      if (!imageItem) return;
-      scheduleOverlayPosition(overlay, imageItem);
-    },
-    [EVENTS.UPDATE_OVERLAY_STYLE]: (data: {
+  );
+
+  channel.on(EVENTS.RESET_OVERLAY, () => {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (!overlay || !lastSelection) return;
+    const imageItem = lastSelection.images[lastSelection.index];
+    if (!imageItem) return;
+    scheduleOverlayPosition(overlay, imageItem);
+  });
+
+  channel.on(
+    EVENTS.UPDATE_OVERLAY_STYLE,
+    (data: {
       opacity: number;
       colorInversion: boolean;
       placement?: PlacementMode;
@@ -1156,45 +1221,69 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
         const imageItem = lastSelection.images[lastSelection.index];
         if (imageItem) scheduleOverlayPosition(overlay, imageItem);
       } else {
-        applyLiveVisibility(canvasElement);
+        const canvasElement = resolveStoryCanvas();
+        if (canvasElement) applyLiveVisibility(canvasElement);
       }
     },
-    [EVENTS.HIDE_OVERLAY]: () => {
-      // Soft-hide only — keep split panes + width lock so the live subject
-      // does not reflow when the placement pad toggles the overlay off.
-      const overlay = document.getElementById(OVERLAY_ID);
-      if (overlay) {
-        overlay.style.visibility = "hidden";
-        overlay.style.pointerEvents = "none";
-      }
-      const baselinePane = document.getElementById(BASELINE_PANE_ID);
-      if (baselinePane instanceof HTMLElement) {
-        baselinePane.style.visibility = "hidden";
-      }
+  );
+
+  channel.on(EVENTS.HIDE_OVERLAY, () => {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) {
+      overlay.style.visibility = "hidden";
+      overlay.style.pointerEvents = "none";
+    }
+    const baselinePane = document.getElementById(BASELINE_PANE_ID);
+    if (baselinePane instanceof HTMLElement) {
+      baselinePane.style.visibility = "hidden";
+    }
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          emit(EVENTS.OVERLAY_HIDDEN, {});
-        });
+        channel.emit(EVENTS.OVERLAY_HIDDEN, {});
       });
-    },
-    [EVENTS.SHOW_OVERLAY]: () => {
-      const overlay = document.getElementById(OVERLAY_ID);
-      if (overlay) {
-        overlay.style.visibility = "";
-        overlay.style.pointerEvents = "";
-      }
-      const baselinePane = document.getElementById(BASELINE_PANE_ID);
-      if (baselinePane instanceof HTMLElement) {
-        baselinePane.style.visibility = "";
-      }
-    },
+    });
   });
 
+  channel.on(EVENTS.SHOW_OVERLAY, () => {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) {
+      overlay.style.visibility = "";
+      overlay.style.pointerEvents = "";
+    }
+    const baselinePane = document.getElementById(BASELINE_PANE_ID);
+    if (baselinePane instanceof HTMLElement) {
+      baselinePane.style.visibility = "";
+    }
+    if (!overlay && lastSelection && lastSelection.index >= 0) {
+      applySelection(0);
+    }
+  });
+}
+
+export const withSelectImage: DecoratorFunction = (storyFn, context) => {
+  ensureOverlayChannel();
+  const visualDeltaParams = context.parameters?.visualDelta as
+    | VisualDeltaParams
+    | undefined;
+  currentPlacement = normalizePlacement(visualDeltaParams?.placement);
+  currentOpacity =
+    visualDeltaParams?.opacity ??
+    (isSplitPlacement(currentPlacement) ? 1 : 0.5);
+  currentColorInversion = visualDeltaParams?.colorInversion ?? false;
+
   useEffect(() => {
+    ensureOverlayChannel();
+    if (lastSelection && lastSelection.index >= 0) {
+      applySelection(0);
+    }
+    addons.getChannel().emit(EVENTS.OVERLAY_LISTENER_READY, {
+      storyId: context.id,
+    });
     return () => {
-      clearOverlay();
+      // Keep the channel listener; only drop DOM so remount can rebuild.
+      removeOverlayDom(true);
     };
-  }, []);
+  }, [context.id]);
 
   return storyFn();
 };

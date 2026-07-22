@@ -58,15 +58,6 @@ export function buildFocusAssets(
     }
   }
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Unable to get canvas context");
-  const imageData = ctx.createImageData(width, height);
-  imageData.data.set(focus);
-  ctx.putImageData(imageData, 0, 0);
-
   let changeBounds: ChangeBounds | null = null;
   if (maxX >= minX && maxY >= minY) {
     const pad = Math.max(8, Math.round(Math.min(width, height) * 0.02));
@@ -80,7 +71,20 @@ export function buildFocusAssets(
       width: right - x + 1,
       height: bottom - y + 1,
     };
+  } else {
+    // No changed pixels (pass / identical). Dimming every pixel reads as a
+    // solid black veil — show the undimmed actual instead.
+    focus.set(actualData);
   }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to get canvas context");
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(focus);
+  ctx.putImageData(imageData, 0, 0);
 
   return {
     focusDataUrl: canvas.toDataURL("image/png"),

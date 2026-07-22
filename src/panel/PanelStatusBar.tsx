@@ -5,11 +5,17 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { SyncIcon } from "@storybook/icons";
-import { PopoverProvider } from "storybook/internal/components";
+import { CheckIcon, CopyIcon, SyncIcon } from "@storybook/icons";
+import {
+  PopoverProvider,
+  ScrollArea,
+  useCopyButton,
+} from "storybook/internal/components";
 import {
   StatusBar,
-  StatusLogPopover,
+  StatusLogBody,
+  StatusLogCopyButton,
+  StatusLogShell,
   StatusProgressButton,
   StatusProgressLabel,
   StatusSpinner,
@@ -68,6 +74,50 @@ type FixedPos = {
   width: number;
 };
 
+const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
+  log,
+  hasError,
+}: {
+  log: string;
+  hasError: boolean;
+}) {
+  const logRef = useRef<HTMLDivElement | null>(null);
+  const { children: copyChildren, buttonProps } = useCopyButton({
+    content: log,
+    children: <CopyIcon />,
+    childrenOnCopy: <CheckIcon />,
+    ariaLabel: "Copy log",
+    ariaLabelOnCopy: "Copied",
+    duration: 1500,
+  });
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [log]);
+
+  return (
+    <StatusLogShell $hasError={hasError}>
+      {/* IconButton already tooltips from ariaLabel — do not wrap WithTooltip. */}
+      <StatusLogCopyButton
+        size="small"
+        variant="ghost"
+        padding="small"
+        ariaLabel={buttonProps.ariaLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          buttonProps.onClick(event);
+        }}
+      >
+        {copyChildren}
+      </StatusLogCopyButton>
+      <ScrollArea ref={logRef} vertical style={{ height: "100%" }}>
+        <StatusLogBody>{log}</StatusLogBody>
+      </ScrollArea>
+    </StatusLogShell>
+  );
+});
+
 export const PanelStatusBar = memo(function PanelStatusBar({
   container,
   running,
@@ -77,7 +127,6 @@ export const PanelStatusBar = memo(function PanelStatusBar({
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<FixedPos | null>(null);
-  const logRef = useRef<HTMLPreElement | null>(null);
   const hasLog = Boolean(log?.trim());
   const idle = !running && !hasLog;
   const clipped =
@@ -120,13 +169,6 @@ export const PanelStatusBar = memo(function PanelStatusBar({
     };
   }, [container]);
 
-  useEffect(() => {
-    if (!open) return;
-    const el = logRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [open, displayLog]);
-
   if (!pos) return null;
 
   return (
@@ -154,15 +196,14 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           }
           setOpen(next);
         }}
-        popover={() => (
-          <StatusLogPopover
-            ref={logRef}
-            $hasError={Boolean(error)}
-            className="font-mono"
-          >
-            {displayLog}
-          </StatusLogPopover>
-        )}
+        popover={() =>
+          hasLog ? (
+            <StatusLogPopoverContent
+              log={displayLog}
+              hasError={Boolean(error)}
+            />
+          ) : null
+        }
       >
         <StatusProgressButton
           type="button"

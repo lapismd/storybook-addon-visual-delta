@@ -1,9 +1,12 @@
+import { addons } from "storybook/preview-api";
+import { EVENTS } from "../constants.js";
 import {
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_STEP_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
   readVisualCaptureUntil,
   slugifyStepLabel,
+  waitWhileSessionParkedAt,
 } from "./interaction-capture.js";
 
 type StepRunner = (
@@ -12,14 +15,18 @@ type StepRunner = (
 ) => Promise<void> | void;
 
 /**
- * Mark the completed step on <html> and park play when Playwright asked via
- * `?visualCaptureUntil=<stepId>` so the suite can screenshot mid-play.
+ * Mark the completed step on <html> and park play when asked via
+ * `?visualCaptureUntil=<stepId>` (Playwright) or sessionStorage (Visual Delta
+ * panel remount).
  *
- * Session-only park (Visual Delta panel remount) must not hang forever — that
- * leaves Storybook's instrumenter / Interactions UI stuck and can blank the
- * manager. Panel scrubbing uses instrumenter GOTO when a callId is available.
+ * URL park hangs forever (suite closes the page). Session park waits until the
+ * panel clears/changes the target so scrubbing Default ↔ interactions works
+ * without leaving Interactions UI stuck after navigation.
  */
-export async function afterPlayStep(label: string): Promise<void> {
+export async function afterPlayStep(
+  label: string,
+  storyId?: string,
+): Promise<void> {
   if (typeof document === "undefined") return;
   const stepId = slugifyStepLabel(label);
   if (!stepId) return;
@@ -40,7 +47,15 @@ export async function afterPlayStep(label: string): Promise<void> {
     if (fromUrl) {
       // Playwright capture — page is closed after the screenshot.
       await new Promise<never>(() => {});
+      return;
     }
+    addons.getChannel().emit(EVENTS.VISUAL_CAPTURE_PARKED, {
+      storyId,
+      stepId,
+    });
+    // Panel session park — cancellable when selecting another row / Default.
+    await waitWhileSessionParkedAt(stepId);
+    document.documentElement.removeAttribute(VISUAL_CAPTURE_READY_ATTR);
   }
 }
 
