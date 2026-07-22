@@ -15,11 +15,13 @@ import {
 } from "storybook/internal/components";
 import {
   experimental_getTestProviderStore,
+  useAddonState,
   useChannel,
   useStorybookApi,
   useStorybookState,
 } from "storybook/manager-api";
 import {
+  ADDON_ID,
   DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
   TEST_PROVIDER_ID,
@@ -28,6 +30,10 @@ import {
   type VisualDeltaInteraction,
   type VisualReviewStatus,
 } from "../constants.js";
+import {
+  DEFAULT_ADDON_STATE,
+  type VisualDeltaAddonState,
+} from "../manager/PanelTitle.js";
 import {
   applyPendingVisualStatuses,
   applyVisualRunResults,
@@ -147,6 +153,25 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
   const loading = !storyReady;
+  const [, setAddonState] = useAddonState<VisualDeltaAddonState>(
+    ADDON_ID,
+    DEFAULT_ADDON_STATE,
+  );
+  /** Primary gallery + wired interaction PNGs — drives the panel tab badge. */
+  const screenshotCount = useMemo(() => {
+    if (!storyReady) return 0;
+    const interactionCount = interactions.filter((item) =>
+      Boolean(item.src),
+    ).length;
+    return primaryImages.length + interactionCount;
+  }, [interactions, primaryImages.length, storyReady]);
+  useEffect(() => {
+    setAddonState((prev) =>
+      prev.imageCount === screenshotCount
+        ? prev
+        : { ...prev, imageCount: screenshotCount },
+    );
+  }, [screenshotCount, setAddonState]);
   const { steps: playSteps } = usePlaySteps(storyId || undefined);
   const interactionSteps = useMemo(
     () => mergeInteractionRows(playSteps, interactions),

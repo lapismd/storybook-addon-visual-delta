@@ -18,7 +18,6 @@ import type { VisualDeltaInteraction } from "../constants.js";
 import type { PlayStepInfo } from "./usePlaySteps.js";
 import {
   VD_HEADER_STICKY_TOP_VAR,
-  VISUAL_DELTA_HEADER_HEIGHT,
   panelCanvasBackground,
 } from "./styled.js";
 
@@ -52,8 +51,10 @@ const SummaryButton = styled.button<{ $expanded?: boolean }>(
     cursor: "pointer",
     font: "inherit",
     position: "sticky",
-    // Sit flush under the Pass/Diff toolbar (live height via CSS var).
-    top: `var(${VD_HEADER_STICKY_TOP_VAR}, ${VISUAL_DELTA_HEADER_HEIGHT}px)`,
+    // Only pins when the live panel publishes `--vd-header-sticky-top`.
+    // No fallback: unset → `top: auto` → behaves like relative, so docs /
+    // catalog scrolls don't glue summaries over SectionBody padding.
+    top: `var(${VD_HEADER_STICKY_TOP_VAR})`,
     zIndex: 1,
     "&:hover": {
       cursor: "pointer",
@@ -138,7 +139,7 @@ const SummaryActions = styled.div({
 });
 
 const SectionBody = styled.div(({ theme }) => ({
-  padding: "8px 12px 12px",
+  padding: "12px 16px 16px",
   borderBottom: `1px solid ${theme.appBorderColor}`,
   background: panelCanvasBackground(theme),
   boxSizing: "border-box",
