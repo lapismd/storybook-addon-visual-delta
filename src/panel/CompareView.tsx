@@ -26,8 +26,7 @@ const TWO_UP_MAX_HEIGHT = 520;
 const VIEW_ZOOM_MIN = 0.5;
 const VIEW_ZOOM_MAX = 3;
 const VIEW_ZOOM_STEP = 0.25;
-const VIEW_ZOOM_STORAGE_KEY =
-  "storybook-addon-visual-delta/compare-view-zoom";
+const VIEW_ZOOM_STORAGE_KEY = "storybook-addon-visual-delta/compare-view-zoom";
 
 const TAB_DEFS: { id: CompareTab; title: string }[] = [
   { id: "sidebyside", title: "2-up" },
@@ -187,13 +186,15 @@ const SideColumn = styled.div({
   minWidth: 0,
 });
 
-const SidePane = styled.div<{ $maxHeight: number }>(({ theme, $maxHeight }) => ({
-  ...checkerboard,
-  border: `1px solid ${theme.appBorderColor}`,
-  overflow: "auto",
-  maxHeight: `${$maxHeight}px`,
-  width: "100%",
-}));
+const SidePane = styled.div<{ $maxHeight: number }>(
+  ({ theme, $maxHeight }) => ({
+    ...checkerboard,
+    border: `1px solid ${theme.appBorderColor}`,
+    overflow: "auto",
+    maxHeight: `${$maxHeight}px`,
+    width: "100%",
+  }),
+);
 
 const SideImg = styled.img({
   display: "block",
@@ -364,10 +365,8 @@ export function CompareView({
     const scaleX = imageWidth / Math.max(1, changeBounds.width);
     const scaleY = imageHeight / Math.max(1, changeBounds.height);
     const scale = Math.min(scaleX, scaleY, 8);
-    const ox =
-      ((changeBounds.x + changeBounds.width / 2) / imageWidth) * 100;
-    const oy =
-      ((changeBounds.y + changeBounds.height / 2) / imageHeight) * 100;
+    const ox = ((changeBounds.x + changeBounds.width / 2) / imageWidth) * 100;
+    const oy = ((changeBounds.y + changeBounds.height / 2) / imageHeight) * 100;
     return {
       transform: `scale(${scale})`,
       transformOrigin: `${ox}% ${oy}%`,
@@ -491,11 +490,7 @@ export function CompareView({
                   ? "Fit full image (exit zoom to change)"
                   : "Zoom to first change"
               }
-              title={
-                zoomToChange
-                  ? "Fit full image"
-                  : "Zoom to first change"
-              }
+              title={zoomToChange ? "Fit full image" : "Zoom to first change"}
             >
               {zoomToChange ? <CollapseIcon /> : <ExpandAltIcon />}
             </ToggleButton>
@@ -528,9 +523,7 @@ export function CompareView({
               onClick={resetViewZoom}
               aria-label="Reset view zoom"
               title={
-                viewZoom === 1
-                  ? "View zoom 100%"
-                  : "Reset zoom to 100% (0)"
+                viewZoom === 1 ? "View zoom 100%" : "Reset zoom to 100% (0)"
               }
               style={{
                 minWidth: "3.25rem",

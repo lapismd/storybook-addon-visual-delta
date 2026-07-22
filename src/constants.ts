@@ -14,6 +14,10 @@ export const EVENTS = {
   HIDE_OVERLAY: `${ADDON_ID}/hide-overlay`,
   SHOW_OVERLAY: `${ADDON_ID}/show-overlay`,
   OVERLAY_HIDDEN: `${ADDON_ID}/overlay-hidden`,
+  /** Preview → manager: named `step()` labels seen during play. */
+  PLAY_STEPS: `${ADDON_ID}/play-steps`,
+  /** Manager → preview: remount and park play after this step id. */
+  RUN_UNTIL_STEP: `${ADDON_ID}/run-until-step`,
 } as const;
 
 export type AlignMode = "viewport" | "canvas";
@@ -63,10 +67,22 @@ export type VisualDeltaImage = {
   placement: PlacementMode;
 };
 
+/** Opt-in mid-play capture (sibling PNG; primary `images` stay end-of-play). */
+export type VisualDeltaInteraction = {
+  id: string;
+  label: string;
+  src: string;
+};
+
 export type VisualDeltaParams = {
   images?:
     | string
     | Array<string | (Partial<VisualDeltaImage> & { src: string })>;
+  /**
+   * Opted-in play-step captures. Created from the Visual Delta Interactions tab;
+   * compared by Playwright in addition to the primary end-of-play baseline.
+   */
+  interactions?: VisualDeltaInteraction[];
   anchor?: string;
   offsetX?: number;
   offsetY?: number;
@@ -107,6 +123,12 @@ export const VISUAL_COMPARE_PANE_PAD_PX = 16;
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";
 /** Storybook-dev middleware that creates missing baselines only (no overwrite). */
 export const VISUAL_DELTA_CREATE_PATH = "/__visual-delta/create-baseline";
+/**
+ * Storybook-dev middleware that creates/updates one mid-play interaction baseline
+ * (`?visualCaptureUntil=<stepId>`).
+ */
+export const VISUAL_DELTA_CREATE_INTERACTION_PATH =
+  "/__visual-delta/create-interaction-baseline";
 /** Storybook-dev middleware that runs the Playwright visual suite. */
 export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
 /** Storybook-dev middleware that cancels an in-flight visual run. */

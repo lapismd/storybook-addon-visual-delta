@@ -41,8 +41,12 @@ export function buildFocusAssets(
         if (y > maxY) maxY = y;
         // Spotlight: punch neon green over the actual pixel.
         focus[i] = Math.round(actualData[i] * 0.25 + FOCUS_RGB[0] * 0.75);
-        focus[i + 1] = Math.round(actualData[i + 1] * 0.25 + FOCUS_RGB[1] * 0.75);
-        focus[i + 2] = Math.round(actualData[i + 2] * 0.25 + FOCUS_RGB[2] * 0.75);
+        focus[i + 1] = Math.round(
+          actualData[i + 1] * 0.25 + FOCUS_RGB[1] * 0.75,
+        );
+        focus[i + 2] = Math.round(
+          actualData[i + 2] * 0.25 + FOCUS_RGB[2] * 0.75,
+        );
         focus[i + 3] = 255;
       } else {
         // Dim unchanged regions so changes read first.
@@ -122,8 +126,12 @@ export function buildDiffHistogram(
         continue;
       }
       const dr = Math.abs((actualData[i] ?? 0) - (baselineData[i] ?? 0));
-      const dg = Math.abs((actualData[i + 1] ?? 0) - (baselineData[i + 1] ?? 0));
-      const db = Math.abs((actualData[i + 2] ?? 0) - (baselineData[i + 2] ?? 0));
+      const dg = Math.abs(
+        (actualData[i + 1] ?? 0) - (baselineData[i + 1] ?? 0),
+      );
+      const db = Math.abs(
+        (actualData[i + 2] ?? 0) - (baselineData[i + 2] ?? 0),
+      );
       const delta = Math.max(dr, dg, db);
       const bin = Math.min(bins - 1, Math.floor(delta / binSize));
       counts[bin] += 1;

@@ -66,10 +66,8 @@ export function canvasCompareInsetsPx(
     px(canvasStyle.paddingBottom) +
     px(canvasStyle.borderTopWidth) +
     px(canvasStyle.borderBottomWidth);
-  const marginX =
-    px(subjectStyle?.marginLeft) + px(subjectStyle?.marginRight);
-  const marginY =
-    px(subjectStyle?.marginTop) + px(subjectStyle?.marginBottom);
+  const marginX = px(subjectStyle?.marginLeft) + px(subjectStyle?.marginRight);
+  const marginY = px(subjectStyle?.marginTop) + px(subjectStyle?.marginBottom);
   return {
     x: padBorderX + marginX,
     y: padBorderY + marginY,
@@ -77,9 +75,10 @@ export function canvasCompareInsetsPx(
 }
 
 /** Offset of the subject border-box from the canvas padding edge. */
-export function subjectOffsetInCanvasPx(
-  subjectStyle?: CssBoxLike | null,
-): { x: number; y: number } {
+export function subjectOffsetInCanvasPx(subjectStyle?: CssBoxLike | null): {
+  x: number;
+  y: number;
+} {
   return {
     x: px(subjectStyle?.marginLeft),
     y: px(subjectStyle?.marginTop),

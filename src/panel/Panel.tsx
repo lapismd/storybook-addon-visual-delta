@@ -1,22 +1,9 @@
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  EllipsisIcon,
-  SyncIcon,
-  UndoIcon,
-} from "@storybook/icons";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import pixelmatch from "pixelmatch";
 import {
-  ActionList,
   AddonPanel,
   Button,
-  IconButton,
-  PopoverProvider,
+  EmptyTabContent,
   ToggleButton,
 } from "storybook/internal/components";
 import {
@@ -24,7 +11,6 @@ import {
   useStorybookApi,
   useStorybookState,
 } from "storybook/manager-api";
-import { useTheme } from "storybook/theming";
 import {
   DEFAULT_PASS_THRESHOLD_PERCENT,
   TEST_PROVIDER_ID,
@@ -41,6 +27,7 @@ import {
   componentStoryIdsFor,
   formatVisualProgressLabel,
   postVisualCreateBaseline,
+  postVisualInteractionBaseline,
   postVisualReviewStatus,
   postVisualRun,
   postVisualUpdateBaseline,
@@ -52,10 +39,7 @@ import {
   type VisualCreateProgress,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
-import {
-  VisualRunSplitButton,
-  type VisualRunMode,
-} from "../manager/VisualRunSplitButton.js";
+import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import type { DiffResultData } from "../types.js";
 import {
   capturePreviewSubject,
@@ -66,32 +50,42 @@ import {
 } from "./capture.js";
 import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
 import { DiffResult } from "./DiffResult.js";
-import {
-  useOverlayHidden,
-  useOverlayInfo,
-  useStoryData,
-} from "./hooks.js";
+import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
 import { ImageGallery } from "./ImageGallery.js";
+import {
+  BaselineAccordion,
+  SectionThumb,
+  SectionThumbFrame,
+  type BaselineSection,
+  type BaselineSectionId,
+} from "./BaselineAccordion.js";
 import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
+import { PanelStatusBar } from "./PanelStatusBar.js";
 import { PlacementPad } from "./PlacementPad.js";
-import { ReviewStatusPad } from "./ReviewStatusPad.js";
+import { VisualDeltaHeader } from "./VisualDeltaHeader.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import {
-  Actions,
+  endPlayDebug,
+  gotoPlayStep,
+  mergeInteractionRows,
+  remountStory,
+  usePlaySteps,
+  type PlayStepInfo,
+} from "./usePlaySteps.js";
+import {
   ButtonGroup,
   Checkbox,
   CheckboxContainer,
-  EmptyCreateWrap,
-  EmptyState,
-  EmptyStateContainer,
   ErrorText,
   InlineControl,
+  PanelBody,
+  PanelScroll,
+  PanelShell,
   SkeletonBone,
   SkeletonRoot,
-  SkeletonToolbar,
   Slider,
-  Toolbar,
+  Toolbar as PanelToolbar,
   ToolbarRow,
   ToolbarSpacer,
   ValueDisplay,
@@ -100,13 +94,13 @@ import {
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 
 export const Panel = memo(function Panel(props: { active?: boolean }) {
-  const theme = useTheme();
   const api = useStorybookApi();
   const { storyId: currentStoryId } = useStorybookState();
+  const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const {
     images,
+    interactions,
     index,
     overlayOn,
     storyId,
@@ -127,9 +121,25 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     resetSettings,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    hydrateInteractions,
+    selectInteractionBaseline,
+    restorePrimaryBaselines,
+    primaryImages,
   } = useStoryData();
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
+  const loading = !storyReady;
+  const { steps: playSteps } = usePlaySteps(storyId || undefined);
+  const interactionSteps = useMemo(
+    () => mergeInteractionRows(playSteps, interactions),
+    [playSteps, interactions],
+  );
+  const [expandedId, setExpandedId] = useState<BaselineSectionId | null>(
+    "default",
+  );
+  const [selectedInteractionId, setSelectedInteractionId] = useState<
+    string | null
+  >(null);
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
@@ -138,8 +148,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     useState<VisualReviewStatus | null>(null);
   const [isRunningVisual, setIsRunningVisual] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
-  const updateLogRef = useRef<HTMLPreElement | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
+  const [showDistribution, setShowDistribution] = useState(false);
   /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
   const [diffEpoch, setDiffEpoch] = useState(0);
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
@@ -154,11 +164,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const isUpdating = Boolean(
     baselineJob?.running && baselineJob.kind === "update",
   );
-  const createProgress =
-    baselineJob?.kind === "create" ? baselineJob : null;
+  const isInteractionJob = Boolean(
+    baselineJob?.running && baselineJob.kind === "interaction",
+  );
+  const createProgress = baselineJob?.kind === "create" ? baselineJob : null;
   const isSplit = isSplitPlacement(placement);
   const busy =
-    isDiffing || isUpdating || isCreating || isRunningVisual || isReviewing;
+    isDiffing ||
+    isUpdating ||
+    isCreating ||
+    isInteractionJob ||
+    isRunningVisual ||
+    isReviewing;
   const storyEntry = storyId ? api.getData(storyId) : undefined;
   const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
   const reviewFromStory = visualReviewStatusFromTags(storyEntry?.tags);
@@ -166,19 +183,179 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   useEffect(() => {
     setOptimisticReview(null);
+    setSelectedInteractionId(null);
+    setExpandedId("default");
+    setShowDistribution(false);
   }, [storyId, storyTagsKey]);
 
-  // Keep the create/update log pinned to the latest lines while streaming.
-  useEffect(() => {
-    const el = updateLogRef.current;
-    if (!el || !updateLog) return;
-    el.scrollTop = el.scrollHeight;
-  }, [updateLog]);
+  const activeSectionId: BaselineSectionId = selectedInteractionId ?? "default";
+  const activeDiffMeta = useMemo(() => {
+    if (!diffResult) return null;
+    const threshold = diffResult.passThresholdPercent ?? 0.1;
+    return {
+      status: (diffResult.passed ? "pass" : "fail") as const,
+      stats: `${diffResult.diffPercent.toFixed(4)}% · ${diffResult.diffPixels}/${diffResult.totalPixels} px · <${threshold}%`,
+    };
+  }, [diffResult]);
+
+  const baselineSections = useMemo((): BaselineSection[] => {
+    const sections: BaselineSection[] = [];
+    if (primaryImages.length > 0) {
+      const isActive = activeSectionId === "default";
+      sections.push({
+        id: "default",
+        label: "Default",
+        hint: "End of play · primary baseline",
+        thumbSrc: primaryImages[0]?.src,
+        status: isActive ? activeDiffMeta?.status : null,
+        stats: isActive ? activeDiffMeta?.stats : null,
+      });
+    }
+    for (const step of interactionSteps) {
+      const wired = interactions.find((item) => item.id === step.stepId);
+      const isActive = activeSectionId === step.stepId;
+      sections.push({
+        id: step.stepId,
+        label: step.label,
+        hint: wired
+          ? `Baseline wired · ${step.stepId}`
+          : `No baseline yet · ${step.stepId}`,
+        thumbSrc: wired?.src,
+        step,
+        wired,
+        status: isActive ? activeDiffMeta?.status : null,
+        stats: isActive ? activeDiffMeta?.stats : null,
+      });
+    }
+    return sections;
+  }, [
+    activeDiffMeta,
+    activeSectionId,
+    interactionSteps,
+    interactions,
+    primaryImages,
+  ]);
+
+  const selectSection = useCallback(
+    (id: BaselineSectionId) => {
+      if (expandedId === id) {
+        setExpandedId(null);
+        return;
+      }
+      setExpandedId(id);
+      if (id === "default") {
+        setSelectedInteractionId(null);
+        restorePrimaryBaselines();
+        if (storyId) endPlayDebug(storyId);
+        return;
+      }
+      if (!storyId) return;
+      const step = interactionSteps.find((item) => item.stepId === id);
+      if (!step) return;
+      setSelectedInteractionId(step.stepId);
+      if (step.callId) {
+        gotoPlayStep(storyId, step.callId);
+      } else {
+        remountStory(storyId);
+      }
+      const wired = interactions.find((item) => item.id === step.stepId);
+      if (wired) {
+        selectInteractionBaseline(wired.src);
+      }
+    },
+    [
+      expandedId,
+      interactionSteps,
+      interactions,
+      restorePrimaryBaselines,
+      selectInteractionBaseline,
+      storyId,
+    ],
+  );
+
+  const handleCreateInteraction = useCallback(
+    async (step: PlayStepInfo, overwrite: boolean) => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      setCaptureError(null);
+      setUpdateLog(null);
+      try {
+        await postVisualInteractionBaseline({
+          storyId,
+          stepLabel: step.label,
+          stepId: step.stepId,
+          overwrite,
+        });
+        const bust = `t=${Date.now()}`;
+        // Prefer URL from on-disk convention; CSF HMR may lag.
+        const entry = api.getData(storyId);
+        const primary = baselineUrlForStoryRef(
+          {
+            id: storyId,
+            title: entry && "title" in entry ? String(entry.title) : undefined,
+            importPath:
+              entry && "importPath" in entry
+                ? String(entry.importPath)
+                : undefined,
+            tags: entry?.tags,
+          },
+          { allowSkipVisual: true },
+        );
+        const src = primary
+          ? primary.replace(
+              /-chromium-darwin\.png$/i,
+              `--${step.stepId}-chromium-darwin.png`,
+            )
+          : undefined;
+        if (src) {
+          const nextInteractions = [
+            ...interactions.filter((item) => item.id !== step.stepId),
+            { id: step.stepId, label: step.label, src },
+          ];
+          hydrateInteractions(nextInteractions);
+          selectInteractionBaseline(`${src}?${bust}`);
+          setSelectedInteractionId(step.stepId);
+          setExpandedId(step.stepId);
+          setDiffEpoch((n) => n + 1);
+        }
+        revealCenteredOverlay();
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error
+            ? error.message
+            : "Interaction baseline failed",
+        );
+      }
+    },
+    [
+      api,
+      hydrateInteractions,
+      interactions,
+      revealCenteredOverlay,
+      selectInteractionBaseline,
+      storyId,
+    ],
+  );
 
   const baselineSrc = images[index]?.src;
   const progressLabel =
     isRunningVisual && !isDiffing
       ? formatVisualProgressLabel(runProgress)
+      : null;
+  const statusRunning =
+    loading ||
+    isCreating ||
+    isUpdating ||
+    isInteractionJob ||
+    isRunningVisual;
+  const statusLabel = loading
+    ? "Loading…"
+    : statusRunning
+      ? isRunningVisual
+        ? progressLabel
+        : (baselineJob?.label ?? null)
       : null;
 
   useEffect(() => {
@@ -235,9 +412,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       // CSF may already be wired (no HMR) or index tags still say skip-visual —
       // hydrate from the known PNG path so the empty-state panel fills.
-      const entry = currentStoryId
-        ? api.getData(currentStoryId)
-        : undefined;
+      const entry = currentStoryId ? api.getData(currentStoryId) : undefined;
       const url = baselineUrlForStoryRef(
         {
           id: currentStoryId,
@@ -256,12 +431,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setDiffResult(null);
       setDiffEpoch(Date.now());
     });
-  }, [
-    api,
-    currentStoryId,
-    hydrateBaselineImages,
-    revealCenteredOverlay,
-  ]);
+  }, [api, currentStoryId, hydrateBaselineImages, revealCenteredOverlay]);
 
   const handleDiff = useCallback(async () => {
     if (index === -1 || !images[index]) {
@@ -363,8 +533,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       );
       const totalPixels = width * height;
       const diffPercent = (diffPixels / totalPixels) * 100;
-      const threshold =
-        passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
+      const threshold = passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
       const passed = diffPercent < threshold;
       setDiffResult({
         actualImage: actualMaskedDataUrl,
@@ -522,9 +691,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             setCaptureError(
               `Visual: ${data.summary.failed} failed · ${data.summary.passed} passed`,
             );
-          } else {
-            setUpdateLog(`Visual: ${data.summary.passed} passed (${scope})`);
           }
+          const summaryLine =
+            data.summary.failed > 0
+              ? `Visual: ${data.summary.failed} failed · ${data.summary.passed} passed (${scope})`
+              : `Visual: ${data.summary.passed} passed (${scope})`;
+          const logTail = data.logTail?.trim();
+          setUpdateLog(logTail ? `${logTail}\n${summaryLine}` : summaryLine);
         });
       } catch (error) {
         setCaptureError(
@@ -548,254 +721,216 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [handleDiff, handleRunVisual],
   );
 
-  return (
-    <AddonPanel active={props.active ?? false}>
-      {!storyReady ? (
-        <SkeletonRoot
-          role="status"
-          aria-busy="true"
-          aria-label="Loading Visual Delta"
-        >
-          <SkeletonToolbar>
-            <SkeletonBone width={56} height={40} radius={6} />
-            <SkeletonBone width={56} height={40} radius={6} />
-            <SkeletonBone width={56} height={40} radius={6} />
-            <SkeletonBone width={88} height={28} radius={6} />
-            <div style={{ flex: 1, minWidth: 12 }} />
-            <SkeletonBone width={72} height={12} radius={4} />
-            <SkeletonBone width={96} height={28} radius={6} />
-            <SkeletonBone width={28} height={28} radius={6} />
-          </SkeletonToolbar>
-          <SkeletonBone width="100%" height={180} radius={8} />
-          <SkeletonBone width="40%" height={12} radius={4} />
-        </SkeletonRoot>
-      ) : images.length === 0 ? (
-        <EmptyStateContainer>
-          <EmptyCreateWrap>
-            <EmptyState style={{ color: theme.color.mediumdark }}>
-              Configure images in the story parameters.visualDelta.images
-            </EmptyState>
-            <Button
-              size="medium"
-              disabled={!storyId || busy}
-              ariaLabel="Create baseline"
-              onClick={() => void handleCreateBaselines()}
-            >
-              {isCreating
-                ? (createProgress?.label ?? "Creating…")
-                : "Create Baseline"}
-            </Button>
-            {isCreating ? (
-              <EmptyState
-                style={{
-                  color: theme.textMutedColor,
-                  fontSize: theme.typography.size.s1,
-                }}
-              >
-                {createProgress?.label ?? "Creating…"}
-              </EmptyState>
+  const isEmpty = primaryImages.length === 0 && images.length === 0;
+  const badgeStatus = diffResult
+    ? diffResult.passed
+      ? ("pass" as const)
+      : ("fail" as const)
+    : null;
+
+  const renderSectionBody = useCallback(
+    (section: BaselineSection) => (
+      <>
+        <PanelToolbar>
+          <ToolbarRow>
+            {section.thumbSrc ? (
+              <SectionThumbFrame title={section.label}>
+                <SectionThumb src={section.thumbSrc} alt="" />
+              </SectionThumbFrame>
             ) : null}
-            {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-            {updateLog ? (
-              <pre
-                ref={updateLogRef}
-                className="font-mono"
-                style={{
-                  margin: 0,
-                  width: "100%",
-                  maxWidth: 560,
-                  color: captureError
-                    ? theme.color.negative
-                    : theme.color.positive,
-                  whiteSpace: "pre-wrap",
-                  maxHeight: 220,
-                  overflow: "auto",
-                  fontSize: 11,
-                  textAlign: "left",
-                  fontFamily: theme.typography.fonts.mono,
-                }}
-              >
-                {updateLog.slice(-4000)}
-              </pre>
+            {section.id === "default" &&
+            liveVisible &&
+            primaryImages.length > 1 ? (
+              <ImageGallery
+                images={primaryImages}
+                selectedIndex={
+                  selectedInteractionId ? 0 : Math.max(0, index)
+                }
+                onSelect={setIndex}
+              />
             ) : null}
-          </EmptyCreateWrap>
-        </EmptyStateContainer>
-      ) : (
-        <>
-          <Toolbar>
-            <ToolbarRow>
-              {liveVisible ? (
-                <ImageGallery
-                  images={images}
-                  selectedIndex={index}
-                  onSelect={setIndex}
-                />
-              ) : null}
-              <LiveVisibilityToggle
-                liveVisible={liveVisible}
-                onToggle={setLiveVisible}
+            <LiveVisibilityToggle
+              liveVisible={liveVisible}
+              onToggle={setLiveVisible}
+              disabled={images.length === 0}
+            />
+            {liveVisible ? (
+              <PlacementPad
+                value={placement}
+                active={overlayOn}
+                onToggle={togglePlacement}
                 disabled={images.length === 0}
               />
-              {liveVisible ? (
-                <PlacementPad
-                  value={placement}
-                  active={overlayOn}
-                  onToggle={togglePlacement}
-                  disabled={images.length === 0}
-                />
-              ) : null}
-              <ReviewStatusPad
-                value={reviewStatus}
-                disabled={busy || !storyId}
-                onSelect={(status) => void handleSetReviewStatus(status)}
-              />
-              {index >= 0 && (!isSplit || !liveVisible) ? (
-                <ButtonGroup role="group" aria-label="Overlay controls">
-                  <ToggleButton
-                    size="small"
-                    pressed={false}
-                    onClick={resetOverlay}
-                    aria-label="Reset overlay position after drag"
-                    title="Reset overlay position after drag"
-                  >
-                    Reset
-                  </ToggleButton>
-                </ButtonGroup>
-              ) : null}
-              <ToolbarSpacer />
-              {liveVisible && index >= 0 && !isSplit ? (
-                <>
-                  <InlineControl title="Overlay opacity">
-                    <span>Opacity</span>
-                    <Slider
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={opacity}
-                      onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                    />
-                    <ValueDisplay>{Math.round(opacity * 100)}%</ValueDisplay>
-                  </InlineControl>
-                  <CheckboxContainer>
-                    <Checkbox
-                      type="checkbox"
-                      checked={colorInversion}
-                      onChange={(e) => setColorInversion(e.target.checked)}
-                    />
-                    <span>Blend</span>
-                  </CheckboxContainer>
-                </>
-              ) : null}
-              <InlineControl title="Pass if diff % is below this">
-                <span>Thresh</span>
-                <Slider
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.05"
-                  value={passThresholdPercent}
-                  onChange={(e) =>
-                    setPassThresholdPercent(parseFloat(e.target.value))
-                  }
-                />
-                <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
-              </InlineControl>
-              <Actions>
-                <VisualRunSplitButton
-                  panel
-                  compact
-                  isRunning={isRunningVisual || isDiffing}
-                  progressLabel={progressLabel}
-                  disabled={busy && !isRunningVisual && !isDiffing}
-                  storyMissing={!storyId}
-                  diffDisabled={index === -1}
-                  allowStory
-                  onRun={handleSplitAction}
-                  onStop={() => void cancelVisualRun()}
-                />
-                <PopoverProvider
-                  ariaLabel="More actions"
-                  placement="bottom-end"
-                  padding={0}
-                  visible={moreMenuOpen}
-                  onVisibleChange={setMoreMenuOpen}
-                  popover={() => (
-                    <div style={{ minWidth: 190 }}>
-                      <ActionList>
-                        <ActionList.Item>
-                          <ActionList.Action
-                            ariaLabel="Update baselines"
-                            disabled={busy || !storyId}
-                            onClick={() => {
-                              setMoreMenuOpen(false);
-                              void handleUpdateBaselines();
-                            }}
-                          >
-                            <ActionList.Icon>
-                              <SyncIcon />
-                            </ActionList.Icon>
-                            <ActionList.Text>
-                              {isUpdating
-                                ? "Updating…"
-                                : "Update baselines"}
-                            </ActionList.Text>
-                          </ActionList.Action>
-                        </ActionList.Item>
-                        <ActionList.Item>
-                          <ActionList.Action
-                            ariaLabel="Reset settings"
-                            onClick={() => {
-                              setMoreMenuOpen(false);
-                              resetSettings();
-                            }}
-                          >
-                            <ActionList.Icon>
-                              <UndoIcon />
-                            </ActionList.Icon>
-                            <ActionList.Text>Reset settings</ActionList.Text>
-                          </ActionList.Action>
-                        </ActionList.Item>
-                      </ActionList>
-                    </div>
-                  )}
-                >
-                  <IconButton
-                    size="small"
-                    variant="ghost"
-                    padding="small"
-                    ariaLabel="More actions"
-                    title="More actions"
-                  >
-                    <EllipsisIcon />
-                  </IconButton>
-                </PopoverProvider>
-              </Actions>
-            </ToolbarRow>
-            {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-            {updateLog ? (
-              <pre
-                ref={updateLogRef}
-                className="font-mono"
-                style={{
-                  margin: 0,
-                  color: captureError
-                    ? theme.color.negative
-                    : theme.color.positive,
-                  whiteSpace: "pre-wrap",
-                  maxHeight: isUpdating || isCreating ? 220 : 120,
-                  overflow: "auto",
-                  fontSize: 11,
-                  fontFamily: theme.typography.fonts.mono,
-                }}
-              >
-                {updateLog.slice(-(isUpdating || isCreating ? 4000 : 800))}
-              </pre>
             ) : null}
-          </Toolbar>
-          {diffResult && <DiffResult result={diffResult} />}
-        </>
-      )}
+            {index >= 0 && (!isSplit || !liveVisible) ? (
+              <ButtonGroup role="group" aria-label="Overlay controls">
+                <ToggleButton
+                  size="small"
+                  pressed={false}
+                  onClick={resetOverlay}
+                  aria-label="Reset overlay position after drag"
+                  title="Reset overlay position after drag"
+                >
+                  Reset
+                </ToggleButton>
+              </ButtonGroup>
+            ) : null}
+            <ToolbarSpacer />
+            {liveVisible && index >= 0 && !isSplit ? (
+              <>
+                <InlineControl title="Overlay opacity">
+                  <span>Opacity</span>
+                  <Slider
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={opacity}
+                    onChange={(e) => setOpacity(parseFloat(e.target.value))}
+                  />
+                  <ValueDisplay>{Math.round(opacity * 100)}%</ValueDisplay>
+                </InlineControl>
+                <CheckboxContainer>
+                  <Checkbox
+                    type="checkbox"
+                    checked={colorInversion}
+                    onChange={(e) => setColorInversion(e.target.checked)}
+                  />
+                  <span>Blend</span>
+                </CheckboxContainer>
+              </>
+            ) : null}
+            <InlineControl title="Pass if diff % is below this">
+              <span>Thresh</span>
+              <Slider
+                type="range"
+                min="0"
+                max="2"
+                step="0.05"
+                value={passThresholdPercent}
+                onChange={(e) =>
+                  setPassThresholdPercent(parseFloat(e.target.value))
+                }
+              />
+              <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
+            </InlineControl>
+          </ToolbarRow>
+          {captureError ? <ErrorText>{captureError}</ErrorText> : null}
+        </PanelToolbar>
+        {diffResult && images.length > 0 ? (
+          <DiffResult
+            result={diffResult}
+            showHistogram={showDistribution}
+          />
+        ) : null}
+      </>
+    ),
+    [
+      captureError,
+      colorInversion,
+      diffResult,
+      images.length,
+      index,
+      isSplit,
+      liveVisible,
+      opacity,
+      overlayOn,
+      passThresholdPercent,
+      placement,
+      primaryImages,
+      resetOverlay,
+      selectedInteractionId,
+      setColorInversion,
+      setIndex,
+      setLiveVisible,
+      setOpacity,
+      setPassThresholdPercent,
+      showDistribution,
+      togglePlacement,
+    ],
+  );
+
+  return (
+    <AddonPanel active={props.active ?? false}>
+      <PanelShell ref={setShellEl}>
+        <PanelScroll>
+          <VisualDeltaHeader
+            badgeStatus={loading ? null : badgeStatus}
+            empty={loading ? false : isEmpty}
+            busy={busy || loading}
+            storyMissing={!storyId || loading}
+            isRunning={!loading && (isRunningVisual || isDiffing)}
+            progressLabel={loading ? null : progressLabel}
+            createLabel={
+              isCreating
+                ? (createProgress?.label ?? "Creating…")
+                : "Create visual"
+            }
+            reviewStatus={loading ? null : reviewStatus}
+            onRunDiff={handleSplitAction}
+            onCreate={() => void handleCreateBaselines()}
+            onUpdateBaselines={() => void handleUpdateBaselines()}
+            onResetSettings={resetSettings}
+            onStop={() => void cancelVisualRun()}
+            onReviewStatus={(status) => void handleSetReviewStatus(status)}
+            isUpdating={isUpdating}
+          />
+          <PanelBody>
+            {loading ? (
+              <SkeletonRoot
+                role="status"
+                aria-busy="true"
+                aria-label="Loading Visual Delta"
+              >
+                <SkeletonBone width="100%" height={180} radius={8} />
+                <SkeletonBone width="40%" height={12} radius={4} />
+              </SkeletonRoot>
+            ) : isEmpty && baselineSections.length === 0 ? (
+              <EmptyTabContent
+                title="Visual Delta"
+                description="Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
+                footer={
+                  <Button
+                    size="small"
+                    ariaLabel="Create visual baseline"
+                    disabled={!storyId || busy}
+                    onClick={() => void handleCreateBaselines()}
+                  >
+                    {isCreating
+                      ? (createProgress?.label ?? "Creating…")
+                      : "Create visual"}
+                  </Button>
+                }
+              />
+            ) : (
+              <BaselineAccordion
+                sections={baselineSections}
+                expandedId={expandedId}
+                busy={busy}
+                showDistribution={showDistribution}
+                onExpand={selectSection}
+                onCreate={(step) =>
+                  void handleCreateInteraction(step, false)
+                }
+                onUpdate={(step) =>
+                  void handleCreateInteraction(step, true)
+                }
+                onToggleDistribution={() =>
+                  setShowDistribution((value) => !value)
+                }
+                renderBody={renderSectionBody}
+              />
+            )}
+          </PanelBody>
+        </PanelScroll>
+        <PanelStatusBar
+          container={shellEl}
+          running={statusRunning}
+          label={statusLabel}
+          log={updateLog}
+          error={captureError}
+        />
+      </PanelShell>
     </AddonPanel>
   );
 });

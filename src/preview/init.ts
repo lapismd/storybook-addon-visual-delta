@@ -33,11 +33,11 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
       );
       emit(EVENTS.INIT_IMAGE, {
         images: normalizedImages,
+        interactions: visualDeltaParams.interactions ?? [],
         storyId: context.id,
         storyName: context.name,
         opacity:
-          visualDeltaParams.opacity ??
-          (isSplitPlacement(placement) ? 1 : 0.5),
+          visualDeltaParams.opacity ?? (isSplitPlacement(placement) ? 1 : 0.5),
         colorInversion: visualDeltaParams.colorInversion ?? false,
         placement,
         passThresholdPercent:
@@ -50,11 +50,11 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
       );
       emit(EVENTS.INIT_IMAGE, {
         images: [],
+        interactions: visualDeltaParams?.interactions ?? [],
         storyId: context.id,
         storyName: context.name,
         opacity:
-          visualDeltaParams?.opacity ??
-          (isSplitPlacement(placement) ? 1 : 0.5),
+          visualDeltaParams?.opacity ?? (isSplitPlacement(placement) ? 1 : 0.5),
         colorInversion: visualDeltaParams?.colorInversion ?? false,
         placement,
         passThresholdPercent:
@@ -62,7 +62,13 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
           DEFAULT_PASS_THRESHOLD_PERCENT,
       });
     }
-  }, [visualDeltaParams?.images, context.id, context.name, emit]);
+  }, [
+    visualDeltaParams?.images,
+    visualDeltaParams?.interactions,
+    context.id,
+    context.name,
+    emit,
+  ]);
 
   return storyFn();
 };

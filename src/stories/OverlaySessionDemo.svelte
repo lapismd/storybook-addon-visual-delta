@@ -80,11 +80,7 @@
         {placement}
       </button>
     {/each}
-    <button
-      type="button"
-      data-testid="reveal-center"
-      onclick={revealCenter}
-    >
+    <button type="button" data-testid="reveal-center" onclick={revealCenter}>
       Reveal center
     </button>
   </div>
@@ -172,6 +168,7 @@
 
   .status dd {
     margin: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      monospace;
   }
 </style>

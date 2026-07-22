@@ -1,4 +1,12 @@
-import { styled } from "storybook/theming";
+import { keyframes, styled } from "storybook/theming";
+
+/** Height reserved under panel content for the fixed status bar. */
+export const PANEL_STATUS_BAR_HEIGHT = 28;
+
+const spin = keyframes({
+  from: { transform: "rotate(0deg)" },
+  to: { transform: "rotate(360deg)" },
+});
 
 export const DiffResultContainer = styled.div(({ theme }) => ({
   padding: "0.75rem 1rem 1rem",
@@ -412,3 +420,131 @@ export const ErrorText = styled.p({
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
 });
+
+/**
+ * Panel frame. Status bar is position:fixed to the AddonPanel scrollport
+ * (see PanelStatusBar) so Storybook's outer panel scroller cannot move it.
+ */
+export const PanelShell = styled.div({
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  minHeight: "100%",
+  boxSizing: "border-box",
+});
+
+/** Main panel body (Storybook may also scroll the AddonPanel wrapper). */
+export const PanelScroll = styled.div({
+  flex: "1 1 auto",
+  minHeight: 0,
+  boxSizing: "border-box",
+  display: "flex",
+  flexDirection: "column",
+  // Clearance for the fixed half-width status bar over the bottom-right.
+  paddingBottom: PANEL_STATUS_BAR_HEIGHT,
+});
+
+/** Content below the sticky Visual Delta header. */
+export const PanelBody = styled.div(({ theme }) => ({
+  flex: "1 1 auto",
+  minHeight: 0,
+  background: theme.background.content ?? "#fff",
+  boxSizing: "border-box",
+}));
+
+export const StatusBar = styled.div(({ theme }) => ({
+  // Position/size are set inline from the AddonPanel scrollport rect.
+  position: "fixed",
+  zIndex: 30,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  height: PANEL_STATUS_BAR_HEIGHT,
+  minWidth: 0,
+  padding: "0 8px",
+  boxSizing: "border-box",
+  borderTop: `1px solid ${theme.appBorderColor}`,
+  borderLeft: `1px solid ${theme.appBorderColor}`,
+  borderTopLeftRadius: Math.max(theme.appBorderRadius ?? 4, 6),
+  backgroundColor: theme.background.app ?? theme.background.content,
+  color: theme.textMutedColor,
+  fontSize: theme.typography.size.s1 - 1,
+  pointerEvents: "auto",
+}));
+
+export const StatusProgressButton = styled.button<{
+  $hasError?: boolean;
+  $idle?: boolean;
+}>(({ theme, $hasError, $idle }) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  flex: "1 1 auto",
+  minWidth: 0,
+  width: "100%",
+  maxWidth: "100%",
+  height: 22,
+  margin: 0,
+  padding: "0 6px",
+  border: "none",
+  borderRadius: theme.appBorderRadius ?? 4,
+  background: "transparent",
+  color: $hasError
+    ? theme.color.negative
+    : $idle
+      ? theme.textMutedColor
+      : theme.color.defaultText,
+  fontSize: "inherit",
+  fontFamily: "inherit",
+  lineHeight: 1.2,
+  cursor: $idle ? "default" : "pointer",
+  textAlign: "left",
+  "&:hover:not(:disabled)": {
+    backgroundColor: theme.background.hoverable ?? theme.color.lightest,
+  },
+  "&:disabled": {
+    cursor: "default",
+    opacity: 1,
+  },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.color.secondary}`,
+    outlineOffset: 1,
+  },
+}));
+
+export const StatusSpinner = styled.span({
+  display: "inline-flex",
+  flex: "0 0 auto",
+  width: 12,
+  height: 12,
+  lineHeight: 0,
+  animation: `${spin} 0.9s linear infinite`,
+  "& svg": {
+    width: 12,
+    height: 12,
+    display: "block",
+  },
+});
+
+export const StatusProgressLabel = styled.span({
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
+export const StatusLogPopover = styled.pre<{ $hasError?: boolean }>(
+  ({ theme, $hasError }) => ({
+    margin: 0,
+    padding: "8px 10px",
+    width: "min(560px, 80vw)",
+    maxHeight: 240,
+    overflow: "auto",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    fontSize: 11,
+    fontFamily: theme.typography.fonts.mono,
+    color: $hasError ? theme.color.negative : theme.color.positive,
+    backgroundColor: theme.background.content,
+  }),
+);

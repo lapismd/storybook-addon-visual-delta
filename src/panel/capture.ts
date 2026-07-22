@@ -211,7 +211,9 @@ export async function capturePreviewSubject(): Promise<CaptureResult> {
   }
   const doc = iframe.contentDocument;
   if (!doc?.documentElement) {
-    throw new Error("Cannot access preview document (cross-origin or not ready)");
+    throw new Error(
+      "Cannot access preview document (cross-origin or not ready)",
+    );
   }
 
   const restoreCapturePrep = preparePreviewForVisualCapture(doc);
@@ -264,7 +266,9 @@ export async function capturePreviewIframe(options?: {
   const doc = iframe.contentDocument;
   const win = iframe.contentWindow;
   if (!doc?.documentElement || !win) {
-    throw new Error("Cannot access preview document (cross-origin or not ready)");
+    throw new Error(
+      "Cannot access preview document (cross-origin or not ready)",
+    );
   }
 
   const prev = readIframeSizeStyles(iframe);
