@@ -482,10 +482,18 @@ export type VisualCreateResponse = {
 async function postVisualBaselineWrite(
   kind: VisualBaselineJobKind,
   body: { storyId: string },
+  options?: {
+    /** Override the in-flight status label (e.g. `Creating… 1/3`). */
+    runningLabel?: string;
+    /** Override the success label when the job finishes cleanly. */
+    successLabel?: string;
+  },
 ): Promise<VisualCreateResponse> {
   const path =
     kind === "create" ? VISUAL_DELTA_CREATE_PATH : VISUAL_DELTA_UPDATE_PATH;
-  const runningLabel = kind === "create" ? "Creating…" : "Updating…";
+  const runningLabel =
+    options?.runningLabel ??
+    (kind === "create" ? "Creating…" : "Updating…");
   const failedLabel = kind === "create" ? "Create failed" : "Update failed";
   const failVerb =
     kind === "create" ? "Create baselines failed" : "Update baselines failed";
@@ -558,7 +566,9 @@ async function postVisualBaselineWrite(
     }
 
     let label: string;
-    if (kind === "create") {
+    if (options?.successLabel) {
+      label = options.successLabel;
+    } else if (kind === "create") {
       const patchMatch = log.match(
         /Story visualDelta patch:\s*(\d+)\s*updated(?:,\s*(\d+)\s*already wired)?/i,
       );
@@ -604,6 +614,29 @@ async function postVisualBaselineWrite(
 }
 
 /**
+ * One representative story id per component family (prefix before `--`).
+ * Prefers a non-skip-visual leaf when available.
+ */
+export function componentCreateTargets(
+  api: API,
+  storyIds: string[],
+): string[] {
+  const byPrefix = new Map<string, string[]>();
+  for (const id of storyIds) {
+    const key = id.split("--")[0] ?? id;
+    const list = byPrefix.get(key) ?? [];
+    list.push(id);
+    byPrefix.set(key, list);
+  }
+  const targets: string[] = [];
+  for (const ids of byPrefix.values()) {
+    const runnable = visualRunnableStoryIds(api, ids);
+    targets.push(runnable[0] ?? ids[0]!);
+  }
+  return targets;
+}
+
+/**
  * Create missing Playwright baselines for a story's component family
  * (`visual-update --create-only`). Shares progress across panel + sidebar.
  */
@@ -611,6 +644,45 @@ export async function postVisualCreateBaseline(body: {
   storyId: string;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("create", body);
+}
+
+/**
+ * Create missing baselines for each unique component represented by `storyIds`
+ * (typically the leaf stories currently listed in the sidebar filter).
+ */
+export async function postVisualCreateBaselinesForStoryIds(
+  api: API,
+  storyIds: string[],
+): Promise<void> {
+  const targets = componentCreateTargets(api, storyIds);
+  if (!targets.length) {
+    emitVisualCreateProgress({
+      running: false,
+      label: "No stories",
+      kind: "create",
+      error: "No stories visible in the sidebar",
+    });
+    throw new Error("No stories visible in the sidebar");
+  }
+  const total = targets.length;
+  for (let i = 0; i < total; i++) {
+    const storyId = targets[i]!;
+    const runningLabel =
+      total > 1 ? `Creating… ${i + 1}/${total}` : "Creating…";
+    const isLast = i === total - 1;
+    await postVisualBaselineWrite(
+      "create",
+      { storyId },
+      {
+        runningLabel,
+        successLabel: isLast
+          ? total > 1
+            ? `Created (${total} components)`
+            : undefined
+          : runningLabel,
+      },
+    );
+  }
 }
 
 /**

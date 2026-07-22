@@ -8,6 +8,7 @@ import {
   experimental_useStatusStore,
   experimental_useTestProviderStore,
   useStorybookApi,
+  useStorybookState,
 } from "storybook/manager-api";
 import { styled } from "storybook/theming";
 import {
@@ -23,6 +24,7 @@ import {
   clearVisualStatuses,
   formatVisualProgressLabel,
   postVisualCreateBaseline,
+  postVisualCreateBaselinesForStoryIds,
   postVisualRun,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
@@ -46,12 +48,13 @@ const Container = styled.div({
   paddingBottom: 1,
 });
 
-/** Testing Module section: separate Visual Tests from Vitest / a11y above. */
-const ModuleContainer = styled(Container)(({ theme }) => ({
-  borderTop: `1px solid ${theme.appBorderColor}`,
-  paddingTop: 8,
-  marginTop: 4,
-}));
+/**
+ * Testing Module section (global). No top border — Vitest/a11y already provide
+ * separators; only the sidebar context menu keeps a divider.
+ */
+const ModuleContainer = styled(Container)({
+  paddingTop: 4,
+});
 
 /** Sidebar story/component context menu: divider above visual actions. */
 const ContextMenuContainer = styled(Container)(({ theme }) => ({
@@ -182,12 +185,55 @@ function chipLabel(
   return "Run tests to see results";
 }
 
+function createProgressDescription(
+  isCreating: boolean,
+  createProgress: VisualCreateProgress | null,
+): string {
+  if (isCreating) return createProgress?.label ?? "Creating…";
+  if (createProgress?.error) return "Create failed";
+  if (createProgress?.label) return createProgress.label;
+  return "Not run";
+}
+
+function createChipStatus(
+  isCreating: boolean,
+  createProgress: VisualCreateProgress | null,
+): ChipStatus {
+  if (isCreating) return "warning";
+  if (createProgress?.error) return "negative";
+  if (
+    createProgress?.label &&
+    /^Created/i.test(createProgress.label)
+  ) {
+    return "positive";
+  }
+  return "unknown";
+}
+
+/** Leaf story ids currently listed in the sidebar (respects search/filters). */
+function sidebarLeafStoryIds(state: {
+  filteredIndex?: Record<string, { type?: string; id?: string }>;
+  index?: Record<string, { type?: string; id?: string }>;
+}): string[] {
+  const hash = state.filteredIndex ?? state.index;
+  if (!hash) return [];
+  const ids: string[] = [];
+  for (const entry of Object.values(hash)) {
+    if (entry?.type === "story" && entry.id) ids.push(entry.id);
+  }
+  return ids;
+}
+
 export function VisualTestProviderRender({
   entry,
 }: {
   entry?: API_HashEntry;
 }) {
   const api = useStorybookApi();
+  const storybookState = useStorybookState() as {
+    filteredIndex?: Record<string, { type?: string; id?: string }>;
+    index?: Record<string, { type?: string; id?: string }>;
+  };
   const testProviderState = experimental_useTestProviderStore(
     (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
   );
@@ -198,6 +244,10 @@ export function VisualTestProviderRender({
     useState<VisualCreateProgress | null>(null);
   const isCreating = Boolean(
     createProgress?.running && createProgress.kind === "create",
+  );
+  const sidebarStoryIds = useMemo(
+    () => sidebarLeafStoryIds(storybookState),
+    [storybookState.filteredIndex, storybookState.index],
   );
 
   const entryStoryIds = useMemo(() => {
@@ -316,6 +366,16 @@ export function VisualTestProviderRender({
       // Progress/error surfaces via subscribeVisualCreateProgress.
     }
   }, [api, entryStoryIds]);
+
+  /** Global Testing Module: create for components currently listed in the sidebar. */
+  const createBaselinesFromSidebar = useCallback(async () => {
+    if (!sidebarStoryIds.length) return;
+    try {
+      await postVisualCreateBaselinesForStoryIds(api, sidebarStoryIds);
+    } catch {
+      // Progress/error surfaces via subscribeVisualCreateProgress.
+    }
+  }, [api, sidebarStoryIds]);
 
   useEffect(() => {
     if (entry) return;
@@ -444,7 +504,22 @@ export function VisualTestProviderRender({
     );
   }
 
-  // Global Testing Module: checklist row + Vitest-style `Testing... 1/N`
+  const createDescription = createProgressDescription(
+    isCreating,
+    createProgress,
+  );
+  const createStatus = createChipStatus(isCreating, createProgress);
+  const createLabel = isCreating
+    ? (createProgress?.label ?? "Creating…")
+    : createProgress?.error
+      ? createProgress.error
+      : createProgress?.label
+        ? createProgress.label
+        : sidebarStoryIds.length
+          ? "Create missing baselines for stories in the sidebar"
+          : "No stories in the sidebar";
+
+  // Global Testing Module: checklist rows + Vitest-style progress
   return (
     <ModuleContainer>
       <Description
@@ -482,6 +557,42 @@ export function VisualTestProviderRender({
           >
             {chipCount}
             <TestStatusIcon status={chipStatus} isRunning={isRunning} />
+          </ActionList.Button>
+        </ActionList.Item>
+      </StyledActionList>
+      <Description
+        id="visual-create-baselines-description"
+        style={{ margin: "8px 0 4px 8px" }}
+      >
+        {createDescription}
+      </Description>
+      <StyledActionList>
+        <ActionList.Item>
+          <ActionList.Action as="label" readOnly ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
+                name="Create Baselines"
+                checked
+                disabled
+              />
+            </ActionList.Icon>
+            <ActionList.Text>Create Baselines</ActionList.Text>
+          </ActionList.Action>
+          <ActionList.Button
+            ariaLabel={createLabel}
+            tooltip={createLabel}
+            disabled={
+              (!sidebarStoryIds.length && !isCreating) || isRunning
+            }
+            onClick={() => {
+              if (isCreating) {
+                void cancelVisualRun();
+                return;
+              }
+              void createBaselinesFromSidebar();
+            }}
+          >
+            <TestStatusIcon status={createStatus} isRunning={isCreating} />
           </ActionList.Button>
         </ActionList.Item>
       </StyledActionList>
