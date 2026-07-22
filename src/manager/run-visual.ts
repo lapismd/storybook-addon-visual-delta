@@ -1,10 +1,8 @@
-import {
-  experimental_getStatusStore,
-  type API,
-} from "storybook/manager-api";
+import { experimental_getStatusStore, type API } from "storybook/manager-api";
 import {
   STATUS_TYPE_ID_VISUAL,
   VISUAL_DELTA_CANCEL_PATH,
+  VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
@@ -130,7 +128,11 @@ function isVisualFailed(item: VisualRunResultItem): boolean {
 function statusDescription(item: VisualRunResultItem): string {
   const failed = isVisualFailed(item);
   const sc = item.sidecar;
-  if (sc && typeof sc.diffPercent === "number" && typeof sc.diffPixels === "number") {
+  if (
+    sc &&
+    typeof sc.diffPercent === "number" &&
+    typeof sc.diffPixels === "number"
+  ) {
     const pct = sc.diffPercent.toFixed(4);
     const threshold =
       sc.passThresholdPercent != null
@@ -399,10 +401,7 @@ export async function postVisualRun(
   });
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (
-    contentType.includes("ndjson") ||
-    contentType.includes("x-ndjson")
-  ) {
+  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
     return readNdjsonRun(response, options?.onProgress);
   }
 
@@ -443,7 +442,7 @@ export async function postVisualReviewStatus(body: {
   return data;
 }
 
-export type VisualBaselineJobKind = "create" | "update";
+export type VisualBaselineJobKind = "create" | "update" | "interaction";
 
 export type VisualCreateProgress = {
   running: boolean;
@@ -459,7 +458,9 @@ const createProgressListeners = new Set<CreateProgressListener>();
 let latestCreateProgress: VisualCreateProgress | null = null;
 
 /** Subscribe to create/update baseline progress from panel or sidebar. */
-export function subscribeVisualCreateProgress(listener: CreateProgressListener) {
+export function subscribeVisualCreateProgress(
+  listener: CreateProgressListener,
+) {
   createProgressListeners.add(listener);
   if (latestCreateProgress) listener(latestCreateProgress);
   return () => {
@@ -492,13 +493,11 @@ async function postVisualBaselineWrite(
   const path =
     kind === "create" ? VISUAL_DELTA_CREATE_PATH : VISUAL_DELTA_UPDATE_PATH;
   const runningLabel =
-    options?.runningLabel ??
-    (kind === "create" ? "Creating…" : "Updating…");
+    options?.runningLabel ?? (kind === "create" ? "Creating…" : "Updating…");
   const failedLabel = kind === "create" ? "Create failed" : "Update failed";
   const failVerb =
     kind === "create" ? "Create baselines failed" : "Update baselines failed";
-  const exitVerb =
-    kind === "create" ? "Baseline create" : "Baseline update";
+  const exitVerb = kind === "create" ? "Baseline create" : "Baseline update";
 
   emitVisualCreateProgress({
     running: true,
@@ -547,14 +546,12 @@ async function postVisualBaselineWrite(
     }
     const exitMatch = log.match(/\[exit (\d+)\]/);
     if (exitMatch && exitMatch[1] !== "0") {
-      const detail =
-        /Address already in use|was not able to start/i.test(log)
-          ? "Playwright static server failed to start (port 6007 busy or stale)."
-          : /No recipe for/i.test(log)
-            ? log.match(/No recipe for[^\n]+/)?.[0]
-            : undefined;
-      const error =
-        detail ?? `${exitVerb} exited with code ${exitMatch[1]}`;
+      const detail = /Address already in use|was not able to start/i.test(log)
+        ? "Playwright static server failed to start (port 6007 busy or stale)."
+        : /No recipe for/i.test(log)
+          ? log.match(/No recipe for[^\n]+/)?.[0]
+          : undefined;
+      const error = detail ?? `${exitVerb} exited with code ${exitMatch[1]}`;
       emitVisualCreateProgress({
         running: false,
         label: failedLabel,
@@ -601,8 +598,7 @@ async function postVisualBaselineWrite(
     ) {
       throw error;
     }
-    const message =
-      error instanceof Error ? error.message : failVerb;
+    const message = error instanceof Error ? error.message : failVerb;
     emitVisualCreateProgress({
       running: false,
       label: failedLabel,
@@ -617,10 +613,7 @@ async function postVisualBaselineWrite(
  * One representative story id per component family (prefix before `--`).
  * Prefers a non-skip-visual leaf when available.
  */
-export function componentCreateTargets(
-  api: API,
-  storyIds: string[],
-): string[] {
+export function componentCreateTargets(api: API, storyIds: string[]): string[] {
   const byPrefix = new Map<string, string[]>();
   for (const id of storyIds) {
     const key = id.split("--")[0] ?? id;
@@ -686,6 +679,45 @@ export async function postVisualCreateBaselinesForStoryIds(
 }
 
 /**
+ * Overwrite baselines for each unique component represented by `storyIds`
+ * (sidebar rewrite / "Rewrite existing").
+ */
+export async function postVisualUpdateBaselinesForStoryIds(
+  api: API,
+  storyIds: string[],
+): Promise<void> {
+  const targets = componentCreateTargets(api, storyIds);
+  if (!targets.length) {
+    emitVisualCreateProgress({
+      running: false,
+      label: "No stories",
+      kind: "update",
+      error: "No stories visible in the sidebar",
+    });
+    throw new Error("No stories visible in the sidebar");
+  }
+  const total = targets.length;
+  for (let i = 0; i < total; i++) {
+    const storyId = targets[i]!;
+    const runningLabel =
+      total > 1 ? `Updating… ${i + 1}/${total}` : "Updating…";
+    const isLast = i === total - 1;
+    await postVisualBaselineWrite(
+      "update",
+      { storyId },
+      {
+        runningLabel,
+        successLabel: isLast
+          ? total > 1
+            ? `Updated (${total} components)`
+            : undefined
+          : runningLabel,
+      },
+    );
+  }
+}
+
+/**
  * Overwrite Playwright baselines for a story's component family
  * (`visual-update` with approval). Streams logs like create.
  */
@@ -693,4 +725,100 @@ export async function postVisualUpdateBaseline(body: {
   storyId: string;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("update", body);
+}
+
+/**
+ * Create or update one mid-play interaction baseline for a named play step.
+ */
+export async function postVisualInteractionBaseline(body: {
+  storyId: string;
+  stepLabel: string;
+  stepId?: string;
+  overwrite?: boolean;
+}): Promise<VisualCreateResponse> {
+  emitVisualCreateProgress({
+    running: true,
+    label: body.overwrite ? "Updating interaction…" : "Creating interaction…",
+    kind: "interaction",
+    logTail: "",
+  });
+  try {
+    const response = await fetch(VISUAL_DELTA_CREATE_INTERACTION_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    let log = "";
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        log += decoder.decode(value, { stream: true });
+        emitVisualCreateProgress({
+          running: true,
+          label: body.overwrite
+            ? "Updating interaction…"
+            : "Creating interaction…",
+          kind: "interaction",
+          logTail: log.slice(-12_000),
+        });
+      }
+      log += decoder.decode();
+    } else {
+      log = await response.text();
+    }
+    log = log.trim();
+
+    if (!response.ok) {
+      const error = log || `Interaction baseline failed (${response.status})`;
+      emitVisualCreateProgress({
+        running: false,
+        label: "Interaction failed",
+        kind: "interaction",
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    const exitMatch = log.match(/\[exit (\d+)\]/);
+    if (exitMatch && exitMatch[1] !== "0") {
+      const error = `Interaction baseline exited with code ${exitMatch[1]}`;
+      emitVisualCreateProgress({
+        running: false,
+        label: "Interaction failed",
+        kind: "interaction",
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+
+    emitVisualCreateProgress({
+      running: false,
+      label: body.overwrite ? "Interaction updated" : "Interaction created",
+      kind: "interaction",
+      logTail: log || undefined,
+    });
+    return { ok: true, log };
+  } catch (error) {
+    if (
+      latestCreateProgress?.running === false &&
+      latestCreateProgress.error &&
+      latestCreateProgress.kind === "interaction"
+    ) {
+      throw error;
+    }
+    const message =
+      error instanceof Error ? error.message : "Interaction baseline failed";
+    emitVisualCreateProgress({
+      running: false,
+      label: "Interaction failed",
+      kind: "interaction",
+      error: message,
+    });
+    throw error instanceof Error ? error : new Error(message);
+  }
 }

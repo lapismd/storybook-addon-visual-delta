@@ -206,7 +206,8 @@ export function VisualRunSplitButton({
 
   const tip = modeActionTooltip(mode);
   const label = modeActionLabel(mode);
-  const needsStory = mode === "story" || mode === "component" || mode === "diff";
+  const needsStory =
+    mode === "story" || mode === "component" || mode === "diff";
   const playDisabled =
     Boolean(disabled) ||
     (mode === "diff" && Boolean(diffDisabled)) ||

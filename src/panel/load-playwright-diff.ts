@@ -16,9 +16,7 @@ function publicUrl(rel: string, cacheBust: number): string {
   return `${VISUAL_BASELINES_PREFIX}${cleaned}?t=${cacheBust}`;
 }
 
-async function fetchSidecar(
-  url: string,
-): Promise<VisualDiffSidecar | null> {
+async function fetchSidecar(url: string): Promise<VisualDiffSidecar | null> {
   try {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) return null;

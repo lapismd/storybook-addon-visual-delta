@@ -100,11 +100,7 @@
     <strong data-testid="pane-padding-top">{panePaddingTop || "—"}</strong>
   </p>
   <div class="panes" role="group" aria-label="Split inset compare demo">
-    <div
-      class="pane live-pane"
-      bind:this={livePaneEl}
-      data-testid="live-pane"
-    >
+    <div class="pane live-pane" bind:this={livePaneEl} data-testid="live-pane">
       <div
         class="canvas"
         bind:this={canvasEl}

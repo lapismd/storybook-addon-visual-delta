@@ -1,7 +1,4 @@
-import {
-  isSplitPlacement,
-  type PlacementMode,
-} from "../constants.js";
+import { isSplitPlacement, type PlacementMode } from "../constants.js";
 
 export type OverlaySessionSnapshot = {
   overlayOn: boolean;
@@ -50,17 +47,12 @@ export function placementToggleAction(
   if (prev.overlayOn && prev.placement === placement) {
     return { type: "soft-hide" };
   }
-  const index =
-    prev.index >= 0 ? prev.index : prev.imageCount > 0 ? 0 : -1;
+  const index = prev.index >= 0 ? prev.index : prev.imageCount > 0 ? 0 : -1;
   return {
     type: "show",
     placement,
     index,
-    opacity: opacityForPlacementChange(
-      prev.placement,
-      placement,
-      prev.opacity,
-    ),
+    opacity: opacityForPlacementChange(prev.placement, placement, prev.opacity),
   };
 }
 
@@ -110,10 +102,6 @@ export function revealCenteredOverlayPatch(prev: {
     placement: "center",
     liveVisible: true,
     index: prev.index >= 0 ? prev.index : 0,
-    opacity: opacityForPlacementChange(
-      prev.placement,
-      "center",
-      prev.opacity,
-    ),
+    opacity: opacityForPlacementChange(prev.placement, "center", prev.opacity),
   };
 }

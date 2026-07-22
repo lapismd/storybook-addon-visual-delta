@@ -5,6 +5,7 @@ import {
   isSplitPlacement,
   type PlacementMode,
   type VisualDeltaImage,
+  type VisualDeltaInteraction,
 } from "../constants.js";
 import {
   opacityForPlacementChange,
@@ -24,6 +25,8 @@ import {
 
 type StoryData = {
   images: VisualDeltaImage[];
+  /** Opted-in mid-play captures from `parameters.visualDelta.interactions`. */
+  interactions: VisualDeltaInteraction[];
   storyId: string;
   storyName: string;
   index: number;
@@ -50,9 +53,7 @@ function waitTwoFrames(): Promise<void> {
 }
 
 export function useOverlayInfo() {
-  const pendingRef = useRef(
-    new Map<string, (info: OverlayInfo) => void>(),
-  );
+  const pendingRef = useRef(new Map<string, (info: OverlayInfo) => void>());
   const emitRef = useRef<ReturnType<typeof useChannel> | null>(null);
   const emit = useChannel({
     [EVENTS.OVERLAY_INFO]: (data: OverlayInfo & { requestId: string }) => {
@@ -137,6 +138,7 @@ export function useStoryData() {
     }
     return {
       images: [],
+      interactions: [],
       storyId: "",
       storyName: "",
       index: -1,
@@ -148,6 +150,8 @@ export function useStoryData() {
       passThresholdPercent: prefs.passThresholdPercent,
     };
   });
+  /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
+  const primaryImagesRef = useRef<VisualDeltaImage[]>([]);
   const emitRef = useRef<ReturnType<typeof useChannel> | null>(null);
 
   const persist = useCallback((next: StoryData) => {
@@ -184,6 +188,7 @@ export function useStoryData() {
   const emit = useChannel({
     [EVENTS.INIT_IMAGE]: (data: {
       images: VisualDeltaImage | VisualDeltaImage[];
+      interactions?: VisualDeltaInteraction[];
       storyId: string;
       storyName: string;
       opacity?: number;
@@ -194,6 +199,7 @@ export function useStoryData() {
       const imagesArray = Array.isArray(data.images)
         ? data.images
         : [data.images];
+      const interactions = data.interactions ?? [];
       const prefs = prefsRef.current;
       const liveVisible = prefs.liveVisible;
       const placement = liveVisible ? prefs.placement : "center";
@@ -212,15 +218,22 @@ export function useStoryData() {
           prev.images.length > 0 &&
           prev.storyId === data.storyId
         ) {
-          return { ...prev, storyName: data.storyName };
+          return {
+            ...prev,
+            storyName: data.storyName,
+            interactions:
+              interactions.length > 0 ? interactions : prev.interactions,
+          };
         }
         const images = withPlacement(imagesArray, placement);
+        primaryImagesRef.current = images;
         const hasImages = images.length > 0;
         // Image-only always shows the overlay; otherwise respect overlayOn.
         const initialIndex =
           hasImages && (prefs.overlayOn || !liveVisible) ? 0 : -1;
         const next: StoryData = {
           images,
+          interactions,
           storyId: data.storyId,
           storyName: data.storyName,
           index: initialIndex,
@@ -409,11 +422,7 @@ export function useStoryData() {
           };
           const images = withPlacement(prev.images, "center");
           const index =
-            prev.images.length > 0
-              ? prev.index >= 0
-                ? prev.index
-                : 0
-              : -1;
+            prev.images.length > 0 ? (prev.index >= 0 ? prev.index : 0) : -1;
           const next: StoryData = {
             ...prev,
             liveVisible: false,
@@ -430,8 +439,7 @@ export function useStoryData() {
           return next;
         }
 
-        const restored =
-          placementBeforeImageOnlyRef.current ?? prev.placement;
+        const restored = placementBeforeImageOnlyRef.current ?? prev.placement;
         const priorStyle = styleBeforeImageOnlyRef.current;
         placementBeforeImageOnlyRef.current = null;
         styleBeforeImageOnlyRef.current = null;
@@ -478,8 +486,7 @@ export function useStoryData() {
     prefsRef.current = defaults;
     setStoryData((prev) => {
       const images = withPlacement(prev.images, defaults.placement);
-      const index =
-        defaults.overlayOn && images.length > 0 ? 0 : -1;
+      const index = defaults.overlayOn && images.length > 0 ? 0 : -1;
       placementBeforeImageOnlyRef.current = null;
       styleBeforeImageOnlyRef.current = null;
       const next: StoryData = {
@@ -573,6 +580,7 @@ export function useStoryData() {
           }),
           "center",
         );
+        primaryImagesRef.current = images;
         const patch = revealCenteredOverlayPatch({
           index: 0,
           imageCount: images.length,
@@ -594,8 +602,61 @@ export function useStoryData() {
     [emitStyle, persist, selectImage],
   );
 
+  /**
+   * Show a mid-play interaction PNG in the overlay (Interactions tab).
+   * Primary end-of-play gallery is kept in `primaryImagesRef`.
+   */
+  const selectInteractionBaseline = useCallback(
+    (src: string) => {
+      setStoryData((prev) => {
+        const bust = `t=${Date.now()}`;
+        const base = src.split("?")[0] ?? src;
+        const image: VisualDeltaImage = {
+          src: `${base}?${bust}`,
+          offsetX: 0,
+          offsetY: 0,
+          align: "canvas",
+          placement: prev.placement,
+        };
+        const images = withPlacement([image], prev.placement);
+        const next: StoryData = {
+          ...prev,
+          images,
+          index: 0,
+          overlayOn: true,
+        };
+        persist(next);
+        void selectImage(0, images);
+        return next;
+      });
+    },
+    [persist, selectImage],
+  );
+
+  /** Restore end-of-play gallery images (Default tab). */
+  const restorePrimaryBaselines = useCallback(() => {
+    setStoryData((prev) => {
+      const images = withPlacement(primaryImagesRef.current, prev.placement);
+      const hasImages = images.length > 0;
+      const next: StoryData = {
+        ...prev,
+        images,
+        index: hasImages ? 0 : -1,
+        overlayOn: hasImages,
+      };
+      persist(next);
+      void selectImage(next.index, images);
+      return next;
+    });
+  }, [persist, selectImage]);
+
+  const hydrateInteractions = useCallback((next: VisualDeltaInteraction[]) => {
+    setStoryData((prev) => ({ ...prev, interactions: next }));
+  }, []);
+
   return {
     ...storyData,
+    primaryImages: primaryImagesRef.current,
     setIndex,
     setOpacity,
     setColorInversion,
@@ -610,5 +671,8 @@ export function useStoryData() {
     reloadBaselineImages,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    selectInteractionBaseline,
+    restorePrimaryBaselines,
+    hydrateInteractions,
   };
 }

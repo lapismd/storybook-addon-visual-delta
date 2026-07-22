@@ -17,6 +17,7 @@
     "./preview": "./src/preview.ts",
     "./preset": "./src/preset.ts",
     "./manager": "./src/manager.tsx",
+    "./visual-capture": "./src/shared/visual-capture-step.ts",
     "./package.json": "./package.json"
   },
   "files": [

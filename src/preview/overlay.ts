@@ -182,8 +182,7 @@ function setupDragOverlay(overlay: HTMLElement): () => void {
 
   const handleMouseUp = () => {
     isDragging = false;
-    overlay.style.cursor =
-      currentPlacement === "center" ? "grab" : "default";
+    overlay.style.cursor = currentPlacement === "center" ? "grab" : "default";
   };
 
   overlay.addEventListener("mousedown", handleMouseDown);
@@ -247,7 +246,10 @@ function syncBaselinePaneInset(
  * Lock the story subject to the baseline CSS width so split and center overlay
  * do not reflow/wrap differently from the Playwright clip.
  */
-function lockLiveContentWidth(canvasElement: HTMLElement, contentWidth: number) {
+function lockLiveContentWidth(
+  canvasElement: HTMLElement,
+  contentWidth: number,
+) {
   liveContentWidthRestoreRef?.();
   liveContentWidthRestoreRef = null;
   const subject = canvasElement.querySelector(":scope > *");
@@ -385,7 +387,11 @@ function equalizePaneScrollExtents(
 ) {
   const live = measurePaneScrollSize(livePane);
   const baseline = measurePaneScrollSize(baselinePane);
-  const target = sharedScrollExtentSize(live, baseline, lastCompareSizes?.content);
+  const target = sharedScrollExtentSize(
+    live,
+    baseline,
+    lastCompareSizes?.content,
+  );
   for (const pane of [livePane, baselinePane]) {
     const extent = getOrCreateScrollExtent(pane);
     extent.style.width = `${target.width}px`;
@@ -535,14 +541,8 @@ function bindSharedScrollRails(
     const deltaX =
       event.deltaX !== 0 ? event.deltaX : event.shiftKey ? event.deltaY : 0;
     const deltaY = event.shiftKey && event.deltaX === 0 ? 0 : event.deltaY;
-    const nextTop = Math.max(
-      0,
-      Math.min(maxTop, desiredTop + deltaY),
-    );
-    const nextLeft = Math.max(
-      0,
-      Math.min(maxLeft, desiredLeft + deltaX),
-    );
+    const nextTop = Math.max(0, Math.min(maxTop, desiredTop + deltaY));
+    const nextLeft = Math.max(0, Math.min(maxLeft, desiredLeft + deltaX));
     applyScroll(nextTop, nextLeft);
   };
 
@@ -634,12 +634,10 @@ function applyEqualPaneViewports(
   );
   const insets = measureCanvasInsets(canvasElement);
   const minPaneW = Math.ceil(
-    sizes.content.width +
-      Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.x),
+    sizes.content.width + Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.x),
   );
   const minPaneH = Math.ceil(
-    sizes.content.height +
-      Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.y),
+    sizes.content.height + Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.y),
   );
 
   let paneW: number;

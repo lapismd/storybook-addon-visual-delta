@@ -1,5 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PlayHollowIcon, StopAltIcon, SyncIcon } from "@storybook/icons";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { PlayHollowIcon, StopAltIcon } from "@storybook/icons";
 import { ActionList, Button, Form } from "storybook/internal/components";
 import type { API_HashEntry } from "storybook/internal/types";
 import {
@@ -16,6 +22,7 @@ import {
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
 } from "../constants.js";
+import { VisualBaselineSplitButton } from "./VisualBaselineSplitButton.js";
 import {
   applyPendingVisualStatuses,
   applyVisualRunResults,
@@ -26,6 +33,8 @@ import {
   postVisualCreateBaseline,
   postVisualCreateBaselinesForStoryIds,
   postVisualRun,
+  postVisualUpdateBaseline,
+  postVisualUpdateBaselinesForStoryIds,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
@@ -122,18 +131,14 @@ const TestStatusIcon = styled.div<{
   ...(status === "positive"
     ? { "--status-color": theme.color.positive }
     : null),
-  ...(status === "warning"
-    ? { "--status-color": theme.color.gold }
-    : null),
+  ...(status === "warning" ? { "--status-color": theme.color.gold } : null),
   ...(status === "negative"
     ? { "--status-color": theme.color.negative }
     : null),
   ...(status === "critical"
     ? { "--status-color": theme.color.defaultText }
     : null),
-  ...(status === "unknown"
-    ? { "--status-color": theme.textMutedColor }
-    : null),
+  ...(status === "unknown" ? { "--status-color": theme.textMutedColor } : null),
 }));
 
 function openVisualPanel(
@@ -145,16 +150,34 @@ function openVisualPanel(
   api.togglePanel(true);
 }
 
-function progressDescription(
+/** One shared status line for Visual Tests + Create Baselines. */
+function moduleDescription(
   isRunning: boolean,
+  isWritingBaselines: boolean,
   progress: VisualRunProgress | null,
+  createProgress: VisualCreateProgress | null,
   lastRun: VisualLastRunSummary | null,
 ): string {
   if (isRunning) return formatVisualProgressLabel(progress);
+  if (isWritingBaselines) {
+    return createProgress?.label ?? "Writing baselines…";
+  }
+
+  const parts: string[] = [];
   if (lastRun) {
     const total = lastRun.summary.total;
-    return `Ran ${total} ${total === 1 ? "test" : "tests"}`;
+    parts.push(`Tests: Ran ${total} ${total === 1 ? "test" : "tests"}`);
   }
+  if (createProgress?.error) {
+    parts.push(
+      createProgress.kind === "update"
+        ? "Baselines: update failed"
+        : "Baselines: create failed",
+    );
+  } else if (createProgress?.label && !createProgress.running) {
+    parts.push(`Baselines: ${createProgress.label}`);
+  }
+  if (parts.length) return parts.join(" · ");
   return "Not run";
 }
 
@@ -185,25 +208,15 @@ function chipLabel(
   return "Run tests to see results";
 }
 
-function createProgressDescription(
-  isCreating: boolean,
-  createProgress: VisualCreateProgress | null,
-): string {
-  if (isCreating) return createProgress?.label ?? "Creating…";
-  if (createProgress?.error) return "Create failed";
-  if (createProgress?.label) return createProgress.label;
-  return "Not run";
-}
-
-function createChipStatus(
-  isCreating: boolean,
+function baselineChipStatus(
+  isWriting: boolean,
   createProgress: VisualCreateProgress | null,
 ): ChipStatus {
-  if (isCreating) return "warning";
+  if (isWriting) return "warning";
   if (createProgress?.error) return "negative";
   if (
     createProgress?.label &&
-    /^Created/i.test(createProgress.label)
+    /^(Created|Updated)/i.test(createProgress.label)
   ) {
     return "positive";
   }
@@ -224,11 +237,7 @@ function sidebarLeafStoryIds(state: {
   return ids;
 }
 
-export function VisualTestProviderRender({
-  entry,
-}: {
-  entry?: API_HashEntry;
-}) {
+export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const api = useStorybookApi();
   const storybookState = useStorybookState() as {
     filteredIndex?: Record<string, { type?: string; id?: string }>;
@@ -242,9 +251,19 @@ export function VisualTestProviderRender({
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
-  const isCreating = Boolean(
-    createProgress?.running && createProgress.kind === "create",
-  );
+  const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(() => {
+    if (typeof localStorage === "undefined") return false;
+    try {
+      return (
+        localStorage.getItem(
+          "storybook-addon-visual-delta/create-baselines-enabled-v1",
+        ) === "1"
+      );
+    } catch {
+      return false;
+    }
+  });
+  const isWritingBaselines = Boolean(createProgress?.running);
   const sidebarStoryIds = useMemo(
     () => sidebarLeafStoryIds(storybookState),
     [storybookState.filteredIndex, storybookState.index],
@@ -282,9 +301,7 @@ export function VisualTestProviderRender({
     async (scope: VisualRunScope, ids?: string[]) => {
       await testProviderStore.runWithState(async () => {
         const scoped = Array.isArray(ids);
-        const runnable = scoped
-          ? visualRunnableStoryIds(api, ids)
-          : undefined;
+        const runnable = scoped ? visualRunnableStoryIds(api, ids) : undefined;
         if (scoped && !runnable?.length) {
           throw new Error(
             "No runnable visual stories in this scope (all skip-visual)",
@@ -347,16 +364,12 @@ export function VisualTestProviderRender({
   }, []);
 
   useEffect(() => {
-    return subscribeVisualCreateProgress((next) => {
-      // Update jobs are panel-only; ignore so sidebar create UI stays stable.
-      if (next?.kind === "update") return;
-      setCreateProgress(next);
-    });
+    // Include create + update so Testing Module status covers rewrite too.
+    return subscribeVisualCreateProgress(setCreateProgress);
   }, []);
 
   const createBaseline = useCallback(async () => {
     if (!entryStoryIds?.length) return;
-    // Prefer a non-skip-visual leaf so create scopes to a real capture story.
     const runnable = visualRunnableStoryIds(api, entryStoryIds);
     const storyId = runnable[0] ?? entryStoryIds[0];
     if (!storyId) return;
@@ -367,11 +380,32 @@ export function VisualTestProviderRender({
     }
   }, [api, entryStoryIds]);
 
+  const rewriteBaseline = useCallback(async () => {
+    if (!entryStoryIds?.length) return;
+    const runnable = visualRunnableStoryIds(api, entryStoryIds);
+    const storyId = runnable[0] ?? entryStoryIds[0];
+    if (!storyId) return;
+    try {
+      await postVisualUpdateBaseline({ storyId });
+    } catch {
+      // Progress/error surfaces via subscribeVisualCreateProgress.
+    }
+  }, [api, entryStoryIds]);
+
   /** Global Testing Module: create for components currently listed in the sidebar. */
   const createBaselinesFromSidebar = useCallback(async () => {
     if (!sidebarStoryIds.length) return;
     try {
       await postVisualCreateBaselinesForStoryIds(api, sidebarStoryIds);
+    } catch {
+      // Progress/error surfaces via subscribeVisualCreateProgress.
+    }
+  }, [api, sidebarStoryIds]);
+
+  const rewriteBaselinesFromSidebar = useCallback(async () => {
+    if (!sidebarStoryIds.length) return;
+    try {
+      await postVisualUpdateBaselinesForStoryIds(api, sidebarStoryIds);
     } catch {
       // Progress/error surfaces via subscribeVisualCreateProgress.
     }
@@ -416,18 +450,27 @@ export function VisualTestProviderRender({
       : (lastRun?.summary.failed ?? 0);
   const chipCount = failedCount > 0 ? failedCount : null;
   const hasResults = counts.passed > 0 || counts.failed > 0 || Boolean(lastRun);
-  const description = progressDescription(isRunning, progress, lastRun);
+  const description = moduleDescription(
+    isRunning,
+    isWritingBaselines,
+    progress,
+    createProgress,
+    lastRun,
+  );
 
-  // Sidebar context menu: run + create for that story/component
+  // Sidebar context menu: run + create/rewrite for that story/component
   if (entry) {
     const canPlay = Boolean(entryStoryIds?.length);
-    const createDescription = isCreating
-      ? (createProgress?.label ?? "Creating…")
+    const baselineDescription = isWritingBaselines
+      ? (createProgress?.label ?? "Writing…")
       : createProgress?.error
-        ? "Create failed"
-        : createProgress?.label === "Created"
-          ? "Created"
-          : "Not run";
+        ? "Write failed"
+        : createProgress?.label === "Created" ||
+            createProgress?.label === "Updated"
+          ? createProgress.label
+          : createProgress?.label
+            ? createProgress.label
+            : "Ready";
     return (
       <ContextMenuContainer>
         <Heading>
@@ -454,7 +497,7 @@ export function VisualTestProviderRender({
                 padding="small"
                 ariaLabel="Run visual tests for this item"
                 title="Run visual tests for this item"
-                disabled={!canPlay || isCreating}
+                disabled={!canPlay || isWritingBaselines}
                 onClick={() => {
                   if (!entryStoryIds?.length) return;
                   void run(
@@ -470,56 +513,38 @@ export function VisualTestProviderRender({
         </Heading>
         <Heading>
           <Info>
-            <Title>Create baseline</Title>
-            <Description>{createDescription}</Description>
+            <Title>Create / rewrite baselines</Title>
+            <Description>{baselineDescription}</Description>
           </Info>
           <Actions>
-            {isCreating ? (
-              <Button
-                size="medium"
-                variant="ghost"
-                padding="small"
-                ariaLabel="Stop baseline create"
-                title="Stop baseline create"
-                onClick={() => void cancelVisualRun()}
-              >
-                <StopAltIcon />
-              </Button>
-            ) : (
-              <Button
-                size="medium"
-                variant="ghost"
-                padding="small"
-                ariaLabel="Create baseline for this item"
-                title="Create baseline for this item"
-                disabled={!canPlay || isRunning}
-                onClick={() => void createBaseline()}
-              >
-                <SyncIcon />
-              </Button>
-            )}
+            <VisualBaselineSplitButton
+              status={baselineChipStatus(isWritingBaselines, createProgress)}
+              isRunning={isWritingBaselines}
+              ariaLabel={baselineDescription}
+              tooltip={baselineDescription}
+              disabled={!canPlay || isRunning}
+              onCreateMissing={() => void createBaseline()}
+              onRewriteExisting={() => void rewriteBaseline()}
+              onStop={() => void cancelVisualRun()}
+            />
           </Actions>
         </Heading>
       </ContextMenuContainer>
     );
   }
 
-  const createDescription = createProgressDescription(
-    isCreating,
-    createProgress,
-  );
-  const createStatus = createChipStatus(isCreating, createProgress);
-  const createLabel = isCreating
-    ? (createProgress?.label ?? "Creating…")
+  const baselineStatus = baselineChipStatus(isWritingBaselines, createProgress);
+  const baselineLabel = isWritingBaselines
+    ? (createProgress?.label ?? "Writing…")
     : createProgress?.error
       ? createProgress.error
       : createProgress?.label
         ? createProgress.label
         : sidebarStoryIds.length
-          ? "Create missing baselines for stories in the sidebar"
+          ? "Create or rewrite baselines for stories in the sidebar"
           : "No stories in the sidebar";
 
-  // Global Testing Module: checklist rows + Vitest-style progress
+  // Global Testing Module: checklist rows + shared status line
   return (
     <ModuleContainer>
       <Description
@@ -532,19 +557,13 @@ export function VisualTestProviderRender({
         <ActionList.Item>
           <ActionList.Action as="label" readOnly ariaLabel={false}>
             <ActionList.Icon>
-              <Form.Checkbox
-                name="Visual Tests"
-                checked
-                disabled
-              />
+              <Form.Checkbox name="Visual Tests" checked disabled />
             </ActionList.Icon>
             <ActionList.Text>Visual Tests</ActionList.Text>
           </ActionList.Action>
           <ActionList.Button
             ariaLabel={
-              chipCount != null
-                ? `${label} (${chipCount} failed)`
-                : label
+              chipCount != null ? `${label} (${chipCount} failed)` : label
             }
             tooltip={label}
             disabled={!hasResults && !crashed && !isRunning}
@@ -559,41 +578,47 @@ export function VisualTestProviderRender({
             <TestStatusIcon status={chipStatus} isRunning={isRunning} />
           </ActionList.Button>
         </ActionList.Item>
-      </StyledActionList>
-      <Description
-        id="visual-create-baselines-description"
-        style={{ margin: "8px 0 4px 8px" }}
-      >
-        {createDescription}
-      </Description>
-      <StyledActionList>
         <ActionList.Item>
-          <ActionList.Action as="label" readOnly ariaLabel={false}>
+          <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
               <Form.Checkbox
                 name="Create Baselines"
-                checked
-                disabled
+                checked={createBaselinesEnabled}
+                disabled={isWritingBaselines}
+                onChange={(event) => {
+                  const next = event.currentTarget.checked;
+                  setCreateBaselinesEnabled(next);
+                  try {
+                    localStorage.setItem(
+                      "storybook-addon-visual-delta/create-baselines-enabled-v1",
+                      next ? "1" : "0",
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
               />
             </ActionList.Icon>
             <ActionList.Text>Create Baselines</ActionList.Text>
           </ActionList.Action>
-          <ActionList.Button
-            ariaLabel={createLabel}
-            tooltip={createLabel}
-            disabled={
-              (!sidebarStoryIds.length && !isCreating) || isRunning
+          <VisualBaselineSplitButton
+            status={baselineStatus}
+            isRunning={isWritingBaselines}
+            ariaLabel={baselineLabel}
+            tooltip={
+              createBaselinesEnabled
+                ? baselineLabel
+                : "Enable Create Baselines to write baselines"
             }
-            onClick={() => {
-              if (isCreating) {
-                void cancelVisualRun();
-                return;
-              }
-              void createBaselinesFromSidebar();
-            }}
-          >
-            <TestStatusIcon status={createStatus} isRunning={isCreating} />
-          </ActionList.Button>
+            disabled={
+              !createBaselinesEnabled ||
+              (!sidebarStoryIds.length && !isWritingBaselines) ||
+              isRunning
+            }
+            onCreateMissing={() => void createBaselinesFromSidebar()}
+            onRewriteExisting={() => void rewriteBaselinesFromSidebar()}
+            onStop={() => void cancelVisualRun()}
+          />
         </ActionList.Item>
       </StyledActionList>
     </ModuleContainer>

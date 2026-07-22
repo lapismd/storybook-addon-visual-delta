@@ -18,7 +18,8 @@ function formatCount(n: number): string {
 
 export function DiffHistogram({ bins }: { bins: number[] }) {
   const { max, yTicks, xLabels } = useMemo(() => {
-    const values = bins.length > 0 ? bins : new Array(DIFF_HISTOGRAM_BINS).fill(0);
+    const values =
+      bins.length > 0 ? bins : new Array(DIFF_HISTOGRAM_BINS).fill(0);
     const peak = Math.max(1, ...values);
     const top = Math.ceil(peak / 4) * 4 || 4;
     return {
