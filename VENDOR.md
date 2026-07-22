@@ -31,7 +31,25 @@ use:
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
   `index`; reveal-center matches post create/update.
 
+Storybook title **`Visual Delta/Panel Chrome`** mounts the real React panel
+controls via `ReactThemeHost.svelte` (`createRoot` + Storybook light theme) and
+interactive fixtures in `src/stories/panel-fixtures.tsx`. Also `skip-visual`
+(manager chrome ≠ product UI). Play functions cover placement soft-hide, image
+only, review pad, badges, gallery, and accordion.
+
 Run via Storybook Vitest / `pnpm test:storybook` (filter the title as needed).
+
+## Unit / component tests
+
+Vitest project **`visual-delta`** (`pnpm test:unit`) covers:
+
+- Pure helpers colocated as `*.spec.ts` under `src/` (placement, insets,
+  overlay session, normalize, baseline URLs, settings, diff-assets, …)
+- React panel/manager controls via Testing Library (`*.spec.tsx`) with a
+  Storybook light-theme wrapper — not catalog stories (manager UI is React;
+  the product catalog is Svelte-only)
+
+Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 
 ## Local behavior (vs upstream 0.1.5)
 

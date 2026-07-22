@@ -11,13 +11,14 @@ import {
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
 } from "./constants.js";
+import { PanelTitle } from "./manager/PanelTitle.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
 addons.register(ADDON_ID, () => {
   addons.add(PANEL_ID, {
     type: types.PANEL,
-    title: "Visual Delta",
+    title: () => <PanelTitle />,
     match: ({ viewMode }) => viewMode === "story",
     render: ({ active }) => <Panel active={active} />,
   });
