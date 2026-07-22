@@ -68,6 +68,7 @@ const Root = styled.div({
   flexDirection: "column",
   gap: "0.5rem",
   outline: "none",
+  // Scrollport when view zoom grows the stage past the host.
   overflow: "auto",
 });
 
@@ -130,8 +131,8 @@ const Stack = styled.div(({ theme }) => ({
 const LayerImg = styled.img({
   display: "block",
   width: "100%",
-  height: "100%",
-  objectFit: "fill",
+  height: "auto",
+  objectFit: "contain",
   pointerEvents: "none",
 });
 
@@ -145,7 +146,7 @@ const TopImg = styled.img({
   display: "block",
   width: "100%",
   height: "100%",
-  objectFit: "fill",
+  objectFit: "contain",
   pointerEvents: "none",
 });
 
@@ -193,6 +194,8 @@ const SidePane = styled.div<{ $maxHeight: number }>(
     overflow: "auto",
     maxHeight: `${$maxHeight}px`,
     width: "100%",
+    lineHeight: 0,
+    boxSizing: "border-box",
   }),
 );
 
@@ -273,9 +276,13 @@ export function CompareView({
   const twoUpMaxHeight = TWO_UP_MAX_HEIGHT * viewZoom;
   const isFocusTab = tab === "focus";
 
+  /**
+   * Single-pane stage width. 100% at zoom 1; grows with viewZoom so Root scrolls.
+   * Width-only — never set height here (Labels reuse this for Swipe).
+   */
   const stageSizeStyle = useMemo(
     () => ({
-      width: `calc((100% - 0.5rem) / 2 * ${viewZoom})`,
+      width: viewZoom === 1 ? "100%" : `calc(100% * ${viewZoom})`,
     }),
     [viewZoom],
   );
@@ -444,7 +451,7 @@ export function CompareView({
         setTab("blink");
         e.preventDefault();
       } else if ((e.key === "f" || e.key === "F") && tab === "focus") {
-        setZoomToChange((z) => !z);
+        if (changeBounds) setZoomToChange((z) => !z);
         e.preventDefault();
       } else if (tab === "swipe" && e.key === "ArrowLeft") {
         setPosition((p) => Math.max(0, p - SWIPE_NUDGE));
@@ -463,7 +470,7 @@ export function CompareView({
         e.preventDefault();
       }
     },
-    [tab, nudgeViewZoom, resetViewZoom],
+    [tab, changeBounds, nudgeViewZoom, resetViewZoom],
   );
 
   const stageCursor =
@@ -479,11 +486,10 @@ export function CompareView({
       <Toolbar>
         <TabList state={tabsState} aria-label="Compare view" />
         <TabTools>
-          {tab === "focus" ? (
+          {tab === "focus" && changeBounds ? (
             <ToggleButton
               size="small"
               pressed={zoomToChange}
-              disabled={!changeBounds}
               onClick={() => setZoomToChange((z) => !z)}
               aria-label={
                 zoomToChange
@@ -565,6 +571,7 @@ export function CompareView({
 
       {tab === "swipe" ? (
         <>
+          {/* Width-only — never pass stage height or Labels grow a tall empty band. */}
           <Labels style={{ ...stageSizeStyle, margin: "0 auto" }}>
             <span>Baseline</span>
             <span>New</span>

@@ -6,6 +6,8 @@ export const KEY = "visual-delta";
 
 export const EVENTS = {
   INIT_IMAGE: `${ADDON_ID}/init-image`,
+  /** Manager → preview: re-emit INIT_IMAGE (missed while play was parked). */
+  REQUEST_INIT_IMAGE: `${ADDON_ID}/request-init-image`,
   SELECT_IMAGE: `${ADDON_ID}/select-image`,
   UPDATE_OVERLAY_STYLE: `${ADDON_ID}/update-overlay-style`,
   RESET_OVERLAY: `${ADDON_ID}/reset-overlay`,
@@ -14,10 +16,18 @@ export const EVENTS = {
   HIDE_OVERLAY: `${ADDON_ID}/hide-overlay`,
   SHOW_OVERLAY: `${ADDON_ID}/show-overlay`,
   OVERLAY_HIDDEN: `${ADDON_ID}/overlay-hidden`,
+  /**
+   * Preview → manager: overlay decorator subscribed after mount/remount.
+   * Manager should re-emit the current SELECT_IMAGE (GOTO / FORCE_REMOUNT
+   * otherwise drops in-flight selection).
+   */
+  OVERLAY_LISTENER_READY: `${ADDON_ID}/overlay-listener-ready`,
   /** Preview → manager: named `step()` labels seen during play. */
   PLAY_STEPS: `${ADDON_ID}/play-steps`,
   /** Manager → preview: remount and park play after this step id. */
   RUN_UNTIL_STEP: `${ADDON_ID}/run-until-step`,
+  /** Preview → manager: play is parked at an interaction step. */
+  VISUAL_CAPTURE_PARKED: `${ADDON_ID}/visual-capture-parked`,
 } as const;
 
 export type AlignMode = "viewport" | "canvas";

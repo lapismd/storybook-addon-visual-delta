@@ -1,7 +1,25 @@
-import { keyframes, styled } from "storybook/theming";
+import { IconButton } from "storybook/internal/components";
+import { keyframes, styled, type Theme } from "storybook/theming";
 
 /** Height reserved under panel content for the fixed status bar. */
 export const PANEL_STATUS_BAR_HEIGHT = 28;
+
+/**
+ * Fallback sticky Visual Delta toolbar height. Live height is published as
+ * `--vd-header-sticky-top` on the panel scroll root from `VisualDeltaHeader`.
+ */
+export const VISUAL_DELTA_HEADER_HEIGHT = 40;
+
+/** CSS custom property for accordion sticky `top` (px length). */
+export const VD_HEADER_STICKY_TOP_VAR = "--vd-header-sticky-top";
+
+/**
+ * Same fill as accordion `SectionBody` — Storybook/Tailwind canvas white in
+ * light mode (not `theme.background.app` chrome grey).
+ */
+export function panelCanvasBackground(theme: Theme): string {
+  return theme.base === "dark" ? theme.background.content : "#ffffff";
+}
 
 const spin = keyframes({
   from: { transform: "rotate(0deg)" },
@@ -11,7 +29,7 @@ const spin = keyframes({
 export const DiffResultContainer = styled.div(({ theme }) => ({
   padding: "0.75rem 1rem 1rem",
   borderTop: `1px solid ${theme.appBorderColor}`,
-  backgroundColor: theme.background.content,
+  backgroundColor: panelCanvasBackground(theme),
 }));
 
 export const DiffStats = styled.div(({ theme }) => ({
@@ -65,12 +83,6 @@ export const DiffSummaryDetail = styled.span(({ theme }) => ({
   fontWeight: 400,
   fontVariantNumeric: "tabular-nums",
 }));
-
-export const DiffToolLabel = styled.span({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.3rem",
-});
 
 export const HistogramPanel = styled.div(({ theme }) => ({
   padding: "0.5rem 0.35rem 0.25rem",
@@ -143,7 +155,7 @@ export const Toolbar = styled.div(({ theme }) => ({
   flexDirection: "column",
   gap: "0.35rem",
   borderBottom: `1px solid ${theme.appBorderColor}`,
-  backgroundColor: theme.background.content,
+  backgroundColor: panelCanvasBackground(theme),
 }));
 
 export const ToolbarRow = styled.div({
@@ -253,7 +265,7 @@ export const SkeletonRoot = styled.div(({ theme }) => ({
   gap: "0.75rem",
   padding: "0.75rem 1rem 1rem",
   minHeight: "100%",
-  backgroundColor: theme.background.content,
+  backgroundColor: panelCanvasBackground(theme),
   cursor: "progress",
 }));
 
@@ -425,16 +437,18 @@ export const ErrorText = styled.p({
  * Panel frame. Status bar is position:fixed to the AddonPanel scrollport
  * (see PanelStatusBar) so Storybook's outer panel scroller cannot move it.
  */
-export const PanelShell = styled.div({
+export const PanelShell = styled.div(({ theme }) => ({
   position: "relative",
   display: "flex",
   flexDirection: "column",
+  height: "100%",
   minHeight: "100%",
   boxSizing: "border-box",
-});
+  background: panelCanvasBackground(theme),
+}));
 
 /** Main panel body (Storybook may also scroll the AddonPanel wrapper). */
-export const PanelScroll = styled.div({
+export const PanelScroll = styled.div(({ theme }) => ({
   flex: "1 1 auto",
   minHeight: 0,
   boxSizing: "border-box",
@@ -442,13 +456,14 @@ export const PanelScroll = styled.div({
   flexDirection: "column",
   // Clearance for the fixed half-width status bar over the bottom-right.
   paddingBottom: PANEL_STATUS_BAR_HEIGHT,
-});
+  background: panelCanvasBackground(theme),
+}));
 
 /** Content below the sticky Visual Delta header. */
 export const PanelBody = styled.div(({ theme }) => ({
   flex: "1 1 auto",
   minHeight: 0,
-  background: theme.background.content ?? "#fff",
+  background: panelCanvasBackground(theme),
   boxSizing: "border-box",
 }));
 
@@ -533,18 +548,49 @@ export const StatusProgressLabel = styled.span({
   whiteSpace: "nowrap",
 });
 
-export const StatusLogPopover = styled.pre<{ $hasError?: boolean }>(
-  ({ theme, $hasError }) => ({
-    margin: 0,
-    padding: "8px 10px",
+/** Terminal-style shell for the progress log popover. */
+export const StatusLogShell = styled.div<{ $hasError?: boolean }>(
+  ({ $hasError }) => ({
+    position: "relative",
+    boxSizing: "border-box",
     width: "min(560px, 80vw)",
-    maxHeight: 240,
-    overflow: "auto",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    fontSize: 11,
-    fontFamily: theme.typography.fonts.mono,
-    color: $hasError ? theme.color.negative : theme.color.positive,
-    backgroundColor: theme.background.content,
+    height: 240,
+    border: `1px solid ${$hasError ? "#7f1d1d" : "#2a2f3a"}`,
+    borderRadius: 4,
+    backgroundColor: "#0f1115",
+    boxShadow: $hasError ? "inset 0 0 0 1px rgba(248, 113, 113, 0.25)" : "none",
+    overflow: "hidden",
   }),
 );
+
+export const StatusLogCopyButton = styled(IconButton)({
+  position: "absolute",
+  top: 6,
+  // Clear of Storybook ScrollArea’s ~10px vertical thumb + padding.
+  right: 18,
+  zIndex: 2,
+  color: "#c8cdd5 !important",
+  background: "rgba(15, 17, 21, 0.85) !important",
+  "&:hover": {
+    color: "#f1f3f5 !important",
+    background: "rgba(42, 47, 58, 0.95) !important",
+  },
+  "& svg": {
+    width: 14,
+    height: 14,
+  },
+});
+
+/** Non-scrolling log text; parent Storybook ScrollArea owns overflow. */
+export const StatusLogBody = styled.pre(({ theme }) => ({
+  margin: 0,
+  // Right padding clears the absolute copy control + ScrollArea thumb.
+  padding: "8px 44px 24px 10px",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  fontSize: 11,
+  lineHeight: 1.45,
+  fontFamily: theme.typography.fonts.mono,
+  color: "#c8cdd5",
+  background: "transparent",
+}));

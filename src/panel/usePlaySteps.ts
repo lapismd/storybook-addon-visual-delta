@@ -152,6 +152,15 @@ export function usePlaySteps(storyId: string | undefined): {
     [instrumenterSteps, previewSteps],
   );
 
+  // Keep a sync lookup for GOTO even when React merge state is briefly stale.
+  useEffect(() => {
+    if (!storyId) return;
+    for (const step of steps) {
+      if (!step.callId || !step.stepId) continue;
+      callIdByStoryStep.set(`${storyId}::${step.stepId}`, step.callId);
+    }
+  }, [steps, storyId]);
+
   const clear = useCallback(() => {
     setPreviewSteps([]);
     setCallsById(new Map());
@@ -159,6 +168,16 @@ export function usePlaySteps(storyId: string | undefined): {
   }, []);
 
   return { steps, clear };
+}
+
+const callIdByStoryStep = new Map<string, string>();
+
+/** Look up an instrumenter call id for GOTO after play has run. */
+export function lookupPlayStepCallId(
+  storyId: string,
+  stepId: string,
+): string | null {
+  return callIdByStoryStep.get(`${storyId}::${stepId}`) ?? null;
 }
 
 /** Remount and run play through the given instrumenter call (inclusive). */
@@ -175,6 +194,12 @@ export function runUntilStep(storyId: string, stepId: string) {
   const channel = addons.getChannel();
   channel.emit(EVENTS.RUN_UNTIL_STEP, { storyId, stepId });
   channel.emit(FORCE_REMOUNT, { storyId });
+}
+
+/** Set/clear the preview session park without remounting. */
+export function setPlayParkTarget(storyId: string, stepId: string | null) {
+  const channel = addons.getChannel();
+  channel.emit(EVENTS.RUN_UNTIL_STEP, { storyId, stepId });
 }
 
 /** Remount the story without parking (refresh instrumenter callIds). */
