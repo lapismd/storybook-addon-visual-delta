@@ -25,22 +25,26 @@ const ReviewButton = styled(ToggleButton)({
 
 const OPTIONS: Array<{
   status: VisualReviewStatus;
-  label: string;
+  actionLabel: string;
+  currentLabel: string;
   Icon: React.ComponentType;
 }> = [
   {
     status: "pending",
-    label: "Mark pending review",
+    actionLabel: "Mark as pending review",
+    currentLabel: "Pending review",
     Icon: HourglassIcon,
   },
   {
     status: "approved",
-    label: "Approve baseline",
+    actionLabel: "Approve visual baseline",
+    currentLabel: "Approved",
     Icon: VerifiedIcon,
   },
   {
     status: "failed",
-    label: "Mark baseline failed",
+    actionLabel: "Mark visual baseline failed",
+    currentLabel: "Failed",
     Icon: FailedIcon,
   },
 ];
@@ -58,16 +62,17 @@ export function ReviewStatusPad({
 }: ReviewStatusPadProps) {
   return (
     <ButtonGroup role="group" aria-label="Baseline review status">
-      {OPTIONS.map(({ status, label, Icon }) => {
+      {OPTIONS.map(({ status, actionLabel, currentLabel, Icon }) => {
         const pressed = value === status;
+        const tip = pressed ? `${currentLabel} (current)` : actionLabel;
         return (
           <ReviewButton
             key={status}
             size="small"
             pressed={pressed}
             disabled={disabled || pressed}
-            aria-label={label}
-            title={label}
+            ariaLabel={tip}
+            tooltip={tip}
             onClick={() => onSelect(status)}
           >
             <Icon />
