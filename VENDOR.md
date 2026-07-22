@@ -109,10 +109,15 @@ Run via Storybook Vitest / `pnpm test:storybook` (filter the title as needed).
   approved.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
-  Testing Module shows a Vitest-style **Visual Tests** checklist row with live
-  `Testing... N/M` progress (NDJSON stream from middleware), an orange status
-  chip while running, and a failure-count badge beside the chip; the panel
-  split button shows the same progress while running. Results map to per-story
+  Testing Module shows Vitest-style checklist rows for **Visual Tests** (compare
+  only) and **Create Baselines** (missing PNGs + story wiring). Visual Tests
+  shows live `Testing... N/M` progress (NDJSON stream from middleware), an
+  orange status chip while running, and a failure-count badge beside the chip;
+  Create Baselines shows the same progress pattern (`Not run` / `Creating… N/M`)
+  and runs against leaf stories currently listed in the sidebar (search/tag
+  filters), one component family at a time. The global module has no extra top
+  border (context-menu actions still keep a divider). The panel split button
+  shows the same visual-run progress while running. Results map to per-story
   sidebar status dots from compare metrics (sidecar `%` / threshold, or panel
   live Diff). Ephemeral artifacts: gitignored `*.json` / `*.actual.png` /
   `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`. The panel
