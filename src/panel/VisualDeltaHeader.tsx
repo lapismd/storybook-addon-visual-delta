@@ -1,5 +1,11 @@
 import React, { memo, useLayoutEffect, useRef } from "react";
-import { EllipsisIcon, SyncIcon, UndoIcon } from "@storybook/icons";
+import {
+  EllipsisIcon,
+  EyeCloseIcon,
+  EyeIcon,
+  SyncIcon,
+  UndoIcon,
+} from "@storybook/icons";
 import {
   ActionList,
   Button,
@@ -59,12 +65,14 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   progressLabel,
   createLabel,
   reviewStatus,
+  skipVisual,
   onRunDiff,
   onCreate,
   onUpdateBaselines,
   onResetSettings,
   onStop,
   onReviewStatus,
+  onToggleSkipVisual,
   isUpdating,
   onHeightChange,
 }: {
@@ -76,12 +84,15 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   progressLabel: string | null;
   createLabel: string;
   reviewStatus: VisualReviewStatus | null;
+  /** Story CSF currently has `skip-visual`. */
+  skipVisual: boolean;
   onRunDiff: (mode: VisualRunMode) => void;
   onCreate: () => void;
   onUpdateBaselines: () => void;
   onResetSettings: () => void;
   onStop: () => void;
   onReviewStatus: (status: VisualReviewStatus) => void;
+  onToggleSkipVisual: () => void;
   isUpdating: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
@@ -102,6 +113,13 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
     ro.observe(el);
     return () => ro.disconnect();
   }, [onHeightChange]);
+
+  const skipActionLabel = skipVisual
+    ? "Include in visual tests"
+    : "Skip visual tests";
+  const skipActionNote = skipVisual
+    ? "Remove skip-visual so Playwright and Visual Delta run this story"
+    : "Add skip-visual to exclude this story from Playwright visual runs";
 
   return (
     <HeaderWrap ref={headerRef} data-vd-header="controls">
@@ -156,71 +174,86 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
               {createLabel}
             </Button>
           ) : (
-            <>
-              <ReviewStatusPad
-                value={reviewStatus}
-                disabled={busy || storyMissing}
-                onSelect={onReviewStatus}
-              />
-              <PopoverProvider
-                ariaLabel="More actions"
-                placement="bottom-end"
-                padding={0}
-                visible={moreOpen}
-                onVisibleChange={setMoreOpen}
-                popover={() => (
-                  <div style={{ minWidth: 190 }}>
-                    <ActionList>
-                      <ActionList.Item>
-                        <ActionList.Action
-                          ariaLabel="Update baselines"
-                          disabled={busy || storyMissing}
-                          onClick={() => {
-                            setMoreOpen(false);
-                            onUpdateBaselines();
-                          }}
-                        >
-                          <ActionList.Icon>
-                            <SyncIcon />
-                          </ActionList.Icon>
-                          <ActionList.Text>
-                            {isUpdating ? "Updating…" : "Update baselines"}
-                          </ActionList.Text>
-                        </ActionList.Action>
-                      </ActionList.Item>
-                      <ActionList.Item>
-                        <ActionList.Action
-                          ariaLabel="Reset settings"
-                          onClick={() => {
-                            setMoreOpen(false);
-                            onResetSettings();
-                          }}
-                        >
-                          <ActionList.Icon>
-                            <UndoIcon />
-                          </ActionList.Icon>
-                          <ActionList.Text>Reset settings</ActionList.Text>
-                        </ActionList.Action>
-                      </ActionList.Item>
-                    </ActionList>
-                  </div>
-                )}
-              >
-                <IconButton
-                  size="small"
-                  variant="ghost"
-                  padding="small"
-                  ariaLabel="More actions"
-                  title="More actions"
-                >
-                  <EllipsisIcon />
-                </IconButton>
-              </PopoverProvider>
-            </>
+            <ReviewStatusPad
+              value={reviewStatus}
+              disabled={busy || storyMissing || skipVisual}
+              onSelect={onReviewStatus}
+            />
           )}
+          <PopoverProvider
+            ariaLabel="More actions"
+            placement="bottom-end"
+            padding={0}
+            visible={moreOpen}
+            onVisibleChange={setMoreOpen}
+            popover={() => (
+              <div style={{ minWidth: 220 }}>
+                <ActionList>
+                  {!empty ? (
+                    <ActionList.Item>
+                      <ActionList.Action
+                        ariaLabel="Update baselines"
+                        disabled={busy || storyMissing || skipVisual}
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onUpdateBaselines();
+                        }}
+                      >
+                        <ActionList.Icon>
+                          <SyncIcon />
+                        </ActionList.Icon>
+                        <ActionList.Text>
+                          {isUpdating ? "Updating…" : "Update baselines"}
+                        </ActionList.Text>
+                      </ActionList.Action>
+                    </ActionList.Item>
+                  ) : null}
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel={skipActionLabel}
+                      disabled={busy || storyMissing}
+                      title={skipActionNote}
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onToggleSkipVisual();
+                      }}
+                    >
+                      <ActionList.Icon>
+                        {skipVisual ? <EyeIcon /> : <EyeCloseIcon />}
+                      </ActionList.Icon>
+                      <ActionList.Text>{skipActionLabel}</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel="Reset settings"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onResetSettings();
+                      }}
+                    >
+                      <ActionList.Icon>
+                        <UndoIcon />
+                      </ActionList.Icon>
+                      <ActionList.Text>Reset settings</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                </ActionList>
+              </div>
+            )}
+          >
+            <IconButton
+              size="small"
+              variant="ghost"
+              padding="small"
+              ariaLabel="More actions"
+              title="More actions"
+            >
+              <EllipsisIcon />
+            </IconButton>
+          </PopoverProvider>
         </RightGroup>
       </Toolbar>
     </HeaderWrap>
   );
 });
-

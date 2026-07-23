@@ -145,6 +145,11 @@ export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
 export const VISUAL_DELTA_CANCEL_PATH = "/__visual-delta/cancel-tests";
 /** Storybook-dev middleware that sets visual review tags on a story. */
 export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
+/** Storybook-dev middleware that adds or removes `skip-visual` on a story. */
+export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
+
+/** CSF tag: exclude story from Playwright visual suite / Visual Delta runs. */
+export const SKIP_VISUAL_TAG = "skip-visual";
 
 /** CSF tag: baseline exists but has not been human-reviewed. */
 export const VISUAL_REVIEW_PENDING_TAG = "visual-pending";

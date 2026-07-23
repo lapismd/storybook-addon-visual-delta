@@ -141,13 +141,17 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   story, the baseline gallery (overlay selector), and the placement pad; forces
   center overlay (still draggable). An “Image only” chip marks the mode in the
   toolbar and preview. Persisted as `liveVisible` in localStorage.
-- **Review tags** — When baselines are configured, a button group after the
-  placement pad sets mutually exclusive CSF tags via
-  `/__visual-delta/review-status`: `visual-pending` (orange clock),
-  `visual-approved` (green shield), `visual-failed` (red ✕). Create-baseline
-  also stamps `visual-pending` on newly wired stories that are not already
-  approved. **Rewrite/update** baselines always resets matching stories to
-  `visual-pending` (clears `visual-approved`).
+- **Review tags** — When baselines are configured, a button group sets mutually
+  exclusive CSF tags via `/__visual-delta/review-status`: `visual-pending`
+  (orange clock), `visual-approved` (green shield), `visual-failed` (red ✕).
+  Create-baseline also stamps `visual-pending` on newly wired stories that are
+  not already approved. **Rewrite/update** baselines always resets matching
+  stories to `visual-pending` (clears `visual-approved`).
+- **skip-visual** — Panel **More** menu: **Skip visual tests** /
+  **Include in visual tests** posts to `/__visual-delta/skip-visual` to add or
+  remove the CSF tag on the current story. Adding skip clears review tags.
+  Skipped stories are excluded from Playwright / Testing Module runs; review
+  and Update baselines stay disabled until included again.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module shows Vitest-style checklist rows for **Visual Tests** (compare

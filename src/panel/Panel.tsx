@@ -24,6 +24,7 @@ import {
   ADDON_ID,
   DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
+  SKIP_VISUAL_TAG,
   TEST_PROVIDER_ID,
   isSplitPlacement,
   visualReviewStatusFromTags,
@@ -46,6 +47,7 @@ import {
   postVisualInteractionBaseline,
   postVisualReviewStatus,
   postVisualRun,
+  postVisualSkipVisual,
   postVisualUpdateBaseline,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
@@ -299,6 +301,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [isReviewing, setIsReviewing] = useState(false);
   const [optimisticReview, setOptimisticReview] =
     useState<VisualReviewStatus | null>(null);
+  const [optimisticSkipVisual, setOptimisticSkipVisual] = useState<
+    boolean | null
+  >(null);
   const [isRunningVisual, setIsRunningVisual] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
@@ -334,9 +339,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
   const reviewFromStory = visualReviewStatusFromTags(storyEntry?.tags);
   const reviewStatus = optimisticReview ?? reviewFromStory;
+  const skipFromStory = (storyEntry?.tags ?? []).includes(SKIP_VISUAL_TAG);
+  const skipVisual = optimisticSkipVisual ?? skipFromStory;
 
   useEffect(() => {
     setOptimisticReview(null);
+    setOptimisticSkipVisual(null);
     setSelectedInteractionId(null);
     setExpandedId("default");
     setShowDistribution(false);
@@ -863,6 +871,34 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [storyId],
   );
 
+  const handleToggleSkipVisual = useCallback(async () => {
+    if (!storyId) {
+      setCaptureError("No story selected");
+      return;
+    }
+    const nextSkip = !skipVisual;
+    setIsReviewing(true);
+    setCaptureError(null);
+    try {
+      await postVisualSkipVisual({ storyId, skip: nextSkip });
+      setOptimisticSkipVisual(nextSkip);
+      if (nextSkip) setOptimisticReview(null);
+      setUpdateLog(
+        nextSkip
+          ? "Added skip-visual — excluded from Playwright visual runs."
+          : "Removed skip-visual — story is included in visual runs.",
+      );
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update skip-visual",
+      );
+    } finally {
+      setIsReviewing(false);
+    }
+  }, [skipVisual, storyId]);
+
   const handleRunVisual = useCallback(
     async (scope: "story" | "component" | "all") => {
       if (scope !== "all" && !storyId) {
@@ -1098,12 +1134,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 : "Create visual"
             }
             reviewStatus={loading ? null : reviewStatus}
+            skipVisual={loading ? false : skipVisual}
             onRunDiff={handleSplitAction}
             onCreate={() => void handleCreateBaselines()}
             onUpdateBaselines={() => void handleUpdateBaselines()}
             onResetSettings={resetSettings}
             onStop={() => void cancelVisualRun()}
             onReviewStatus={(status) => void handleSetReviewStatus(status)}
+            onToggleSkipVisual={() => void handleToggleSkipVisual()}
             isUpdating={isUpdating}
             onHeightChange={setHeaderStickyTop}
           />
@@ -1120,7 +1158,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             ) : isEmpty && baselineSections.length === 0 ? (
               <EmptyTabContent
                 title="Visual Delta"
-                description="Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
+                description={
+                  skipVisual
+                    ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use More → Include in visual tests to opt in, then Create visual."
+                    : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
+                }
                 footer={
                   <Button
                     size="small"

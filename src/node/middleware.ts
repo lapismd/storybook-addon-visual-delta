@@ -9,6 +9,7 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
+  VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   isVisualReviewStatus,
   type VisualReviewStatus,
@@ -17,6 +18,7 @@ import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 /** Host CLI helpers — stay in the monorepo; middleware only shells / calls them. */
 import { loadSidecarForStoryId } from "../../../../scripts/ui-generator/visual/diff-result.js";
 import { ensurePlaywrightWebServerPort } from "../../../../scripts/ui-generator/visual/ensure-playwright-webserver.js";
+import { patchStorySkipVisual } from "../../../../scripts/ui-generator/visual/patch-story-visual-delta.js";
 import { patchStoryVisualReviewStatus } from "../../../../scripts/ui-generator/visual/patch-story-visual-review.js";
 import type { StoryIndexEntry } from "../../../../scripts/ui-generator/visual/snapshot-paths.js";
 import {
@@ -699,6 +701,45 @@ async function handleReviewStatus(
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
+type SkipVisualBody = {
+  storyId?: string;
+  /** `true` = add skip-visual; `false` = remove it. */
+  skip?: boolean;
+};
+
+async function handleSkipVisual(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+) {
+  let body: SkipVisualBody;
+  try {
+    body = await readJsonBody<SkipVisualBody>(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    });
+    return;
+  }
+
+  const storyId = body.storyId?.trim();
+  if (!storyId || typeof body.skip !== "boolean") {
+    writeJson(res, 400, {
+      ok: false,
+      error: "Provide storyId and skip (boolean)",
+    });
+    return;
+  }
+
+  const result = patchStorySkipVisual({
+    packageRoot: root,
+    storyId,
+    skip: body.skip,
+  });
+  writeJson(res, result.ok ? 200 : 400, result);
+}
+
 /**
  * Dev-only Visual Delta endpoints:
  * - POST /__visual-delta/update-baseline — regenerate baselines (overwrite)
@@ -707,6 +748,7 @@ async function handleReviewStatus(
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual-pending / visual-approved tag
+ * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  */
 export function visualDeltaMiddlewarePlugin(
   options: VisualDeltaHostOptions = {},
@@ -759,6 +801,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           await handleReviewStatus(req, res, root);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_SKIP_VISUAL_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleSkipVisual(req, res, root);
           return;
         }
 
