@@ -15,8 +15,23 @@ committed `dist/` build. The catalog loads the addon via
 `src/preview.ts`), not the `node_modules` package name, so edits are not
 masked by Storybook/Vite ignoring `node_modules`. `pnpm storybook` runs
 `scripts/storybook-run.mjs`, which restarts on manager/panel (and related
-`.storybook` plugin) changes — the manager builder is a one-shot esbuild
-bundle and does not HMR. Preview overlay edits reload via Vite.
+addon `src/node` + preset) changes — the manager builder is a one-shot
+esbuild bundle and does not HMR. Preview overlay edits reload via Vite.
+
+## Addon vs host boundary
+
+| Owned by the addon package | Stays in `@stevejuma/ui` (host) |
+| -------------------------- | -------------------------------- |
+| Panel / Testing Module UI, overlay, Live Diff | Playwright suite `tests/visual/storybook.spec.ts` |
+| `viteFinal`: middleware (`/__visual-delta/*`), baseline CSF inject, src watch | `staticDirs` → `/visual-baselines` |
+| Preview `runStep` + park / `PLAY_STEPS` channel | CLI pipelines `scripts/ui-generator/pipeline/visual-*` |
+| Path constants + `fetch` client (`run-visual.ts`) | CSF patchers under `scripts/ui-generator/visual/` |
+| Catalog fixtures + Panel Shell mocks | Approval gate `VISUAL_UPDATE_APPROVED` |
+
+Host `.storybook/main.ts` only registers the local preset and `staticDirs`.
+Thin re-exports under `.storybook/visual-delta-middleware.ts` /
+`visual-baseline-*.ts` remain for gradual migration; prefer
+`storybook-addon-visual-delta/node`.
 
 ## Catalog regression fixtures
 
@@ -36,6 +51,11 @@ controls via `ReactThemeHost.svelte` (`createRoot` + Storybook light theme) and
 interactive fixtures in `src/stories/panel-fixtures.tsx`. Also `skip-visual`
 (manager chrome ≠ product UI). Play functions cover placement soft-hide, image
 only, review pad, badges, gallery, and accordion.
+
+Storybook title **`Visual Delta/Panel Shell`** mounts an end-to-end panel
+harness (`PanelShell` + in-memory mock `/__visual-delta` backend) so Create /
+Update / Diff / Run / Cancel / Review can be exercised without Playwright.
+Tagged `skip-visual`.
 
 Run via Storybook Vitest / `pnpm test:storybook` (filter the title as needed).
 

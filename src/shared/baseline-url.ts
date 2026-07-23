@@ -1,6 +1,6 @@
 /**
  * Build `/visual-baselines/…` URLs for the panel after create/update when CSF
- * HMR has not yet re-emitted INIT_IMAGE. Mirrors `.storybook/visual-baseline-design`.
+ * HMR has not yet re-emitted INIT_IMAGE. Mirrors `src/node/baseline-design`.
  */
 
 export const VISUAL_BASELINE_SUFFIX = "-chromium-darwin";
