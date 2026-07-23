@@ -18,19 +18,33 @@
     "./preset": "./src/preset.ts",
     "./manager": "./src/manager.tsx",
     "./visual-capture": "./src/shared/visual-capture-step.ts",
-    "./node": "./src/node/index.ts",
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js",
+      "default": "./dist/node/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "src/**/*",
+    "dist/**/*",
     "README.md",
     "VENDOR.md",
     "LICENSE"
   ],
+  "scripts": {
+    "build:node": "tsc -p tsconfig.node-build.json",
+    "prepare": "pnpm build:node",
+    "prepack": "pnpm build:node"
+  },
   "dependencies": {
     "@storybook/icons": "^2.1.0",
     "html-to-image": "^1.11.13",
     "pixelmatch": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
   },
   "peerDependencies": {
     "react": "*",
