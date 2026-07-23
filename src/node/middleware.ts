@@ -15,18 +15,22 @@ import {
   type VisualReviewStatus,
 } from "../constants.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
-/** Host CLI helpers — stay in the monorepo; middleware only shells / calls them. */
-import { loadSidecarForStoryId } from "../../../../scripts/ui-generator/visual/diff-result.js";
-import { ensurePlaywrightWebServerPort } from "../../../../scripts/ui-generator/visual/ensure-playwright-webserver.js";
-import { patchStorySkipVisual } from "../../../../scripts/ui-generator/visual/patch-story-visual-delta.js";
-import { patchStoryVisualReviewStatus } from "../../../../scripts/ui-generator/visual/patch-story-visual-review.js";
-import type { StoryIndexEntry } from "../../../../scripts/ui-generator/visual/snapshot-paths.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
+  DEFAULT_VISUAL_SERVER_PORT,
+  DEFAULT_VISUAL_TEST_ARGS,
   DEFAULT_VISUAL_UPDATE_ARGS,
   resolveRoot,
+  resolveSnapshotDir,
   type VisualDeltaHostOptions,
 } from "./options.js";
+import type { StoryIndexEntry } from "./snapshot-paths.js";
+import {
+  patchStorySkipVisual,
+  patchStoryVisualReviewStatus,
+} from "./story-source.js";
+import { loadSidecarForStoryId } from "./visual-sidecars.js";
+import { ensurePlaywrightWebServerPort } from "./visual-server.js";
 
 type UpdateBody = {
   storyId?: string;
@@ -206,9 +210,17 @@ function parsePlaywrightJson(raw: string): VisualRunResultItem[] {
 export function attachSidecars(
   results: VisualRunResultItem[],
   packageRoot: string,
+  options: VisualDeltaHostOptions = {},
 ): VisualRunResultItem[] {
+  const snapshotDir = resolveSnapshotDir(options, packageRoot);
+  const mode = options.baselinePathMode ?? "nested-import";
   return results.map((item) => {
-    const sidecar = loadSidecarForStoryId(item.storyId, packageRoot);
+    const sidecar = loadSidecarForStoryId(
+      item.storyId,
+      packageRoot,
+      snapshotDir,
+      mode,
+    );
     return sidecar ? { ...item, sidecar } : item;
   });
 }
@@ -228,6 +240,18 @@ function summarize(results: VisualRunResultItem[]) {
     else summary.failed++;
   }
   return summary;
+}
+
+export function visualTestCommandArgs(
+  options: VisualDeltaHostOptions = {},
+  grep?: string,
+): string[] {
+  return [
+    ...(options.visualTestArgs ?? [...DEFAULT_VISUAL_TEST_ARGS]),
+    "--reporter=list",
+    "--reporter=json",
+    ...(grep ? ["-g", grep] : []),
+  ];
 }
 
 /**
@@ -418,9 +442,9 @@ async function handleInteractionBaselineWrite(
     return;
   }
 
-  const baseArgs =
-    options.visualInteractionUpdateArgs ??
-    [...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS];
+  const baseArgs = options.visualInteractionUpdateArgs ?? [
+    ...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
+  ];
   const args = [
     ...baseArgs,
     ...(body.overwrite ? [] : ["--create-only"]),
@@ -564,16 +588,11 @@ async function handleRun(
     let failed = 0;
     let lineBuf = "";
 
-    await ensurePlaywrightWebServerPort();
+    await ensurePlaywrightWebServerPort(
+      options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
+    );
 
-    const args = [
-      "exec",
-      "playwright",
-      "test",
-      "--reporter=list",
-      "--reporter=json",
-      ...(grep ? ["-g", grep] : []),
-    ];
+    const args = visualTestCommandArgs(options, grep);
     const { code, log: runLog } = await runCommand(
       "pnpm",
       args,
@@ -609,7 +628,7 @@ async function handleRun(
     const json = extractJsonDocument(runLog);
     if (json) {
       try {
-        results = attachSidecars(parsePlaywrightJson(json), root);
+        results = attachSidecars(parsePlaywrightJson(json), root, options);
       } catch {
         /* leave empty — UI still shows crash/fail via exit code */
       }
@@ -842,4 +861,3 @@ export function visualDeltaMiddlewarePlugin(
     },
   };
 }
-

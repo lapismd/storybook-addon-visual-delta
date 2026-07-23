@@ -8,25 +8,17 @@ import {
 } from "./baseline-design.js";
 import {
   DEFAULT_SNAPSHOT_DIR,
+  resolveRoot,
   type VisualDeltaHostOptions,
 } from "./options.js";
+import { baselinePublicUrl } from "./snapshot-paths.js";
+import { findStoryOpenTagEnd, sanitizeStoryName } from "./source-utils.js";
+import { injectTypeScriptStoryBaselines } from "./story-source.js";
 
 type BaselineExists = (url: string) => boolean;
 
-/** Match Storybook's story-name sanitizer for id slugs. */
-export function sanitizeStoryName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[ ’–—―′¿'`~!@#$%^&*()_|+\-=?;:'",.<>{}[\]\\/]/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "");
-}
-
 function extractTitle(code: string): string | undefined {
-  const match = code.match(
-    /title:\s*["']((?:Shadcn|Workspace|Tasks)\/[^"']+)["']/,
-  );
+  const match = code.match(/\btitle:\s*["']([^"']+)["']/);
   return match?.[1];
 }
 
@@ -79,73 +71,6 @@ function endOfDoubleBraceObject(source: string, start: number): number {
   return -1;
 }
 
-export function findStoryOpenTagEnd(source: string, start: number): number {
-  if (!source.startsWith("<Story", start)) return -1;
-
-  let i = start + "<Story".length;
-  let braceDepth = 0;
-  let quote: '"' | "'" | "`" | null = null;
-
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-    const prev = source[i - 1];
-
-    if (quote) {
-      if (ch === quote && prev !== "\\") quote = null;
-      i++;
-      continue;
-    }
-
-    if (ch === "/" && next === "/") {
-      i += 2;
-      while (i < source.length && source[i] !== "\n") i++;
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      i += 2;
-      while (
-        i < source.length - 1 &&
-        !(source[i] === "*" && source[i + 1] === "/")
-      ) {
-        i++;
-      }
-      i += 2;
-      continue;
-    }
-
-    if (ch === '"' || ch === "'" || ch === "`") {
-      quote = ch;
-      i++;
-      continue;
-    }
-
-    if (ch === "{") {
-      braceDepth++;
-      i++;
-      continue;
-    }
-
-    if (ch === "}") {
-      braceDepth = Math.max(0, braceDepth - 1);
-      i++;
-      continue;
-    }
-
-    if (braceDepth === 0 && ch === ">") {
-      return i;
-    }
-
-    if (braceDepth === 0 && ch === "/" && next === ">") {
-      return i + 1;
-    }
-
-    i++;
-  }
-
-  return -1;
-}
-
 function injectVisualDeltaIntoStoryOpenTag(
   openTag: string,
   directory: string,
@@ -164,6 +89,15 @@ function injectVisualDeltaIntoStoryOpenTag(
     baselineExists,
   );
   if (!visualDeltaLiteral) return openTag;
+  return injectVisualDeltaLiteralIntoStoryOpenTag(openTag, visualDeltaLiteral);
+}
+
+function injectVisualDeltaLiteralIntoStoryOpenTag(
+  openTag: string,
+  visualDeltaLiteral: string,
+): string {
+  if (/skip-visual/.test(openTag)) return openTag;
+  if (/\bvisualDelta\s*:/.test(openTag)) return openTag;
 
   const paramsKey = "parameters={{";
   const paramsIdx = openTag.indexOf(paramsKey);
@@ -223,6 +157,41 @@ export function injectVisualBaselineVisualDeltas(
   return result;
 }
 
+function injectStoryIdVisualDeltas(
+  code: string,
+  title: string,
+  baselineExists: BaselineExists,
+): string {
+  let result = "";
+  let cursor = 0;
+  while (cursor < code.length) {
+    const start = code.indexOf("<Story", cursor);
+    if (start < 0) return result + code.slice(cursor);
+    result += code.slice(cursor, start);
+    const end = findStoryOpenTagEnd(code, start);
+    if (end < 0) return result + code.slice(start);
+    const openTag = code.slice(start, end + 1);
+    const storyName = extractStoryName(openTag);
+    if (!storyName) {
+      result += openTag;
+    } else {
+      const id = `${sanitizeStoryName(title)}--${sanitizeStoryName(storyName)}`;
+      const url = baselinePublicUrl(
+        { id, importPath: "story.stories.svelte" },
+        "story-id",
+      );
+      result += baselineExists(url)
+        ? injectVisualDeltaLiteralIntoStoryOpenTag(
+            openTag,
+            JSON.stringify(visualBaselineVisualDeltaParameter(url)),
+          )
+        : openTag;
+    }
+    cursor = end + 1;
+  }
+  return result;
+}
+
 /**
  * Injects `parameters.visualDelta` into supported catalog CSF so Visual Delta
  * receives baseline image URLs.
@@ -230,21 +199,36 @@ export function injectVisualBaselineVisualDeltas(
 export function visualBaselineVisualDeltaPlugin(
   options: VisualDeltaHostOptions = {},
 ): Plugin {
-  const snapshotDir =
-    options.snapshotDir?.startsWith("/")
-      ? options.snapshotDir
-      : join(process.cwd(), options.snapshotDir ?? DEFAULT_SNAPSHOT_DIR);
+  const root = resolveRoot(options, process.cwd());
+  const snapshotDir = options.snapshotDir?.startsWith("/")
+    ? options.snapshotDir
+    : join(root, options.snapshotDir ?? DEFAULT_SNAPSHOT_DIR);
   const baselineExists = createCommittedBaselineExists(snapshotDir);
+  const mode = options.baselinePathMode ?? "nested-import";
 
   return {
     name: "visual-baseline-visual-delta",
     enforce: "pre",
     transform(code, id) {
       const normalized = id.split("?")[0]?.replace(/\\/g, "/") ?? id;
-      if (!normalized.includes(".stories.svelte")) return null;
-
       const title = extractTitle(code);
       if (!title) return null;
+      if (/\.stories\.[cm]?[jt]sx?$/.test(normalized)) {
+        const next = injectTypeScriptStoryBaselines(
+          code,
+          title,
+          mode,
+          baselineExists,
+        );
+        if (next === code) return null;
+        return { code: next, map: null };
+      }
+      if (!normalized.includes(".stories.svelte")) return null;
+      if (mode === "story-id") {
+        const next = injectStoryIdVisualDeltas(code, title, baselineExists);
+        if (next === code) return null;
+        return { code: next, map: null };
+      }
 
       const formsDir = normalized.match(
         /\/shared\/forms\/(.+)\/[^/]+\.stories\.\w+$/,
@@ -277,3 +261,5 @@ export function visualBaselineVisualDeltaPlugin(
     },
   };
 }
+
+export { findStoryOpenTagEnd, sanitizeStoryName } from "./source-utils.js";

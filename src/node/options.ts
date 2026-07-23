@@ -16,6 +16,13 @@ export type VisualDeltaHostOptions = {
    */
   snapshotDir?: string;
   /**
+   * How committed baseline PNGs are addressed.
+   *
+   * `nested-import` preserves the UI catalog's component-folder layout.
+   * `story-id` stores one flat PNG per Storybook story id.
+   */
+  baselinePathMode?: BaselinePathMode;
+  /**
    * Absolute path to the addon package `src/` for Vite watch/reload.
    * When set, `viteFinal` watches it for preview HMR.
    */
@@ -30,12 +37,23 @@ export type VisualDeltaHostOptions = {
    * (`visual-interaction-update`). Story/step flags are appended.
    */
   visualInteractionUpdateArgs?: string[];
+  /**
+   * CLI argv after `pnpm` for compare-only visual runs.
+   * Reporter and grep flags are appended by the middleware.
+   */
+  visualTestArgs?: string[];
+  /**
+   * Port used by the visual Playwright config's static Storybook server.
+   * Defaults to the UI catalog's historical port, 6007.
+   */
+  visualServerPort?: number;
   /** Whether `/__visual-delta/run-tests` may run `build-storybook` first. */
   allowRebuild?: boolean;
 };
 
-export const DEFAULT_SNAPSHOT_DIR =
-  "tests/visual/storybook.spec.ts-snapshots";
+export type BaselinePathMode = "nested-import" | "story-id";
+
+export const DEFAULT_SNAPSHOT_DIR = "tests/visual/storybook.spec.ts-snapshots";
 
 export const DEFAULT_VISUAL_UPDATE_ARGS = [
   "exec",
@@ -55,6 +73,10 @@ export const DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS = [
   "--approved",
   "--skip-build",
 ] as const;
+
+export const DEFAULT_VISUAL_TEST_ARGS = ["exec", "playwright", "test"] as const;
+
+export const DEFAULT_VISUAL_SERVER_PORT = 6007;
 
 export function resolveSnapshotDir(
   options: VisualDeltaHostOptions | undefined,

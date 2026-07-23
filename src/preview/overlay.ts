@@ -4,7 +4,7 @@ import {
   DEFAULT_PLACEMENT,
   EVENTS,
   VISUAL_COMPARE_PANE_PAD_PX,
-  VISUAL_DEVICE_SCALE_FACTOR,
+  deviceScaleFactorForImage,
   isSplitPlacement,
   normalizePlacement,
   type PlacementMode,
@@ -41,15 +41,9 @@ const RAIL_THICKNESS_PX = 12;
  * After FORCE_REMOUNT / GOTO the closed-over node can be detached while
  * SELECT_IMAGE is still delivered to a handler that early-returns.
  */
-function resolveStoryCanvas(
-  fallback?: HTMLElement | null,
-): HTMLElement | null {
+function resolveStoryCanvas(fallback?: HTMLElement | null): HTMLElement | null {
   const root = document.getElementById("storybook-root");
-  if (
-    root instanceof HTMLElement &&
-    root.isConnected &&
-    root.parentElement
-  ) {
+  if (root instanceof HTMLElement && root.isConnected && root.parentElement) {
     return root;
   }
   if (
@@ -63,10 +57,14 @@ function resolveStoryCanvas(
 }
 
 /** Device-scale PNGs display at CSS size so they match the live subject. */
-function sizeOverlayImageToCss(img: HTMLImageElement) {
+function sizeOverlayImageToCss(
+  img: HTMLImageElement,
+  imageItem: VisualDeltaImage,
+) {
   if (!img.naturalWidth || !img.naturalHeight) return;
-  img.style.width = `${img.naturalWidth / VISUAL_DEVICE_SCALE_FACTOR}px`;
-  img.style.height = `${img.naturalHeight / VISUAL_DEVICE_SCALE_FACTOR}px`;
+  const scale = deviceScaleFactorForImage(imageItem);
+  img.style.width = `${img.naturalWidth / scale}px`;
+  img.style.height = `${img.naturalHeight / scale}px`;
 }
 
 let dragCleanupRef: (() => void) | null = null;
@@ -914,7 +912,6 @@ function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
   }
 }
 
-
 function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
   return normalizePlacement(
     imageItem.placement ?? currentPlacement ?? DEFAULT_PLACEMENT,
@@ -927,7 +924,9 @@ function updateOverlayStyle(overlay: HTMLElement | null) {
     overlay.style.mixBlendMode = "normal";
     overlay.style.opacity = "1";
   } else {
-    overlay.style.mixBlendMode = currentColorInversion ? "difference" : "normal";
+    overlay.style.mixBlendMode = currentColorInversion
+      ? "difference"
+      : "normal";
     overlay.style.opacity = String(currentOpacity);
   }
 }
@@ -993,11 +992,17 @@ function applyOverlayPosition(
           return baselineCompareSizesFromNatural(
             img.naturalWidth,
             img.naturalHeight,
+            VISUAL_COMPARE_PANE_PAD_PX,
+            deviceScaleFactorForImage(imageItem),
           );
         }
         return null;
       })();
-    const { baselinePane } = ensureSplit(canvasElement, placement, compareSizes);
+    const { baselinePane } = ensureSplit(
+      canvasElement,
+      placement,
+      compareSizes,
+    );
     if (overlay.parentElement !== baselinePane) {
       baselinePane.appendChild(overlay);
     }
@@ -1022,6 +1027,8 @@ function applyOverlayPosition(
         return baselineCompareSizesFromNatural(
           img.naturalWidth,
           img.naturalHeight,
+          VISUAL_COMPARE_PANE_PAD_PX,
+          deviceScaleFactorForImage(imageItem),
         );
       }
       return null;
@@ -1131,10 +1138,12 @@ function applySelection(attempt: number) {
   const img = overlay.querySelector("img");
   if (img) {
     const onReady = () => {
-      sizeOverlayImageToCss(img);
+      sizeOverlayImageToCss(img, selectedImageItem);
       const sizes = baselineCompareSizesFromNatural(
         img.naturalWidth,
         img.naturalHeight,
+        VISUAL_COMPARE_PANE_PAD_PX,
+        deviceScaleFactorForImage(selectedImageItem),
       );
       scheduleOverlayPosition(overlay, selectedImageItem, sizes);
       watchLayout(overlay);

@@ -37,6 +37,10 @@ export function normalizeImages(
       offsetY: item.offsetY ?? globalOffsetY ?? 0,
       align: item.align ?? defaultAlign,
       placement: normalizePlacement(item.placement ?? defaultPlacement),
+      ...(item.deviceScaleFactor != null
+        ? { deviceScaleFactor: item.deviceScaleFactor }
+        : {}),
+      ...(item.viewport ? { viewport: item.viewport } : {}),
     };
   });
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import "../../../../src/shared/forms/form-placeholder/FormPlaceholder.css";
+import "./FormPlaceholder.css";
 
 /**
  * React stand-in for `@stevejuma/ui` `FormPlaceholder` — same dotted stub

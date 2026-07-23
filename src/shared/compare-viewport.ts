@@ -22,11 +22,16 @@ export function baselineCompareSizesFromNatural(
   naturalWidth: number,
   naturalHeight: number,
   padPx: number = VISUAL_COMPARE_PANE_PAD_PX,
+  deviceScaleFactor: number = VISUAL_DEVICE_SCALE_FACTOR,
 ): BaselineCompareSizes | null {
   if (naturalWidth < 1 || naturalHeight < 1) return null;
+  const scale =
+    Number.isFinite(deviceScaleFactor) && deviceScaleFactor > 0
+      ? deviceScaleFactor
+      : VISUAL_DEVICE_SCALE_FACTOR;
   const content = {
-    width: naturalWidth / VISUAL_DEVICE_SCALE_FACTOR,
-    height: naturalHeight / VISUAL_DEVICE_SCALE_FACTOR,
+    width: naturalWidth / scale,
+    height: naturalHeight / scale,
   };
   const pad = Math.max(0, padPx) * 2;
   return {
