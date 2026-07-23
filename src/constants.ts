@@ -1,5 +1,7 @@
 export const ADDON_ID = "visual-delta";
 export const PANEL_ID = `${ADDON_ID}/panel`;
+export const TOOL_ID = `${ADDON_ID}/tool/review-layout`;
+export const REVIEW_LAYOUT_STATE_ID = `${ADDON_ID}/review-layout`;
 export const TEST_PROVIDER_ID = `${ADDON_ID}/test-provider`;
 export const STATUS_TYPE_ID_VISUAL = `${ADDON_ID}/visual`;
 export const KEY = "visual-delta";

@@ -10,8 +10,10 @@ import {
   PANEL_ID,
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
+  TOOL_ID,
 } from "./constants.js";
 import { PanelTitle } from "./manager/PanelTitle.js";
+import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
@@ -21,6 +23,13 @@ addons.register(ADDON_ID, () => {
     title: () => <PanelTitle />,
     match: ({ viewMode }) => viewMode === "story",
     render: ({ active }) => <Panel active={active} />,
+  });
+
+  addons.add(TOOL_ID, {
+    type: types.TOOL,
+    title: "Visual Delta review layout",
+    match: ({ viewMode, tabId }) => viewMode === "story" && !tabId,
+    render: () => <ReviewLayoutTool />,
   });
 
   // Local Playwright visual suite — only available while the Storybook

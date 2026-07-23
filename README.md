@@ -68,7 +68,7 @@ Peers: `storybook`, `react`, and `vite` for Vite-based Storybook.
 | `storybook-addon-visual-delta`                | Package root                               |
 | `storybook-addon-visual-delta/preset`         | `viteFinal` / webpack hooks                |
 | `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                 |
-| `storybook-addon-visual-delta/manager`        | Panel + Testing Module                     |
+| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool |
 | `storybook-addon-visual-delta/node`           | Middleware, inject plugins, options (Node) |
 | `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                    |
 
@@ -267,6 +267,23 @@ skipped. Prefer this over hand-editing tags when flake cannot be stabilized
 
 Review tags (when baselines are configured): `visual-pending`,
 `visual-approved`, `visual-failed` via `/__visual-delta/review-status`.
+
+### Review layout (canvas + panel)
+
+Toggle **Review layout** from the preview toolbar, the panel header control, or
+the panel **More** menu to:
+
+1. Hide the sidebar
+2. Dock the addon panel **bottom**, full width
+3. Select the Visual Delta panel
+4. Size the bottom panel to ~42% of the viewport height
+
+The preview toolbar stays visible so the toolbar control remains a reliable
+exit affordance (hiding it remounts Storybook landmark regions and can crash
+the manager). Exit restores the prior sidebar, panel position, and sizes;
+Visual Delta stays selected.
+
+Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 
 ## Addon vs host
 
