@@ -1,6 +1,7 @@
 /**
  * Host wiring for Visual Delta Vite middleware + baseline inject.
- * Defaults match the `@stevejuma/ui` monorepo layout.
+ * Defaults follow the desired host layout documented in the package README
+ * (`tests/visual/storybook.spec.ts-snapshots`, `scripts/ui-generator/cli.ts`).
  */
 
 export type VisualDeltaHostOptions = {
