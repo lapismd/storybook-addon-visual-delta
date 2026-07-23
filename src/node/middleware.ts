@@ -47,6 +47,19 @@ type InteractionUpdateBody = {
   overwrite?: boolean;
 };
 
+type SpawnedVisualCommand = ChildProcess & {
+  on: {
+    (
+      event: "error",
+      listener: (error: Error) => void,
+    ): SpawnedVisualCommand;
+    (
+      event: "close",
+      listener: (code: number | null) => void,
+    ): SpawnedVisualCommand;
+  };
+};
+
 type RunBody = {
   /** Limit Playwright `-g` to these story ids (or their shared prefix). */
   storyIds?: string[];
@@ -334,7 +347,7 @@ function runCommand(
       cwd,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
-    });
+    }) as SpawnedVisualCommand;
     activeRun = child;
     let log = "";
     const append = (chunk: Buffer) => {
@@ -347,11 +360,11 @@ function runCommand(
     };
     child.stdout?.on("data", append);
     child.stderr?.on("data", append);
-    child.on("error", (error) => {
+    child.on("error", (error: Error) => {
       if (activeRun === child) activeRun = null;
       reject(error);
     });
-    child.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       if (activeRun === child) activeRun = null;
       resolve({ code: code ?? 1, log });
     });
