@@ -1,6 +1,8 @@
 import React, { memo, useLayoutEffect, useRef } from "react";
 import {
+  CloseIcon,
   EllipsisIcon,
+  ExpandIcon,
   EyeCloseIcon,
   EyeIcon,
   SyncIcon,
@@ -18,6 +20,7 @@ import {
 } from "storybook/internal/components";
 import { styled, useTheme } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
+import { useReviewLayoutToggle } from "../manager/ReviewLayoutTool.js";
 import {
   VisualRunSplitButton,
   type VisualRunMode,
@@ -100,6 +103,12 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   const theme = useTheme();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const headerRef = useRef<HTMLDivElement | null>(null);
+  const pendingReviewToggle = useRef(false);
+  const { active: reviewLayoutActive, toggle: toggleReviewLayout } =
+    useReviewLayoutToggle();
+  const reviewLayoutLabel = reviewLayoutActive
+    ? "Exit review layout"
+    : "Review layout";
 
   useLayoutEffect(() => {
     const el = headerRef.current;
@@ -180,12 +189,44 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
               onSelect={onReviewStatus}
             />
           )}
+          <WithTooltip
+            hasChrome={false}
+            placement="top"
+            trigger="hover"
+            tooltip={
+              <TooltipNote
+                note={
+                  reviewLayoutActive
+                    ? "Exit review layout"
+                    : "Review layout — canvas on top, Visual Delta below"
+                }
+              />
+            }
+          >
+            <IconButton
+              size="small"
+              variant="ghost"
+              padding="small"
+              active={reviewLayoutActive}
+              ariaLabel={reviewLayoutLabel}
+              title={reviewLayoutLabel}
+              onClick={toggleReviewLayout}
+            >
+              {reviewLayoutActive ? <CloseIcon /> : <ExpandIcon />}
+            </IconButton>
+          </WithTooltip>
           <PopoverProvider
             ariaLabel="More actions"
             placement="bottom-end"
             padding={0}
             visible={moreOpen}
-            onVisibleChange={setMoreOpen}
+            onVisibleChange={(open) => {
+              setMoreOpen(open);
+              if (!open && pendingReviewToggle.current) {
+                pendingReviewToggle.current = false;
+                toggleReviewLayout();
+              }
+            }}
             popover={() => (
               <div style={{ minWidth: 220 }}>
                 <ActionList>
@@ -222,6 +263,25 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                         {skipVisual ? <EyeIcon /> : <EyeCloseIcon />}
                       </ActionList.Icon>
                       <ActionList.Text>{skipActionLabel}</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel={reviewLayoutLabel}
+                      title={
+                        reviewLayoutActive
+                          ? "Restore sidebar and prior panel position"
+                          : "Hide sidebar; dock Visual Delta full width under the canvas"
+                      }
+                      onClick={() => {
+                        pendingReviewToggle.current = true;
+                        setMoreOpen(false);
+                      }}
+                    >
+                      <ActionList.Icon>
+                        {reviewLayoutActive ? <CloseIcon /> : <ExpandIcon />}
+                      </ActionList.Icon>
+                      <ActionList.Text>{reviewLayoutLabel}</ActionList.Text>
                     </ActionList.Action>
                   </ActionList.Item>
                   <ActionList.Item>
