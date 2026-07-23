@@ -18,15 +18,20 @@ masked by Storybook/Vite ignoring `node_modules`. `pnpm storybook` runs
 addon `src/node` + preset) changes — the manager builder is a one-shot
 esbuild bundle and does not HMR. Preview overlay edits reload via Vite.
 
+The package owns every runtime dependency used by its preset and middleware.
+It must not import UI-repository scripts outside this package. Host repositories
+provide commands and paths through `VisualDeltaHostOptions`; both Svelte CSF
+and object-style TypeScript/JavaScript CSF are supported.
+
 ## Addon vs host boundary
 
-| Owned by the addon package | Stays in `@stevejuma/ui` (host) |
-| -------------------------- | -------------------------------- |
-| Panel / Testing Module UI, overlay, Live Diff | Playwright suite `tests/visual/storybook.spec.ts` |
-| `viteFinal`: middleware (`/__visual-delta/*`), baseline CSF inject, src watch | `staticDirs` → `/visual-baselines` |
-| Preview `runStep` + park / `PLAY_STEPS` channel | CLI pipelines `scripts/ui-generator/pipeline/visual-*` |
-| Path constants + `fetch` client (`run-visual.ts`) | CSF patchers under `scripts/ui-generator/visual/` |
-| Catalog fixtures + Panel Shell mocks | Approval gate `VISUAL_UPDATE_APPROVED` |
+| Owned by the addon package                                                                   | Stays in `@stevejuma/ui` (host)                          |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Panel / Testing Module UI, overlay, Live Diff                                                | Playwright suite `tests/visual/storybook.spec.ts`        |
+| `viteFinal`: middleware (`/__visual-delta/*`), baseline CSF inject, src watch                | `staticDirs` → `/visual-baselines`                       |
+| Preview `runStep` + park / `PLAY_STEPS` channel                                              | CLI pipelines `scripts/ui-generator/pipeline/visual-*`   |
+| Path constants, source patchers, sidecar/index readers, server readiness, and `fetch` client | CLI orchestration under `scripts/ui-generator/pipeline/` |
+| Catalog fixtures + Panel Shell mocks                                                         | Approval gate `VISUAL_UPDATE_APPROVED`                   |
 
 Host `.storybook/main.ts` only registers the local preset and `staticDirs`.
 Thin re-exports under `.storybook/visual-delta-middleware.ts` /

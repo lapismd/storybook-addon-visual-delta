@@ -75,6 +75,10 @@ export type VisualDeltaImage = {
   offsetY: number;
   align: AlignMode;
   placement: PlacementMode;
+  /** Device-pixel density used to capture this PNG. */
+  deviceScaleFactor?: number;
+  /** CSS viewport used to capture this PNG. */
+  viewport?: { width: number; height: number };
 };
 
 /** Opt-in mid-play capture (sibling PNG; primary `images` stay end-of-play). */
@@ -122,6 +126,28 @@ export const VISUAL_DEVICE_SCALE_FACTOR = 3;
  * the preview iframe to this size before subject capture so wrapping matches.
  */
 export const VISUAL_VIEWPORT = { width: 1280, height: 900 } as const;
+
+export function deviceScaleFactorForImage(
+  image: Pick<VisualDeltaImage, "deviceScaleFactor"> | undefined,
+): number {
+  const value = image?.deviceScaleFactor;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : VISUAL_DEVICE_SCALE_FACTOR;
+}
+
+export function viewportForImage(
+  image: Pick<VisualDeltaImage, "viewport"> | undefined,
+): { width: number; height: number } {
+  const viewport = image?.viewport;
+  return viewport &&
+    Number.isFinite(viewport.width) &&
+    viewport.width > 0 &&
+    Number.isFinite(viewport.height) &&
+    viewport.height > 0
+    ? viewport
+    : VISUAL_VIEWPORT;
+}
 
 /**
  * Padding (each side) added to baseline CSS size when sizing equal compare

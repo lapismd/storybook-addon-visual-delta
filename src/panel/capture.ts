@@ -84,11 +84,9 @@ export function applyPreviewViewport(
  */
 export async function withPlaywrightPreviewViewport<T>(
   fn: () => Promise<T>,
+  viewport: { width: number; height: number } = VISUAL_VIEWPORT,
 ): Promise<T> {
-  const restore = applyPreviewViewport(
-    VISUAL_VIEWPORT.width,
-    VISUAL_VIEWPORT.height,
-  );
+  const restore = applyPreviewViewport(viewport.width, viewport.height);
   try {
     await waitTwoFrames();
     await new Promise((r) => setTimeout(r, 50));
@@ -204,7 +202,9 @@ function resolveCaptureTarget(doc: Document): HTMLElement {
  * Capture the story subject (first #storybook-root child, or body when portals
  * are open) — matches Playwright component-clipped baselines.
  */
-export async function capturePreviewSubject(): Promise<CaptureResult> {
+export async function capturePreviewSubject(options?: {
+  pixelRatio?: number;
+}): Promise<CaptureResult> {
   const iframe = getPreviewIframe();
   if (!iframe) {
     throw new Error("Storybook preview iframe not found");
@@ -232,7 +232,7 @@ export async function capturePreviewSubject(): Promise<CaptureResult> {
         height,
         canvasWidth: width,
         canvasHeight: height,
-        pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
+        pixelRatio: options?.pixelRatio ?? VISUAL_DEVICE_SCALE_FACTOR,
         backgroundColor: resolveCaptureBackground(doc),
         cacheBust: true,
         skipAutoScale: true,
@@ -258,6 +258,7 @@ export async function capturePreviewSubject(): Promise<CaptureResult> {
 export async function capturePreviewIframe(options?: {
   width?: number;
   height?: number;
+  pixelRatio?: number;
 }): Promise<CaptureResult> {
   const iframe = getPreviewIframe();
   if (!iframe) {
@@ -309,7 +310,7 @@ export async function capturePreviewIframe(options?: {
       height,
       canvasWidth: width,
       canvasHeight: height,
-      pixelRatio: VISUAL_DEVICE_SCALE_FACTOR,
+      pixelRatio: options?.pixelRatio ?? VISUAL_DEVICE_SCALE_FACTOR,
       backgroundColor: resolveCaptureBackground(doc),
       cacheBust: true,
       skipAutoScale: true,

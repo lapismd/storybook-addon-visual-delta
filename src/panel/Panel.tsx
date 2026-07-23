@@ -26,7 +26,9 @@ import {
   EVENTS,
   SKIP_VISUAL_TAG,
   TEST_PROVIDER_ID,
+  deviceScaleFactorForImage,
   isSplitPlacement,
+  viewportForImage,
   visualReviewStatusFromTags,
   type VisualDeltaInteraction,
   type VisualReviewStatus,
@@ -688,8 +690,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       await overlayHidden;
       let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
       try {
-        capture = await withPlaywrightPreviewViewport(() =>
-          capturePreviewSubject(),
+        const selectedImage = images[index];
+        capture = await withPlaywrightPreviewViewport(
+          () =>
+            capturePreviewSubject({
+              pixelRatio: deviceScaleFactorForImage(selectedImage),
+            }),
+          viewportForImage(selectedImage),
         );
       } finally {
         showOverlay();

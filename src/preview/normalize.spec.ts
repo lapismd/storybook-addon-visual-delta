@@ -49,4 +49,27 @@ describe("normalizeImages", () => {
       },
     ]);
   });
+
+  it("preserves per-image capture metadata", () => {
+    expect(
+      normalizeImages([
+        {
+          src: "/lapis.png",
+          deviceScaleFactor: 1,
+          viewport: { width: 1440, height: 960 },
+        },
+      ]),
+    ).toEqual([
+      {
+        src: "/lapis.png",
+        anchor: undefined,
+        offsetX: 0,
+        offsetY: 0,
+        align: "viewport",
+        placement: "right",
+        deviceScaleFactor: 1,
+        viewport: { width: 1440, height: 960 },
+      },
+    ]);
+  });
 });

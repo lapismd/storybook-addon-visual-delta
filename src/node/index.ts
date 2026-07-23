@@ -1,7 +1,9 @@
-export type { VisualDeltaHostOptions } from "./options.js";
+export type { BaselinePathMode, VisualDeltaHostOptions } from "./options.js";
 export {
   DEFAULT_SNAPSHOT_DIR,
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
+  DEFAULT_VISUAL_SERVER_PORT,
+  DEFAULT_VISUAL_TEST_ARGS,
   DEFAULT_VISUAL_UPDATE_ARGS,
   resolveRoot,
   resolveSnapshotDir,
@@ -21,11 +23,25 @@ export {
   visualBaselineVisualDeltaPlugin,
 } from "./baseline-vite-plugin.js";
 export {
+  baselinePublicUrl,
+  screenshotRelativePath,
+  snapshotDirFromImportPath,
+  snapshotFileName,
+  type StoryIndexEntry,
+} from "./snapshot-paths.js";
+export {
+  injectTypeScriptStoryBaselines,
+  patchStorySkipVisual,
+  patchStorySourceText,
+  patchStoryVisualReviewStatus,
+} from "./story-source.js";
+export {
   attachSidecars,
   countVisualStories,
   grepFromStoryIds,
   parseListReporterProgress,
   stripAnsi,
+  visualTestCommandArgs,
   visualDeltaMiddlewarePlugin,
   type VisualRunResponse,
   type VisualRunResultItem,
