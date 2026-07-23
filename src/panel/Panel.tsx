@@ -49,6 +49,7 @@ import {
   postVisualUpdateBaseline,
   publishVisualLastRun,
   subscribeVisualCreateProgress,
+  subscribeVisualLastRun,
   subscribeVisualRunProgress,
   visualResultFromLiveDiff,
   visualRunnableStoryIds,
@@ -327,6 +328,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isCreating ||
     isInteractionJob ||
     isRunningVisual ||
+    runProgress != null ||
     isReviewing;
   const storyEntry = storyId ? api.getData(storyId) : undefined;
   const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
@@ -521,8 +523,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const baselineSrc = images[index]?.src;
   const baselineStem = baselineSrc?.split("?")[0] ?? "";
+  /** True for panel-initiated runs and sidebar / Testing Module runs. */
+  const runInFlight = isRunningVisual || runProgress != null;
   const progressLabel =
-    isRunningVisual && !isDiffing
+    runInFlight && !isDiffing
       ? formatVisualProgressLabel(runProgress)
       : null;
   const statusRunning =
@@ -530,11 +534,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isCreating ||
     isUpdating ||
     isInteractionJob ||
-    isRunningVisual;
+    runInFlight;
   const statusLabel = loading
     ? "Loading…"
     : statusRunning
-      ? isRunningVisual
+      ? runInFlight
         ? progressLabel
         : (baselineJob?.label ?? null)
       : null;
@@ -573,17 +577,43 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [diffEpoch]);
 
   // Live progress + reload compare view when a visual run finishes.
+  // Also drives the status bar for sidebar / Testing Module runs.
   useEffect(() => {
     let sawProgress = false;
     return subscribeVisualRunProgress((next) => {
       setRunProgress(next);
       if (next) {
         sawProgress = true;
+        setCaptureError(null);
+        const line = next.storyId
+          ? `${next.status === "failed" ? "✘" : "✓"} ${next.storyId} (${next.completed}/${next.total})`
+          : formatVisualProgressLabel(next);
+        setUpdateLog((prev) => {
+          if (!prev || (next.completed === 0 && !next.storyId)) return line;
+          return `${prev}\n${line}`;
+        });
         return;
       }
       if (sawProgress) {
         sawProgress = false;
         setDiffEpoch(Date.now());
+      }
+    });
+  }, []);
+
+  // Finished-run summary + log tail (sidebar and panel share this channel).
+  useEffect(() => {
+    return subscribeVisualLastRun((last) => {
+      if (!last) return;
+      const summaryLine = last.error
+        ? `Visual: ${last.error}${last.scope ? ` (${last.scope})` : ""}`
+        : last.summary.failed > 0
+          ? `Visual: ${last.summary.failed} failed · ${last.summary.passed} passed${last.scope ? ` (${last.scope})` : ""}`
+          : `Visual: ${last.summary.passed} passed${last.scope ? ` (${last.scope})` : ""}`;
+      const logTail = last.logTail?.trim();
+      setUpdateLog(logTail ? `${logTail}\n${summaryLine}` : summaryLine);
+      if (last.error) {
+        setCaptureError(last.error);
       }
     });
   }, []);
@@ -869,6 +899,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               summary: data.summary,
               error: data.error ?? "Visual test run crashed",
               scope,
+              logTail: data.logTail,
             });
             throw new Error(data.error ?? "Visual test run crashed");
           }
@@ -881,6 +912,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 ? `${data.summary.failed} failed`
                 : undefined,
             scope,
+            logTail: data.logTail,
           });
           setDiffEpoch(Date.now());
           if (data.summary.failed > 0) {
@@ -888,12 +920,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               `Visual: ${data.summary.failed} failed · ${data.summary.passed} passed`,
             );
           }
-          const summaryLine =
-            data.summary.failed > 0
-              ? `Visual: ${data.summary.failed} failed · ${data.summary.passed} passed (${scope})`
-              : `Visual: ${data.summary.passed} passed (${scope})`;
-          const logTail = data.logTail?.trim();
-          setUpdateLog(logTail ? `${logTail}\n${summaryLine}` : summaryLine);
+          // Status bar log is set via subscribeVisualLastRun (shared with sidebar).
         });
       } catch (error) {
         setCaptureError(
@@ -1061,7 +1088,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             empty={loading ? false : isEmpty}
             busy={busy || loading}
             storyMissing={!storyId || loading}
-            isRunning={!loading && (isRunningVisual || isDiffing)}
+            isRunning={
+              !loading && (isRunningVisual || isDiffing || runProgress != null)
+            }
             progressLabel={loading ? null : progressLabel}
             createLabel={
               isCreating

@@ -61,6 +61,8 @@ export type VisualLastRunSummary = {
   summary: VisualRunResponse["summary"];
   error?: string;
   scope?: VisualRunScope;
+  /** Trailing Playwright / middleware log for the panel status popover. */
+  logTail?: string;
 };
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
