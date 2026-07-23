@@ -111,10 +111,22 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
         aria-label="Visual Delta controls"
       >
         <ControlsGroup>
+          <VisualRunSplitButton
+            panel
+            compact
+            isRunning={isRunning}
+            progressLabel={progressLabel}
+            disabled={busy && !isRunning}
+            storyMissing={storyMissing}
+            diffDisabled={false}
+            allowStory
+            onRun={onRunDiff}
+            onStop={onStop}
+          />
           {badgeStatus ? (
             <>
-              <VisualStatusBadge status={badgeStatus} />
               <Separator />
+              <VisualStatusBadge status={badgeStatus} />
               <WithTooltip
                 hasChrome={false}
                 placement="top"
@@ -131,20 +143,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                 </BadgeActionButton>
               </WithTooltip>
             </>
-          ) : (
-            <VisualRunSplitButton
-              panel
-              compact
-              isRunning={isRunning}
-              progressLabel={progressLabel}
-              disabled={busy && !isRunning}
-              storyMissing={storyMissing}
-              diffDisabled={false}
-              allowStory
-              onRun={onRunDiff}
-              onStop={onStop}
-            />
-          )}
+          ) : null}
         </ControlsGroup>
         <RightGroup>
           {empty ? (
@@ -224,3 +223,4 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
     </HeaderWrap>
   );
 });
+

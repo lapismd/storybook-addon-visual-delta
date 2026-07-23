@@ -124,19 +124,24 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Build a Playwright `-g` filter from selected story ids. */
+/** Build a Playwright `-g` filter from selected story ids.
+ *
+ * Playwright matches against the *full* title
+ * (`… › ${storyId}`), so patterns must not use a leading `^` — only a
+ * trailing `$` for exact leaf ids.
+ */
 export function grepFromStoryIds(storyIds?: string[]): string | undefined {
   if (!storyIds?.length) return undefined;
   if (storyIds.length === 1) {
-    return `^${escapeRegExp(storyIds[0]!)}$`;
+    return `${escapeRegExp(storyIds[0]!)}$`;
   }
 
   const heads = storyIds.map((id) => id.split("--")[0] ?? id);
   if (new Set(heads).size === 1) {
-    return `^${escapeRegExp(heads[0]!)}--`;
+    return `${escapeRegExp(heads[0]!)}--`;
   }
 
-  return `^(${storyIds.map(escapeRegExp).join("|")})$`;
+  return `(${storyIds.map(escapeRegExp).join("|")})$`;
 }
 
 type PlaywrightJsonSpec = {
@@ -609,6 +614,13 @@ async function handleRun(
     }
 
     const summary = summarize(results);
+    // List-reporter progress is authoritative when the JSON report failed to parse
+    // (dual reporters / interleaved log), so the UI does not show "Ran 0 tests".
+    if (summary.total === 0 && completed > 0) {
+      summary.total = completed;
+      summary.passed = passed;
+      summary.failed = failed;
+    }
     writeNdjson(res, {
       type: "done",
       ok: code === 0 && summary.failed === 0,
@@ -777,3 +789,4 @@ export function visualDeltaMiddlewarePlugin(
     },
   };
 }
+

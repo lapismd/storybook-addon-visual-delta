@@ -105,6 +105,85 @@ const Description = styled.div(({ theme }) => ({
   whiteSpace: "nowrap",
 }));
 
+/**
+ * Same relative copy as Storybook’s Vitest Testing Module
+ * (`just now` / `a minute ago` / …), ticking every 10s.
+ */
+function RelativeTime({ timestamp }: { timestamp: number }) {
+  const [timeAgo, setTimeAgo] = useState<number | null>(null);
+  useEffect(() => {
+    setTimeAgo(Date.now() - timestamp);
+    const interval = window.setInterval(() => {
+      setTimeAgo(Date.now() - timestamp);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [timestamp]);
+  if (timeAgo === null) return null;
+  const seconds = Math.round(timeAgo / 1_000);
+  if (seconds < 60) return <>just now</>;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return <>{minutes === 1 ? "a minute ago" : `${minutes} minutes ago`}</>;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return <>{hours === 1 ? "an hour ago" : `${hours} hours ago`}</>;
+  }
+  const days = Math.floor(hours / 24);
+  return <>{days === 1 ? "yesterday" : `${days} days ago`}</>;
+}
+
+/** One shared status line for Visual Tests + Create Baselines. */
+function moduleDescription(
+  isRunning: boolean,
+  isWritingBaselines: boolean,
+  progress: VisualRunProgress | null,
+  createProgress: VisualCreateProgress | null,
+  lastRun: VisualLastRunSummary | null,
+): React.ReactNode {
+  if (isRunning) return formatVisualProgressLabel(progress);
+  if (isWritingBaselines) {
+    return createProgress?.label ?? "Writing baselines…";
+  }
+
+  const parts: React.ReactNode[] = [];
+  if (lastRun) {
+    const total = Math.max(
+      lastRun.summary.total,
+      lastRun.summary.passed +
+        lastRun.summary.failed +
+        lastRun.summary.skipped,
+    );
+    parts.push(
+      <React.Fragment key="tests">
+        Ran {total} {total === 1 ? "test" : "tests"}{" "}
+        <RelativeTime timestamp={lastRun.finishedAt} />
+      </React.Fragment>,
+    );
+  }
+  if (createProgress?.error) {
+    parts.push(
+      createProgress.kind === "update"
+        ? "Baselines: update failed"
+        : "Baselines: create failed",
+    );
+  } else if (createProgress?.label && !createProgress.running) {
+    parts.push(`Baselines: ${createProgress.label}`);
+  }
+  if (!parts.length) return "Not run";
+  if (parts.length === 1) return parts[0];
+  return (
+    <>
+      {parts.map((part, index) => (
+        <React.Fragment key={index}>
+          {index > 0 ? " · " : null}
+          {part}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
 const Actions = styled.div({
   display: "flex",
   gap: 4,
@@ -148,37 +227,6 @@ function openVisualPanel(
   if (storyId) api.selectStory(storyId);
   api.setSelectedPanel(PANEL_ID);
   api.togglePanel(true);
-}
-
-/** One shared status line for Visual Tests + Create Baselines. */
-function moduleDescription(
-  isRunning: boolean,
-  isWritingBaselines: boolean,
-  progress: VisualRunProgress | null,
-  createProgress: VisualCreateProgress | null,
-  lastRun: VisualLastRunSummary | null,
-): string {
-  if (isRunning) return formatVisualProgressLabel(progress);
-  if (isWritingBaselines) {
-    return createProgress?.label ?? "Writing baselines…";
-  }
-
-  const parts: string[] = [];
-  if (lastRun) {
-    const total = lastRun.summary.total;
-    parts.push(`Tests: Ran ${total} ${total === 1 ? "test" : "tests"}`);
-  }
-  if (createProgress?.error) {
-    parts.push(
-      createProgress.kind === "update"
-        ? "Baselines: update failed"
-        : "Baselines: create failed",
-    );
-  } else if (createProgress?.label && !createProgress.running) {
-    parts.push(`Baselines: ${createProgress.label}`);
-  }
-  if (parts.length) return parts.join(" · ");
-  return "Not run";
 }
 
 function chipLabel(
@@ -322,6 +370,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             summary: data.summary,
             error: data.error ?? "Visual test run crashed",
             scope,
+            logTail: data.logTail,
           };
           publishVisualLastRun(summary);
           throw new Error(data.error ?? "Visual test run crashed");
@@ -335,6 +384,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               ? `${data.summary.failed} failed`
               : undefined,
           scope,
+          logTail: data.logTail,
         });
       });
     },
