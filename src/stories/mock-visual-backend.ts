@@ -10,11 +10,13 @@ export type MockVisualAction =
   | "run-tests"
   | "cancel-tests"
   | "review-status"
+  | "skip-visual"
   | "diff";
 
 export type MockVisualBackend = {
   actions: MockVisualAction[];
   lastReviewStatus: "pending" | "approved" | "failed" | null;
+  lastSkipVisual: boolean | null;
   lastInteractionStep: string | null;
   cancelled: boolean;
   reset: () => void;
@@ -31,6 +33,10 @@ export type MockVisualBackend = {
     storyId: string,
     status: "pending" | "approved" | "failed",
   ) => Promise<{ ok: boolean; status: string }>;
+  skipVisual: (
+    storyId: string,
+    skip: boolean,
+  ) => Promise<{ ok: boolean; skip: boolean }>;
 };
 
 function delay(ms: number) {
@@ -41,6 +47,7 @@ export function createMockVisualBackend(): MockVisualBackend {
   const actions: MockVisualAction[] = [];
   let cancelled = false;
   let lastReviewStatus: MockVisualBackend["lastReviewStatus"] = null;
+  let lastSkipVisual: boolean | null = null;
   let lastInteractionStep: string | null = null;
   let runActive = false;
 
@@ -50,6 +57,9 @@ export function createMockVisualBackend(): MockVisualBackend {
     },
     get lastReviewStatus() {
       return lastReviewStatus;
+    },
+    get lastSkipVisual() {
+      return lastSkipVisual;
     },
     get lastInteractionStep() {
       return lastInteractionStep;
@@ -61,6 +71,7 @@ export function createMockVisualBackend(): MockVisualBackend {
       actions.length = 0;
       cancelled = false;
       lastReviewStatus = null;
+      lastSkipVisual = null;
       lastInteractionStep = null;
       runActive = false;
     },
@@ -144,6 +155,12 @@ export function createMockVisualBackend(): MockVisualBackend {
       lastReviewStatus = status;
       await delay(20);
       return { ok: true, status };
+    },
+    async skipVisual(_storyId, skip) {
+      actions.push("skip-visual");
+      lastSkipVisual = skip;
+      await delay(20);
+      return { ok: true, skip };
     },
   };
 }

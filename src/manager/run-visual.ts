@@ -6,6 +6,7 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
+  VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
 } from "../constants.js";
@@ -439,6 +440,32 @@ export async function postVisualReviewStatus(body: {
   if (!response.ok || !data.ok) {
     throw new Error(
       data.error || `Review status update failed (${response.status})`,
+    );
+  }
+  return data;
+}
+
+export type VisualSkipVisualResponse = {
+  ok: boolean;
+  storyId: string;
+  skip: boolean;
+  error?: string;
+};
+
+/** Persist add/remove of `skip-visual` on the story CSF via middleware. */
+export async function postVisualSkipVisual(body: {
+  storyId: string;
+  skip: boolean;
+}): Promise<VisualSkipVisualResponse> {
+  const response = await fetch(VISUAL_DELTA_SKIP_VISUAL_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json()) as VisualSkipVisualResponse;
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      data.error || `skip-visual update failed (${response.status})`,
     );
   }
   return data;

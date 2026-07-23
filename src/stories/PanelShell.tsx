@@ -81,6 +81,7 @@ export function PanelShell({
   const [reviewStatus, setReviewStatus] = useState<VisualReviewStatus | null>(
     null,
   );
+  const [skipVisual, setSkipVisual] = useState(false);
   const [badgeStatus, setBadgeStatus] = useState<"pass" | "fail" | null>(null);
   const [diffResult, setDiffResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -191,6 +192,14 @@ export function PanelShell({
     [backend, recordActions],
   );
 
+  const handleToggleSkipVisual = useCallback(async () => {
+    const next = !skipVisual;
+    await backend.skipVisual(DEMO_STORY_ID, next);
+    setSkipVisual(next);
+    if (next) setReviewStatus(null);
+    recordActions();
+  }, [backend, recordActions, skipVisual]);
+
   const handleCreateInteraction = useCallback(
     async (step: { label: string; stepId: string }) => {
       setBusy(true);
@@ -249,6 +258,7 @@ export function PanelShell({
         progressLabel={progressLabel}
         createLabel={busy ? "Creating…" : "Create visual"}
         reviewStatus={reviewStatus}
+        skipVisual={skipVisual}
         onRunDiff={(mode) => void handleRunDiff(mode)}
         onCreate={() => void handleCreate()}
         onUpdateBaselines={() => void handleUpdate()}
@@ -259,12 +269,14 @@ export function PanelShell({
         }}
         onStop={() => void handleStop()}
         onReviewStatus={(status) => void handleReview(status)}
+        onToggleSkipVisual={() => void handleToggleSkipVisual()}
         isUpdating={busy}
       />
       <PanelBody>
         <div data-testid="panel-shell-meta" style={{ display: "none" }}>
           <span data-testid="fixture-actions">{actionLog}</span>
           <span data-testid="fixture-review">{reviewStatus ?? "none"}</span>
+          <span data-testid="fixture-skip-visual">{String(skipVisual)}</span>
           <span data-testid="fixture-diff">{diffResult ?? "none"}</span>
           <span data-testid="fixture-placement">{placement}</span>
           <span data-testid="fixture-overlay-on">{String(overlayOn)}</span>

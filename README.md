@@ -134,6 +134,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/run-tests` | Compare-only Playwright run (NDJSON stream) |
 | `POST` | `/__visual-delta/cancel-tests` | Abort an in-flight run |
 | `POST` | `/__visual-delta/review-status` | Set CSF review tags |
+| `POST` | `/__visual-delta/skip-visual` | Add or remove `skip-visual` on a story |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -218,6 +219,25 @@ parameters: {
 
 Review / Testing Module tags: `skip-visual`, `visual-pending`, `visual-approved`,
 `visual-failed`.
+
+### `skip-visual` from the panel
+
+The Visual Delta panel **More** menu can add or remove `skip-visual` on the
+current story (patches the `.stories.svelte` CSF open tag via
+`POST /__visual-delta/skip-visual`):
+
+| Menu action | Effect |
+| ----------- | ------ |
+| **Skip visual tests** | Adds `skip-visual` (and clears review tags) |
+| **Include in visual tests** | Removes `skip-visual` |
+
+Skipped stories are excluded from Playwright visual runs and from Visual Delta
+Testing Module scope. Review status and Update baselines stay disabled while
+skipped. Prefer this over hand-editing tags when flake cannot be stabilized
+(document why in the story if the skip is permanent).
+
+Review tags (when baselines are configured): `visual-pending`,
+`visual-approved`, `visual-failed` via `/__visual-delta/review-status`.
 
 ## Addon vs host
 
