@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { visualTestCommandArgs } from "./middleware.js";
 import {
+  DEFAULT_BASELINE_PATH_MODE,
+  DEFAULT_VISUAL_UPDATE_ARGS,
+  resolveBaselinePathMode,
+} from "./options.js";
+import {
   baselinePublicUrl,
   screenshotRelativePath,
   type StoryIndexEntry,
@@ -12,6 +17,21 @@ const entry: StoryIndexEntry = {
 };
 
 describe("portable Visual Delta host options", () => {
+  it("defaults to story-id path mode and packaged CLI", () => {
+    expect(DEFAULT_BASELINE_PATH_MODE).toBe("story-id");
+    expect(resolveBaselinePathMode(undefined)).toBe("story-id");
+    expect(resolveBaselinePathMode({ baselinePathMode: "nested-import" })).toBe(
+      "nested-import",
+    );
+    expect(DEFAULT_VISUAL_UPDATE_ARGS).toEqual([
+      "exec",
+      "visual-delta",
+      "update",
+      "--allow-dirty",
+      "--approved",
+    ]);
+  });
+
   it("supports flat story-id snapshots", () => {
     expect(screenshotRelativePath(entry, "story-id")).toBe(
       "workspace-shell-tabs--top-light.png",

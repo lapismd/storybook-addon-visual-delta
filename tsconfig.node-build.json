@@ -16,6 +16,10 @@
     "src/constants.ts",
     "src/visual-diff-sidecar.ts",
     "src/shared/capture-subject-types.ts",
+    "src/shared/interaction-capture.ts",
+    "src/shared/modes.ts",
+    "src/shared/ignore.ts",
+    "src/shared/config-types.ts",
     "src/node/**/*.ts"
   ],
   "exclude": ["src/**/*.spec.ts"]

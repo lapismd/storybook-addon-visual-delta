@@ -31,12 +31,18 @@ and object-style TypeScript/JavaScript CSF are supported.
 | Owned by the addon package                                                                   | Stays in `@stevejuma/ui` (host)                          |
 | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Panel / Testing Module UI, overlay, Live Diff                                                | Playwright suite `tests/visual/storybook.spec.ts`        |
-| `viteFinal`: middleware (`/__visual-delta/*`), baseline CSF inject, src watch                | `staticDirs` → `/visual-baselines`                       |
+| Preset: `managerEntries`, `previewAnnotations`, `staticDirs`, `viteFinal` (middleware + CSF inject + src watch); packaged `visual-delta` CLI + `/playwright` helpers | Committed PNGs + thin Playwright entry (or catalog suite/CLIs) |
 | Preview `runStep` + park / `PLAY_STEPS` channel                                              | CLI pipelines `scripts/ui-generator/pipeline/visual-*`   |
 | Path constants, source patchers, sidecar/index readers, server readiness, and `fetch` client | CLI orchestration under `scripts/ui-generator/pipeline/` |
 | Catalog fixtures + Panel Shell mocks                                                         | Approval gate `VISUAL_UPDATE_APPROVED`                   |
 
-Host `.storybook/main.ts` only registers the local preset and `staticDirs`.
+Host `.storybook/main.ts` registers the local preset (absolute `src/` manager /
+preview for HMR) with catalog overrides (`nested-import` + ui-generator CLIs).
+Portable consumers use `addons: ["storybook-addon-visual-delta"]` (or
+`npx storybook add storybook-addon-visual-delta`) plus `visual-delta init` /
+`defineVisualPlaywrightConfig` / `defineVisualSuite`. The panel empty state
+offers **Set up Visual Delta** when the suite/config is missing
+(`POST /__visual-delta/init`).
 Thin re-exports under `.storybook/visual-delta-middleware.ts` /
 `visual-baseline-*.ts` remain for gradual migration; prefer
 `storybook-addon-visual-delta/node`.

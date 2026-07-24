@@ -14,8 +14,11 @@ import { loadStoryIndex } from "./visual-sidecars.js";
 export type StorySourceMutation =
   | { kind: "skip"; skip: boolean }
   | { kind: "review"; status: VisualReviewStatus }
-  | { kind: "baseline"; url: string };
-
+  | { kind: "baseline"; url: string }
+  | {
+      kind: "interaction";
+      interaction: { id: string; label: string; src: string };
+    };
 function resolveStoriesPath(
   packageRoot: string,
   importPath: string,
@@ -64,6 +67,36 @@ function svelteStoryMatches(openTag: string, entry: StoryIndexEntry): boolean {
   );
 }
 
+function findVisualDeltaObjectRange(
+  openTag: string,
+): { start: number; end: number } | null {
+  const key = openTag.match(/\bvisualDelta\s*:\s*/);
+  if (!key || key.index == null) return null;
+  const start = key.index + key[0].length;
+  if (openTag[start] !== "{") return null;
+  const end = findBalancedEnd(openTag, start, "{", "}");
+  if (end < 0) return null;
+  return { start, end: end + 1 };
+}
+
+function parseVisualDeltaObjectLiteral(
+  objectText: string,
+): Record<string, unknown> | null {
+  try {
+    return JSON.parse(objectText) as Record<string, unknown>;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const normalized = objectText
+      .replace(/([{\[,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')
+      .replace(/,(\s*[}\]])/g, "$1");
+    return JSON.parse(normalized) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function mutateSvelteOpenTag(
   openTag: string,
   mutation: StorySourceMutation,
@@ -95,6 +128,29 @@ function mutateSvelteOpenTag(
     const attribute = `\n  parameters={{\n    visualDelta: ${visualDelta},\n  }}`;
     const closeLength = openTag.endsWith("/>") ? 2 : 1;
     return `${openTag.slice(0, -closeLength)}${attribute}\n${openTag.slice(-closeLength)}`;
+  }
+
+  if (mutation.kind === "interaction") {
+    if (openTag.includes("skip-visual")) return openTag;
+    const range = findVisualDeltaObjectRange(openTag);
+    if (!range) return openTag;
+    const parsed = parseVisualDeltaObjectLiteral(
+      openTag.slice(range.start, range.end),
+    );
+    if (!parsed) return openTag;
+    const existing = Array.isArray(parsed.interactions)
+      ? (parsed.interactions as Array<Record<string, unknown>>)
+      : [];
+    const without = existing.filter(
+      (item) => item?.id !== mutation.interaction.id,
+    );
+    without.push({ ...mutation.interaction });
+    parsed.interactions = without;
+    return (
+      openTag.slice(0, range.start) +
+      JSON.stringify(parsed) +
+      openTag.slice(range.end)
+    );
   }
 
   const match = /\btags=\{\[([\s\S]*?)\]\}/.exec(openTag);
@@ -343,6 +399,48 @@ function mutateTsBaseline(objectText: string, url: string): string {
   return `${objectText.slice(0, parameters.valueStart)}${next}${objectText.slice(end + 1)}`;
 }
 
+function mutateTsInteraction(
+  objectText: string,
+  interaction: { id: string; label: string; src: string },
+): string {
+  if (objectText.includes("skip-visual")) return objectText;
+  const parameters = findTopLevelProperty(objectText, "parameters");
+  if (!parameters || objectText[parameters.valueStart] !== "{") return objectText;
+  const end = findBalancedEnd(objectText, parameters.valueStart, "{", "}");
+  if (end < 0) return objectText;
+  const parametersObject = objectText.slice(parameters.valueStart, end + 1);
+  const visualDelta = findTopLevelProperty(parametersObject, "visualDelta");
+  if (!visualDelta || parametersObject[visualDelta.valueStart] !== "{") {
+    return objectText;
+  }
+  const vdEnd = findBalancedEnd(
+    parametersObject,
+    visualDelta.valueStart,
+    "{",
+    "}",
+  );
+  if (vdEnd < 0) return objectText;
+  const vdText = parametersObject.slice(visualDelta.valueStart, vdEnd + 1);
+  const parsed = parseVisualDeltaObjectLiteral(vdText);
+  if (!parsed) return objectText;
+  const existing = Array.isArray(parsed.interactions)
+    ? (parsed.interactions as Array<Record<string, unknown>>)
+    : [];
+  const without = existing.filter((item) => item?.id !== interaction.id);
+  without.push({ ...interaction });
+  parsed.interactions = without;
+  const nextVd = JSON.stringify(parsed);
+  const nextParameters =
+    parametersObject.slice(0, visualDelta.valueStart) +
+    nextVd +
+    parametersObject.slice(vdEnd + 1);
+  return (
+    objectText.slice(0, parameters.valueStart) +
+    nextParameters +
+    objectText.slice(end + 1)
+  );
+}
+
 function exportNameSlug(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -391,10 +489,14 @@ function patchTsStory(
   );
   if (!range) return source;
   const objectText = source.slice(range.objectStart, range.objectEnd);
-  const next =
-    mutation.kind === "baseline"
-      ? mutateTsBaseline(objectText, mutation.url)
-      : mutateTsTags(objectText, mutation);
+  let next = objectText;
+  if (mutation.kind === "baseline") {
+    next = mutateTsBaseline(objectText, mutation.url);
+  } else if (mutation.kind === "interaction") {
+    next = mutateTsInteraction(objectText, mutation.interaction);
+  } else {
+    next = mutateTsTags(objectText, mutation);
+  }
   return `${source.slice(0, range.objectStart)}${next}${source.slice(range.objectEnd)}`;
 }
 
@@ -500,6 +602,72 @@ export function patchStoryVisualReviewStatus(options: {
         storyId: options.storyId,
         status: options.status,
         error: `Could not patch story source for ${options.storyId}`,
+      };
+}
+
+export function patchStoryBaselineImages(options: {
+  packageRoot: string;
+  storyId: string;
+  url: string;
+}): { ok: boolean; storyId: string; error?: string } {
+  const entry = loadStoryIndex(options.packageRoot)[options.storyId];
+  if (!entry?.importPath) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: `Story not found in index: ${options.storyId}`,
+    };
+  }
+  if ((entry.tags ?? []).includes("skip-visual")) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: "Cannot wire baselines on skip-visual stories",
+    };
+  }
+  const changed = patchStoryFile(options.packageRoot, entry, {
+    kind: "baseline",
+    url: options.url,
+  });
+  return changed
+    ? { ok: true, storyId: options.storyId }
+    : {
+        ok: false,
+        storyId: options.storyId,
+        error: `Could not patch baseline images for ${options.storyId}`,
+      };
+}
+
+export function patchStoryInteraction(options: {
+  packageRoot: string;
+  storyId: string;
+  interaction: { id: string; label: string; src: string };
+}): { ok: boolean; storyId: string; error?: string } {
+  const entry = loadStoryIndex(options.packageRoot)[options.storyId];
+  if (!entry?.importPath) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: `Story not found in index: ${options.storyId}`,
+    };
+  }
+  if ((entry.tags ?? []).includes("skip-visual")) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: "Cannot wire interactions on skip-visual stories",
+    };
+  }
+  const changed = patchStoryFile(options.packageRoot, entry, {
+    kind: "interaction",
+    interaction: options.interaction,
+  });
+  return changed
+    ? { ok: true, storyId: options.storyId }
+    : {
+        ok: false,
+        storyId: options.storyId,
+        error: `Could not patch interaction for ${options.storyId}`,
       };
 }
 

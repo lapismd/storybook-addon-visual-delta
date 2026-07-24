@@ -103,6 +103,19 @@ export function ConfigurationPanel({ onClose }: { onClose: () => void }) {
       </Actions>
       {loading ? <Hint>Loading…</Hint> : null}
       {error ? <Hint role="alert">{error}</Hint> : null}
+      {config?.onboarding ? (
+        <Hint>
+          Onboarding:{" "}
+          {config.onboarding.ready
+            ? "suite + Playwright config ready"
+            : config.onboarding.hint}{" "}
+          {!config.onboarding.ready ? (
+            <>
+              (CLI: <code>pnpm exec visual-delta init</code>)
+            </>
+          ) : null}
+        </Hint>
+      ) : null}
       {config?.warnings && config.warnings.length > 0 ? (
         <Warn>
           {config.warnings.map((w) => (
@@ -110,7 +123,15 @@ export function ConfigurationPanel({ onClose }: { onClose: () => void }) {
           ))}
         </Warn>
       ) : null}
-      {config ? <Pre>{JSON.stringify(config.options, null, 2)}</Pre> : null}
+      {config ? (
+        <Pre>
+          {JSON.stringify(
+            { options: config.options, onboarding: config.onboarding },
+            null,
+            2,
+          )}
+        </Pre>
+      ) : null}
     </Root>
   );
 }

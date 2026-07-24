@@ -2,14 +2,17 @@ import { experimental_getStatusStore, type API } from "storybook/manager-api";
 import {
   STATUS_TYPE_ID_VISUAL,
   VISUAL_DELTA_CANCEL_PATH,
+  VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
+  VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
 } from "../constants.js";
+import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import {
   PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
   type VisualDiffSidecar,
@@ -425,6 +428,38 @@ export type VisualReviewResponse = {
   status: VisualReviewStatus;
   error?: string;
 };
+
+/** Read resolved host options + onboarding status. */
+export async function fetchVisualConfig(): Promise<VisualDeltaResolvedConfig> {
+  const response = await fetch(VISUAL_DELTA_CONFIG_PATH);
+  if (!response.ok) {
+    throw new Error(`Config request failed (${response.status})`);
+  }
+  return (await response.json()) as VisualDeltaResolvedConfig;
+}
+
+export type VisualInitResponse = {
+  ok: true;
+  written: string[];
+  skipped: string[];
+  scriptsUpdated: string[];
+  suiteReady: boolean;
+  playwrightConfigReady: boolean;
+  snapshotDir: string;
+  onboarding: VisualDeltaResolvedConfig["onboarding"];
+};
+
+/** Scaffold portable suite / Playwright config / snapshot dir via middleware. */
+export async function postVisualInit(): Promise<VisualInitResponse> {
+  const response = await fetch(VISUAL_DELTA_INIT_PATH, { method: "POST" });
+  const data = (await response.json()) as VisualInitResponse & {
+    error?: string;
+  };
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || `Init failed (${response.status})`);
+  }
+  return data;
+}
 
 /** Persist visual review tags on the story CSF via middleware. */
 export async function postVisualReviewStatus(body: {
