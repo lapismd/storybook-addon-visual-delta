@@ -1,5 +1,5 @@
 import React from "react";
-import { FailedIcon, HourglassIcon, VerifiedIcon } from "@storybook/icons";
+import { FailedIcon, FlagIcon } from "@storybook/icons";
 import { ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
@@ -23,26 +23,20 @@ const ReviewButton = styled(ToggleButton)({
   },
 });
 
+/** Panel pad only exposes agent/dev signals; Accept/Unaccept cover pending/approved. */
 const OPTIONS: Array<{
-  status: VisualReviewStatus;
+  status: Extract<VisualReviewStatus, "ready" | "failed">;
   label: string;
   actionLabel: string;
   currentLabel: string;
   Icon: React.ComponentType;
 }> = [
   {
-    status: "pending",
-    label: "Pending",
-    actionLabel: "Mark as pending review",
-    currentLabel: "Pending review",
-    Icon: HourglassIcon,
-  },
-  {
-    status: "approved",
-    label: "Approved",
-    actionLabel: "Approve visual baseline",
-    currentLabel: "Approved",
-    Icon: VerifiedIcon,
+    status: "ready",
+    label: "Ready",
+    actionLabel: "Mark visual baseline ready for review",
+    currentLabel: "Ready for review",
+    Icon: FlagIcon,
   },
   {
     status: "failed",

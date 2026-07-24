@@ -1,5 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { ChevronSmallDownIcon, VerifiedIcon, UndoIcon } from "@storybook/icons";
+import {
+  CheckIcon,
+  ChevronSmallDownIcon,
+  UndoIcon,
+  VerifiedIcon,
+} from "@storybook/icons";
 import {
   ActionList,
   Button,
@@ -10,6 +15,8 @@ import { styled } from "storybook/theming";
 export type AcceptScope = "story" | "component";
 
 const STORAGE_KEY = "storybook-addon-visual-delta/accept-scope-v1";
+
+const SCOPES: readonly AcceptScope[] = ["story", "component"];
 
 function loadScope(): AcceptScope {
   try {
@@ -27,6 +34,10 @@ function saveScope(scope: AcceptScope): void {
   } catch {
     /* ignore */
   }
+}
+
+function scopeLabel(scope: AcceptScope): string {
+  return scope === "component" ? "Component scope" : "Story scope";
 }
 
 const Split = styled.div(({ theme }) => ({
@@ -59,6 +70,12 @@ const MainButton = styled(Button)({
     height: 12,
   },
 });
+
+/** Middle segment: flat corners + straight themed divider (matches chevron). */
+const MidButton = styled(MainButton)(({ theme }) => ({
+  borderRadius: 0,
+  borderLeft: `1px solid ${theme.appBorderColor}`,
+}));
 
 const MenuButton = styled(Button)(({ theme }) => ({
   borderTopLeftRadius: 0,
@@ -113,62 +130,61 @@ export function AcceptSplitButton({
     <Split role="group" aria-label="Accept or unaccept baselines">
       <MainButton
         size="small"
+        variant="ghost"
+        padding="small"
         disabled={disabled || busy}
         ariaLabel={acceptLabel}
+        title={acceptLabel}
         onClick={() => onAccept(scope)}
       >
         <VerifiedIcon />
         {scope === "component" ? "Accept all" : "Accept"}
       </MainButton>
-      <MainButton
+      <MidButton
         size="small"
+        variant="ghost"
+        padding="small"
         disabled={disabled || busy}
         ariaLabel={unacceptLabel}
+        title={unacceptLabel}
         onClick={() => onUnaccept(scope)}
-        style={{ borderLeft: "1px solid var(--sb-color-border, #0002)" }}
       >
         <UndoIcon />
         Unaccept
-      </MainButton>
+      </MidButton>
       <PopoverProvider
-        placement="bottom"
+        ariaLabel="Choose Accept scope"
+        placement="bottom-end"
         padding={0}
         visible={menuOpen}
         onVisibleChange={setMenuOpen}
-        popover={
+        popover={() => (
           <div style={{ minWidth: 180 }}>
             <ActionList>
-              <ActionList.Item>
-                <ActionList.Action
-                  ariaLabel="Story scope"
-                  onClick={() => chooseScope("story")}
-                >
-                  <ActionList.Text>
-                    {scope === "story" ? "✓ Story scope" : "Story scope"}
-                  </ActionList.Text>
-                </ActionList.Action>
-              </ActionList.Item>
-              <ActionList.Item>
-                <ActionList.Action
-                  ariaLabel="Component scope"
-                  onClick={() => chooseScope("component")}
-                >
-                  <ActionList.Text>
-                    {scope === "component"
-                      ? "✓ Component scope"
-                      : "Component scope"}
-                  </ActionList.Text>
-                </ActionList.Action>
-              </ActionList.Item>
+              {SCOPES.map((item) => (
+                <ActionList.Item key={item} active={scope === item}>
+                  <ActionList.Action
+                    ariaLabel={scopeLabel(item)}
+                    onClick={() => chooseScope(item)}
+                  >
+                    <ActionList.Icon>
+                      {scope === item ? <CheckIcon /> : <span />}
+                    </ActionList.Icon>
+                    <ActionList.Text>{scopeLabel(item)}</ActionList.Text>
+                  </ActionList.Action>
+                </ActionList.Item>
+              ))}
             </ActionList>
           </div>
-        }
+        )}
       >
         <MenuButton
           size="small"
+          variant="ghost"
+          padding="small"
           disabled={disabled || busy}
-          ariaLabel="Accept scope"
-          onClick={() => setMenuOpen((o) => !o)}
+          ariaLabel="Choose Accept story or component scope"
+          title="Choose Accept scope"
         >
           <ChevronSmallDownIcon />
         </MenuButton>

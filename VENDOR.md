@@ -149,12 +149,14 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   story, the baseline gallery (overlay selector), and the placement pad; forces
   center overlay (still draggable). An “Image only” chip marks the mode in the
   toolbar and preview. Persisted as `liveVisible` in localStorage.
-- **Review tags** — When baselines are configured, a button group sets mutually
-  exclusive CSF tags via `/__visual-delta/review-status`: `visual-pending`
-  (orange clock), `visual-approved` (green shield), `visual-failed` (red ✕).
-  Create-baseline also stamps `visual-pending` on newly wired stories that are
-  not already approved. **Rewrite/update** baselines always resets matching
-  stories to `visual-pending` (clears `visual-approved`).
+- **Review tags** — Mutually exclusive CSF tags via `/__visual-delta/review-status`:
+  `visual-pending` (orange clock), `visual-ready` (blue flag), `visual-approved`
+  (green shield), `visual-failed` (red ✕). Accept / Unaccept set approved /
+  pending; the panel pad toggles ready / failed (agents mark `visual-ready`
+  when work is ready for human review). Create-baseline stamps `visual-pending`
+  on newly wired stories that are not already approved. **Rewrite/update**
+  baselines always resets matching stories to `visual-pending` (clears
+  `visual-approved` / `visual-ready`).
 - **skip-visual** — Panel **More** menu: **Skip visual tests** /
   **Include in visual tests** posts to `/__visual-delta/skip-visual` to add or
   remove the CSF tag on the current story. Adding skip clears review tags.
@@ -170,8 +172,8 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   running and a failure-count badge beside the chip. Create Baselines is **off by default** (unchecked); enable the row checkbox
   to use the split status control: default **Create missing**, menu
   **Rewrite existing** (overwrite PNGs via `/__visual-delta/update-baseline`).
-  Rewrite clears `visual-approved` so the component loses its approved badge
-  and returns to `visual-pending`. Create/rewrite runs against leaf stories
+  Rewrite clears `visual-approved` / `visual-ready` so the component returns
+  to `visual-pending`. Create/rewrite runs against leaf stories
   currently listed in the sidebar (search/tag filters), one component family
   at a time. The
   global module has no extra top border (context-menu actions still keep a

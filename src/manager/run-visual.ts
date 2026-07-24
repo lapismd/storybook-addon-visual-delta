@@ -426,7 +426,7 @@ export type VisualReviewResponse = {
   error?: string;
 };
 
-/** Persist `visual-pending` / `visual-approved` on the story CSF via middleware. */
+/** Persist visual review tags on the story CSF via middleware. */
 export async function postVisualReviewStatus(body: {
   storyId: string;
   status: VisualReviewStatus;
