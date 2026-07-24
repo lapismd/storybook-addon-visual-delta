@@ -235,6 +235,22 @@ parameters: {
         placement: "center",
       },
     ],
+    /** Chromatic-style modes (globals + optional per-mode baseline `src`). */
+    modes: {
+      dark: {
+        globals: { colorMode: "dark" },
+        src: "/visual-baselines/…/default--dark-chromium-darwin.png",
+      },
+    },
+    /** pixelmatch color threshold 0–1 (Live Diff). */
+    diffThreshold: 0.2,
+    diffIncludeAntiAliasing: false,
+    /** Extra settle ms before capture (Live Diff + Playwright). */
+    delay: 0,
+    /** Hide these CSS regions during capture (plus data-visual-delta-ignore). */
+    ignoreSelectors: [".toast"],
+    cropToViewport: false,
+    passThresholdPercent: 0.1,
     interactions: [
       {
         stepId: "opens-chooser",
@@ -245,6 +261,15 @@ parameters: {
   },
 },
 ```
+
+Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
+`data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
+
+Panel **More → Configuration** shows resolved host options
+(`GET /__visual-delta/config`). Accept / Unaccept (story or component) maps to
+`visual-approved` / `visual-pending`.
+
+Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
 Review / Testing Module tags: `skip-visual`, `visual-pending`, `visual-approved`,
 `visual-failed`.

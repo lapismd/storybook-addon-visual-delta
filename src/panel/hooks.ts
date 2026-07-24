@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChannel } from "storybook/manager-api";
 import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
   isSplitPlacement,
   type PlacementMode,
   type VisualDeltaImage,
   type VisualDeltaInteraction,
+  type VisualDeltaModes,
 } from "../constants.js";
 import {
   opacityForPlacementChange,
@@ -56,6 +59,11 @@ type StoryData = {
   images: VisualDeltaImage[];
   /** Opted-in mid-play captures from `parameters.visualDelta.interactions`. */
   interactions: VisualDeltaInteraction[];
+  /** Stacked modes from CSF (Chromatic-style). */
+  modes: VisualDeltaModes;
+  modeNames: string[];
+  /** Currently selected mode name, or null for default/primary. */
+  selectedMode: string | null;
   storyId: string;
   storyName: string;
   index: number;
@@ -71,6 +79,11 @@ type StoryData = {
   /** False = image-only (live hidden, center overlay). Default true. */
   liveVisible: boolean;
   passThresholdPercent: number;
+  diffThreshold: number;
+  diffIncludeAntiAliasing: boolean;
+  delay: number;
+  ignoreSelectors: string[];
+  cropToViewport: boolean;
 };
 
 function waitTwoFrames(): Promise<void> {
@@ -168,6 +181,9 @@ export function useStoryData() {
     return {
       images: [],
       interactions: [],
+      modes: {},
+      modeNames: [],
+      selectedMode: null,
       storyId: "",
       storyName: "",
       index: -1,
@@ -177,6 +193,11 @@ export function useStoryData() {
       placement: liveVisible ? prefs.placement : "center",
       liveVisible,
       passThresholdPercent: prefs.passThresholdPercent,
+      diffThreshold: DEFAULT_DIFF_THRESHOLD,
+      diffIncludeAntiAliasing: false,
+      delay: 0,
+      ignoreSelectors: [],
+      cropToViewport: false,
     };
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
@@ -231,12 +252,19 @@ export function useStoryData() {
     [EVENTS.INIT_IMAGE]: (data: {
       images: VisualDeltaImage | VisualDeltaImage[];
       interactions?: VisualDeltaInteraction[];
+      modes?: VisualDeltaModes;
+      modeNames?: string[];
       storyId: string;
       storyName: string;
       opacity?: number;
       colorInversion?: boolean;
       placement?: PlacementMode;
       passThresholdPercent?: number;
+      diffThreshold?: number;
+      diffIncludeAntiAliasing?: boolean;
+      delay?: number;
+      ignoreSelectors?: string[];
+      cropToViewport?: boolean;
     }) => {
       const imagesArray = Array.isArray(data.images)
         ? data.images
@@ -314,9 +342,15 @@ export function useStoryData() {
           (interactionSrc != null || prefs.overlayOn || !liveVisible)
             ? 0
             : -1;
+        const modes = data.modes ?? {};
+        const modeNames = data.modeNames ?? Object.keys(modes);
         const next: StoryData = {
           images,
           interactions,
+          modes,
+          modeNames,
+          selectedMode:
+            prev.storyId === data.storyId ? prev.selectedMode : null,
           storyId: data.storyId,
           storyName: data.storyName,
           index: initialIndex,
@@ -325,7 +359,15 @@ export function useStoryData() {
           colorInversion: liveVisible ? prefs.colorInversion : false,
           placement,
           liveVisible,
-          passThresholdPercent: prefs.passThresholdPercent,
+          passThresholdPercent:
+            data.passThresholdPercent ??
+            prefs.passThresholdPercent ??
+            DEFAULT_PASS_THRESHOLD_PERCENT,
+          diffThreshold: data.diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
+          diffIncludeAntiAliasing: data.diffIncludeAntiAliasing ?? false,
+          delay: typeof data.delay === "number" ? data.delay : 0,
+          ignoreSelectors: data.ignoreSelectors ?? [],
+          cropToViewport: data.cropToViewport ?? false,
         };
         emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
           opacity: next.opacity,
@@ -854,6 +896,45 @@ export function useStoryData() {
     setStoryData((prev) => ({ ...prev, interactions: next }));
   }, []);
 
+  /**
+   * Select a Chromatic-style mode: pin matching gallery image (if any) and
+   * store the mode name so the panel can apply Storybook globals.
+   */
+  const setSelectedMode = useCallback(
+    (modeName: string | null) => {
+      setStoryData((prev) => {
+        if (modeName == null) {
+          const images = withPlacement(primaryImagesRef.current, prev.placement);
+          const index = images.length > 0 ? 0 : -1;
+          const next: StoryData = {
+            ...prev,
+            selectedMode: null,
+            images,
+            index,
+            overlayOn: index >= 0,
+          };
+          void selectImage(index, images);
+          return next;
+        }
+        const primary = primaryImagesRef.current;
+        const modeIndex = primary.findIndex((img) => img.mode === modeName);
+        if (modeIndex >= 0) {
+          const next: StoryData = {
+            ...prev,
+            selectedMode: modeName,
+            images: primary,
+            index: modeIndex,
+            overlayOn: true,
+          };
+          void selectImage(modeIndex, primary);
+          return next;
+        }
+        return { ...prev, selectedMode: modeName };
+      });
+    },
+    [selectImage],
+  );
+
   return {
     ...storyData,
     primaryImages: primaryImagesRef.current,
@@ -864,6 +945,7 @@ export function useStoryData() {
     togglePlacement,
     setLiveVisible,
     setPassThresholdPercent,
+    setSelectedMode,
     hideOverlay,
     showOverlay,
     resetOverlay,

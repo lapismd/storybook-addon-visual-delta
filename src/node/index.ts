@@ -24,11 +24,26 @@ export {
 } from "./baseline-vite-plugin.js";
 export {
   baselinePublicUrl,
+  modeBaselineSlug,
   screenshotRelativePath,
   snapshotDirFromImportPath,
   snapshotFileName,
   type StoryIndexEntry,
 } from "./snapshot-paths.js";
+export type {
+  VisualDeltaModeDef,
+  VisualDeltaModes,
+} from "../shared/modes.js";
+export {
+  imagesFromModes,
+  modeNames,
+  stackModes,
+} from "../shared/modes.js";
+export {
+  BUILTIN_IGNORE_SELECTORS,
+  resolveIgnoreSelectors,
+} from "../shared/ignore.js";
+export type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 export {
   injectTypeScriptStoryBaselines,
   patchStorySkipVisual,

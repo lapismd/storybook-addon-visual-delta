@@ -6,6 +6,7 @@ import type { Plugin } from "vite";
 import {
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CAPTURE_PATH,
+  VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
@@ -15,6 +16,7 @@ import {
   isVisualReviewStatus,
   type VisualReviewStatus,
 } from "../constants.js";
+import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import {
   captureSubjectWithChromium,
@@ -778,6 +780,48 @@ async function handleSkipVisual(
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
+function handleConfig(
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+) {
+  const snapshotDir = resolveSnapshotDir(options, root);
+  const warnings: string[] = [];
+  if (!existsSync(snapshotDir)) {
+    warnings.push(`snapshotDir does not exist yet: ${snapshotDir}`);
+  }
+  const staticHint =
+    "Host must serve PNGs at /visual-baselines via Storybook staticDirs.";
+  if (!warnings.includes(staticHint)) {
+    /* always remind — cannot verify staticDirs from middleware alone */
+    warnings.push(staticHint);
+  }
+  const payload: VisualDeltaResolvedConfig = {
+    ok: true,
+    options: {
+      root,
+      snapshotDir,
+      baselinePathMode: options.baselinePathMode ?? "nested-import",
+      visualServerPort: options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
+      allowRebuild: options.allowRebuild !== false,
+      visualUpdateArgs: [
+        ...(options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS]),
+      ],
+      visualInteractionUpdateArgs: [
+        ...(options.visualInteractionUpdateArgs ?? [
+          ...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
+        ]),
+      ],
+      visualTestArgs: [
+        ...(options.visualTestArgs ?? [...DEFAULT_VISUAL_TEST_ARGS]),
+      ],
+      addonSrcDir: options.addonSrcDir?.trim() || null,
+    },
+    warnings,
+  };
+  writeJson(res, 200, payload);
+}
+
 async function handleCaptureSubject(
   req: IncomingMessage,
   res: ServerResponse,
@@ -833,6 +877,7 @@ async function handleCaptureSubject(
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual-pending / visual-approved tag
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
+ * - GET  /__visual-delta/config — resolved host options (read-only)
  */
 export function visualDeltaMiddlewarePlugin(
   options: VisualDeltaHostOptions = {},
@@ -843,6 +888,17 @@ export function visualDeltaMiddlewarePlugin(
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
         const root = resolveRoot(options, server.config.root);
+
+        if (url === VISUAL_DELTA_CONFIG_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          handleConfig(res, root, options);
+          return;
+        }
 
         if (url === VISUAL_DELTA_UPDATE_PATH) {
           if (req.method !== "POST") {

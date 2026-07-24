@@ -1,5 +1,8 @@
 import path from "node:path";
+import { modeBaselineSlug } from "../shared/modes.js";
 import type { BaselinePathMode } from "./options.js";
+
+export { modeBaselineSlug };
 
 export type StoryIndexEntry = {
   id: string;
@@ -51,17 +54,28 @@ export function snapshotFileName(
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
   platform: NodeJS.Platform | string = "darwin",
+  /** Optional Chromatic-style mode name → `--{slug}` before project/platform. */
+  visualModeName?: string,
 ): string {
+  const modeSlug = visualModeName ? modeBaselineSlug(visualModeName) : "";
+  const modeInfix = modeSlug ? `--${modeSlug}` : "";
   return screenshotRelativePath(entry, mode).replace(
     /\.png$/,
-    `-${project}-${platform}.png`,
+    `${modeInfix}-${project}-${platform}.png`,
   );
 }
 
 export function baselinePublicUrl(
   entry: StoryIndexEntry,
   mode: BaselinePathMode = "nested-import",
+  visualModeName?: string,
 ): string {
-  const file = snapshotFileName(entry, mode).replaceAll(path.sep, "/");
+  const file = snapshotFileName(
+    entry,
+    mode,
+    "chromium",
+    "darwin",
+    visualModeName,
+  ).replaceAll(path.sep, "/");
   return `/visual-baselines/${file}`;
 }

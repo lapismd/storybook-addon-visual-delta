@@ -18,6 +18,9 @@ export async function postChromiumSubjectCapture(
     visualCaptureUntil?: string;
     viewport?: { width: number; height: number };
     deviceScaleFactor?: number;
+    delay?: number;
+    ignoreSelectors?: string[];
+    cropToViewport?: boolean;
   },
   options?: {
     onProgress?: (progress: CaptureSubjectProgress) => void;

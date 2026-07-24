@@ -21,6 +21,10 @@ import {
 import { styled, useTheme } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
 import {
+  AcceptSplitButton,
+  type AcceptScope,
+} from "../manager/AcceptSplitButton.js";
+import {
   DiffCaptureSplitButton,
   type DiffCaptureEngine,
 } from "../manager/DiffCaptureSplitButton.js";
@@ -84,7 +88,10 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onStopDiff,
   onStopRun,
   onReviewStatus,
+  onAccept,
+  onUnaccept,
   onToggleSkipVisual,
+  onOpenConfiguration,
   isUpdating,
   onHeightChange,
 }: {
@@ -110,7 +117,10 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onStopDiff: () => void;
   onStopRun: () => void;
   onReviewStatus: (status: VisualReviewStatus) => void;
+  onAccept: (scope: AcceptScope) => void;
+  onUnaccept: (scope: AcceptScope) => void;
   onToggleSkipVisual: () => void;
+  onOpenConfiguration: () => void;
   isUpdating: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
@@ -206,11 +216,19 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
               {createLabel}
             </Button>
           ) : (
-            <ReviewStatusPad
-              value={reviewStatus}
-              disabled={busy || storyMissing || skipVisual}
-              onSelect={onReviewStatus}
-            />
+            <>
+              <AcceptSplitButton
+                busy={busy}
+                disabled={storyMissing || skipVisual}
+                onAccept={onAccept}
+                onUnaccept={onUnaccept}
+              />
+              <ReviewStatusPad
+                value={reviewStatus}
+                disabled={busy || storyMissing || skipVisual}
+                onSelect={onReviewStatus}
+              />
+            </>
           )}
           <WithTooltip
             hasChrome={false}
@@ -305,6 +323,20 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                         {reviewLayoutActive ? <CloseIcon /> : <ExpandIcon />}
                       </ActionList.Icon>
                       <ActionList.Text>{reviewLayoutLabel}</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel="Configuration"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onOpenConfiguration();
+                      }}
+                    >
+                      <ActionList.Icon>
+                        <EllipsisIcon />
+                      </ActionList.Icon>
+                      <ActionList.Text>Configuration</ActionList.Text>
                     </ActionList.Action>
                   </ActionList.Item>
                   <ActionList.Item>

@@ -22,6 +22,7 @@ import {
 } from "storybook/manager-api";
 import {
   ADDON_ID,
+  DEFAULT_DIFF_THRESHOLD,
   DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
   SKIP_VISUAL_TAG,
@@ -33,6 +34,7 @@ import {
   type VisualDeltaInteraction,
   type VisualReviewStatus,
 } from "../constants.js";
+import type { AcceptScope } from "../manager/AcceptSplitButton.js";
 import {
   DEFAULT_ADDON_STATE,
   type VisualDeltaAddonState,
@@ -86,8 +88,11 @@ import {
 import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
 import { PanelStatusBar } from "./PanelStatusBar.js";
 import { PlacementPad } from "./PlacementPad.js";
+import { ConfigurationPanel } from "./ConfigurationPanel.js";
+import { ModeSelector } from "./ModeSelector.js";
 import { VisualDeltaHeader } from "./VisualDeltaHeader.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
+import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import {
   endPlayDebug,
   gotoPlayStep,
@@ -131,6 +136,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const {
     images,
     interactions,
+    modes,
+    modeNames,
+    selectedMode,
     index,
     overlayOn,
     storyId,
@@ -139,12 +147,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     placement,
     liveVisible,
     passThresholdPercent,
+    diffThreshold,
+    diffIncludeAntiAliasing,
+    delay,
+    ignoreSelectors,
+    cropToViewport,
     setIndex,
     setOpacity,
     setColorInversion,
     togglePlacement,
     setLiveVisible,
     setPassThresholdPercent,
+    setSelectedMode,
     hideOverlay,
     showOverlay,
     resetOverlay,
@@ -157,6 +171,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     restorePrimaryBaselines,
     primaryImages,
   } = useStoryData();
+  const [showConfiguration, setShowConfiguration] = useState(false);
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
   const loading = !storyReady;
@@ -717,6 +732,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               visualCaptureUntil: selectedInteractionId ?? undefined,
               viewport: viewportForImage(selectedImage),
               deviceScaleFactor: deviceScaleFactorForImage(selectedImage),
+              delay,
+              ignoreSelectors: resolveIgnoreSelectors(ignoreSelectors),
+              cropToViewport,
             },
             {
               signal: abort.signal,
@@ -735,10 +753,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           await overlayHidden;
           let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
           try {
-            capture = await withPlaywrightPreviewViewport(
+                capture = await withPlaywrightPreviewViewport(
               () =>
                 capturePreviewSubject({
                   pixelRatio: deviceScaleFactorForImage(selectedImage),
+                  delay,
+                  ignoreSelectors: resolveIgnoreSelectors(ignoreSelectors),
+                  cropToViewport,
                 }),
               viewportForImage(selectedImage),
             );
@@ -790,8 +811,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           width,
           height,
           {
-            threshold: 0.2,
-            includeAA: false,
+            threshold: diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
+            includeAA: diffIncludeAntiAliasing,
             alpha: 0.1,
             diffColor: [255, 0, 0],
             diffColorAlt: [0, 255, 0],
@@ -869,8 +890,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     },
     [
       applyVisualStatuses,
+      cropToViewport,
+      delay,
+      diffIncludeAntiAliasing,
+      diffThreshold,
       getOverlayInfo,
       hideOverlay,
+      ignoreSelectors,
       images,
       index,
       passThresholdPercent,
@@ -944,6 +970,84 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
     },
     [storyId],
+  );
+
+  const handleAcceptScope = useCallback(
+    async (scope: AcceptScope) => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      setIsReviewing(true);
+      setCaptureError(null);
+      try {
+        const ids =
+          scope === "component"
+            ? componentStoryIdsFor(api, storyId)
+            : [storyId];
+        for (const id of ids) {
+          await postVisualReviewStatus({ storyId: id, status: "approved" });
+        }
+        setOptimisticReview("approved");
+        setUpdateLog(
+          scope === "component"
+            ? `Accepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} (visual-approved).`
+            : "Accepted story baseline (visual-approved).",
+        );
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error ? error.message : "Accept failed",
+        );
+      } finally {
+        setIsReviewing(false);
+      }
+    },
+    [api, storyId],
+  );
+
+  const handleUnacceptScope = useCallback(
+    async (scope: AcceptScope) => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      setIsReviewing(true);
+      setCaptureError(null);
+      try {
+        const ids =
+          scope === "component"
+            ? componentStoryIdsFor(api, storyId)
+            : [storyId];
+        for (const id of ids) {
+          await postVisualReviewStatus({ storyId: id, status: "pending" });
+        }
+        setOptimisticReview("pending");
+        setUpdateLog(
+          scope === "component"
+            ? `Unaccepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} (visual-pending).`
+            : "Unaccepted story baseline (visual-pending).",
+        );
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error ? error.message : "Unaccept failed",
+        );
+      } finally {
+        setIsReviewing(false);
+      }
+    },
+    [api, storyId],
+  );
+
+  const handleModeChange = useCallback(
+    (mode: string | null) => {
+      setSelectedMode(mode);
+      if (mode == null) return;
+      const globals = modes[mode]?.globals;
+      if (globals && typeof api.updateGlobals === "function") {
+        api.updateGlobals(globals);
+      }
+    },
+    [api, modes, setSelectedMode],
   );
 
   const handleToggleSkipVisual = useCallback(async () => {
@@ -1083,6 +1187,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 onSelect={setIndex}
               />
             ) : null}
+            {section.id === "default" ? (
+              <ModeSelector
+                modeNames={modeNames}
+                value={selectedMode}
+                onChange={handleModeChange}
+                disabled={busy}
+              />
+            ) : null}
             <LiveVisibilityToggle
               liveVisible={liveVisible}
               onToggle={setLiveVisible}
@@ -1160,13 +1272,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       </>
     ),
     [
+      busy,
       captureError,
       colorInversion,
       diffResult,
+      handleModeChange,
       images.length,
       index,
       isSplit,
       liveVisible,
+      modeNames,
       opacity,
       overlayOn,
       passThresholdPercent,
@@ -1174,6 +1289,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       primaryImages,
       resetOverlay,
       selectedInteractionId,
+      selectedMode,
       setColorInversion,
       setIndex,
       setLiveVisible,
@@ -1219,12 +1335,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             onStopDiff={handleStopDiff}
             onStopRun={() => void cancelVisualRun()}
             onReviewStatus={(status) => void handleSetReviewStatus(status)}
+            onAccept={(scope) => void handleAcceptScope(scope)}
+            onUnaccept={(scope) => void handleUnacceptScope(scope)}
             onToggleSkipVisual={() => void handleToggleSkipVisual()}
+            onOpenConfiguration={() => setShowConfiguration(true)}
             isUpdating={isUpdating}
             onHeightChange={setHeaderStickyTop}
           />
           <PanelBody>
-            {loading ? (
+            {showConfiguration ? (
+              <ConfigurationPanel
+                onClose={() => setShowConfiguration(false)}
+              />
+            ) : null}
+            {!showConfiguration && loading ? (
               <SkeletonRoot
                 role="status"
                 aria-busy="true"
@@ -1233,7 +1357,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 <SkeletonBone width="100%" height={180} radius={8} />
                 <SkeletonBone width="40%" height={12} radius={4} />
               </SkeletonRoot>
-            ) : isEmpty && baselineSections.length === 0 ? (
+            ) : null}
+            {!showConfiguration &&
+            !loading &&
+            isEmpty &&
+            baselineSections.length === 0 ? (
               <EmptyTabContent
                 title="Visual Delta"
                 description={
@@ -1254,7 +1382,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   </Button>
                 }
               />
-            ) : (
+            ) : null}
+            {!showConfiguration &&
+            !loading &&
+            !(isEmpty && baselineSections.length === 0) ? (
               <BaselineAccordion
                 sections={baselineSections}
                 expandedId={expandedId}
@@ -1273,7 +1404,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 }
                 renderBody={renderSectionBody}
               />
-            )}
+            ) : null}
           </PanelBody>
         </PanelScroll>
         <PanelStatusBar
