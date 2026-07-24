@@ -8,7 +8,9 @@ import {
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REVIEW_PATH,
+  VISUAL_DELTA_RUN_EVENTS_PATH,
   VISUAL_DELTA_RUN_PATH,
+  VISUAL_DELTA_RUN_STATUS_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
@@ -42,6 +44,8 @@ export type VisualRunResponse = {
   };
   results: VisualRunResultItem[];
   logTail: string;
+  /** Set when `/run-events` reports no active or recent run. */
+  idle?: boolean;
 };
 
 export type VisualRunProgress = {
@@ -54,11 +58,66 @@ export type VisualRunProgress = {
 };
 
 export type VisualRunStreamEvent =
+  | { type: "idle" }
   | { type: "start"; total: number }
   | ({ type: "progress" } & VisualRunProgress)
   | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)
   | { type: "error"; error: string; crashed?: boolean };
+
+const LAST_RUN_STORAGE_KEY = "visual-delta:last-run";
+const STATUS_JOB_STORAGE_KEY = "visual-delta:status-job";
+
+/** Survives manager HMR so Update status / remounts can restore the summary. */
+function persistVisualLastRun(lastRun: VisualLastRunSummary | null) {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (!lastRun) sessionStorage.removeItem(LAST_RUN_STORAGE_KEY);
+    else sessionStorage.setItem(LAST_RUN_STORAGE_KEY, JSON.stringify(lastRun));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+export function loadPersistedVisualLastRun(): VisualLastRunSummary | null {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(LAST_RUN_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as VisualLastRunSummary;
+  } catch {
+    return null;
+  }
+}
+
+export type VisualStatusJob = {
+  updates: Array<{ storyId: string; status: VisualReviewStatus }>;
+};
+
+function persistVisualStatusJob(job: VisualStatusJob | null) {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (!job) sessionStorage.removeItem(STATUS_JOB_STORAGE_KEY);
+    else sessionStorage.setItem(STATUS_JOB_STORAGE_KEY, JSON.stringify(job));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadPersistedVisualStatusJob(): VisualStatusJob | null {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(STATUS_JOB_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as VisualStatusJob;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPersistedVisualStatusJob() {
+  persistVisualStatusJob(null);
+}
 
 type LogListener = (line: string) => void;
 const logListeners = new Set<LogListener>();
@@ -124,6 +183,7 @@ export function subscribeVisualLastRun(listener: LastRunListener) {
 
 export function publishVisualLastRun(lastRun: VisualLastRunSummary | null) {
   latestLastRun = lastRun;
+  persistVisualLastRun(lastRun);
   for (const listener of lastRunListeners) {
     listener(lastRun);
   }
@@ -321,6 +381,9 @@ function notifyProgress(
   onProgress?.(progress);
 }
 
+/** Bumped per stream so an aborted HMR fetch does not clear a newer reconnect. */
+let ndjsonStreamGeneration = 0;
+
 async function readNdjsonRun(
   response: Response,
   onProgress?: (progress: VisualRunProgress) => void,
@@ -330,11 +393,13 @@ async function readNdjsonRun(
     throw new Error("Visual run response had no body");
   }
 
+  const generation = ++ndjsonStreamGeneration;
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let final: VisualRunResponse | null = null;
   let streamError: string | undefined;
+  let idle = false;
 
   try {
     while (true) {
@@ -351,6 +416,11 @@ async function readNdjsonRun(
         try {
           event = JSON.parse(trimmed) as VisualRunStreamEvent;
         } catch {
+          continue;
+        }
+
+        if (event.type === "idle") {
+          idle = true;
           continue;
         }
 
@@ -401,7 +471,21 @@ async function readNdjsonRun(
       }
     }
   } finally {
-    emitVisualRunProgress(null);
+    if (generation === ndjsonStreamGeneration) {
+      emitVisualRunProgress(null);
+    }
+  }
+
+  if (idle && !final) {
+    return {
+      ok: true,
+      idle: true,
+      exitCode: 0,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+    };
   }
 
   if (final) return final;
@@ -411,6 +495,63 @@ async function readNdjsonRun(
     crashed: true,
     error: streamError ?? "Visual run ended without a result",
     exitCode: 1,
+    rebuild: false,
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+    results: [],
+    logTail: "",
+  };
+}
+
+export type VisualRunHubStatus = {
+  phase: "idle" | "running" | "done";
+  total: number;
+  completed: number;
+  passed: number;
+  failed: number;
+};
+
+/** Lightweight phase check used before opening a reconnect stream. */
+export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
+  try {
+    const response = await fetch(VISUAL_DELTA_RUN_STATUS_PATH);
+    if (!response.ok) {
+      return { phase: "idle", total: 0, completed: 0, passed: 0, failed: 0 };
+    }
+    return (await response.json()) as VisualRunHubStatus;
+  } catch {
+    return { phase: "idle", total: 0, completed: 0, passed: 0, failed: 0 };
+  }
+}
+
+/**
+ * Reattach to an in-flight or recently finished visual run after manager HMR.
+ * Returns `idle` when there is nothing to recover.
+ */
+export async function reconnectVisualRun(options?: {
+  onProgress?: (progress: VisualRunProgress) => void;
+}): Promise<VisualRunResponse> {
+  const response = await fetch(VISUAL_DELTA_RUN_EVENTS_PATH);
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!response.ok) {
+    return {
+      ok: false,
+      crashed: true,
+      idle: true,
+      error: `Reconnect failed (${response.status})`,
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+    };
+  }
+  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
+    return readNdjsonRun(response, options?.onProgress);
+  }
+  return {
+    ok: true,
+    idle: true,
+    exitCode: 0,
     rebuild: false,
     summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
     results: [],
@@ -510,26 +651,81 @@ export async function postVisualReviewStatus(body: {
 /**
  * Stamp CSF review tags from visual run outcomes:
  * passed → ready, failed → failed. Skips skipped / timedOut.
+ * Uses one batched middleware call so HMR lands after the write finishes.
  */
 export async function postVisualReviewStatusesFromResults(
   results: VisualRunResultItem[],
 ): Promise<{ updated: number; errors: string[] }> {
-  let updated = 0;
-  const errors: string[] = [];
-  for (const item of results) {
-    if (item.status !== "passed" && item.status !== "failed") continue;
-    const status: VisualReviewStatus =
-      item.status === "passed" ? "ready" : "failed";
-    try {
-      await postVisualReviewStatus({ storyId: item.storyId, status });
-      updated += 1;
-    } catch (error) {
-      errors.push(
-        `${item.storyId}: ${error instanceof Error ? error.message : String(error)}`,
+  const updates = results
+    .filter((item) => item.status === "passed" || item.status === "failed")
+    .map((item) => ({
+      storyId: item.storyId,
+      status: (item.status === "passed" ? "ready" : "failed") as VisualReviewStatus,
+    }));
+  if (!updates.length) return { updated: 0, errors: [] };
+
+  persistVisualStatusJob({ updates });
+  try {
+    const response = await fetch(VISUAL_DELTA_REVIEW_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ updates }),
+    });
+    const data = (await response.json()) as {
+      ok?: boolean;
+      updated?: number;
+      errors?: string[];
+      error?: string;
+    };
+    if (!response.ok && data.updated == null) {
+      throw new Error(
+        data.error || `Review status update failed (${response.status})`,
       );
     }
+    clearPersistedVisualStatusJob();
+    return {
+      updated: data.updated ?? 0,
+      errors: data.errors ?? [],
+    };
+  } catch (error) {
+    // Leave the job in sessionStorage so remount can retry.
+    throw error;
   }
-  return { updated, errors };
+}
+
+/** Resume a batched review-status job left behind by manager HMR. */
+export async function resumePersistedVisualStatusJob(): Promise<{
+  updated: number;
+  errors: string[];
+} | null> {
+  const job = loadPersistedVisualStatusJob();
+  if (!job?.updates.length) return null;
+  persistVisualStatusJob(job);
+  try {
+    const response = await fetch(VISUAL_DELTA_REVIEW_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ updates: job.updates }),
+    });
+    const data = (await response.json()) as {
+      ok?: boolean;
+      updated?: number;
+      errors?: string[];
+      error?: string;
+    };
+    if (!response.ok && data.updated == null) {
+      throw new Error(
+        data.error || `Review status update failed (${response.status})`,
+      );
+    }
+    clearPersistedVisualStatusJob();
+    return {
+      updated: data.updated ?? 0,
+      errors: data.errors ?? [],
+    };
+  } catch (error) {
+    throw error;
+  }
 }
 
 /** Persist package-wide Playwright pass threshold (%) on the host. */

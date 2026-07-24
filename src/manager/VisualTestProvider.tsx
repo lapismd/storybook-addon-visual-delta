@@ -32,12 +32,17 @@ import {
   applyVisualStatuses,
   cancelVisualRun,
   clearVisualStatuses,
+  fetchVisualRunStatus,
   formatVisualProgressLabel,
+  loadPersistedVisualLastRun,
+  loadPersistedVisualStatusJob,
   postVisualCreateBaselinesForStoryIds,
   postVisualReviewStatusesFromResults,
   postVisualRun,
   postVisualUpdateBaselinesForStoryIds,
   publishVisualLastRun,
+  reconnectVisualRun,
+  resumePersistedVisualStatusJob,
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunLog,
@@ -70,6 +75,9 @@ type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
+
+/** Deduplicate remount recovery across provider instances after HMR. */
+let visualRecoveryInFlight: Promise<void> | null = null;
 
 /**
  * Same relative copy as Storybook’s Vitest Testing Module
@@ -290,7 +298,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
   );
   const allStatuses = experimental_useStatusStore();
-  const [lastRun, setLastRun] = useState<VisualLastRunSummary | null>(null);
+  const [lastRun, setLastRun] = useState<VisualLastRunSummary | null>(() =>
+    loadPersistedVisualLastRun(),
+  );
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
@@ -558,6 +568,104 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
     });
   }, []);
+
+  // After manager HMR (e.g. Update status rewriting CSF), reattach to a live
+  // Playwright run and restore / resume review-status work.
+  useEffect(() => {
+    if (entry) return;
+    if (visualRecoveryInFlight) return;
+
+    let cancelled = false;
+    visualRecoveryInFlight = (async () => {
+      const persisted = loadPersistedVisualLastRun();
+      if (persisted) publishVisualLastRun(persisted);
+
+      const hub = await fetchVisualRunStatus();
+      if (cancelled) return;
+
+      if (hub.phase === "running") {
+        if (hub.total > 0) {
+          setProgress({
+            completed: hub.completed,
+            total: hub.total,
+            passed: hub.passed,
+            failed: hub.failed,
+          });
+        }
+        await testProviderStore.runWithState(async () => {
+          const data = await reconnectVisualRun();
+          if (cancelled || data.idle) return;
+          applyVisualRunResults(undefined, data.results);
+          publishVisualLastRun({
+            finishedAt: Date.now(),
+            summary: data.summary,
+            error: data.crashed
+              ? (data.error ?? "Visual test run crashed")
+              : data.summary.failed > 0
+                ? `${data.summary.failed} failed`
+                : undefined,
+            logTail: data.logTail,
+            results: data.results,
+          });
+          if (data.crashed) {
+            throw new Error(data.error ?? "Visual test run crashed");
+          }
+        });
+      } else if (hub.phase === "done") {
+        const data = await reconnectVisualRun();
+        if (!cancelled && !data.idle) {
+          applyVisualRunResults(undefined, data.results);
+          publishVisualLastRun({
+            finishedAt: Date.now(),
+            summary: data.summary,
+            error: data.crashed
+              ? (data.error ?? "Visual test run crashed")
+              : data.summary.failed > 0
+                ? `${data.summary.failed} failed`
+                : undefined,
+            logTail: data.logTail,
+            results: data.results,
+          });
+        }
+      }
+
+      if (cancelled || !loadPersistedVisualStatusJob()) return;
+
+      await testProviderStore.runWithState(async () => {
+        setIsUpdatingStatus(true);
+        try {
+          const jobResults = loadPersistedVisualStatusJob()?.updates ?? [];
+          setStatusProgress({
+            completed: 0,
+            total: jobResults.length,
+          });
+          setStatusLog(
+            `Updating review status… 0/${jobResults.length} (resumed)`,
+          );
+          const result = await resumePersistedVisualStatusJob();
+          if (!result || cancelled) return;
+          setStatusProgress({
+            completed: jobResults.length,
+            total: jobResults.length,
+          });
+          const doneLabel = result.errors.length
+            ? `Updated ${result.updated} · ${result.errors.length} failed`
+            : `Updated ${result.updated} review tags`;
+          setStatusUpdateLabel(doneLabel);
+          setStatusLog(doneLabel);
+        } finally {
+          setIsUpdatingStatus(false);
+          setStatusProgress(null);
+        }
+      });
+    })().finally(() => {
+      visualRecoveryInFlight = null;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entry]);
 
   useEffect(() => {
     if (entry) return;

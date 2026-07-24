@@ -85,6 +85,11 @@ export {
   type VisualRunStreamEvent,
 } from "./middleware.js";
 export {
+  getVisualRunHubStatus,
+  isVisualRunActive,
+  type VisualRunHubStatus,
+} from "./run-hub.js";
+export {
   captureSubjectWithChromium,
   type CaptureSubjectError,
   type CaptureSubjectRequest,
