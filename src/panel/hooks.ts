@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChannel } from "storybook/manager-api";
 import {
   DEFAULT_DIFF_THRESHOLD,
-  DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
   isSplitPlacement,
   type PlacementMode,
@@ -17,12 +16,14 @@ import {
   shouldSoftShowOverlay,
 } from "../shared/overlay-session.js";
 import type { OverlayInfo } from "../types.js";
+import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
 import {
   clearSettings,
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
   SETTINGS_STORAGE_KEY,
+  type PassThresholdByEngine,
   type VisualDeltaSettings,
 } from "./settings.js";
 
@@ -78,7 +79,8 @@ type StoryData = {
   placement: PlacementMode;
   /** False = image-only (live hidden, center overlay). Default true. */
   liveVisible: boolean;
-  passThresholdPercent: number;
+  /** Pass threshold (%) scoped by Diff HTML vs Diff Chromium. */
+  passThresholdByEngine: PassThresholdByEngine;
   diffThreshold: number;
   diffIncludeAntiAliasing: boolean;
   delay: number;
@@ -192,7 +194,7 @@ export function useStoryData() {
       colorInversion: prefs.colorInversion,
       placement: liveVisible ? prefs.placement : "center",
       liveVisible,
-      passThresholdPercent: prefs.passThresholdPercent,
+      passThresholdByEngine: { ...prefs.passThresholdByEngine },
       diffThreshold: DEFAULT_DIFF_THRESHOLD,
       diffIncludeAntiAliasing: false,
       delay: 0,
@@ -227,7 +229,7 @@ export function useStoryData() {
         ? next.colorInversion
         : (priorStyle?.colorInversion ?? next.colorInversion),
       liveVisible: next.liveVisible,
-      passThresholdPercent: next.passThresholdPercent,
+      passThresholdByEngine: { ...next.passThresholdByEngine },
     };
     prefsRef.current = settings;
     saveSettings(settings);
@@ -359,10 +361,14 @@ export function useStoryData() {
           colorInversion: liveVisible ? prefs.colorInversion : false,
           placement,
           liveVisible,
-          passThresholdPercent:
-            data.passThresholdPercent ??
-            prefs.passThresholdPercent ??
-            DEFAULT_PASS_THRESHOLD_PERCENT,
+          passThresholdByEngine: {
+            html: prefs.passThresholdByEngine.html,
+            // CSF threshold aligns with Playwright / Chromium Diff.
+            chromium:
+              typeof data.passThresholdPercent === "number"
+                ? data.passThresholdPercent
+                : prefs.passThresholdByEngine.chromium,
+          },
           diffThreshold: data.diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
           diffIncludeAntiAliasing: data.diffIncludeAntiAliasing ?? false,
           delay: typeof data.delay === "number" ? data.delay : 0,
@@ -615,9 +621,15 @@ export function useStoryData() {
   );
 
   const setPassThresholdPercent = useCallback(
-    (passThresholdPercent: number) => {
+    (engine: DiffCaptureEngine, passThresholdPercent: number) => {
       setStoryData((prev) => {
-        const next = { ...prev, passThresholdPercent };
+        const next = {
+          ...prev,
+          passThresholdByEngine: {
+            ...prev.passThresholdByEngine,
+            [engine]: passThresholdPercent,
+          },
+        };
         persist(next);
         return next;
       });
@@ -647,7 +659,7 @@ export function useStoryData() {
         colorInversion: defaults.colorInversion,
         placement: defaults.placement,
         liveVisible: defaults.liveVisible,
-        passThresholdPercent: defaults.passThresholdPercent,
+        passThresholdByEngine: { ...defaults.passThresholdByEngine },
       };
       emitStyle(next);
       void selectImage(index, images);
