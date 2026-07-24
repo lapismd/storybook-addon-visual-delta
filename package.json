@@ -47,11 +47,15 @@
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
+    "playwright": "*",
     "react": "*",
     "storybook": "*",
     "vite": "*"
   },
   "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }

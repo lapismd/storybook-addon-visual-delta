@@ -47,4 +47,15 @@ export {
   type VisualRunResultItem,
   type VisualRunStreamEvent,
 } from "./middleware.js";
+export {
+  captureSubjectWithChromium,
+  type CaptureSubjectError,
+  type CaptureSubjectRequest,
+  type CaptureSubjectResult,
+} from "./capture-subject.js";
+export type {
+  CaptureSubjectPhase,
+  CaptureSubjectProgress,
+  CaptureSubjectStreamEvent,
+} from "../shared/capture-subject-types.js";
 export { watchVisualDeltaSourcePlugin } from "./watch-src.js";

@@ -175,6 +175,8 @@ export const VISUAL_DELTA_CANCEL_PATH = "/__visual-delta/cancel-tests";
 export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
 /** Storybook-dev middleware that adds or removes `skip-visual` on a story. */
 export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
+/** Storybook-dev middleware that captures a story subject via Playwright Chromium. */
+export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
 
 /** CSF tag: exclude story from Playwright visual suite / Visual Delta runs. */
 export const SKIP_VISUAL_TAG = "skip-visual";

@@ -283,6 +283,24 @@ exit affordance (hiding it remounts Storybook landmark regions and can crash
 the manager). Exit restores the prior sidebar, panel position, and sizes;
 Visual Delta stays selected.
 
+### Diff capture engines
+
+Diff is its own split button (separate from Story / Component / All runs):
+
+| Mode | Capture | Use when |
+| ---- | ------- | -------- |
+| **Diff HTML** | `html-to-image` in the live preview iframe | Fast iteration |
+| **Diff Chromium** | Playwright Chromium via `/__visual-delta/capture-subject` | Matching committed baselines (fonts, AA) |
+
+**Diff Chromium** streams NDJSON progress (`launching` → `navigating` →
+`settling` → `capturing` → `encoding`) into the Diff Stop control. Stop aborts
+the fetch mid-capture.
+
+`html-to-image` rasterizes through SVG `foreignObject`, so variable fonts
+(e.g. DM Sans Variable) can paint at different glyph widths than Playwright’s
+native screenshots. Prefer **Diff Chromium** when diagnosing baseline parity.
+Requires `playwright` installed in the host (optional peer of this package).
+
 Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 
 ## Addon vs host

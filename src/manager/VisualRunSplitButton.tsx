@@ -12,13 +12,19 @@ import {
 } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 
-/** Sidebar scopes. Panel also allows `diff` and `all`. */
+/** Sidebar scopes. Panel allows Story / Component / All (Diff is a separate control). */
 export type ScopedRunMode = "component" | "story";
-export type PanelRunMode = ScopedRunMode | "diff" | "all";
+export type PanelRunMode = ScopedRunMode | "all";
 export type VisualRunMode = PanelRunMode;
 
 const SIDEBAR_SCOPE_KEY = "storybook-addon-visual-delta/run-scope-v2";
 const PANEL_SCOPE_KEY = "storybook-addon-visual-delta/panel-run-scope-v2";
+
+const PANEL_MODES = [
+  "story",
+  "component",
+  "all",
+] as const satisfies readonly VisualRunMode[];
 
 const Split = styled.div<{ $compact?: boolean }>(({ theme, $compact }) => ({
   display: "inline-flex",
@@ -88,6 +94,14 @@ function loadMode(
   if (typeof localStorage === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(key);
+    // Migrate older panel prefs that mixed Diff into this control.
+    if (
+      raw === "diff" ||
+      raw === "diff-html" ||
+      raw === "diff-chromium"
+    ) {
+      return fallback;
+    }
     if (raw && (allowed as readonly string[]).includes(raw)) {
       return raw as VisualRunMode;
     }
@@ -107,7 +121,6 @@ function saveMode(key: string, mode: VisualRunMode) {
 }
 
 export function modeActionLabel(mode: VisualRunMode): string {
-  if (mode === "diff") return "Diff";
   if (mode === "story") return "Story";
   if (mode === "all") return "All";
   return "Component";
@@ -115,7 +128,6 @@ export function modeActionLabel(mode: VisualRunMode): string {
 
 /** Tooltip / aria copy for the action the play button will execute. */
 export function modeActionTooltip(mode: VisualRunMode): string {
-  if (mode === "diff") return "Compare live preview to the selected baseline";
   if (mode === "story") return "Run visual test for this story";
   if (mode === "all") return "Run all visual tests";
   return "Run visual tests for this component";
@@ -129,12 +141,11 @@ export function scopeActionTooltip(scope: ScopedRunMode): string {
 export function VisualRunSplitButton({
   isRunning,
   disabled,
-  diffDisabled,
   storyMissing,
   onRun,
   onStop,
   allowStory = true,
-  /** Visual Delta panel: include Diff, show label, default Diff. */
+  /** Visual Delta panel: show label, include All. */
   panel = false,
   compact = true,
   /** Shown next to Stop while a Playwright visual run is in progress. */
@@ -142,8 +153,6 @@ export function VisualRunSplitButton({
 }: {
   isRunning: boolean;
   disabled?: boolean;
-  /** When Diff is selected, disable play if no baseline is selected. */
-  diffDisabled?: boolean;
   /** Story/Component need a selected story; All does not. */
   storyMissing?: boolean;
   onRun: (mode: VisualRunMode) => void;
@@ -155,13 +164,13 @@ export function VisualRunSplitButton({
   progressLabel?: string | null;
 }) {
   const allowed = useMemo((): readonly VisualRunMode[] => {
-    if (panel) return ["diff", "story", "component", "all"] as const;
+    if (panel) return PANEL_MODES;
     if (allowStory) return ["story", "component"] as const;
     return ["component"] as const;
   }, [panel, allowStory]);
 
   const storageKey = panel ? PANEL_SCOPE_KEY : SIDEBAR_SCOPE_KEY;
-  const fallback: VisualRunMode = panel ? "diff" : "story";
+  const fallback: VisualRunMode = "story";
 
   const [mode, setMode] = useState<VisualRunMode>(() =>
     loadMode(storageKey, fallback, allowed),
@@ -206,12 +215,9 @@ export function VisualRunSplitButton({
 
   const tip = modeActionTooltip(mode);
   const label = modeActionLabel(mode);
-  const needsStory =
-    mode === "story" || mode === "component" || mode === "diff";
+  const needsStory = mode === "story" || mode === "component";
   const playDisabled =
-    Boolean(disabled) ||
-    (mode === "diff" && Boolean(diffDisabled)) ||
-    (needsStory && Boolean(storyMissing));
+    Boolean(disabled) || (needsStory && Boolean(storyMissing));
 
   const menuItems = allowed.map((item) => (
     <ActionList.Item key={item} active={mode === item}>
@@ -269,7 +275,7 @@ export function VisualRunSplitButton({
         visible={menuOpen}
         onVisibleChange={setMenuOpen}
         popover={() => (
-          <div style={{ minWidth: 160 }}>
+          <div style={{ minWidth: 200 }}>
             <ActionList>{menuItems}</ActionList>
           </div>
         )}
@@ -281,7 +287,7 @@ export function VisualRunSplitButton({
           $compact={compact}
           ariaLabel={
             panel
-              ? "Choose Diff, Story, Component, or All"
+              ? "Choose Story, Component, or All"
               : "Choose Story or Component"
           }
           title="Choose action"

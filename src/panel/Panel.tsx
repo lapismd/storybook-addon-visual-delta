@@ -60,6 +60,7 @@ import {
   type VisualCreateProgress,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
+import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import type { DiffResultData } from "../types.js";
 import {
@@ -69,6 +70,7 @@ import {
   maskTransparentRegions,
   withPlaywrightPreviewViewport,
 } from "./capture.js";
+import { postChromiumSubjectCapture } from "./chromium-capture.js";
 import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
 import { DiffResult } from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
@@ -300,6 +302,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const { getOverlayInfo } = useOverlayInfo();
   const { waitForOverlayHidden } = useOverlayHidden();
   const [isDiffing, setIsDiffing] = useState(false);
+  const [diffProgressLabel, setDiffProgressLabel] = useState<string | null>(
+    null,
+  );
+  const diffAbortRef = useRef<AbortController | null>(null);
+  const lastDiffEngineRef = useRef<DiffCaptureEngine>("html");
   const [isReviewing, setIsReviewing] = useState(false);
   const [optimisticReview, setOptimisticReview] =
     useState<VisualReviewStatus | null>(null);
@@ -535,23 +542,25 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const baselineStem = baselineSrc?.split("?")[0] ?? "";
   /** True for panel-initiated runs and sidebar / Testing Module runs. */
   const runInFlight = isRunningVisual || runProgress != null;
-  const progressLabel =
-    runInFlight && !isDiffing
-      ? formatVisualProgressLabel(runProgress)
-      : null;
+  const runProgressLabel = runInFlight
+    ? formatVisualProgressLabel(runProgress)
+    : null;
   const statusRunning =
     loading ||
     isCreating ||
     isUpdating ||
     isInteractionJob ||
-    runInFlight;
+    runInFlight ||
+    isDiffing;
   const statusLabel = loading
     ? "Loading…"
-    : statusRunning
-      ? runInFlight
-        ? progressLabel
-        : (baselineJob?.label ?? null)
-      : null;
+    : isDiffing
+      ? (diffProgressLabel ?? "Diffing…")
+      : statusRunning
+        ? runInFlight
+          ? runProgressLabel
+          : (baselineJob?.label ?? null)
+        : null;
 
   useEffect(() => {
     setCaptureError(null);
@@ -669,156 +678,215 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     });
   }, [api, currentStoryId, hydrateBaselineImages, revealCenteredOverlay]);
 
-  const handleDiff = useCallback(async () => {
-    if (index === -1 || !images[index]) {
-      setCaptureError("Please select a baseline image first");
-      return;
-    }
-    setIsDiffing(true);
-    setCaptureError(null);
-    setDiffResult(null);
-    try {
-      const currentOverlayInfo = await getOverlayInfo();
-      if (!currentOverlayInfo?.image?.src) {
-        throw new Error(
-          "Unable to get baseline image; make sure an image is selected",
-        );
+  const handleDiff = useCallback(
+    async (engine: DiffCaptureEngine = "html") => {
+      if (index === -1 || !images[index]) {
+        setCaptureError("Please select a baseline image first");
+        return;
       }
-      const baseline = await loadImage(currentOverlayInfo.image.src);
-      const overlayHidden = waitForOverlayHidden();
-      hideOverlay();
-      await overlayHidden;
-      let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
+      if (!storyId && engine === "chromium") {
+        setCaptureError("No story selected for Chromium Diff");
+        return;
+      }
+      lastDiffEngineRef.current = engine;
+      diffAbortRef.current?.abort();
+      const abort = new AbortController();
+      diffAbortRef.current = abort;
+      setIsDiffing(true);
+      setDiffProgressLabel(
+        engine === "chromium" ? "Starting Chromium…" : "Diffing…",
+      );
+      setCaptureError(null);
+      setDiffResult(null);
       try {
+        const currentOverlayInfo = await getOverlayInfo();
+        if (!currentOverlayInfo?.image?.src) {
+          throw new Error(
+            "Unable to get baseline image; make sure an image is selected",
+          );
+        }
+        const baseline = await loadImage(currentOverlayInfo.image.src);
         const selectedImage = images[index];
-        capture = await withPlaywrightPreviewViewport(
-          () =>
-            capturePreviewSubject({
-              pixelRatio: deviceScaleFactorForImage(selectedImage),
-            }),
-          viewportForImage(selectedImage),
+        let actual: Awaited<ReturnType<typeof loadImage>>;
+        let captureTag: string;
+
+        if (engine === "chromium") {
+          const capture = await postChromiumSubjectCapture(
+            {
+              storyId: storyId!,
+              visualCaptureUntil: selectedInteractionId ?? undefined,
+              viewport: viewportForImage(selectedImage),
+              deviceScaleFactor: deviceScaleFactorForImage(selectedImage),
+            },
+            {
+              signal: abort.signal,
+              onProgress: (progress) => {
+                setDiffProgressLabel(progress.label);
+              },
+            },
+          );
+          if (abort.signal.aborted) return;
+          setDiffProgressLabel("Comparing…");
+          actual = await loadImage(capture.dataUrl);
+          captureTag = "chromium";
+        } else {
+          const overlayHidden = waitForOverlayHidden();
+          hideOverlay();
+          await overlayHidden;
+          let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
+          try {
+            capture = await withPlaywrightPreviewViewport(
+              () =>
+                capturePreviewSubject({
+                  pixelRatio: deviceScaleFactorForImage(selectedImage),
+                }),
+              viewportForImage(selectedImage),
+            );
+          } finally {
+            showOverlay();
+          }
+          if (abort.signal.aborted) return;
+          setDiffProgressLabel("Comparing…");
+          actual = await loadImage(capture.dataUrl);
+          captureTag = "html-to-image";
+        }
+
+        const width = baseline.width;
+        const height = baseline.height;
+        const baselineData = baseline.imageData.data;
+        const actualData = fitImageData(actual.imageData, width, height);
+        const sizeCore =
+          actual.width === width && actual.height === height
+            ? `${width}×${height}`
+            : `baseline ${width}×${height}, actual ${actual.width}×${actual.height} (padded/cropped)`;
+        const sizeNote = `${captureTag} · ${sizeCore}`;
+        const { baselineForDiff, actualForDiff, ignore } =
+          maskTransparentRegions(baselineData, actualData, width, height);
+        const actualMaskedCanvas = document.createElement("canvas");
+        actualMaskedCanvas.width = width;
+        actualMaskedCanvas.height = height;
+        const actualMaskedCtx = actualMaskedCanvas.getContext("2d");
+        if (!actualMaskedCtx) throw new Error("Unable to get canvas context");
+        const actualMaskedImageData = actualMaskedCtx.createImageData(
+          width,
+          height,
         );
+        actualMaskedImageData.data.set(actualData);
+        for (let p = 0; p < width * height; p++) {
+          if (!ignore[p]) continue;
+          const i = p * 4;
+          actualMaskedImageData.data[i] = 0;
+          actualMaskedImageData.data[i + 1] = 0;
+          actualMaskedImageData.data[i + 2] = 0;
+          actualMaskedImageData.data[i + 3] = 0;
+        }
+        actualMaskedCtx.putImageData(actualMaskedImageData, 0, 0);
+        const actualMaskedDataUrl = actualMaskedCanvas.toDataURL("image/png");
+        const diffData = new Uint8ClampedArray(width * height * 4);
+        const diffPixels = pixelmatch(
+          actualForDiff,
+          baselineForDiff,
+          diffData,
+          width,
+          height,
+          {
+            threshold: 0.2,
+            includeAA: false,
+            alpha: 0.1,
+            diffColor: [255, 0, 0],
+            diffColorAlt: [0, 255, 0],
+          },
+        );
+        const diffCanvas = document.createElement("canvas");
+        diffCanvas.width = width;
+        diffCanvas.height = height;
+        const ctx = diffCanvas.getContext("2d");
+        if (!ctx) throw new Error("Unable to get canvas context");
+        const diffImageData = ctx.createImageData(width, height);
+        diffImageData.data.set(diffData);
+        ctx.putImageData(diffImageData, 0, 0);
+        const { focusDataUrl, changeBounds } = buildFocusAssets(
+          actualMaskedImageData.data,
+          diffData,
+          width,
+          height,
+        );
+        const diffHistogram = buildDiffHistogram(
+          baselineForDiff,
+          actualForDiff,
+          diffData,
+          width,
+          height,
+        );
+        const totalPixels = width * height;
+        const diffPercent = (diffPixels / totalPixels) * 100;
+        const threshold = passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
+        const passed = diffPercent < threshold;
+        setDiffResult({
+          actualImage: actualMaskedDataUrl,
+          diffImage: diffCanvas.toDataURL("image/png"),
+          baselineImage: baseline.dataUrl,
+          focusImage: focusDataUrl,
+          changeBounds,
+          imageWidth: width,
+          imageHeight: height,
+          diffPixels,
+          totalPixels,
+          diffPercent,
+          passThresholdPercent: threshold,
+          passed,
+          sizeNote,
+          diffHistogram,
+        });
+        if (storyId) {
+          applyVisualStatuses([
+            visualResultFromLiveDiff({
+              storyId,
+              diffPercent,
+              diffPixels,
+              totalPixels,
+              passThresholdPercent: threshold,
+              passed,
+            }),
+          ]);
+        }
+      } catch (error) {
+        if (abort.signal.aborted) return;
+        const message =
+          error instanceof Error ? error.message : "Diff failed";
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        if (/aborted|abort/i.test(message)) return;
+        setCaptureError(message);
       } finally {
-        showOverlay();
+        if (diffAbortRef.current === abort) {
+          diffAbortRef.current = null;
+        }
+        setIsDiffing(false);
+        setDiffProgressLabel(null);
       }
-      const actual = await loadImage(capture.dataUrl);
-      const width = baseline.width;
-      const height = baseline.height;
-      const baselineData = baseline.imageData.data;
-      const actualData = fitImageData(actual.imageData, width, height);
-      const sizeNote =
-        actual.width === width && actual.height === height
-          ? `${width}×${height}`
-          : `baseline ${width}×${height}, actual ${actual.width}×${actual.height} (padded/cropped)`;
-      const { baselineForDiff, actualForDiff, ignore } = maskTransparentRegions(
-        baselineData,
-        actualData,
-        width,
-        height,
-      );
-      const actualMaskedCanvas = document.createElement("canvas");
-      actualMaskedCanvas.width = width;
-      actualMaskedCanvas.height = height;
-      const actualMaskedCtx = actualMaskedCanvas.getContext("2d");
-      if (!actualMaskedCtx) throw new Error("Unable to get canvas context");
-      const actualMaskedImageData = actualMaskedCtx.createImageData(
-        width,
-        height,
-      );
-      actualMaskedImageData.data.set(actualData);
-      for (let p = 0; p < width * height; p++) {
-        if (!ignore[p]) continue;
-        const i = p * 4;
-        actualMaskedImageData.data[i] = 0;
-        actualMaskedImageData.data[i + 1] = 0;
-        actualMaskedImageData.data[i + 2] = 0;
-        actualMaskedImageData.data[i + 3] = 0;
-      }
-      actualMaskedCtx.putImageData(actualMaskedImageData, 0, 0);
-      const actualMaskedDataUrl = actualMaskedCanvas.toDataURL("image/png");
-      const diffData = new Uint8ClampedArray(width * height * 4);
-      const diffPixels = pixelmatch(
-        actualForDiff,
-        baselineForDiff,
-        diffData,
-        width,
-        height,
-        {
-          threshold: 0.2,
-          includeAA: false,
-          alpha: 0.1,
-          diffColor: [255, 0, 0],
-          diffColorAlt: [0, 255, 0],
-        },
-      );
-      const diffCanvas = document.createElement("canvas");
-      diffCanvas.width = width;
-      diffCanvas.height = height;
-      const ctx = diffCanvas.getContext("2d");
-      if (!ctx) throw new Error("Unable to get canvas context");
-      const diffImageData = ctx.createImageData(width, height);
-      diffImageData.data.set(diffData);
-      ctx.putImageData(diffImageData, 0, 0);
-      const { focusDataUrl, changeBounds } = buildFocusAssets(
-        actualMaskedImageData.data,
-        diffData,
-        width,
-        height,
-      );
-      const diffHistogram = buildDiffHistogram(
-        baselineForDiff,
-        actualForDiff,
-        diffData,
-        width,
-        height,
-      );
-      const totalPixels = width * height;
-      const diffPercent = (diffPixels / totalPixels) * 100;
-      const threshold = passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
-      const passed = diffPercent < threshold;
-      setDiffResult({
-        actualImage: actualMaskedDataUrl,
-        diffImage: diffCanvas.toDataURL("image/png"),
-        baselineImage: baseline.dataUrl,
-        focusImage: focusDataUrl,
-        changeBounds,
-        imageWidth: width,
-        imageHeight: height,
-        diffPixels,
-        totalPixels,
-        diffPercent,
-        passThresholdPercent: threshold,
-        passed,
-        sizeNote,
-        diffHistogram,
-      });
-      if (storyId) {
-        applyVisualStatuses([
-          visualResultFromLiveDiff({
-            storyId,
-            diffPercent,
-            diffPixels,
-            totalPixels,
-            passThresholdPercent: threshold,
-            passed,
-          }),
-        ]);
-      }
-    } catch (error) {
-      setCaptureError(error instanceof Error ? error.message : "Diff failed");
-    } finally {
-      setIsDiffing(false);
-    }
-  }, [
-    index,
-    images,
-    storyId,
-    passThresholdPercent,
-    getOverlayInfo,
-    waitForOverlayHidden,
-    hideOverlay,
-    showOverlay,
-  ]);
+    },
+    [
+      applyVisualStatuses,
+      getOverlayInfo,
+      hideOverlay,
+      images,
+      index,
+      passThresholdPercent,
+      selectedInteractionId,
+      showOverlay,
+      storyId,
+      waitForOverlayHidden,
+    ],
+  );
+
+  const handleStopDiff = useCallback(() => {
+    diffAbortRef.current?.abort();
+    diffAbortRef.current = null;
+    setIsDiffing(false);
+    setDiffProgressLabel(null);
+  }, []);
 
   const handleUpdateBaselines = useCallback(async () => {
     if (!storyId) {
@@ -976,16 +1044,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [api, storyId],
   );
 
-  const handleSplitAction = useCallback(
+  const handleRun = useCallback(
     (mode: VisualRunMode) => {
-      if (mode === "diff") {
-        void handleDiff();
-        return;
-      }
       void handleRunVisual(mode);
     },
-    [handleDiff, handleRunVisual],
+    [handleRunVisual],
   );
+
+  const handleReRunDiff = useCallback(() => {
+    void handleDiff(lastDiffEngineRef.current);
+  }, [handleDiff]);
 
   const isEmpty = primaryImages.length === 0 && images.length === 0;
   const badgeStatus = diffResult
@@ -1131,10 +1199,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             empty={loading ? false : isEmpty}
             busy={busy || loading}
             storyMissing={!storyId || loading}
-            isRunning={
-              !loading && (isRunningVisual || isDiffing || runProgress != null)
-            }
-            progressLabel={loading ? null : progressLabel}
+            isDiffing={!loading && isDiffing}
+            isRunning={!loading && runInFlight}
+            diffProgressLabel={loading ? null : diffProgressLabel}
+            runProgressLabel={loading ? null : runProgressLabel}
             createLabel={
               isCreating
                 ? (createProgress?.label ?? "Creating…")
@@ -1142,11 +1210,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             }
             reviewStatus={loading ? null : reviewStatus}
             skipVisual={loading ? false : skipVisual}
-            onRunDiff={handleSplitAction}
+            onDiff={(engine) => void handleDiff(engine)}
+            onRun={handleRun}
+            onReRunDiff={handleReRunDiff}
             onCreate={() => void handleCreateBaselines()}
             onUpdateBaselines={() => void handleUpdateBaselines()}
             onResetSettings={resetSettings}
-            onStop={() => void cancelVisualRun()}
+            onStopDiff={handleStopDiff}
+            onStopRun={() => void cancelVisualRun()}
             onReviewStatus={(status) => void handleSetReviewStatus(status)}
             onToggleSkipVisual={() => void handleToggleSkipVisual()}
             isUpdating={isUpdating}

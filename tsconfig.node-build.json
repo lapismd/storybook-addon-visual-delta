@@ -15,6 +15,7 @@
   "include": [
     "src/constants.ts",
     "src/visual-diff-sidecar.ts",
+    "src/shared/capture-subject-types.ts",
     "src/node/**/*.ts"
   ],
   "exclude": ["src/**/*.spec.ts"]
