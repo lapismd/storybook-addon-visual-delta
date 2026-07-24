@@ -41,7 +41,10 @@ import {
   patchStorySkipVisual,
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
-import { loadSidecarForStoryId } from "./visual-sidecars.js";
+import {
+  baselinePngExistsForStoryId,
+  loadSidecarForStoryId,
+} from "./visual-sidecars.js";
 import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
@@ -83,10 +86,7 @@ type InteractionUpdateBody = {
 
 type SpawnedVisualCommand = ChildProcess & {
   on: {
-    (
-      event: "error",
-      listener: (error: Error) => void,
-    ): SpawnedVisualCommand;
+    (event: "error", listener: (error: Error) => void): SpawnedVisualCommand;
     (
       event: "close",
       listener: (code: number | null) => void,
@@ -218,6 +218,10 @@ function parsePlaywrightJson(raw: string): VisualRunResultItem[] {
   return results;
 }
 
+/** Error when refusing `visual-failed` without a committed baseline PNG. */
+export const NO_BASELINE_FAILED_ERROR =
+  "Cannot mark failed — no baseline screenshot";
+
 /** Attach on-disk JSON sidecars produced by the visual suite. */
 export function attachSidecars(
   results: VisualRunResultItem[],
@@ -233,8 +237,37 @@ export function attachSidecars(
       snapshotDir,
       mode,
     );
-    return sidecar ? { ...item, sidecar } : item;
+    const hasBaseline = baselinePngExistsForStoryId(
+      item.storyId,
+      packageRoot,
+      snapshotDir,
+      mode,
+    );
+    let next: VisualRunResultItem = sidecar
+      ? { ...item, sidecar }
+      : { ...item };
+    if (item.status === "failed" && !hasBaseline) {
+      next = {
+        ...next,
+        missingBaseline: true,
+        error: next.error ?? "No baseline screenshot",
+      };
+    }
+    return next;
   });
+}
+
+function canMarkVisualFailed(
+  root: string,
+  storyId: string,
+  options: VisualDeltaHostOptions,
+): boolean {
+  return baselinePngExistsForStoryId(
+    storyId,
+    root,
+    resolveSnapshotDir(options, root),
+    resolveBaselinePathMode(options),
+  );
 }
 
 function extractJsonDocument(log: string): string | null {
@@ -564,9 +597,7 @@ async function handleRun(
   const staticIframe = path.join(root, "storybook-static", "iframe.html");
   const staticComplete = existsSync(staticIndex) && existsSync(staticIframe);
   const allowRebuild = options.allowRebuild !== false;
-  const rebuild =
-    allowRebuild &&
-    (Boolean(body.rebuild) || !staticComplete);
+  const rebuild = allowRebuild && (Boolean(body.rebuild) || !staticComplete);
   const grep = grepFromStoryIds(body.storyIds);
   let log = "";
 
@@ -752,6 +783,7 @@ async function handleReviewStatus(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
+  options: VisualDeltaHostOptions = {},
 ) {
   let body: ReviewBody;
   try {
@@ -775,9 +807,11 @@ async function handleReviewStatus(
       const storyId = item.storyId?.trim();
       const status = item.status;
       if (!storyId || !isVisualReviewStatus(status)) {
-        errors.push(
-          `${storyId ?? "(missing)"}: invalid storyId/status`,
-        );
+        errors.push(`${storyId ?? "(missing)"}: invalid storyId/status`);
+        continue;
+      }
+      if (status === "failed" && !canMarkVisualFailed(root, storyId, options)) {
+        errors.push(`${storyId}: ${NO_BASELINE_FAILED_ERROR}`);
         continue;
       }
       const result = patchStoryVisualReviewStatus({
@@ -799,6 +833,16 @@ async function handleReviewStatus(
       ok: false,
       error:
         'Provide storyId and status ("pending" | "approved" | "ready" | "failed"), or updates[]',
+    });
+    return;
+  }
+
+  if (status === "failed" && !canMarkVisualFailed(root, storyId, options)) {
+    writeJson(res, 400, {
+      ok: false,
+      storyId,
+      status,
+      error: NO_BASELINE_FAILED_ERROR,
     });
     return;
   }
@@ -962,10 +1006,7 @@ function handleInit(
   });
 }
 
-async function handleCaptureSubject(
-  req: IncomingMessage,
-  res: ServerResponse,
-) {
+async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
   let body: CaptureSubjectRequest;
   try {
     body = await readJsonBody<CaptureSubjectRequest>(req);
@@ -1123,7 +1164,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleReviewStatus(req, res, root);
+          await handleReviewStatus(req, res, root, options);
           return;
         }
 

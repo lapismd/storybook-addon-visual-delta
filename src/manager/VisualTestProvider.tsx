@@ -164,9 +164,7 @@ export function moduleDescription(
   if (lastRun) {
     const total = Math.max(
       lastRun.summary.total,
-      lastRun.summary.passed +
-        lastRun.summary.failed +
-        lastRun.summary.skipped,
+      lastRun.summary.passed + lastRun.summary.failed + lastRun.summary.skipped,
     );
     parts.push(
       <React.Fragment key="tests">
@@ -313,7 +311,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [statusUpdateLabel, setStatusUpdateLabel] = useState<string | null>(
     null,
   );
-  const [runVisualEnabled, setRunVisualEnabled] = useState(loadRunVisualEnabled);
+  const [runVisualEnabled, setRunVisualEnabled] =
+    useState(loadRunVisualEnabled);
   const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(
     loadCreateBaselinesEnabled,
   );
@@ -398,9 +397,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         finishedAt: Date.now(),
         summary: data.summary,
         error:
-          data.summary.failed > 0
-            ? `${data.summary.failed} failed`
-            : undefined,
+          data.summary.failed > 0 ? `${data.summary.failed} failed` : undefined,
         scope,
         logTail: data.logTail,
         results: data.results,
@@ -436,9 +433,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         (entryStoryIdsRef.current?.length
           ? entryStoryIdsRef.current
           : undefined);
-      const writeTargets = scope?.length
-        ? scope
-        : sidebarStoryIdsRef.current;
+      const writeTargets = scope?.length ? scope : sidebarStoryIdsRef.current;
       const compareScope: VisualRunScope = scope?.length
         ? scope.length === 1
           ? "story"
@@ -492,15 +487,20 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             }
             setStatusProgress({ completed: 0, total: source.length });
             setStatusLog(`Updating review status… 0/${source.length}`);
-            const { updated, errors } =
+            const { updated, errors, skippedMissingBaseline } =
               await postVisualReviewStatusesFromResults(source);
             setStatusProgress({
               completed: source.length,
               total: source.length,
             });
-            const doneLabel = errors.length
-              ? `Updated ${updated} · ${errors.length} failed`
-              : `Updated ${updated} review tags`;
+            const parts = [`Updated ${updated} review tags`];
+            if (skippedMissingBaseline) {
+              parts.push(`${skippedMissingBaseline} skipped (no baseline)`);
+            }
+            if (errors.length) {
+              parts.push(`${errors.length} failed`);
+            }
+            const doneLabel = parts.join(" · ");
             setStatusUpdateLabel(doneLabel);
             setStatusLog(doneLabel);
             if (errors.length && updated === 0) {
@@ -723,12 +723,18 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     ? (formatProgressFraction(progress?.completed, progress?.total) ?? "…")
     : null;
   const baselineRowProgress = isWritingBaselines
-    ? (formatProgressFraction(createProgress?.completed, createProgress?.total) ??
-      (createProgress?.label?.match(/(\d+)\s*\/\s*(\d+)/)?.[0] ?? "…"))
+    ? (formatProgressFraction(
+        createProgress?.completed,
+        createProgress?.total,
+      ) ??
+      createProgress?.label?.match(/(\d+)\s*\/\s*(\d+)/)?.[0] ??
+      "…")
     : null;
   const statusRowProgress = isUpdatingStatus
-    ? (formatProgressFraction(statusProgress?.completed, statusProgress?.total) ??
-      "…")
+    ? (formatProgressFraction(
+        statusProgress?.completed,
+        statusProgress?.total,
+      ) ?? "…")
     : null;
 
   const baselineStatus = baselineChipStatus(isWritingBaselines, createProgress);
