@@ -20,6 +20,10 @@ import {
 } from "storybook/internal/components";
 import { styled, useTheme } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
+import {
+  DiffCaptureSplitButton,
+  type DiffCaptureEngine,
+} from "../manager/DiffCaptureSplitButton.js";
 import { useReviewLayoutToggle } from "../manager/ReviewLayoutTool.js";
 import {
   VisualRunSplitButton,
@@ -64,16 +68,21 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   empty,
   busy,
   storyMissing,
+  isDiffing,
   isRunning,
-  progressLabel,
+  diffProgressLabel,
+  runProgressLabel,
   createLabel,
   reviewStatus,
   skipVisual,
-  onRunDiff,
+  onDiff,
+  onRun,
+  onReRunDiff,
   onCreate,
   onUpdateBaselines,
   onResetSettings,
-  onStop,
+  onStopDiff,
+  onStopRun,
   onReviewStatus,
   onToggleSkipVisual,
   isUpdating,
@@ -83,17 +92,23 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   empty: boolean;
   busy: boolean;
   storyMissing: boolean;
+  isDiffing: boolean;
   isRunning: boolean;
-  progressLabel: string | null;
+  diffProgressLabel: string | null;
+  runProgressLabel: string | null;
   createLabel: string;
   reviewStatus: VisualReviewStatus | null;
   /** Story CSF currently has `skip-visual`. */
   skipVisual: boolean;
-  onRunDiff: (mode: VisualRunMode) => void;
+  onDiff: (engine: DiffCaptureEngine) => void;
+  onRun: (mode: VisualRunMode) => void;
+  /** Re-run Diff with the last selected capture engine (HTML or Chromium). */
+  onReRunDiff?: () => void;
   onCreate: () => void;
   onUpdateBaselines: () => void;
   onResetSettings: () => void;
-  onStop: () => void;
+  onStopDiff: () => void;
+  onStopRun: () => void;
   onReviewStatus: (status: VisualReviewStatus) => void;
   onToggleSkipVisual: () => void;
   isUpdating: boolean;
@@ -138,17 +153,25 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
         aria-label="Visual Delta controls"
       >
         <ControlsGroup>
+          <DiffCaptureSplitButton
+            compact
+            isRunning={isDiffing}
+            progressLabel={diffProgressLabel}
+            disabled={busy && !isDiffing}
+            storyMissing={storyMissing}
+            onDiff={onDiff}
+            onStop={onStopDiff}
+          />
           <VisualRunSplitButton
             panel
             compact
             isRunning={isRunning}
-            progressLabel={progressLabel}
+            progressLabel={runProgressLabel}
             disabled={busy && !isRunning}
             storyMissing={storyMissing}
-            diffDisabled={false}
             allowStory
-            onRun={onRunDiff}
-            onStop={onStop}
+            onRun={onRun}
+            onStop={onStopRun}
           />
           {badgeStatus ? (
             <>
@@ -163,7 +186,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                 <BadgeActionButton
                   type="button"
                   disabled={busy || storyMissing}
-                  onClick={() => onRunDiff("diff")}
+                  onClick={() => onReRunDiff?.()}
                   aria-label="Re-run Diff"
                 >
                   Diff

@@ -4,6 +4,7 @@ import type {
   VisualDeltaImage,
   VisualReviewStatus,
 } from "../constants.js";
+import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
@@ -86,7 +87,11 @@ export function PanelShell({
   const [diffResult, setDiffResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [progressLabel, setProgressLabel] = useState<string | null>(null);
+  const [isDiffing, setIsDiffing] = useState(false);
+  const [diffProgressLabel, setDiffProgressLabel] = useState<string | null>(
+    null,
+  );
+  const [runProgressLabel, setRunProgressLabel] = useState<string | null>(null);
   const [statusLog, setStatusLog] = useState("");
   const [expandedId, setExpandedId] = useState<"default" | string | null>(
     "default",
@@ -110,7 +115,7 @@ export function PanelShell({
 
   const handleCreate = useCallback(async () => {
     setBusy(true);
-    setProgressLabel("Creating…");
+    setRunProgressLabel("Creating…");
     try {
       const log = await backend.createBaseline(DEMO_STORY_ID);
       appendLog(log);
@@ -119,13 +124,13 @@ export function PanelShell({
       recordActions();
     } finally {
       setBusy(false);
-      setProgressLabel(null);
+      setRunProgressLabel(null);
     }
   }, [appendLog, backend, recordActions]);
 
   const handleUpdate = useCallback(async () => {
     setBusy(true);
-    setProgressLabel("Updating…");
+    setRunProgressLabel("Updating…");
     try {
       const log = await backend.updateBaseline(DEMO_STORY_ID);
       appendLog(log);
@@ -133,21 +138,36 @@ export function PanelShell({
       recordActions();
     } finally {
       setBusy(false);
-      setProgressLabel(null);
+      setRunProgressLabel(null);
     }
   }, [appendLog, backend, recordActions]);
 
-  const handleRunDiff = useCallback(
+  const handleDiff = useCallback(
+    (engine: DiffCaptureEngine) => {
+      backend.actions.push("diff");
+      setIsDiffing(true);
+      setDiffProgressLabel(
+        engine === "chromium" ? "Capturing…" : "Diffing…",
+      );
+      setDiffResult(
+        engine === "chromium"
+          ? "Live Diff Chromium: 0.0000% (mock)"
+          : "Live Diff HTML: 0.0000% (mock)",
+      );
+      setBadgeStatus("pass");
+      recordActions();
+      window.setTimeout(() => {
+        setIsDiffing(false);
+        setDiffProgressLabel(null);
+      }, 0);
+    },
+    [backend, recordActions],
+  );
+
+  const handleRun = useCallback(
     async (mode: VisualRunMode) => {
-      if (mode === "diff") {
-        backend.actions.push("diff");
-        setDiffResult("Live Diff: 0.0000% (mock)");
-        setBadgeStatus("pass");
-        recordActions();
-        return;
-      }
       setIsRunning(true);
-      setProgressLabel("Testing…");
+      setRunProgressLabel(mode === "all" ? "Testing all…" : "Testing…");
       try {
         for await (const chunk of backend.runTests([DEMO_STORY_ID])) {
           appendLog(chunk);
@@ -158,7 +178,7 @@ export function PanelShell({
               total?: number;
             };
             if (event.type === "progress" && event.completed != null) {
-              setProgressLabel(
+              setRunProgressLabel(
                 `Testing… ${event.completed}/${event.total ?? "?"}`,
               );
             }
@@ -170,18 +190,24 @@ export function PanelShell({
         recordActions();
       } finally {
         setIsRunning(false);
-        setProgressLabel(null);
+        setRunProgressLabel(null);
       }
     },
     [appendLog, backend, recordActions],
   );
 
-  const handleStop = useCallback(async () => {
+  const handleStopRun = useCallback(async () => {
     await backend.cancelTests();
     setIsRunning(false);
-    setProgressLabel(null);
+    setRunProgressLabel(null);
     recordActions();
   }, [backend, recordActions]);
+
+  const handleStopDiff = useCallback(() => {
+    setIsDiffing(false);
+    setDiffProgressLabel(null);
+    recordActions();
+  }, [recordActions]);
 
   const handleReview = useCallback(
     async (status: VisualReviewStatus) => {
@@ -252,14 +278,18 @@ export function PanelShell({
       <VisualDeltaHeader
         badgeStatus={badgeStatus}
         empty={images.length === 0}
-        busy={busy}
+        busy={busy || isDiffing || isRunning}
         storyMissing={false}
+        isDiffing={isDiffing}
         isRunning={isRunning}
-        progressLabel={progressLabel}
+        diffProgressLabel={diffProgressLabel}
+        runProgressLabel={runProgressLabel}
         createLabel={busy ? "Creating…" : "Create visual"}
         reviewStatus={reviewStatus}
         skipVisual={skipVisual}
-        onRunDiff={(mode) => void handleRunDiff(mode)}
+        onDiff={handleDiff}
+        onRun={(mode) => void handleRun(mode)}
+        onReRunDiff={() => handleDiff("html")}
         onCreate={() => void handleCreate()}
         onUpdateBaselines={() => void handleUpdate()}
         onResetSettings={() => {
@@ -267,7 +297,8 @@ export function PanelShell({
           setBadgeStatus(null);
           setStatusLog("");
         }}
-        onStop={() => void handleStop()}
+        onStopDiff={handleStopDiff}
+        onStopRun={() => void handleStopRun()}
         onReviewStatus={(status) => void handleReview(status)}
         onToggleSkipVisual={() => void handleToggleSkipVisual()}
         isUpdating={busy}

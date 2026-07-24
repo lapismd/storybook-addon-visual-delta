@@ -363,7 +363,10 @@ export function loadImage(src: string): Promise<{
 }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // `crossOrigin` on data: URLs can yield an empty decode in Chromium.
+    if (!src.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;

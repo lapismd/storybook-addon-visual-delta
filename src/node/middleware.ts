@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import {
   VISUAL_DELTA_CANCEL_PATH,
+  VISUAL_DELTA_CAPTURE_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_REVIEW_PATH,
@@ -15,6 +16,11 @@ import {
   type VisualReviewStatus,
 } from "../constants.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import {
+  captureSubjectWithChromium,
+  type CaptureSubjectRequest,
+} from "./capture-subject.js";
+import type { CaptureSubjectStreamEvent } from "../shared/capture-subject-types.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   DEFAULT_VISUAL_SERVER_PORT,
@@ -772,11 +778,57 @@ async function handleSkipVisual(
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
+async function handleCaptureSubject(
+  req: IncomingMessage,
+  res: ServerResponse,
+) {
+  let body: CaptureSubjectRequest;
+  try {
+    body = await readJsonBody<CaptureSubjectRequest>(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  beginNdjson(res);
+  const write = (event: CaptureSubjectStreamEvent) => {
+    res.write(`${JSON.stringify(event)}\n`);
+    const flushable = res as ServerResponse & { flush?: () => void };
+    flushable.flush?.();
+  };
+
+  // Client abort (Diff Stop) closes the request; stop emitting further events.
+  let clientClosed = false;
+  req.on("close", () => {
+    clientClosed = true;
+  });
+
+  write({ type: "start", storyId: body.storyId });
+  try {
+    const result = await captureSubjectWithChromium(body, (progress) => {
+      if (!clientClosed) write({ type: "progress", ...progress });
+    });
+    if (!clientClosed) write({ type: "done", ...result });
+  } catch (error) {
+    if (!clientClosed) {
+      write({
+        type: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  if (!res.writableEnded) res.end();
+}
+
 /**
  * Dev-only Visual Delta endpoints:
  * - POST /__visual-delta/update-baseline — regenerate baselines (overwrite)
  * - POST /__visual-delta/create-baseline — create missing baselines only
  * - POST /__visual-delta/create-interaction-baseline — mid-play step capture
+ * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual-pending / visual-approved tag
@@ -822,6 +874,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           await handleInteractionBaselineWrite(req, res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_CAPTURE_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleCaptureSubject(req, res);
           return;
         }
 
