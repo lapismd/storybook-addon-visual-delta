@@ -47,7 +47,9 @@ import {
   clearVisualStatuses,
   componentStoryIdsFor,
   formatVisualProgressLabel,
+  fetchVisualConfig,
   postVisualCreateBaseline,
+  postVisualInit,
   postVisualInteractionBaseline,
   postVisualReviewStatus,
   postVisualRun,
@@ -323,6 +325,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const diffAbortRef = useRef<AbortController | null>(null);
   const lastDiffEngineRef = useRef<DiffCaptureEngine>("html");
   const [isReviewing, setIsReviewing] = useState(false);
+  const [onboardingReady, setOnboardingReady] = useState<boolean | null>(null);
+  const [onboardingHint, setOnboardingHint] = useState<string | null>(null);
+  const [isIniting, setIsIniting] = useState(false);
   const [optimisticReview, setOptimisticReview] =
     useState<VisualReviewStatus | null>(null);
   const [optimisticSkipVisual, setOptimisticSkipVisual] = useState<
@@ -358,7 +363,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isInteractionJob ||
     isRunningVisual ||
     runProgress != null ||
-    isReviewing;
+    isReviewing ||
+    isIniting;
   const storyEntry = storyId ? api.getData(storyId) : undefined;
   const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
   const reviewFromStory = visualReviewStatusFromTags(storyEntry?.tags);
@@ -942,6 +948,39 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     }
   }, [storyId]);
 
+  const refreshOnboarding = useCallback(async () => {
+    try {
+      const config = await fetchVisualConfig();
+      setOnboardingReady(config.onboarding.ready);
+      setOnboardingHint(config.onboarding.hint);
+    } catch {
+      setOnboardingReady(null);
+      setOnboardingHint(null);
+    }
+  }, []);
+
+  const handleInitScaffold = useCallback(async () => {
+    setIsIniting(true);
+    setCaptureError(null);
+    try {
+      const result = await postVisualInit();
+      setOnboardingReady(result.onboarding.ready);
+      setOnboardingHint(result.onboarding.hint);
+      const wrote = result.written.length
+        ? `Wrote ${result.written.join(", ")}.`
+        : "Scaffold files already present.";
+      setUpdateLog(
+        `${wrote} ${result.onboarding.ready ? "You can Create visual now." : result.onboarding.hint}`,
+      );
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error ? error.message : "Visual Delta init failed",
+      );
+    } finally {
+      setIsIniting(false);
+    }
+  }, []);
+
   const handleSetReviewStatus = useCallback(
     async (status: VisualReviewStatus) => {
       if (!storyId) {
@@ -1161,6 +1200,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [handleDiff]);
 
   const isEmpty = primaryImages.length === 0 && images.length === 0;
+  const needsScaffold = onboardingReady === false;
+
+  useEffect(() => {
+    if (!isEmpty || loading || skipVisual) return;
+    void refreshOnboarding();
+  }, [isEmpty, loading, skipVisual, refreshOnboarding]);
   const badgeStatus = diffResult
     ? diffResult.passed
       ? ("pass" as const)
@@ -1368,19 +1413,33 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 description={
                   skipVisual
                     ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use More → Include in visual tests to opt in, then Create visual."
-                    : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
+                    : needsScaffold
+                      ? (onboardingHint ??
+                        "Set up the Playwright suite and config, then create a baseline for this story.")
+                      : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
                 }
                 footer={
-                  <Button
-                    size="small"
-                    ariaLabel="Create visual baseline"
-                    disabled={!storyId || busy}
-                    onClick={() => void handleCreateBaselines()}
-                  >
-                    {isCreating
-                      ? (createProgress?.label ?? "Creating…")
-                      : "Create visual"}
-                  </Button>
+                  needsScaffold && !skipVisual ? (
+                    <Button
+                      size="small"
+                      ariaLabel="Set up Visual Delta Playwright suite"
+                      disabled={busy}
+                      onClick={() => void handleInitScaffold()}
+                    >
+                      {isIniting ? "Setting up…" : "Set up Visual Delta"}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      ariaLabel="Create visual baseline"
+                      disabled={!storyId || busy}
+                      onClick={() => void handleCreateBaselines()}
+                    >
+                      {isCreating
+                        ? (createProgress?.label ?? "Creating…")
+                        : "Create visual"}
+                    </Button>
+                  )
                 }
               />
             ) : null}

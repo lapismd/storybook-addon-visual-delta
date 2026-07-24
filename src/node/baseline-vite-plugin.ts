@@ -8,6 +8,7 @@ import {
 } from "./baseline-design.js";
 import {
   DEFAULT_SNAPSHOT_DIR,
+  resolveBaselinePathMode,
   resolveRoot,
   type VisualDeltaHostOptions,
 } from "./options.js";
@@ -204,7 +205,7 @@ export function visualBaselineVisualDeltaPlugin(
     ? options.snapshotDir
     : join(root, options.snapshotDir ?? DEFAULT_SNAPSHOT_DIR);
   const baselineExists = createCommittedBaselineExists(snapshotDir);
-  const mode = options.baselinePathMode ?? "nested-import";
+  const mode = resolveBaselinePathMode(options);
 
   return {
     name: "visual-baseline-visual-delta",

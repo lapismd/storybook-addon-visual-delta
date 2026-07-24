@@ -9,6 +9,7 @@ import {
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
+  VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
@@ -28,6 +29,7 @@ import {
   DEFAULT_VISUAL_SERVER_PORT,
   DEFAULT_VISUAL_TEST_ARGS,
   DEFAULT_VISUAL_UPDATE_ARGS,
+  resolveBaselinePathMode,
   resolveRoot,
   resolveSnapshotDir,
   type VisualDeltaHostOptions,
@@ -38,6 +40,10 @@ import {
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
 import { loadSidecarForStoryId } from "./visual-sidecars.js";
+import {
+  inspectVisualDeltaOnboarding,
+  runVisualDeltaInit,
+} from "./init-scaffold.js";
 import { ensurePlaywrightWebServerPort } from "./visual-server.js";
 
 type UpdateBody = {
@@ -234,7 +240,7 @@ export function attachSidecars(
   options: VisualDeltaHostOptions = {},
 ): VisualRunResultItem[] {
   const snapshotDir = resolveSnapshotDir(options, packageRoot);
-  const mode = options.baselinePathMode ?? "nested-import";
+  const mode = resolveBaselinePathMode(options);
   return results.map((item) => {
     const sidecar = loadSidecarForStoryId(
       item.storyId,
@@ -787,22 +793,23 @@ function handleConfig(
   options: VisualDeltaHostOptions,
 ) {
   const snapshotDir = resolveSnapshotDir(options, root);
+  const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
   const warnings: string[] = [];
   if (!existsSync(snapshotDir)) {
     warnings.push(`snapshotDir does not exist yet: ${snapshotDir}`);
   }
-  const staticHint =
-    "Host must serve PNGs at /visual-baselines via Storybook staticDirs.";
-  if (!warnings.includes(staticHint)) {
-    /* always remind — cannot verify staticDirs from middleware alone */
-    warnings.push(staticHint);
+  if (!onboardingStatus.ready) {
+    warnings.push(onboardingStatus.hint);
   }
+  const staticHint =
+    "Preset staticDirs mounts snapshotDir at /visual-baselines (or host maps it).";
+  warnings.push(staticHint);
   const payload: VisualDeltaResolvedConfig = {
     ok: true,
     options: {
       root,
       snapshotDir,
-      baselinePathMode: options.baselinePathMode ?? "nested-import",
+      baselinePathMode: resolveBaselinePathMode(options),
       visualServerPort: options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
       allowRebuild: options.allowRebuild !== false,
       visualUpdateArgs: [
@@ -818,9 +825,34 @@ function handleConfig(
       ],
       addonSrcDir: options.addonSrcDir?.trim() || null,
     },
+    onboarding: {
+      suiteReady: onboardingStatus.suiteReady,
+      playwrightConfigReady: onboardingStatus.playwrightConfigReady,
+      snapshotDirExists: onboardingStatus.snapshotDirExists,
+      ready: onboardingStatus.ready,
+      hint: onboardingStatus.hint,
+    },
     warnings,
   };
   writeJson(res, 200, payload);
+}
+
+function handleInit(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+) {
+  void req;
+  const result = runVisualDeltaInit({
+    packageRoot: root,
+    port: options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
+    force: false,
+  });
+  writeJson(res, 200, {
+    ...result,
+    onboarding: inspectVisualDeltaOnboarding(root, result.snapshotDir),
+  });
 }
 
 async function handleCaptureSubject(
@@ -879,6 +911,7 @@ async function handleCaptureSubject(
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/config — resolved host options (read-only)
+ * - POST /__visual-delta/init — scaffold portable Playwright suite/config
  */
 export function visualDeltaMiddlewarePlugin(
   options: VisualDeltaHostOptions = {},
@@ -898,6 +931,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           handleConfig(res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_INIT_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          handleInit(req, res, root, options);
           return;
         }
 
