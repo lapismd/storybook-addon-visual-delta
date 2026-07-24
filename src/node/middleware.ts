@@ -728,7 +728,8 @@ async function handleReviewStatus(
   if (!storyId || !isVisualReviewStatus(status)) {
     writeJson(res, 400, {
       ok: false,
-      error: 'Provide storyId and status ("pending" | "approved" | "failed")',
+      error:
+        'Provide storyId and status ("pending" | "approved" | "ready" | "failed")',
     });
     return;
   }
@@ -875,7 +876,7 @@ async function handleCaptureSubject(
  * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
- * - POST /__visual-delta/review-status — set visual-pending / visual-approved tag
+ * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/config — resolved host options (read-only)
  */

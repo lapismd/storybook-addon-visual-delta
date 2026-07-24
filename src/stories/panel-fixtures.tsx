@@ -101,9 +101,9 @@ export function LiveVisibilityFixture() {
 }
 
 export function ReviewStatusFixture() {
-  const [value, setValue] = useState<"pending" | "approved" | "failed" | null>(
-    null,
-  );
+  const [value, setValue] = useState<
+    "pending" | "approved" | "ready" | "failed" | null
+  >(null);
   return (
     <div data-testid="review-status-fixture" style={rowStyle}>
       <ReviewStatusPad value={value} onSelect={setValue} />
@@ -204,7 +204,7 @@ export function PanelChromeFixture() {
     >
       <div style={rowStyle}>
         <VisualStatusBadge status="pass" />
-        <ReviewStatusPad value="pending" onSelect={() => undefined} />
+        <ReviewStatusPad value="ready" onSelect={() => undefined} />
       </div>
       <div style={rowStyle}>
         <LiveVisibilityToggle liveVisible onToggle={() => undefined} />

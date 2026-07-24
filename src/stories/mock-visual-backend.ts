@@ -15,7 +15,7 @@ export type MockVisualAction =
 
 export type MockVisualBackend = {
   actions: MockVisualAction[];
-  lastReviewStatus: "pending" | "approved" | "failed" | null;
+  lastReviewStatus: "pending" | "approved" | "ready" | "failed" | null;
   lastSkipVisual: boolean | null;
   lastInteractionStep: string | null;
   cancelled: boolean;
@@ -31,7 +31,7 @@ export type MockVisualBackend = {
   cancelTests: () => Promise<void>;
   reviewStatus: (
     storyId: string,
-    status: "pending" | "approved" | "failed",
+    status: "pending" | "approved" | "ready" | "failed",
   ) => Promise<{ ok: boolean; status: string }>;
   skipVisual: (
     storyId: string,

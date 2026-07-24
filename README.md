@@ -266,13 +266,35 @@ Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
 `data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
 
 Panel **More → Configuration** shows resolved host options
-(`GET /__visual-delta/config`). Accept / Unaccept (story or component) maps to
-`visual-approved` / `visual-pending`.
+(`GET /__visual-delta/config`).
 
 Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
-Review / Testing Module tags: `skip-visual`, `visual-pending`, `visual-approved`,
-`visual-failed`.
+### Review tags (Accept vs Ready / Failed)
+
+Review tags are mutually exclusive CSF tags on the story (sidebar + toolbar
+badges). Set them from the panel or by editing `tags={…}` / posting
+`POST /__visual-delta/review-status`. Skipping visual clears all review tags.
+
+| Tag | Meaning | How it is set |
+| --- | ------- | ------------- |
+| `visual-pending` | Baseline exists; awaiting review | Create / rewrite baselines; **Unaccept** |
+| `visual-ready` | Agent/dev finished visual work; ready for human review | Panel **Ready** pad, or `tags={["visual-ready"]}` |
+| `visual-approved` | Human accepted the baseline | **Accept** (story or component scope) |
+| `visual-failed` | Review rejected / known bad | Panel **Failed** pad |
+
+**Panel controls**
+
+- **Accept / Unaccept** — human sign-off. Accept → `visual-approved`; Unaccept →
+  `visual-pending`. Scope menu: story vs entire component.
+- **Ready / Failed** pad — agent/dev signals only (pending/approved are *not*
+  on this pad; use Accept/Unaccept for those).
+
+**Agent guidance:** after updating pixels or stabilizing a story, mark
+`visual-ready` so humans can scan the sidebar for `⚑ Ready`. Do **not** set
+`visual-approved` from agent work — leave Accept to a human. Rewrite / Update
+baselines always resets matching stories to `visual-pending` (clears approved
+and ready).
 
 ### `skip-visual` from the panel
 
@@ -289,9 +311,6 @@ Skipped stories are excluded from Playwright visual runs and from Visual Delta
 Testing Module scope. Review status and Update baselines stay disabled while
 skipped. Prefer this over hand-editing tags when flake cannot be stabilized
 (document why in the story if the skip is permanent).
-
-Review tags (when baselines are configured): `visual-pending`,
-`visual-approved`, `visual-failed` via `/__visual-delta/review-status`.
 
 ### Review layout (canvas + panel)
 

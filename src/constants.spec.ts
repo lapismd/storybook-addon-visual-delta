@@ -31,13 +31,15 @@ describe("visual review tags", () => {
   it("round-trips status ↔ tag", () => {
     expect(visualReviewTagFor("pending")).toBe("visual-pending");
     expect(visualReviewTagFor("approved")).toBe("visual-approved");
+    expect(visualReviewTagFor("ready")).toBe("visual-ready");
     expect(visualReviewTagFor("failed")).toBe("visual-failed");
   });
 
-  it("prefers approved over failed over pending", () => {
+  it("prefers approved over failed over ready over pending", () => {
     expect(
       visualReviewStatusFromTags([
         "visual-pending",
+        "visual-ready",
         "visual-failed",
         "visual-approved",
       ]),
@@ -45,12 +47,16 @@ describe("visual review tags", () => {
     expect(visualReviewStatusFromTags(["visual-pending", "visual-failed"])).toBe(
       "failed",
     );
+    expect(visualReviewStatusFromTags(["visual-pending", "visual-ready"])).toBe(
+      "ready",
+    );
     expect(visualReviewStatusFromTags(["visual-pending"])).toBe("pending");
     expect(visualReviewStatusFromTags([])).toBeNull();
   });
 
   it("guards status values", () => {
     expect(isVisualReviewStatus("pending")).toBe(true);
+    expect(isVisualReviewStatus("ready")).toBe(true);
     expect(isVisualReviewStatus("nope")).toBe(false);
   });
 });

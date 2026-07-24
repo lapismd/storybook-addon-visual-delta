@@ -956,6 +956,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const messages: Record<VisualReviewStatus, string> = {
           pending: "Marked baseline as pending review (visual-pending).",
           approved: "Marked baseline as approved (visual-approved).",
+          ready: "Marked baseline ready for review (visual-ready).",
           failed: "Marked baseline as failed (visual-failed).",
         };
         setUpdateLog(messages[status]);

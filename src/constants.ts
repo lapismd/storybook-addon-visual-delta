@@ -227,14 +227,21 @@ export const SKIP_VISUAL_TAG = "skip-visual";
 export const VISUAL_REVIEW_PENDING_TAG = "visual-pending";
 /** CSF tag: baseline has been reviewed and accepted. */
 export const VISUAL_REVIEW_APPROVED_TAG = "visual-approved";
+/** CSF tag: agent/dev marked baseline ready for human review. */
+export const VISUAL_REVIEW_READY_TAG = "visual-ready";
 /** CSF tag: baseline review failed / rejected. */
 export const VISUAL_REVIEW_FAILED_TAG = "visual-failed";
 
-export type VisualReviewStatus = "pending" | "approved" | "failed";
+export type VisualReviewStatus =
+  | "pending"
+  | "approved"
+  | "ready"
+  | "failed";
 
 export const VISUAL_REVIEW_TAGS = [
   VISUAL_REVIEW_PENDING_TAG,
   VISUAL_REVIEW_APPROVED_TAG,
+  VISUAL_REVIEW_READY_TAG,
   VISUAL_REVIEW_FAILED_TAG,
 ] as const;
 
@@ -242,6 +249,7 @@ export function visualReviewTagFor(
   status: VisualReviewStatus,
 ): (typeof VISUAL_REVIEW_TAGS)[number] {
   if (status === "approved") return VISUAL_REVIEW_APPROVED_TAG;
+  if (status === "ready") return VISUAL_REVIEW_READY_TAG;
   if (status === "failed") return VISUAL_REVIEW_FAILED_TAG;
   return VISUAL_REVIEW_PENDING_TAG;
 }
@@ -250,8 +258,10 @@ export function visualReviewStatusFromTags(
   tags: readonly string[] | undefined,
 ): VisualReviewStatus | null {
   if (!tags?.length) return null;
+  // Precedence when multiple review tags leak into CSF.
   if (tags.includes(VISUAL_REVIEW_APPROVED_TAG)) return "approved";
   if (tags.includes(VISUAL_REVIEW_FAILED_TAG)) return "failed";
+  if (tags.includes(VISUAL_REVIEW_READY_TAG)) return "ready";
   if (tags.includes(VISUAL_REVIEW_PENDING_TAG)) return "pending";
   return null;
 }
@@ -259,5 +269,10 @@ export function visualReviewStatusFromTags(
 export function isVisualReviewStatus(
   value: unknown,
 ): value is VisualReviewStatus {
-  return value === "pending" || value === "approved" || value === "failed";
+  return (
+    value === "pending" ||
+    value === "approved" ||
+    value === "ready" ||
+    value === "failed"
+  );
 }
