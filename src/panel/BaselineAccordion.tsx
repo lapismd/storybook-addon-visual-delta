@@ -7,12 +7,7 @@ import {
   GraphBarIcon,
   SyncIcon,
 } from "@storybook/icons";
-import {
-  IconButton,
-  ToggleButton,
-  TooltipNote,
-  WithTooltip,
-} from "storybook/internal/components";
+import { Button, ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { PlayStepInfo } from "./usePlaySteps.js";
@@ -269,32 +264,26 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                 {section.stats ? <Stats>{section.stats}</Stats> : null}
                 <SummaryActions>
                   {expanded && hasDiff ? (
-                    <WithTooltip
-                      hasChrome={false}
-                      placement="top"
-                      trigger="hover"
-                      tooltip={
-                        <TooltipNote note="Difference distribution" />
-                      }
+                    <ToggleButton
+                      size="small"
+                      padding="small"
+                      pressed={showDistribution}
+                      onClick={onToggleDistribution}
+                      ariaLabel="Difference distribution"
+                      title="Difference distribution"
+                      aria-expanded={showDistribution}
                     >
-                      <ToggleButton
-                        size="small"
-                        padding="small"
-                        pressed={showDistribution}
-                        onClick={onToggleDistribution}
-                        ariaLabel="Difference distribution"
-                        aria-expanded={showDistribution}
-                      >
-                        <GraphBarIcon />
-                      </ToggleButton>
-                    </WithTooltip>
+                      <GraphBarIcon />
+                    </ToggleButton>
                   ) : null}
                   {section.id === "default" || section.wired ? (
-                    <IconButton
+                    <Button
                       size="small"
+                      variant="ghost"
                       padding="small"
                       disabled={busy}
                       ariaLabel="Update baseline"
+                      title="Update baseline"
                       onClick={() => {
                         if (section.id === "default") {
                           onUpdateDefault();
@@ -304,17 +293,19 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                       }}
                     >
                       <SyncIcon />
-                    </IconButton>
+                    </Button>
                   ) : section.step ? (
-                    <IconButton
+                    <Button
                       size="small"
+                      variant="ghost"
                       padding="small"
                       disabled={busy}
                       ariaLabel="Create baseline"
+                      title="Create baseline"
                       onClick={() => onCreate(section.step!)}
                     >
                       <AddIcon />
-                    </IconButton>
+                    </Button>
                   ) : null}
                 </SummaryActions>
               </SummaryRight>

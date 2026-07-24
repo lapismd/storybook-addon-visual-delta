@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { EyeIcon } from "@storybook/icons";
-import { IconButton } from "storybook/internal/components";
+import { ToggleButton } from "storybook/internal/components";
 import { useChannel, useStorybookApi } from "storybook/manager-api";
 import { EVENTS } from "../constants.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
@@ -53,11 +53,14 @@ export function HighlightIgnoreTool() {
     : "Highlight ignored regions";
 
   return (
-    <IconButton
+    <ToggleButton
       key="visual-delta-highlight-ignore"
-      active={enabled}
-      title={label}
+      size="small"
+      variant="ghost"
+      padding="small"
+      pressed={enabled}
       ariaLabel={label}
+      title={label}
       onClick={() => {
         setEnabled((prev) => {
           const next = !prev;
@@ -67,6 +70,6 @@ export function HighlightIgnoreTool() {
       }}
     >
       <EyeIcon />
-    </IconButton>
+    </ToggleButton>
   );
 }

@@ -1,4 +1,4 @@
-import { IconButton } from "storybook/internal/components";
+import { Button } from "storybook/internal/components";
 import { keyframes, styled, type Theme } from "storybook/theming";
 
 /** Height reserved under panel content for the fixed status bar. */
@@ -563,7 +563,7 @@ export const StatusLogShell = styled.div<{ $hasError?: boolean }>(
   }),
 );
 
-export const StatusLogCopyButton = styled(IconButton)({
+export const StatusLogCopyButton = styled(Button)({
   position: "absolute",
   top: 6,
   // Clear of Storybook ScrollArea’s ~10px vertical thumb + padding.

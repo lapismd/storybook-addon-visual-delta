@@ -1,5 +1,4 @@
 import React, { memo } from "react";
-import { TooltipNote, WithTooltip } from "storybook/internal/components";
 import { styled, typography } from "storybook/theming";
 
 export type VisualBadgeStatus = "pass" | "fail";
@@ -68,15 +67,12 @@ export const VisualStatusBadge = memo(function VisualStatusBadge({
   const badgeNote = StatusNoteMapping[status];
 
   return (
-    <WithTooltip
-      hasChrome={false}
-      placement="top"
-      trigger="hover"
-      tooltip={<TooltipNote note={badgeNote} />}
+    <StyledBadge
+      aria-label={`Visual status: ${badgeText}. ${badgeNote}`}
+      title={badgeNote}
+      status={status}
     >
-      <StyledBadge aria-label={`Visual status: ${badgeText}`} status={status}>
-        {badgeText}
-      </StyledBadge>
-    </WithTooltip>
+      {badgeText}
+    </StyledBadge>
   );
 });
