@@ -90,7 +90,7 @@ const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
 
   return (
     <StatusLogShell $hasError={hasError}>
-      {/* IconButton already tooltips from ariaLabel — do not wrap WithTooltip. */}
+      {/* Button tooltips from ariaLabel — do not wrap WithTooltip. */}
       <StatusLogCopyButton
         size="small"
         variant="ghost"

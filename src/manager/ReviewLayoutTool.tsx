@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from "react";
 import { CloseIcon, ExpandIcon } from "@storybook/icons";
-import { IconButton } from "storybook/internal/components";
+import { ToggleButton } from "storybook/internal/components";
 import {
   useAddonState,
   useStorybookApi,
@@ -51,14 +51,16 @@ export function useReviewLayoutToggle() {
 /** Storybook preview toolbar toggle for Visual Delta review layout. */
 export function ReviewLayoutTool() {
   const { active, toggle } = useReviewLayoutToggle();
+  const label = active ? "Exit review layout" : "Review layout";
 
   return (
-    <IconButton
+    <ToggleButton
       key="visual-delta-review-layout"
-      active={active}
+      size="small"
       padding="small"
       variant="ghost"
-      ariaLabel={active ? "Exit review layout" : "Review layout"}
+      pressed={active}
+      ariaLabel={label}
       title={
         active
           ? "Exit review layout (restore sidebar and panel)"
@@ -67,6 +69,6 @@ export function ReviewLayoutTool() {
       onClick={toggle}
     >
       {active ? <CloseIcon /> : <ExpandIcon />}
-    </IconButton>
+    </ToggleButton>
   );
 }

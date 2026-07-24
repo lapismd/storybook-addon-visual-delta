@@ -11,12 +11,10 @@ import {
 import {
   ActionList,
   Button,
-  IconButton,
   PopoverProvider,
   Separator,
+  ToggleButton,
   Toolbar,
-  TooltipNote,
-  WithTooltip,
 } from "storybook/internal/components";
 import { styled, useTheme } from "storybook/theming";
 import type { VisualReviewStatus } from "../constants.js";
@@ -218,34 +216,23 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
               />
             </>
           )}
-          <WithTooltip
-            hasChrome={false}
-            placement="top"
-            trigger="hover"
-            tooltip={
-              <TooltipNote
-                note={
-                  reviewLayoutActive
-                    ? "Exit review layout"
-                    : "Review layout — canvas on top, Visual Delta below"
-                }
-              />
+          <ToggleButton
+            size="small"
+            variant="ghost"
+            padding="small"
+            pressed={reviewLayoutActive}
+            ariaLabel={reviewLayoutLabel}
+            title={
+              reviewLayoutActive
+                ? "Exit review layout"
+                : "Review layout — canvas on top, Visual Delta below"
             }
+            onClick={toggleReviewLayout}
           >
-            <IconButton
-              size="small"
-              variant="ghost"
-              padding="small"
-              active={reviewLayoutActive}
-              ariaLabel={reviewLayoutLabel}
-              title={reviewLayoutLabel}
-              onClick={toggleReviewLayout}
-            >
-              {reviewLayoutActive ? <CloseIcon /> : <ExpandIcon />}
-            </IconButton>
-          </WithTooltip>
+            {reviewLayoutActive ? <CloseIcon /> : <ExpandIcon />}
+          </ToggleButton>
           <PopoverProvider
-            ariaLabel="More actions"
+            ariaLabel="More Visual Delta actions"
             placement="bottom-end"
             padding={0}
             visible={moreOpen}
@@ -345,15 +332,15 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
               </div>
             )}
           >
-            <IconButton
+            <Button
               size="small"
               variant="ghost"
               padding="small"
-              ariaLabel="More actions"
+              ariaLabel="More Visual Delta actions"
               title="More actions"
             >
               <EllipsisIcon />
-            </IconButton>
+            </Button>
           </PopoverProvider>
         </RightGroup>
       </Toolbar>
