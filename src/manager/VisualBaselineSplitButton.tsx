@@ -145,11 +145,12 @@ const StatusDot = styled.span<{
 });
 
 /**
- * Trailing Testing Module / context-menu control: main action + status + split
- * menu for create-missing vs rewrite-existing.
+ * Trailing Testing Module control (global + sidebar context): play/stop +
+ * status + split menu for create-missing vs rewrite-existing.
  *
- * - Context menu: Sync icon, main click writes baselines.
- * - Global Testing Module heading: Play icon, main click runs selected actions.
+ * With `mainIcon="play"` (Testing Module), main click runs selected actions via
+ * `onRun`. Legacy `writeOnMainClick` still supports a Sync glyph that writes
+ * baselines directly.
  */
 export function VisualBaselineSplitButton({
   status,
@@ -174,14 +175,14 @@ export function VisualBaselineSplitButton({
   /** Controlled write mode; omit to manage selection internally. */
   mode?: BaselineWriteMode;
   onModeChange?: (mode: BaselineWriteMode) => void;
-  /** Main-button glyph: play (global runner) or sync (context-menu write). */
+  /** Main-button glyph: play (Testing Module) or sync (legacy write-on-click). */
   mainIcon?: "play" | "sync";
   /**
-   * When true (default), main click runs create/rewrite (sidebar context menu).
+   * When true (default for Sync), main click runs create/rewrite.
    * Ignored when `mainIcon` is `play` (uses `onRun` instead).
    */
   writeOnMainClick?: boolean;
-  /** Global Testing Module: run the checked actions (compare / baselines / status). */
+  /** Testing Module: run the checked actions (compare / baselines / status). */
   onRun?: () => void;
   onCreateMissing?: () => void;
   onRewriteExisting?: () => void;
