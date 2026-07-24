@@ -958,7 +958,7 @@ async function postVisualBaselineWrite(
     const exitMatch = log.match(/\[exit (\d+)\]/);
     if (exitMatch && exitMatch[1] !== "0") {
       const detail = /Address already in use|was not able to start/i.test(log)
-        ? "Playwright static server failed to start (port 6007 busy or stale)."
+        ? "Playwright static server failed to start (visual port busy or stale)."
         : /No recipe for/i.test(log)
           ? log.match(/No recipe for[^\n]+/)?.[0]
           : undefined;

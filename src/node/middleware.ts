@@ -28,12 +28,13 @@ import {
 import type { CaptureSubjectStreamEvent } from "../shared/capture-subject-types.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
-  DEFAULT_VISUAL_SERVER_PORT,
   DEFAULT_VISUAL_TEST_ARGS,
   DEFAULT_VISUAL_UPDATE_ARGS,
   resolveBaselinePathMode,
   resolveRoot,
   resolveSnapshotDir,
+  resolveStorybookPort,
+  resolveVisualServerPort,
   type VisualDeltaHostOptions,
 } from "./options.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
@@ -551,6 +552,7 @@ async function handleRun(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  visualPort: number,
 ) {
   // Reconnect after manager HMR while Playwright is still running.
   // A finished snapshot must not block starting a new run — use GET
@@ -653,7 +655,6 @@ async function handleRun(
     let failed = 0;
     let lineBuf = "";
 
-    const visualPort = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
     const warm = await ensureWarmStaticStorybookServer(root, visualPort);
     if (warm.message) {
       emitRun({ type: "log", line: warm.message });
@@ -668,7 +669,11 @@ async function handleRun(
       "pnpm",
       args,
       root,
-      { PLAYWRIGHT_UPDATE_SNAPSHOTS: "0" },
+      {
+        PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
+        // Keep Playwright webServer on the same port the middleware warmed.
+        VISUAL_SERVER_PORT: String(visualPort),
+      },
       (chunk) => {
         lineBuf += chunk;
         const lines = lineBuf.split("\n");
@@ -898,6 +903,7 @@ function handleConfig(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  visualPort: number,
 ) {
   const snapshotDir = resolveSnapshotDir(options, root);
   const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
@@ -917,7 +923,7 @@ function handleConfig(
       root,
       snapshotDir,
       baselinePathMode: resolveBaselinePathMode(options),
-      visualServerPort: options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
+      visualServerPort: visualPort,
       allowRebuild: options.allowRebuild !== false,
       visualUpdateArgs: [
         ...(options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS]),
@@ -993,11 +999,12 @@ function handleInit(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  visualPort: number,
 ) {
   void req;
   const result = runVisualDeltaInit({
     packageRoot: root,
-    port: options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
+    port: visualPort,
     force: false,
   });
   writeJson(res, 200, {
@@ -1071,8 +1078,12 @@ export function visualDeltaMiddlewarePlugin(
     name: "visual-delta-middleware",
     configureServer(server) {
       const root = resolveRoot(options, server.config.root);
-      const visualPort = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
-      // Warm :6007 in the background so Testing Module runs can reuse it.
+      const storybookPort =
+        typeof server.config.server?.port === "number"
+          ? server.config.server.port
+          : resolveStorybookPort();
+      const visualPort = resolveVisualServerPort(options, storybookPort);
+      // Warm storybook-static (Storybook port + 1 by default) for Testing Module.
       void ensureWarmStaticStorybookServer(root, visualPort).catch(() => {
         /* non-fatal — Playwright can still start its own webServer */
       });
@@ -1087,7 +1098,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          handleConfig(res, root, options);
+          handleConfig(res, root, options, visualPort);
           return;
         }
 
@@ -1109,7 +1120,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          handleInit(req, res, root, options);
+          handleInit(req, res, root, options, visualPort);
           return;
         }
 
@@ -1186,7 +1197,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleRun(req, res, root, options);
+          await handleRun(req, res, root, options, visualPort);
           return;
         }
 

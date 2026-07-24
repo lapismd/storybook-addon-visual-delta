@@ -7,7 +7,7 @@ import {
   VISUAL_DEVICE_SCALE_FACTOR,
   VISUAL_VIEWPORT,
 } from "../constants.js";
-import { DEFAULT_VISUAL_SERVER_PORT } from "../node/options.js";
+import { resolveVisualServerPort } from "../node/options.js";
 import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
 
@@ -39,7 +39,7 @@ export function visualScreenshotExpect(root = process.cwd()) {
 /**
  * Suggested Playwright `use` block for Visual Delta compare / update runs.
  */
-export function visualPlaywrightUse(port = DEFAULT_VISUAL_SERVER_PORT) {
+export function visualPlaywrightUse(port = resolveVisualServerPort()) {
   return {
     baseURL: `http://127.0.0.1:${port}`,
     locale: "en-GB",
@@ -55,7 +55,7 @@ export function visualPlaywrightUse(port = DEFAULT_VISUAL_SERVER_PORT) {
 /**
  * Suggested static Storybook webServer for Playwright.
  */
-export function visualPlaywrightWebServer(port = DEFAULT_VISUAL_SERVER_PORT) {
+export function visualPlaywrightWebServer(port = resolveVisualServerPort()) {
   const baseURL = `http://127.0.0.1:${port}`;
   return {
     command: `python3 -m http.server ${port} --directory storybook-static --bind 127.0.0.1`,
@@ -68,7 +68,10 @@ export function visualPlaywrightWebServer(port = DEFAULT_VISUAL_SERVER_PORT) {
 }
 
 export type DefineVisualPlaywrightConfigOptions = {
-  /** Static Storybook port (default 6007). */
+  /**
+   * Static Storybook port. Defaults to Storybook port + 1
+   * (`STORYBOOK_PORT` / `VISUAL_SERVER_PORT` — see `resolveVisualServerPort`).
+   */
   port?: number;
   /** Playwright testDir (default `./tests/visual`). */
   testDir?: string;
@@ -88,7 +91,7 @@ export type DefineVisualPlaywrightConfigOptions = {
 export function defineVisualPlaywrightConfig(
   options: DefineVisualPlaywrightConfigOptions = {},
 ): PlaywrightTestConfig {
-  const port = options.port ?? DEFAULT_VISUAL_SERVER_PORT;
+  const port = options.port ?? resolveVisualServerPort();
   const testDir = options.testDir ?? "./tests/visual";
   return defineConfig({
     testDir,

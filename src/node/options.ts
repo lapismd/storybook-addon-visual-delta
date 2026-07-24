@@ -44,7 +44,7 @@ export type VisualDeltaHostOptions = {
   visualTestArgs?: string[];
   /**
    * Port used by the visual Playwright config's static Storybook server.
-   * Defaults to 6007.
+   * Defaults to Storybook port + 1 (see `resolveVisualServerPort`).
    */
   visualServerPort?: number;
   /** Whether `/__visual-delta/run-tests` may run `build-storybook` first. */
@@ -82,7 +82,55 @@ export const DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS = [
 
 export const DEFAULT_VISUAL_TEST_ARGS = ["exec", "playwright", "test"] as const;
 
-export const DEFAULT_VISUAL_SERVER_PORT = 6007;
+/** Upstream Storybook `storybook dev` default when `STORYBOOK_PORT` is unset. */
+export const DEFAULT_STORYBOOK_PORT = 6006;
+
+/**
+ * Fallback static port when Storybook port is the upstream default (6006 + 1).
+ * Prefer `resolveVisualServerPort()` so hosts on custom Storybook ports follow
+ * `STORYBOOK_PORT + 1`.
+ */
+export const DEFAULT_VISUAL_SERVER_PORT = DEFAULT_STORYBOOK_PORT + 1;
+
+function parsePortEnv(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return undefined;
+  const port = Number(trimmed);
+  return Number.isFinite(port) && port > 0 ? port : undefined;
+}
+
+/** Storybook UI port: explicit arg → `STORYBOOK_PORT` → 6006. */
+export function resolveStorybookPort(explicit?: number): number {
+  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+  return parsePortEnv(process.env.STORYBOOK_PORT) ?? DEFAULT_STORYBOOK_PORT;
+}
+
+/**
+ * Static `storybook-static` port for Playwright / warm server:
+ * `options.visualServerPort` → `VISUAL_SERVER_PORT` → Storybook port + 1.
+ *
+ * Pass the live Storybook listen port as `storybookPort` from Vite middleware
+ * so concurrent catalogs (e.g. 9009 / 9109) each get an isolated +1 port.
+ */
+export function resolveVisualServerPort(
+  options?: Pick<VisualDeltaHostOptions, "visualServerPort">,
+  storybookPort?: number,
+): number {
+  if (
+    typeof options?.visualServerPort === "number" &&
+    Number.isFinite(options.visualServerPort) &&
+    options.visualServerPort > 0
+  ) {
+    return options.visualServerPort;
+  }
+  const fromEnv =
+    parsePortEnv(process.env.VISUAL_SERVER_PORT) ??
+    parsePortEnv(process.env.VISUAL_DELTA_SERVER_PORT);
+  if (fromEnv != null) return fromEnv;
+  return resolveStorybookPort(storybookPort) + 1;
+}
 
 export function resolveBaselinePathMode(
   options: VisualDeltaHostOptions | undefined,

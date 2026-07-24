@@ -1,9 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import {
-  DEFAULT_SNAPSHOT_DIR,
-  DEFAULT_VISUAL_SERVER_PORT,
-} from "./options.js";
+import { DEFAULT_SNAPSHOT_DIR, resolveVisualServerPort } from "./options.js";
 
 export type VisualDeltaInitOptions = {
   packageRoot?: string;
@@ -164,7 +161,7 @@ export function runVisualDeltaInit(
   options: VisualDeltaInitOptions = {},
 ): VisualDeltaInitResult {
   const packageRoot = options.packageRoot?.trim() || process.cwd();
-  const port = options.port ?? DEFAULT_VISUAL_SERVER_PORT;
+  const port = options.port ?? resolveVisualServerPort();
   const force = Boolean(options.force);
   const written: string[] = [];
   const skipped: string[] = [];

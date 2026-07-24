@@ -8,7 +8,7 @@ import {
 import {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_SNAPSHOT_DIR,
-  DEFAULT_VISUAL_SERVER_PORT,
+  resolveVisualServerPort,
   type BaselinePathMode,
 } from "./options.js";
 import {
@@ -159,7 +159,7 @@ export async function runBaselineUpdate(
   const root = packageRootOf(options);
   const mode = pathModeOf(options);
   const snapshotDir = snapshotDirOf(options, root);
-  const port = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
+  const port = resolveVisualServerPort(options);
 
   if (options.createOnly) {
     for (const entry of matchingEntries(root, storyId, component)) {
@@ -244,7 +244,7 @@ export async function runInteractionUpdate(
   const root = packageRootOf(options);
   const mode = pathModeOf(options);
   const snapshotDir = snapshotDirOf(options, root);
-  const port = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
+  const port = resolveVisualServerPort(options);
   const stepId = (options.stepId ?? slugifyStepLabel(stepLabel)).trim();
 
   ensureStorybookStatic(root, options.skipBuild);
