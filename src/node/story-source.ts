@@ -588,7 +588,16 @@ export function patchStoryVisualReviewStatus(options: {
       error: "Cannot set review status on skip-visual stories",
     };
   }
-  if ((entry.tags ?? []).includes(visualReviewTagFor(options.status))) {
+  const desired = visualReviewTagFor(options.status);
+  const presentReviewTags = (entry.tags ?? []).filter((tag) =>
+    (VISUAL_REVIEW_TAGS as readonly string[]).includes(tag),
+  );
+  // Only skip the write when the desired tag is alone — otherwise strip
+  // stale siblings (e.g. visual-failed lingering next to visual-ready).
+  if (
+    presentReviewTags.length === 1 &&
+    presentReviewTags[0] === desired
+  ) {
     return { ok: true, storyId: options.storyId, status: options.status };
   }
   const changed = patchStoryFile(options.packageRoot, entry, {

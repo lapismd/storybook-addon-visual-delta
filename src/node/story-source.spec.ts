@@ -51,6 +51,29 @@ export const Light: Story = {
     expect(next).toContain("workspace-shell-demo--light-chromium-darwin.png");
   });
 
+  it("keeps only one visual review tag when swapping ready ↔ failed", () => {
+    const svelteEntry: StoryIndexEntry = {
+      id: "demo--light",
+      name: "Light",
+      importPath: "src/Demo.stories.svelte",
+    };
+    const source = `<Story name="Light" tags={["visual-failed", "upstream-example"]}>\n`;
+    const ready = patchStorySourceText(source, svelteEntry, {
+      kind: "review",
+      status: "ready",
+    });
+    expect(ready).toContain('"visual-ready"');
+    expect(ready).toContain('"upstream-example"');
+    expect(ready).not.toContain("visual-failed");
+
+    const failed = patchStorySourceText(ready, svelteEntry, {
+      kind: "review",
+      status: "failed",
+    });
+    expect(failed).toContain('"visual-failed"');
+    expect(failed).not.toContain("visual-ready");
+  });
+
   it("injects story-id baselines during Vite transforms", () => {
     const source = `
 const meta = { title: "Workspace shell/Demo" };

@@ -216,6 +216,13 @@ export const VISUAL_DELTA_CREATE_INTERACTION_PATH =
   "/__visual-delta/create-interaction-baseline";
 /** Storybook-dev middleware that runs the Playwright visual suite. */
 export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
+/**
+ * Storybook-dev middleware that replays / continues an in-flight (or recent)
+ * visual run as NDJSON — used to recover after manager HMR.
+ */
+export const VISUAL_DELTA_RUN_EVENTS_PATH = "/__visual-delta/run-events";
+/** Lightweight JSON phase/progress for remount recovery. */
+export const VISUAL_DELTA_RUN_STATUS_PATH = "/__visual-delta/run-status";
 /** Storybook-dev middleware that cancels an in-flight visual run. */
 export const VISUAL_DELTA_CANCEL_PATH = "/__visual-delta/cancel-tests";
 /** Storybook-dev middleware that sets visual review tags on a story. */

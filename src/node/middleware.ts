@@ -12,14 +12,15 @@ import {
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REVIEW_PATH,
+  VISUAL_DELTA_RUN_EVENTS_PATH,
   VISUAL_DELTA_RUN_PATH,
+  VISUAL_DELTA_RUN_STATUS_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   isVisualReviewStatus,
   type VisualReviewStatus,
 } from "../constants.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
-import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import {
   captureSubjectWithChromium,
   type CaptureSubjectRequest,
@@ -49,6 +50,17 @@ import {
   readPlaywrightPassThresholdPercent,
   writePlaywrightPassThresholdPercent,
 } from "./playwright-threshold.js";
+import {
+  beginVisualRunHub,
+  getVisualRunHubStatus,
+  isVisualRunActive,
+  publishVisualRunEvent,
+  resetVisualRunHub,
+  subscribeVisualRunHub,
+  type VisualRunResponse,
+  type VisualRunResultItem,
+  type VisualRunStreamEvent,
+} from "./run-hub.js";
 import {
   ensurePlaywrightWebServerPort,
   ensureWarmStaticStorybookServer,
@@ -89,47 +101,11 @@ type RunBody = {
   rebuild?: boolean;
 };
 
-export type VisualRunResultItem = {
-  storyId: string;
-  status: "passed" | "failed" | "skipped" | "timedOut";
-  title: string;
-  error?: string;
-  /** Ephemeral metrics written next to the baseline PNG during the run. */
-  sidecar?: VisualDiffSidecar;
-};
-
-export type VisualRunResponse = {
-  ok: boolean;
-  exitCode: number;
-  crashed?: boolean;
-  error?: string;
-  rebuild: boolean;
-  grep?: string;
-  summary: {
-    total: number;
-    passed: number;
-    failed: number;
-    skipped: number;
-  };
-  results: VisualRunResultItem[];
-  logTail: string;
-};
-
-/** NDJSON events streamed while `/__visual-delta/run-tests` is in progress. */
-export type VisualRunStreamEvent =
-  | { type: "start"; total: number }
-  | {
-      type: "progress";
-      completed: number;
-      total: number;
-      passed: number;
-      failed: number;
-      storyId: string;
-      status: "passed" | "failed";
-    }
-  | { type: "log"; line: string }
-  | ({ type: "done" } & VisualRunResponse)
-  | { type: "error"; error: string; crashed?: boolean };
+export type {
+  VisualRunResponse,
+  VisualRunResultItem,
+  VisualRunStreamEvent,
+} from "./run-hub.js";
 
 let activeRun: ChildProcess | null = null;
 
@@ -359,6 +335,11 @@ function writeNdjson(res: ServerResponse, event: VisualRunStreamEvent) {
   res.write(`${JSON.stringify(event)}\n`);
 }
 
+/** Emit to the reconnectable run hub (and all live NDJSON subscribers). */
+function emitRun(event: VisualRunStreamEvent) {
+  publishVisualRunEvent(event);
+}
+
 function runCommand(
   command: string,
   args: string[],
@@ -538,17 +519,11 @@ async function handleRun(
   root: string,
   options: VisualDeltaHostOptions,
 ) {
-  if (activeRun) {
-    writeJson(res, 409, {
-      ok: false,
-      crashed: true,
-      error: "A visual test run is already in progress",
-      exitCode: 1,
-      rebuild: false,
-      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-      results: [],
-      logTail: "",
-    } satisfies VisualRunResponse);
+  // Reconnect after manager HMR while Playwright is still running.
+  // A finished snapshot must not block starting a new run — use GET
+  // `/__visual-delta/run-events` to hydrate recent results instead.
+  if (activeRun || isVisualRunActive()) {
+    subscribeVisualRunHub(res);
     return;
   }
 
@@ -595,7 +570,8 @@ async function handleRun(
   const grep = grepFromStoryIds(body.storyIds);
   let log = "";
 
-  beginNdjson(res);
+  beginVisualRunHub();
+  subscribeVisualRunHub(res);
 
   try {
     if (rebuild) {
@@ -604,17 +580,17 @@ async function handleRun(
         : !existsSync(staticIndex)
           ? "Building storybook-static — index.json missing"
           : "Rebuilding storybook-static — incomplete (missing iframe.html)";
-      writeNdjson(res, { type: "log", line: rebuildLine });
+      emitRun({ type: "log", line: rebuildLine });
       log += `${rebuildLine}\n`;
       const built = await runCommand("pnpm", ["build-storybook"], root);
       log += built.log;
       if (built.code !== 0) {
-        writeNdjson(res, {
+        emitRun({
           type: "error",
           error: "build-storybook failed",
           crashed: true,
         });
-        writeNdjson(res, {
+        emitRun({
           type: "done",
           ok: false,
           crashed: true,
@@ -626,11 +602,10 @@ async function handleRun(
           results: [],
           logTail: log.slice(-4000),
         });
-        res.end();
         return;
       }
     } else if (staticComplete) {
-      writeNdjson(res, {
+      emitRun({
         type: "log",
         line: "Using existing storybook-static",
       });
@@ -638,7 +613,7 @@ async function handleRun(
     }
 
     const total = countVisualStories(root, body.storyIds);
-    writeNdjson(res, { type: "start", total });
+    emitRun({ type: "start", total });
 
     const seenIndexes = new Set<number>();
     const progressResults: VisualRunResultItem[] = [];
@@ -650,7 +625,7 @@ async function handleRun(
     const visualPort = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
     const warm = await ensureWarmStaticStorybookServer(root, visualPort);
     if (warm.message) {
-      writeNdjson(res, { type: "log", line: warm.message });
+      emitRun({ type: "log", line: warm.message });
       log += `${warm.message}\n`;
     }
     if (!warm.ok) {
@@ -679,7 +654,7 @@ async function handleRun(
               status: item.status,
               title: item.storyId,
             });
-            writeNdjson(res, {
+            emitRun({
               type: "progress",
               completed,
               total: total || completed,
@@ -718,7 +693,7 @@ async function handleRun(
       summary.passed = passed;
       summary.failed = failed;
     }
-    writeNdjson(res, {
+    emitRun({
       type: "done",
       ok: code === 0 && summary.failed === 0,
       exitCode: code,
@@ -730,8 +705,8 @@ async function handleRun(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    writeNdjson(res, { type: "error", error: message, crashed: true });
-    writeNdjson(res, {
+    emitRun({ type: "error", error: message, crashed: true });
+    emitRun({
       type: "done",
       ok: false,
       crashed: true,
@@ -744,22 +719,33 @@ async function handleRun(
       logTail: log.slice(-4000),
     });
   }
-  res.end();
 }
 
 function handleCancel(res: ServerResponse) {
   if (!activeRun) {
+    resetVisualRunHub();
     writeJson(res, 200, { ok: true, cancelled: false });
     return;
   }
   activeRun.kill("SIGTERM");
   activeRun = null;
+  resetVisualRunHub();
   writeJson(res, 200, { ok: true, cancelled: true });
+}
+
+function handleRunEvents(res: ServerResponse) {
+  subscribeVisualRunHub(res);
+}
+
+function handleRunStatus(res: ServerResponse) {
+  writeJson(res, 200, getVisualRunHubStatus());
 }
 
 type ReviewBody = {
   storyId?: string;
   status?: VisualReviewStatus;
+  /** Batch updates — preferred after a suite run to cut HMR churn. */
+  updates?: Array<{ storyId?: string; status?: VisualReviewStatus }>;
 };
 
 async function handleReviewStatus(
@@ -778,13 +764,41 @@ async function handleReviewStatus(
     return;
   }
 
+  if (Array.isArray(body.updates)) {
+    if (!body.updates.length) {
+      writeJson(res, 400, { ok: false, error: "updates must not be empty" });
+      return;
+    }
+    let updated = 0;
+    const errors: string[] = [];
+    for (const item of body.updates) {
+      const storyId = item.storyId?.trim();
+      const status = item.status;
+      if (!storyId || !isVisualReviewStatus(status)) {
+        errors.push(
+          `${storyId ?? "(missing)"}: invalid storyId/status`,
+        );
+        continue;
+      }
+      const result = patchStoryVisualReviewStatus({
+        packageRoot: root,
+        storyId,
+        status,
+      });
+      if (result.ok) updated += 1;
+      else errors.push(`${storyId}: ${result.error ?? "update failed"}`);
+    }
+    writeJson(res, 200, { ok: errors.length === 0, updated, errors });
+    return;
+  }
+
   const storyId = body.storyId?.trim();
   const status = body.status;
   if (!storyId || !isVisualReviewStatus(status)) {
     writeJson(res, 400, {
       ok: false,
       error:
-        'Provide storyId and status ("pending" | "approved" | "ready" | "failed")',
+        'Provide storyId and status ("pending" | "approved" | "ready" | "failed"), or updates[]',
     });
     return;
   }
@@ -1000,6 +1014,8 @@ async function handleCaptureSubject(
  * - POST /__visual-delta/create-interaction-baseline — mid-play step capture
  * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
+ * - GET  /__visual-delta/run-events — replay / continue an in-flight or recent run
+ * - GET  /__visual-delta/run-status — lightweight phase/progress JSON
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
@@ -1130,6 +1146,28 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           await handleRun(req, res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_RUN_EVENTS_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          handleRunEvents(res);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_RUN_STATUS_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          handleRunStatus(res);
           return;
         }
 
