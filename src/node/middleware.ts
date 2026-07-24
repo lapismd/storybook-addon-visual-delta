@@ -10,6 +10,7 @@ import {
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_INIT_PATH,
+  VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
@@ -44,6 +45,10 @@ import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
 } from "./init-scaffold.js";
+import {
+  readPlaywrightPassThresholdPercent,
+  writePlaywrightPassThresholdPercent,
+} from "./playwright-threshold.js";
 import { ensurePlaywrightWebServerPort } from "./visual-server.js";
 
 type UpdateBody = {
@@ -825,6 +830,7 @@ function handleConfig(
       ],
       addonSrcDir: options.addonSrcDir?.trim() || null,
     },
+    playwrightPassThresholdPercent: readPlaywrightPassThresholdPercent(root),
     onboarding: {
       suiteReady: onboardingStatus.suiteReady,
       playwrightConfigReady: onboardingStatus.playwrightConfigReady,
@@ -835,6 +841,49 @@ function handleConfig(
     warnings,
   };
   writeJson(res, 200, payload);
+}
+
+async function handlePlaywrightThreshold(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+) {
+  let body: { passThresholdPercent?: unknown };
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  if (
+    typeof body.passThresholdPercent !== "number" ||
+    !Number.isFinite(body.passThresholdPercent)
+  ) {
+    writeJson(res, 400, {
+      ok: false,
+      error: "passThresholdPercent must be a finite number",
+    });
+    return;
+  }
+  try {
+    const written = writePlaywrightPassThresholdPercent(
+      root,
+      body.passThresholdPercent,
+    );
+    writeJson(res, 200, {
+      ok: true,
+      ...written,
+      playwrightPassThresholdPercent: written.passThresholdPercent,
+    });
+  } catch (error) {
+    writeJson(res, 500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function handleInit(
@@ -911,6 +960,7 @@ async function handleCaptureSubject(
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/config — resolved host options (read-only)
+ * - POST /__visual-delta/playwright-threshold — write host Playwright pass %
  * - POST /__visual-delta/init — scaffold portable Playwright suite/config
  */
 export function visualDeltaMiddlewarePlugin(
@@ -931,6 +981,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           handleConfig(res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handlePlaywrightThreshold(req, res, root);
           return;
         }
 

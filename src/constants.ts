@@ -219,6 +219,9 @@ export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
 export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
 /** Storybook-dev middleware that returns resolved host options (read-only). */
 export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";
+/** Storybook-dev middleware that writes host Playwright pass threshold. */
+export const VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH =
+  "/__visual-delta/playwright-threshold";
 /** Storybook-dev middleware that scaffolds portable Playwright entrypoints. */
 export const VISUAL_DELTA_INIT_PATH = "/__visual-delta/init";
 

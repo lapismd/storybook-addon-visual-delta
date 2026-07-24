@@ -7,6 +7,10 @@ import {
   diffEngineLabel,
   diffEngineTooltip,
 } from "./DiffCaptureSplitButton.js";
+import {
+  baselineModeLabel,
+  baselineWriteRowLabel,
+} from "./VisualBaselineSplitButton.js";
 
 describe("VisualRunSplitButton", () => {
   it("labels Story / Component / All", () => {
@@ -31,5 +35,17 @@ describe("DiffCaptureSplitButton", () => {
   it("tooltips explain the capture engines", () => {
     expect(diffEngineTooltip("html")).toMatch(/html-to-image/i);
     expect(diffEngineTooltip("chromium")).toMatch(/Chromium/i);
+  });
+});
+
+describe("VisualBaselineSplitButton labels", () => {
+  it("menu labels Create missing / Rewrite existing", () => {
+    expect(baselineModeLabel("create")).toBe("Create missing");
+    expect(baselineModeLabel("rewrite")).toBe("Rewrite existing");
+  });
+
+  it("Testing Module row labels follow write mode", () => {
+    expect(baselineWriteRowLabel("create")).toBe("Create missing Baselines");
+    expect(baselineWriteRowLabel("rewrite")).toBe("Update baselines");
   });
 });

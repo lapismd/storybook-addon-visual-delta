@@ -126,7 +126,12 @@ export function ConfigurationPanel({ onClose }: { onClose: () => void }) {
       {config ? (
         <Pre>
           {JSON.stringify(
-            { options: config.options, onboarding: config.onboarding },
+            {
+              options: config.options,
+              playwrightPassThresholdPercent:
+                config.playwrightPassThresholdPercent,
+              onboarding: config.onboarding,
+            },
             null,
             2,
           )}

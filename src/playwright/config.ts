@@ -8,6 +8,8 @@ import {
   VISUAL_VIEWPORT,
 } from "../constants.js";
 import { DEFAULT_VISUAL_SERVER_PORT } from "../node/options.js";
+import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
+import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
 
 export { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT };
 
@@ -19,13 +21,20 @@ export function visualUpdateSnapshotsMode(): "none" | "missing" | "all" {
 
 /**
  * Shared expect.toHaveScreenshot options (device-scale PNGs, no animation).
+ * `maxDiffPixelRatio` follows host `.visual-delta/playwright.json` when present.
  */
-export const visualScreenshotExpect = {
-  animations: "disabled" as const,
-  caret: "hide" as const,
-  maxDiffPixelRatio: 0.01,
-  scale: "device" as const,
-};
+export function visualScreenshotExpect(root = process.cwd()) {
+  const passThresholdPercent = resolvePlaywrightPassThresholdPercent(root);
+  const ratio = passThresholdPercent / 100;
+  return {
+    animations: "disabled" as const,
+    caret: "hide" as const,
+    maxDiffPixelRatio: Number.isFinite(ratio)
+      ? ratio
+      : PLAYWRIGHT_PASS_THRESHOLD_PERCENT / 100,
+    scale: "device" as const,
+  };
+}
 
 /**
  * Suggested Playwright `use` block for Visual Delta compare / update runs.
@@ -89,7 +98,7 @@ export function defineVisualPlaywrightConfig(
     reporter: [["list"], ["html", { open: "never" }]],
     timeout: 30_000,
     expect: {
-      toHaveScreenshot: { ...visualScreenshotExpect },
+      toHaveScreenshot: { ...visualScreenshotExpect() },
     },
     use: visualPlaywrightUse(port),
     projects: [
