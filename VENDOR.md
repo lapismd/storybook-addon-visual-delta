@@ -175,14 +175,17 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   and Update baselines stay disabled until included again.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
-  Testing Module heading: **Run visual tests** with status under it (`Not run`
-  / progress) and a **play** split (Create missing / Rewrite existing;
-  **Create missing** default). Checklist: compare (on by default),
-  **Create missing Baselines** / **Update baselines** (off by default), and
-  **Update status** (off by default; pass → `visual-ready`, fail →
-  `visual-failed`). The same checklist is used for the sidebar
-  story/component context menu (scoped to that entry). Heading play /
-  Storybook **Run tests** execute checked rows (baselines → compare →
+  Testing Module heading: **Run visual tests** with a streamed single-line
+  status under it (same last-log-line behavior as the panel status bar;
+  idle shows `Not run` / summary) and a **play** split (Create missing /
+  Rewrite existing; **Create missing** default). Checklist: compare (on by
+  default), **Create missing Baselines** / **Update baselines** (off by
+  default), and **Update status** (off by default; pass → `visual-ready`,
+  fail → `visual-failed`). While running, each checked row shows
+  `completed/total` under the checkbox (compare = stories in scope; baselines
+  = component targets; status = result count). The same checklist is used for
+  the sidebar story/component context menu (scoped to that entry). Heading
+  play / Storybook **Run tests** execute checked rows (baselines → compare →
   status). With nothing checked, play is disabled. Rewrite clears
   `visual-approved` / `visual-ready`. Global writes use sidebar leaf stories;
   context menu uses the selected story/component leaves. Results map to

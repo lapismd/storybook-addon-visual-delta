@@ -571,6 +571,10 @@ export type VisualCreateProgress = {
   kind: VisualBaselineJobKind;
   error?: string;
   logTail?: string;
+  /** 1-based index of the current component target (multi-target writes). */
+  completed?: number;
+  /** Total component targets in this write job. */
+  total?: number;
 };
 
 type CreateProgressListener = (progress: VisualCreateProgress | null) => void;
@@ -608,6 +612,10 @@ async function postVisualBaselineWrite(
     runningLabel?: string;
     /** Override the success label when the job finishes cleanly. */
     successLabel?: string;
+    /** 1-based index for multi-target Testing Module progress. */
+    completed?: number;
+    /** Total targets for multi-target Testing Module progress. */
+    total?: number;
   },
 ): Promise<VisualCreateResponse> {
   const path =
@@ -618,12 +626,17 @@ async function postVisualBaselineWrite(
   const failVerb =
     kind === "create" ? "Create baselines failed" : "Update baselines failed";
   const exitVerb = kind === "create" ? "Baseline create" : "Baseline update";
+  const fraction = {
+    completed: options?.completed,
+    total: options?.total,
+  };
 
   emitVisualCreateProgress({
     running: true,
     label: runningLabel,
     kind,
     logTail: "",
+    ...fraction,
   });
   try {
     const response = await fetch(path, {
@@ -645,6 +658,7 @@ async function postVisualBaselineWrite(
           label: runningLabel,
           kind,
           logTail: log.slice(-12_000),
+          ...fraction,
         });
       }
       log += decoder.decode();
@@ -708,6 +722,7 @@ async function postVisualBaselineWrite(
       label,
       kind,
       logTail: log || undefined,
+      ...fraction,
     });
     return { ok: true, log };
   } catch (error) {
@@ -724,6 +739,7 @@ async function postVisualBaselineWrite(
       label: failedLabel,
       kind,
       error: message,
+      ...fraction,
     });
     throw error instanceof Error ? error : new Error(message);
   }
@@ -780,14 +796,17 @@ export async function postVisualCreateBaselinesForStoryIds(
   const total = targets.length;
   for (let i = 0; i < total; i++) {
     const storyId = targets[i]!;
+    const completed = i + 1;
     const runningLabel =
-      total > 1 ? `Creating… ${i + 1}/${total}` : "Creating…";
+      total > 1 ? `Creating… ${completed}/${total}` : "Creating…";
     const isLast = i === total - 1;
     await postVisualBaselineWrite(
       "create",
       { storyId },
       {
         runningLabel,
+        completed,
+        total,
         successLabel: isLast
           ? total > 1
             ? `Created (${total} components)`
@@ -819,14 +838,17 @@ export async function postVisualUpdateBaselinesForStoryIds(
   const total = targets.length;
   for (let i = 0; i < total; i++) {
     const storyId = targets[i]!;
+    const completed = i + 1;
     const runningLabel =
-      total > 1 ? `Updating… ${i + 1}/${total}` : "Updating…";
+      total > 1 ? `Updating… ${completed}/${total}` : "Updating…";
     const isLast = i === total - 1;
     await postVisualBaselineWrite(
       "update",
       { storyId },
       {
         runningLabel,
+        completed,
+        total,
         successLabel: isLast
           ? total > 1
             ? `Updated (${total} components)`

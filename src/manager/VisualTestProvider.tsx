@@ -49,6 +49,11 @@ import {
   type VisualRunScope,
 } from "./run-visual.js";
 import {
+  appendVisualRunLogLine,
+  formatProgressFraction,
+  lastMeaningfulLogLine,
+} from "../shared/status-log.js";
+import {
   CREATE_BASELINES_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
@@ -93,7 +98,38 @@ function RelativeTime({ timestamp }: { timestamp: number }) {
   return <>{days === 1 ? "yesterday" : `${days} days ago`}</>;
 }
 
-/** One shared status line for Testing Module actions. */
+/**
+ * Live single-line status under the Testing Module title (mirrors the panel
+ * status streamer: last meaningful log line, with coarse fallbacks).
+ */
+export function moduleStreamingDescription(
+  isRunning: boolean,
+  isWritingBaselines: boolean,
+  isUpdatingStatus: boolean,
+  progress: VisualRunProgress | null,
+  createProgress: VisualCreateProgress | null,
+  statusLog: string | null,
+): string | null {
+  if (isUpdatingStatus) {
+    return lastMeaningfulLogLine(statusLog ?? "") || "Updating review status…";
+  }
+  if (isWritingBaselines) {
+    return (
+      lastMeaningfulLogLine(createProgress?.logTail ?? "") ||
+      createProgress?.label ||
+      "Writing baselines…"
+    );
+  }
+  if (isRunning) {
+    return (
+      lastMeaningfulLogLine(statusLog ?? "") ||
+      formatVisualProgressLabel(progress)
+    );
+  }
+  return null;
+}
+
+/** Idle summary under the Testing Module title. */
 export function moduleDescription(
   isRunning: boolean,
   isWritingBaselines: boolean,
@@ -102,13 +138,18 @@ export function moduleDescription(
   createProgress: VisualCreateProgress | null,
   lastRun: VisualLastRunSummary | null,
   anyActionSelected: boolean,
+  statusLog: string | null = null,
 ): React.ReactNode {
   if (!anyActionSelected) return "Select at least one action";
-  if (isUpdatingStatus) return "Updating review status…";
-  if (isRunning) return formatVisualProgressLabel(progress);
-  if (isWritingBaselines) {
-    return createProgress?.label ?? "Writing baselines…";
-  }
+  const streaming = moduleStreamingDescription(
+    isRunning,
+    isWritingBaselines,
+    isUpdatingStatus,
+    progress,
+    createProgress,
+    statusLog,
+  );
+  if (streaming) return streaming;
 
   const parts: React.ReactNode[] = [];
   if (lastRun) {
@@ -246,6 +287,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
+  const [statusLog, setStatusLog] = useState<string | null>(null);
+  const [statusProgress, setStatusProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [statusUpdateLabel, setStatusUpdateLabel] = useState<string | null>(
     null,
@@ -383,6 +429,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         : "all";
 
       await testProviderStore.runWithState(async () => {
+        setStatusLog(null);
+        setStatusProgress(null);
         if (writeBaselines) {
           if (!writeTargets.length) {
             throw new Error(
@@ -425,18 +473,25 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                 "No visual results to update status from — run visual tests first",
               );
             }
+            setStatusProgress({ completed: 0, total: source.length });
+            setStatusLog(`Updating review status… 0/${source.length}`);
             const { updated, errors } =
               await postVisualReviewStatusesFromResults(source);
-            setStatusUpdateLabel(
-              errors.length
-                ? `Updated ${updated} · ${errors.length} failed`
-                : `Updated ${updated} review tags`,
-            );
+            setStatusProgress({
+              completed: source.length,
+              total: source.length,
+            });
+            const doneLabel = errors.length
+              ? `Updated ${updated} · ${errors.length} failed`
+              : `Updated ${updated} review tags`;
+            setStatusUpdateLabel(doneLabel);
+            setStatusLog(doneLabel);
             if (errors.length && updated === 0) {
               throw new Error(errors[0] ?? "Update status failed");
             }
           } finally {
             setIsUpdatingStatus(false);
+            setStatusProgress(null);
           }
         }
       });
@@ -450,6 +505,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   useEffect(() => {
     return subscribeVisualRunProgress((next) => {
       setProgress(next);
+      if (next) {
+        setStatusLog((prev) => appendVisualRunLogLine(prev, next));
+      }
       if (next?.storyId && next.status) {
         applyVisualStatuses([
           {
@@ -466,11 +524,26 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     return subscribeVisualLastRun((next) => {
       setLastRun(next);
       latestResultsRef.current = next?.results;
+      if (!next) return;
+      const summaryLine = next.error
+        ? `Visual: ${next.error}${next.scope ? ` (${next.scope})` : ""}`
+        : next.summary.failed > 0
+          ? `Visual: ${next.summary.failed} failed · ${next.summary.passed} passed${next.scope ? ` (${next.scope})` : ""}`
+          : `Visual: ${next.summary.passed} passed${next.scope ? ` (${next.scope})` : ""}`;
+      const logTail = next.logTail?.trim();
+      setStatusLog(logTail ? `${logTail}\n${summaryLine}` : summaryLine);
     });
   }, []);
 
   useEffect(() => {
-    return subscribeVisualCreateProgress(setCreateProgress);
+    return subscribeVisualCreateProgress((next) => {
+      setCreateProgress(next);
+      if (next?.running && next.logTail) {
+        setStatusLog(next.logTail);
+      } else if (next && !next.running && (next.label || next.error)) {
+        setStatusLog(next.error ?? next.label);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -483,6 +556,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       publishVisualLastRun(null);
       setProgress(null);
       setStatusUpdateLabel(null);
+      setStatusLog(null);
+      setStatusProgress(null);
     });
     const offSelect = statusStore.onSelect((selected) => {
       const storyId = selected[0]?.storyId;
@@ -521,7 +596,19 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     createProgress,
     lastRun,
     anyActionSelected,
+    statusLog,
   );
+  const compareRowProgress = isRunning
+    ? (formatProgressFraction(progress?.completed, progress?.total) ?? "…")
+    : null;
+  const baselineRowProgress = isWritingBaselines
+    ? (formatProgressFraction(createProgress?.completed, createProgress?.total) ??
+      (createProgress?.label?.match(/(\d+)\s*\/\s*(\d+)/)?.[0] ?? "…"))
+    : null;
+  const statusRowProgress = isUpdatingStatus
+    ? (formatProgressFraction(statusProgress?.completed, statusProgress?.total) ??
+      "…")
+    : null;
 
   const baselineStatus = baselineChipStatus(isWritingBaselines, createProgress);
   const baselineRowLabel = baselineWriteRowLabel(baselineMode);
@@ -573,6 +660,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       baselineChipTooltip={baselineChipTooltip}
       statusChipStatus={statusChipStatus}
       statusChipLabel={statusUpdateLabel}
+      compareRowProgress={compareRowProgress}
+      baselineRowProgress={baselineRowProgress}
+      statusRowProgress={statusRowProgress}
       isWritingBaselines={isWritingBaselines}
       isUpdatingStatus={isUpdatingStatus}
       isCompareRunning={isRunning}

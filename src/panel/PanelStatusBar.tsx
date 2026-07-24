@@ -21,15 +21,7 @@ import {
   StatusSpinner,
 } from "./styled.js";
 
-/** Last non-empty line from a streamed log (for the clipped status label). */
-export function lastMeaningfulLogLine(log: string): string {
-  const lines = log.replace(/\r\n/g, "\n").split("\n");
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i]?.trim();
-    if (line) return line;
-  }
-  return "";
-}
+export { lastMeaningfulLogLine } from "../shared/status-log.js";
 
 /** Nearest ancestor that actually scrolls (Storybook AddonPanel scroller). */
 function findScrollPort(start: HTMLElement | null): HTMLElement | null {
