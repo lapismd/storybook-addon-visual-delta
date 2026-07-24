@@ -66,32 +66,32 @@ export default defineVisualPlaywrightConfig();
 
 What the package preset wires for you:
 
-| Preset hook | Effect |
-| ----------- | ------ |
-| `managerEntries` / `previewAnnotations` | Panel, Testing Module, overlay |
-| `staticDirs` | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
-| `viteFinal` | `/__visual-delta/*` middleware + CSF baseline inject |
+| Preset hook                             | Effect                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `managerEntries` / `previewAnnotations` | Panel, Testing Module, overlay                                           |
+| `staticDirs`                            | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
+| `viteFinal`                             | `/__visual-delta/*` middleware + CSF baseline inject                     |
 
 Defaults (override via `options.visualDelta`):
 
-| Concern | Default |
-| ------- | ------- |
-| Snapshot directory | `tests/visual/storybook.spec.ts-snapshots` |
-| Path mode | `story-id` (flat `{storyId}-chromium-darwin.png`) |
-| Create / update CLI | `pnpm exec visual-delta update …` |
-| Interaction CLI | `pnpm exec visual-delta interaction-update …` |
-| Compare run | `pnpm exec playwright test` |
+| Concern             | Default                                           |
+| ------------------- | ------------------------------------------------- |
+| Snapshot directory  | `tests/visual/storybook.spec.ts-snapshots`        |
+| Path mode           | `story-id` (flat `{storyId}-chromium-darwin.png`) |
+| Create / update CLI | `pnpm exec visual-delta update …`                 |
+| Interaction CLI     | `pnpm exec visual-delta interaction-update …`     |
+| Compare run         | `pnpm exec playwright test`                       |
 
 Baseline URLs look like `/visual-baselines/<story-id>-chromium-darwin.png`.
 
 ## Requirements
 
-| Peer        | Notes                                                                    |
-| ----------- | ------------------------------------------------------------------------ |
-| `storybook` | Manager + preview annotations                                            |
-| `react`     | Manager / panel UI                                                       |
-| `vite`      | Needed for `viteFinal` (middleware + CSF inject) on Vite Storybook hosts |
-| `playwright`| Optional peer — required for Diff Chromium, suite, and `visual-delta` CLI |
+| Peer         | Notes                                                                     |
+| ------------ | ------------------------------------------------------------------------- |
+| `storybook`  | Manager + preview annotations                                             |
+| `react`      | Manager / panel UI                                                        |
+| `vite`       | Needed for `viteFinal` (middleware + CSF inject) on Vite Storybook hosts  |
+| `playwright` | Optional peer — required for Diff Chromium, suite, and `visual-delta` CLI |
 
 You still commit PNGs under the snapshot dir and keep a thin Playwright entry
 (or a custom suite). Tag-badge chrome for review tags is optional host polish.
@@ -104,15 +104,15 @@ pnpm add -D storybook-addon-visual-delta
 
 ### Package exports
 
-| Import                                        | Purpose                                         |
-| --------------------------------------------- | ----------------------------------------------- |
-| `storybook-addon-visual-delta`                | Package root                                    |
+| Import                                        | Purpose                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| `storybook-addon-visual-delta`                | Package root                                                      |
 | `storybook-addon-visual-delta/preset`         | `managerEntries`, `previewAnnotations`, `staticDirs`, `viteFinal` |
-| `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                      |
-| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool     |
-| `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers |
-| `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)  |
-| `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                         |
+| `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                        |
+| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                       |
+| `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                   |
+| `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                    |
+| `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                           |
 
 Bin: `visual-delta` → `init` / `update` / `interaction-update`.
 
@@ -164,15 +164,18 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 
 ### Middleware routes
 
-| Method | Path                                          | Action                                      |
-| ------ | --------------------------------------------- | ------------------------------------------- |
-| `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring       |
-| `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                         |
-| `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                       |
-| `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream) |
-| `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                      |
-| `POST` | `/__visual-delta/review-status`               | Set CSF review tags                         |
-| `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story      |
+| Method | Path                                          | Action                                                  |
+| ------ | --------------------------------------------- | ------------------------------------------------------- |
+| `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                   |
+| `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                     |
+| `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                   |
+| `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)             |
+| `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)             |
+| `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run            |
+| `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run          |
+| `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                  |
+| `POST` | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`) |
+| `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                  |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -186,24 +189,28 @@ Interaction writes spawn `pnpm <visualInteractionUpdateArgs…>` with:
 
 Run-tests uses `pnpm <visualTestArgs…>` (optional `-g` grep from story ids)
 and may call `pnpm build-storybook` first when `allowRebuild` is enabled and
-`storybook-static/index.json` is missing (or the client requests a rebuild).
+`storybook-static` is incomplete/stale (missing `index.json` or `iframe.html`,
+or the client requests a rebuild). Progress is streamed with a **list-only**
+Playwright reporter so the Testing Module can show live `Testing N/M` counts.
+After HMR remounts the Testing Module (e.g. Update status), the client
+reconnects via `/run-status` + `/run-events` instead of losing progress.
 
 ## Options (`VisualDeltaHostOptions`)
 
 Pass under addon `options.visualDelta`. Types from
 `storybook-addon-visual-delta/preset` or `…/node`.
 
-| Option                        | Default                                    | Purpose                                                       |
-| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
-| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                 |
-| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                       |
-| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts     |
-| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                         |
-| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                 |
-| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                       |
-| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                       |
-| `visualServerPort`            | `6007`                                     | Static Storybook port owned by the visual Playwright config   |
-| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                      |
+| Option                        | Default                                    | Purpose                                                     |
+| ----------------------------- | ------------------------------------------ | ----------------------------------------------------------- |
+| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                               |
+| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                     |
+| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts   |
+| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                       |
+| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes               |
+| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                     |
+| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                     |
+| `visualServerPort`            | `6007`                                     | Static Storybook port owned by the visual Playwright config |
+| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                    |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
 Playwright-server readiness checks are package-owned. A packed or file-linked
@@ -319,20 +326,26 @@ Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
 Review tags are mutually exclusive CSF tags on the story (sidebar + toolbar
 badges). Set them from the panel or by editing `tags={…}` / posting
-`POST /__visual-delta/review-status`. Skipping visual clears all review tags.
+`POST /__visual-delta/review-status` (single `{ storyId, status }` or batched
+`{ updates: [{ storyId, status }] }`). Patchers keep **exactly one** review tag:
+setting `ready` clears `failed` / `pending` / `approved` even when the desired
+tag was already present alongside a sibling. Skipping visual clears all review
+tags. **Update status** / middleware refuse `visual-failed` when no committed
+baseline PNG exists for the story (missing-baseline Playwright failures are
+skipped, not stamped failed).
 
-| Tag | Meaning | How it is set |
-| --- | ------- | ------------- |
-| `visual-pending` | Baseline exists; awaiting review | Create / rewrite baselines; **Unaccept** |
-| `visual-ready` | Agent/dev finished visual work; ready for human review | Panel **Ready** pad, or `tags={["visual-ready"]}` |
-| `visual-approved` | Human accepted the baseline | **Accept** (story or component scope) |
-| `visual-failed` | Review rejected / known bad | Panel **Failed** pad |
+| Tag               | Meaning                                                | How it is set                                     |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `visual-pending`  | Baseline exists; awaiting review                       | Create / rewrite baselines; **Unaccept**          |
+| `visual-ready`    | Agent/dev finished visual work; ready for human review | Panel **Ready** pad, or `tags={["visual-ready"]}` |
+| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)             |
+| `visual-failed`   | Review rejected / known bad                            | Panel **Failed** pad                              |
 
 **Panel controls**
 
 - **Accept / Unaccept** — human sign-off. Accept → `visual-approved`; Unaccept →
   `visual-pending`. Scope menu: story vs entire component.
-- **Ready / Failed** pad — agent/dev signals only (pending/approved are *not*
+- **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
   on this pad; use Accept/Unaccept for those).
 
 **Agent guidance:** after updating pixels or stabilizing a story, mark
@@ -376,9 +389,9 @@ Visual Delta stays selected.
 
 Diff is its own split button (separate from Story / Component / All runs):
 
-| Mode | Capture | Use when |
-| ---- | ------- | -------- |
-| **Diff HTML** | `html-to-image` in the live preview iframe | Fast iteration |
+| Mode              | Capture                                                   | Use when                                 |
+| ----------------- | --------------------------------------------------------- | ---------------------------------------- |
+| **Diff HTML**     | `html-to-image` in the live preview iframe                | Fast iteration                           |
 | **Diff Chromium** | Playwright Chromium via `/__visual-delta/capture-subject` | Matching committed baselines (fonts, AA) |
 
 **Diff Chromium** streams NDJSON progress (`launching` → `navigating` →
@@ -394,13 +407,13 @@ Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 
 ## Addon vs host
 
-| This package                                         | Your project                                      |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| Panel, Testing Module, overlay, Live Diff            | Committed PNGs under the snapshot dir             |
-| Preset `staticDirs` → `/visual-baselines`            | Thin Playwright entry (`defineVisualSuite`)       |
-| `viteFinal` middleware + CSF inject                  | Optional tag-badge manager chrome                 |
-| Packaged `visual-delta` CLI (create / update / …)    | Custom suites (reference captures, extra masks)   |
-| `storybook-addon-visual-delta/playwright` helpers    | Approval policy is `--approved` / env (built-in)  |
+| This package                                      | Your project                                     |
+| ------------------------------------------------- | ------------------------------------------------ |
+| Panel, Testing Module, overlay, Live Diff         | Committed PNGs under the snapshot dir            |
+| Preset `staticDirs` → `/visual-baselines`         | Thin Playwright entry (`defineVisualSuite`)      |
+| `viteFinal` middleware + CSF inject               | Optional tag-badge manager chrome                |
+| Packaged `visual-delta` CLI (create / update / …) | Custom suites (reference captures, extra masks)  |
+| `storybook-addon-visual-delta/playwright` helpers | Approval policy is `--approved` / env (built-in) |
 
 ---
 
@@ -439,11 +452,25 @@ export default defineVisualPlaywrightConfig({ port: 6007 });
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `tsx scripts/ui-generator/cli.ts visual-update`             | Create missing or overwrite primary baselines; patches CSF `parameters.visualDelta` |
 | `tsx scripts/ui-generator/cli.ts visual-interaction-update` | Mid-play step PNG + CSF `interactions` entry                                        |
+| `pnpm ui visual:tag …`                                      | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)   |
 | `pnpm test:visual` / `pnpm exec playwright test`            | Compare only (`PLAYWRIGHT_UPDATE_SNAPSHOTS=0` from middleware)                      |
 
 Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
-`--skip-build`, `--component <name>`, `--story-id <id>`, `--step-label`,
-`--step-id`.
+`--skip-build`, `--rebuild`, `--component <name>`, `--story-id <id>`,
+`--step-label`, `--step-id`. For `visual:tag`: `--status`, `--prefix`.
+
+`visual:tag` examples (requires `storybook-static/index.json` for expansion):
+
+```bash
+pnpm ui visual:tag review --status ready --component button
+pnpm ui visual:tag skip --story-id shadcn-button--default
+pnpm ui visual:tag include --prefix shadcn-button--
+pnpm ui visual:tag --help
+```
+
+Host catalog policy: Apps/Beancount and Tasks stories are typically
+`skip-visual` (reference captures stay outside the Playwright suite). Prefer
+the panel for one-off edits; use `visual:tag` for bulk/scripted updates.
 
 ### `.storybook/main.ts`
 
@@ -455,6 +482,7 @@ addons: [
       visualDelta: {
         baselinePathMode: "nested-import",
         visualServerPort: 6007,
+        visualTestArgs: ["exec", "playwright", "test"],
         visualUpdateArgs: [
           "exec",
           "tsx",
@@ -462,6 +490,7 @@ addons: [
           "visual-update",
           "--allow-dirty",
           "--approved",
+          "--skip-build",
         ],
         visualInteractionUpdateArgs: [
           "exec",

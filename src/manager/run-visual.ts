@@ -27,7 +27,49 @@ export type VisualRunResultItem = {
   title: string;
   error?: string;
   sidecar?: VisualDiffSidecar;
+  /** Set when the story failed because no committed baseline PNG exists. */
+  missingBaseline?: boolean;
 };
+
+/** Middleware / patcher message when refusing visual-failed without a PNG. */
+export const NO_BASELINE_FAILED_ERROR =
+  "Cannot mark failed — no baseline screenshot";
+
+export function isMissingBaselineFailure(item: VisualRunResultItem): boolean {
+  if (item.missingBaseline) return true;
+  const error = item.error?.toLowerCase() ?? "";
+  if (!error) return false;
+  return (
+    error.includes("snapshot doesn't exist") ||
+    error.includes("snapshot does not exist") ||
+    error.includes("no baseline screenshot") ||
+    error.includes(NO_BASELINE_FAILED_ERROR.toLowerCase())
+  );
+}
+
+/**
+ * Map run outcomes to review tags: passed → ready, failed → failed.
+ * Skips skipped / timedOut, and failed stories with no baseline PNG.
+ */
+export function reviewUpdatesFromRunResults(
+  results: VisualRunResultItem[],
+): Array<{ storyId: string; status: VisualReviewStatus }> {
+  return results
+    .filter((item) => item.status === "passed" || item.status === "failed")
+    .filter(
+      (item) => !(item.status === "failed" && isMissingBaselineFailure(item)),
+    )
+    .map((item) => ({
+      storyId: item.storyId,
+      status: (item.status === "passed"
+        ? "ready"
+        : "failed") as VisualReviewStatus,
+    }));
+}
+
+export function isNoBaselineFailedReviewError(error: string): boolean {
+  return error.toLowerCase().includes("no baseline screenshot");
+}
 
 export type VisualRunResponse = {
   ok: boolean;
@@ -650,19 +692,24 @@ export async function postVisualReviewStatus(body: {
 
 /**
  * Stamp CSF review tags from visual run outcomes:
- * passed → ready, failed → failed. Skips skipped / timedOut.
+ * passed → ready, failed → failed. Skips skipped / timedOut and failures
+ * with no committed baseline (those must not become `visual-failed`).
  * Uses one batched middleware call so HMR lands after the write finishes.
  */
 export async function postVisualReviewStatusesFromResults(
   results: VisualRunResultItem[],
-): Promise<{ updated: number; errors: string[] }> {
-  const updates = results
-    .filter((item) => item.status === "passed" || item.status === "failed")
-    .map((item) => ({
-      storyId: item.storyId,
-      status: (item.status === "passed" ? "ready" : "failed") as VisualReviewStatus,
-    }));
-  if (!updates.length) return { updated: 0, errors: [] };
+): Promise<{
+  updated: number;
+  errors: string[];
+  skippedMissingBaseline: number;
+}> {
+  const skippedMissingBaseline = results.filter(
+    (item) => item.status === "failed" && isMissingBaselineFailure(item),
+  ).length;
+  const updates = reviewUpdatesFromRunResults(results);
+  if (!updates.length) {
+    return { updated: 0, errors: [], skippedMissingBaseline };
+  }
 
   persistVisualStatusJob({ updates });
   try {
@@ -683,9 +730,17 @@ export async function postVisualReviewStatusesFromResults(
       );
     }
     clearPersistedVisualStatusJob();
+    const rawErrors = data.errors ?? [];
+    const softSkipped = rawErrors.filter((error) =>
+      isNoBaselineFailedReviewError(error),
+    ).length;
+    const errors = rawErrors.filter(
+      (error) => !isNoBaselineFailedReviewError(error),
+    );
     return {
       updated: data.updated ?? 0,
-      errors: data.errors ?? [],
+      errors,
+      skippedMissingBaseline: skippedMissingBaseline + softSkipped,
     };
   } catch (error) {
     // Leave the job in sessionStorage so remount can retry.
@@ -719,9 +774,12 @@ export async function resumePersistedVisualStatusJob(): Promise<{
       );
     }
     clearPersistedVisualStatusJob();
+    const rawErrors = data.errors ?? [];
     return {
       updated: data.updated ?? 0,
-      errors: data.errors ?? [],
+      errors: rawErrors.filter(
+        (error) => !isNoBaselineFailedReviewError(error),
+      ),
     };
   } catch (error) {
     throw error;
@@ -748,8 +806,7 @@ export async function postPlaywrightPassThreshold(
       data.error || `Playwright threshold update failed (${response.status})`,
     );
   }
-  const next =
-    data.playwrightPassThresholdPercent ?? data.passThresholdPercent;
+  const next = data.playwrightPassThresholdPercent ?? data.passThresholdPercent;
   if (typeof next !== "number") {
     throw new Error("Playwright threshold response missing percent");
   }
