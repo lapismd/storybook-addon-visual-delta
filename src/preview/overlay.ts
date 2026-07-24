@@ -766,6 +766,20 @@ function ensureSplit(
     split.appendChild(corner);
   }
 
+  if (
+    !(split instanceof HTMLElement) ||
+    !(panesWrap instanceof HTMLElement) ||
+    !(livePane instanceof HTMLElement) ||
+    !(baselinePane instanceof HTMLElement) ||
+    !(vRail instanceof HTMLElement) ||
+    !(vSpacer instanceof HTMLElement) ||
+    !(hRail instanceof HTMLElement) ||
+    !(hSpacer instanceof HTMLElement) ||
+    !(corner instanceof HTMLElement)
+  ) {
+    throw new Error("Visual Delta: split chrome missing");
+  }
+
   ensurePaneScrollbarStyles();
 
   const horizontal = placement === "left" || placement === "right";

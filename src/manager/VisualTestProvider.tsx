@@ -254,13 +254,19 @@ function sidebarLeafStoryIds(state: {
   return ids;
 }
 
+type VisualStatusByStory = Record<
+  string,
+  Partial<Record<string, { value?: string }>>
+>;
+
 function resultsFromStatusStore(
   allStatuses: ReturnType<typeof experimental_useStatusStore>,
   scopeIds?: string[],
 ): VisualRunResultItem[] {
   const allow = scopeIds?.length ? new Set(scopeIds) : null;
   const results: VisualRunResultItem[] = [];
-  for (const [storyId, byType] of Object.entries(allStatuses)) {
+  const byStory = allStatuses as VisualStatusByStory;
+  for (const [storyId, byType] of Object.entries(byStory)) {
     if (allow && !allow.has(storyId)) continue;
     const status = byType?.[STATUS_TYPE_ID_VISUAL];
     if (!status) continue;

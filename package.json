@@ -43,6 +43,7 @@
   ],
   "scripts": {
     "build:node": "tsc -p tsconfig.node-build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node-build.json --noEmit",
     "prepare": "pnpm build:node",
     "prepack": "pnpm build:node"
   },

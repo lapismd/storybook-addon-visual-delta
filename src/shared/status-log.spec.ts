@@ -18,8 +18,6 @@ describe("status-log helpers", () => {
       visualRunProgressLogLine({
         completed: 2,
         total: 5,
-        passed: 1,
-        failed: 1,
         storyId: "shadcn-button--default",
         status: "failed",
       }),
@@ -28,8 +26,6 @@ describe("status-log helpers", () => {
       visualRunProgressLogLine({
         completed: 0,
         total: 3,
-        passed: 0,
-        failed: 0,
       }),
     ).toBe("Testing... 0/3");
   });
@@ -38,15 +34,11 @@ describe("status-log helpers", () => {
     const start = appendVisualRunLogLine(null, {
       completed: 0,
       total: 2,
-      passed: 0,
-      failed: 0,
     });
     expect(start).toBe("Testing... 0/2");
     const next = appendVisualRunLogLine(start, {
       completed: 1,
       total: 2,
-      passed: 1,
-      failed: 0,
       storyId: "a--b",
       status: "passed",
     });

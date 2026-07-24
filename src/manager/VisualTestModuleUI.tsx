@@ -24,10 +24,14 @@ const ModuleContainer = styled(Container)({
   paddingTop: 4,
 });
 
+/** Fixed status-line width so streamed log text does not resize the popover. */
+const STATUS_LINE_WIDTH = 180;
+
 const ContextMenuContainer = styled(Container)(({ theme }) => ({
   borderTop: `1px solid ${theme.appBorderColor}`,
   paddingTop: 4,
   marginTop: 4,
+  overflow: "hidden",
 }));
 
 const Heading = styled.div({
@@ -36,13 +40,17 @@ const Heading = styled.div({
   alignItems: "center",
   padding: "8px 0",
   gap: 12,
+  minWidth: 0,
+  width: "100%",
 });
 
 const Info = styled.div({
   display: "flex",
   flexDirection: "column",
   marginLeft: 8,
+  flex: "1 1 0%",
   minWidth: 0,
+  overflow: "hidden",
 });
 
 const Title = styled.div(({ theme }) => ({
@@ -57,6 +65,8 @@ const Title = styled.div(({ theme }) => ({
 const Description = styled.div(({ theme }) => ({
   fontSize: theme.typography.size.s1 - 1,
   color: theme.textMutedColor,
+  width: STATUS_LINE_WIDTH,
+  maxWidth: STATUS_LINE_WIDTH,
   minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -205,13 +215,18 @@ export function VisualTestModuleUI({
     : compareChipCount;
   const baselineChipValue = isWritingBaselines ? baselineRowProgress : null;
   const statusChipValue = isUpdatingStatus ? statusRowProgress : null;
+  const statusTitle =
+    typeof statusLine === "string" && statusLine.trim() ? statusLine : undefined;
 
   return (
     <Root data-testid={`visual-test-module-${variant}`}>
       <Heading>
         <Info>
           <Title>Run visual tests</Title>
-          <Description id={`visual-testing-module-description-${variant}`}>
+          <Description
+            id={`visual-testing-module-description-${variant}`}
+            title={statusTitle}
+          >
             {statusLine}
           </Description>
         </Info>

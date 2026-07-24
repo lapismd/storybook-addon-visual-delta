@@ -13,7 +13,7 @@ export function normalizeImages(
   globalOffsetX?: number,
   globalOffsetY?: number,
   globalAlign?: AlignMode,
-  globalPlacement?: PlacementMode,
+  globalPlacement?: VisualDeltaParams["placement"],
 ): VisualDeltaImage[] {
   const imagesArray = Array.isArray(images) ? images : [images];
   const defaultAlign: AlignMode = globalAlign ?? "viewport";
