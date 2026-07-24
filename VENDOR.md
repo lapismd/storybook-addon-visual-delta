@@ -170,15 +170,13 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   and Update baselines stay disabled until included again.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
-  Testing Module checklist: **Run visual tests** (compare; on by default),
-  **Create missing Baselines** / **Update baselines** (off by default; label
-  follows the baseline mode split on row 1), and **Update status** (off by
-  default; stamps `visual-ready` / `visual-failed` from pass/fail). Storybook
-  **Run tests** executes the checked rows in order (baselines → compare →
-  status). With nothing checked, Play no-ops and the status line says
-  “Select at least one action”. The baseline mode split (Create missing /
-  Rewrite existing) lives on the Run visual tests row; writes run via Play,
-  not Sync click. Rewrite clears `visual-approved` / `visual-ready` so the
+  Testing Module heading: **Run visual tests** with status under it (`Not run`
+  / progress) and a **play** split (Create missing / Rewrite existing mode).
+  Checklist: compare (on by default), **Create missing Baselines** /
+  **Update baselines**, and **Update status** (pass → `visual-ready`, fail →
+  `visual-failed`). Heading play / Storybook **Run tests** execute checked
+  rows (baselines → compare → status). With nothing checked, play is disabled
+  and the status line says “Select at least one action”. Rewrite clears `visual-approved` / `visual-ready` so the
   component returns to `visual-pending`. Create/rewrite uses leaf stories in
   the sidebar (search/tag filters). Context-menu keep scoped compare +
   write-on-click create/rewrite. Results map to sidebar status dots from

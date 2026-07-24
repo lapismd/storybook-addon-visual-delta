@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   CheckIcon,
   ChevronSmallDownIcon,
+  PlayHollowIcon,
   StopAltIcon,
   SyncIcon,
 } from "@storybook/icons";
@@ -144,11 +145,11 @@ const StatusDot = styled.span<{
 });
 
 /**
- * Trailing Testing Module / context-menu control: Sync + status + split menu
- * for create-missing vs rewrite-existing.
+ * Trailing Testing Module / context-menu control: main action + status + split
+ * menu for create-missing vs rewrite-existing.
  *
- * When `writeOnMainClick` is false (global Testing Module), Play owns writes and
- * the main button is status-only. Context menu keeps write-on-click.
+ * - Context menu: Sync icon, main click writes baselines.
+ * - Global Testing Module heading: Play icon, main click runs selected actions.
  */
 export function VisualBaselineSplitButton({
   status,
@@ -158,7 +159,9 @@ export function VisualBaselineSplitButton({
   tooltip,
   mode: modeProp,
   onModeChange,
+  mainIcon = "sync",
   writeOnMainClick = true,
+  onRun,
   onCreateMissing,
   onRewriteExisting,
   onStop,
@@ -171,11 +174,15 @@ export function VisualBaselineSplitButton({
   /** Controlled write mode; omit to manage selection internally. */
   mode?: BaselineWriteMode;
   onModeChange?: (mode: BaselineWriteMode) => void;
+  /** Main-button glyph: play (global runner) or sync (context-menu write). */
+  mainIcon?: "play" | "sync";
   /**
    * When true (default), main click runs create/rewrite (sidebar context menu).
-   * When false, main click is status-only — Play runs the write.
+   * Ignored when `mainIcon` is `play` (uses `onRun` instead).
    */
   writeOnMainClick?: boolean;
+  /** Global Testing Module: run the checked actions (compare / baselines / status). */
+  onRun?: () => void;
   onCreateMissing?: () => void;
   onRewriteExisting?: () => void;
   onStop: () => void;
@@ -211,8 +218,8 @@ export function VisualBaselineSplitButton({
           size="small"
           variant="ghost"
           padding="small"
-          ariaLabel="Stop baseline write"
-          title="Stop baseline write"
+          ariaLabel={mainIcon === "play" ? "Stop visual run" : "Stop baseline write"}
+          title={mainIcon === "play" ? "Stop visual run" : "Stop baseline write"}
           onClick={onStop}
         >
           <StopAltIcon />
@@ -223,6 +230,7 @@ export function VisualBaselineSplitButton({
   }
 
   const tip = `${tooltip} · ${baselineModeTooltip(mode)}`;
+  const isPlay = mainIcon === "play";
 
   return (
     <Split>
@@ -230,20 +238,30 @@ export function VisualBaselineSplitButton({
         size="small"
         variant="ghost"
         padding="small"
-        ariaLabel={`${ariaLabel}. ${baselineModeLabel(mode)}`}
-        title={
-          writeOnMainClick
-            ? tip
-            : `${tip}. Use Run tests to write baselines when enabled.`
+        ariaLabel={
+          isPlay
+            ? `${ariaLabel}. ${baselineModeLabel(mode)}`
+            : `${ariaLabel}. ${baselineModeLabel(mode)}`
         }
-        disabled={writeOnMainClick ? Boolean(disabled) : true}
+        title={
+          isPlay
+            ? `${tip}. Runs the checked Testing Module actions.`
+            : writeOnMainClick
+              ? tip
+              : `${tip}. Use Run tests to write baselines when enabled.`
+        }
+        disabled={Boolean(disabled)}
         onClick={() => {
+          if (isPlay) {
+            onRun?.();
+            return;
+          }
           if (!writeOnMainClick) return;
           if (mode === "rewrite") onRewriteExisting?.();
           else onCreateMissing?.();
         }}
       >
-        <SyncIcon />
+        {isPlay ? <PlayHollowIcon /> : <SyncIcon />}
         <StatusDot status={status} />
       </MainButton>
       <PopoverProvider

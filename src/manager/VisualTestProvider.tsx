@@ -228,14 +228,6 @@ const Actions = styled.div({
   flexShrink: 0,
 });
 
-const Trailing = styled.div({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  flexShrink: 0,
-  marginLeft: "auto",
-});
-
 const StyledActionList = styled(ActionList)({
   padding: 0,
 });
@@ -735,15 +727,46 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         ? "positive"
         : "unknown";
 
-  // Global Testing Module: checklist rows + shared status line
+  const runnerBusy = isRunning || isWritingBaselines || isUpdatingStatus;
+  const runnerChipStatus: ChipStatus = isUpdatingStatus
+    ? "warning"
+    : isWritingBaselines
+      ? baselineStatus
+      : chipStatus;
+
+  // Global Testing Module: title row + checklist
   return (
     <ModuleContainer>
-      <Description
-        id="visual-testing-module-description"
-        style={{ margin: "4px 0 4px 8px" }}
-      >
-        {moduleStatusLine}
-      </Description>
+      <Heading>
+        <Info>
+          <Title>Run visual tests</Title>
+          <Description id="visual-testing-module-description">
+            {moduleStatusLine}
+          </Description>
+        </Info>
+        <Actions>
+          <VisualBaselineSplitButton
+            status={runnerChipStatus}
+            isRunning={runnerBusy}
+            ariaLabel="Run selected visual actions"
+            tooltip={
+              anyActionSelected
+                ? "Run selected actions"
+                : "Select at least one action below"
+            }
+            mode={baselineMode}
+            onModeChange={(next) => {
+              setBaselineMode(next);
+              saveBaselineWriteMode(next);
+            }}
+            mainIcon="play"
+            writeOnMainClick={false}
+            disabled={!anyActionSelected || runnerBusy}
+            onRun={() => void runSelectedRef.current()}
+            onStop={() => void cancelVisualRun()}
+          />
+        </Actions>
+      </Heading>
       <StyledActionList>
         <ActionList.Item>
           <ActionList.Action as="label" ariaLabel={false}>
@@ -751,7 +774,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               <Form.Checkbox
                 name="Run visual tests"
                 checked={runVisualEnabled}
-                disabled={isRunning || isWritingBaselines || isUpdatingStatus}
+                disabled={runnerBusy}
                 onChange={(event) => {
                   const next = event.currentTarget.checked;
                   setRunVisualEnabled(next);
@@ -761,38 +784,22 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             </ActionList.Icon>
             <ActionList.Text>Run visual tests</ActionList.Text>
           </ActionList.Action>
-          <Trailing>
-            <ActionList.Button
-              ariaLabel={
-                chipCount != null ? `${label} (${chipCount} failed)` : label
-              }
-              tooltip={label}
-              disabled={!hasResults && !crashed && !isRunning}
-              onClick={() => {
-                openVisualPanel(
-                  api,
-                  statusIds.failedIds[0] ?? statusIds.passedIds[0],
-                );
-              }}
-            >
-              {chipCount}
-              <TestStatusIcon status={chipStatus} isRunning={isRunning} />
-            </ActionList.Button>
-            <VisualBaselineSplitButton
-              status={baselineStatus}
-              isRunning={isWritingBaselines}
-              ariaLabel={baselineChipTooltip}
-              tooltip={baselineChipTooltip}
-              mode={baselineMode}
-              onModeChange={(next) => {
-                setBaselineMode(next);
-                saveBaselineWriteMode(next);
-              }}
-              writeOnMainClick={false}
-              disabled={isRunning || isUpdatingStatus}
-              onStop={() => void cancelVisualRun()}
-            />
-          </Trailing>
+          <ActionList.Button
+            ariaLabel={
+              chipCount != null ? `${label} (${chipCount} failed)` : label
+            }
+            tooltip={label}
+            disabled={!hasResults && !crashed && !isRunning}
+            onClick={() => {
+              openVisualPanel(
+                api,
+                statusIds.failedIds[0] ?? statusIds.passedIds[0],
+              );
+            }}
+          >
+            {chipCount}
+            <TestStatusIcon status={chipStatus} isRunning={isRunning} />
+          </ActionList.Button>
         </ActionList.Item>
         <ActionList.Item>
           <ActionList.Action as="label" ariaLabel={false}>
@@ -800,7 +807,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               <Form.Checkbox
                 name={baselineRowLabel}
                 checked={createBaselinesEnabled}
-                disabled={isWritingBaselines || isRunning || isUpdatingStatus}
+                disabled={runnerBusy}
                 onChange={(event) => {
                   const next = event.currentTarget.checked;
                   setCreateBaselinesEnabled(next);
@@ -833,7 +840,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               <Form.Checkbox
                 name="Update status"
                 checked={updateStatusEnabled}
-                disabled={isRunning || isWritingBaselines || isUpdatingStatus}
+                disabled={runnerBusy}
                 onChange={(event) => {
                   const next = event.currentTarget.checked;
                   setUpdateStatusEnabled(next);
