@@ -29,6 +29,7 @@ describe("portable Visual Delta host options", () => {
       "update",
       "--allow-dirty",
       "--approved",
+      "--skip-build",
     ]);
   });
 
@@ -68,7 +69,6 @@ describe("portable Visual Delta host options", () => {
       "-c",
       "playwright.visual.config.ts",
       "--reporter=list",
-      "--reporter=json",
       "-g",
       "workspace-shell-tabs--top-light$",
     ]);

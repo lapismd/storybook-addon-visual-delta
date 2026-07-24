@@ -23,7 +23,10 @@ import {
   patchStorySkipVisual,
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
-import { ensurePlaywrightWebServerPort } from "./visual-server.js";
+import {
+  ensurePlaywrightWebServerPort,
+  ensureWarmStaticStorybookServer,
+} from "./visual-server.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 
 export type BaselineCliOptions = {
@@ -73,19 +76,22 @@ function ensureStorybookStatic(
   skipBuild: boolean | undefined,
 ): void {
   const indexPath = path.join(root, "storybook-static", "index.json");
-  if (existsSync(indexPath)) return;
+  const iframePath = path.join(root, "storybook-static", "iframe.html");
+  if (existsSync(indexPath) && existsSync(iframePath)) return;
   if (skipBuild) {
     throw new Error(
-      "storybook-static/index.json missing — run build-storybook first",
+      !existsSync(indexPath)
+        ? "storybook-static/index.json missing — run build-storybook first"
+        : "storybook-static incomplete (missing iframe.html) — run build-storybook",
     );
   }
   execFileSync("pnpm", ["build-storybook"], {
     cwd: root,
     stdio: "inherit",
   });
-  if (!existsSync(indexPath)) {
+  if (!existsSync(indexPath) || !existsSync(iframePath)) {
     throw new Error(
-      "build-storybook did not produce storybook-static/index.json",
+      "build-storybook did not produce a complete storybook-static (index.json + iframe.html)",
     );
   }
 }
@@ -170,7 +176,8 @@ export async function runBaselineUpdate(
   }
 
   ensureStorybookStatic(root, options.skipBuild);
-  await ensurePlaywrightWebServerPort(port);
+  const warm = await ensureWarmStaticStorybookServer(root, port);
+  if (!warm.ok) await ensurePlaywrightWebServerPort(port);
 
   const grep = playwrightGrep(storyId, component);
   const env: NodeJS.ProcessEnv = {
@@ -264,7 +271,8 @@ export async function runInteractionUpdate(
     return;
   }
 
-  await ensurePlaywrightWebServerPort(port);
+  const warmInteraction = await ensureWarmStaticStorybookServer(root, port);
+  if (!warmInteraction.ok) await ensurePlaywrightWebServerPort(port);
 
   const capture = JSON.stringify({ storyId, stepId, stepLabel });
   execFileSync("pnpm", ["exec", "playwright", "test"], {

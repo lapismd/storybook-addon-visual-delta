@@ -48,7 +48,7 @@ describe("defineVisualPlaywrightConfig", () => {
     expect(config.use?.baseURL).toBe("http://127.0.0.1:6010");
     expect(config.projects?.[0]?.name).toBe("chromium");
     expect(config.webServer).toMatchObject({
-      url: "http://127.0.0.1:6010/index.json",
+      url: "http://127.0.0.1:6010/iframe.html",
     });
   });
 });

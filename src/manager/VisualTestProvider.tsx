@@ -40,6 +40,7 @@ import {
   publishVisualLastRun,
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
+  subscribeVisualRunLog,
   subscribeVisualRunProgress,
   visualRunnableStoryIds,
   type VisualCreateProgress,
@@ -523,6 +524,12 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           },
         ]);
       }
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeVisualRunLog((line) => {
+      setStatusLog((prev) => (prev ? `${prev}\n${line}` : line));
     });
   }, []);
 

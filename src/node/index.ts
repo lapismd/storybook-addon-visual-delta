@@ -96,3 +96,8 @@ export type {
   CaptureSubjectStreamEvent,
 } from "../shared/capture-subject-types.js";
 export { watchVisualDeltaSourcePlugin } from "./watch-src.js";
+export {
+  ensurePlaywrightWebServerPort,
+  ensureWarmStaticStorybookServer,
+  type WarmStaticServerResult,
+} from "./visual-server.js";
