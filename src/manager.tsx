@@ -7,11 +7,13 @@ import {
 import { Addon_TypesEnum, type API_HashEntry } from "storybook/internal/types";
 import {
   ADDON_ID,
+  HIGHLIGHT_IGNORE_TOOL_ID,
   PANEL_ID,
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
   TOOL_ID,
 } from "./constants.js";
+import { HighlightIgnoreTool } from "./manager/HighlightIgnoreTool.js";
 import { PanelTitle } from "./manager/PanelTitle.js";
 import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
@@ -30,6 +32,13 @@ addons.register(ADDON_ID, () => {
     title: "Visual Delta review layout",
     match: ({ viewMode, tabId }) => viewMode === "story" && !tabId,
     render: () => <ReviewLayoutTool />,
+  });
+
+  addons.add(HIGHLIGHT_IGNORE_TOOL_ID, {
+    type: types.TOOL,
+    title: "Highlight ignored regions",
+    match: ({ viewMode, tabId }) => viewMode === "story" && !tabId,
+    render: () => <HighlightIgnoreTool />,
   });
 
   // Local Playwright visual suite — only available while the Storybook

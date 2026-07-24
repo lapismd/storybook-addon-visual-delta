@@ -300,7 +300,14 @@ export function PanelShell({
         onStopDiff={handleStopDiff}
         onStopRun={() => void handleStopRun()}
         onReviewStatus={(status) => void handleReview(status)}
+        onAccept={(scope) =>
+          void handleReview(scope === "component" ? "approved" : "approved")
+        }
+        onUnaccept={() => void handleReview("pending")}
         onToggleSkipVisual={() => void handleToggleSkipVisual()}
+        onOpenConfiguration={() => {
+          setStatusLog("Configuration (mock)");
+        }}
         isUpdating={busy}
       />
       <PanelBody>

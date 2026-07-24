@@ -7,11 +7,17 @@ import {
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
 } from "../shared/interaction-capture.js";
+import {
+  VISUAL_DELTA_CROP_ATTR,
+  VISUAL_DELTA_DELAY_ATTR,
+  VISUAL_DELTA_IGNORE_ATTR_LIST,
+} from "../shared/capture-params-attrs.js";
 import type {
   CaptureSubjectPhase,
   CaptureSubjectProgress,
   CaptureSubjectResult,
 } from "../shared/capture-subject-types.js";
+import { resolveIgnoreSelectors } from "../shared/ignore.js";
 
 export type {
   CaptureSubjectPhase,
@@ -35,6 +41,12 @@ export type CaptureSubjectRequest = {
   visualCaptureUntil?: string;
   viewport?: { width: number; height: number };
   deviceScaleFactor?: number;
+  /** Extra settle delay (ms) after play (CSF `delay`). */
+  delay?: number;
+  /** CSS selectors to mask (Playwright `mask`). */
+  ignoreSelectors?: string[];
+  /** Capture full viewport instead of subject clip. */
+  cropToViewport?: boolean;
 };
 
 export type CaptureSubjectError = {
@@ -235,21 +247,72 @@ export async function captureSubjectWithChromium(
 
     await settleAfterPlay(page, request.storyId);
 
+    const fromDom = await page.evaluate(
+      (attrs: {
+        delay: string;
+        ignore: string;
+        crop: string;
+      }) => {
+        const root = document.documentElement;
+        const delayRaw = root.getAttribute(attrs.delay);
+        const ignoreRaw = root.getAttribute(attrs.ignore);
+        return {
+          delay: delayRaw ? Number(delayRaw) : 0,
+          ignoreSelectors: ignoreRaw
+            ? ignoreRaw.split("\n").filter(Boolean)
+            : [],
+          cropToViewport: root.getAttribute(attrs.crop) === "1",
+        };
+      },
+      {
+        delay: VISUAL_DELTA_DELAY_ATTR,
+        ignore: VISUAL_DELTA_IGNORE_ATTR_LIST,
+        crop: VISUAL_DELTA_CROP_ATTR,
+      },
+    );
+    const delayMs =
+      typeof request.delay === "number" && request.delay > 0
+        ? request.delay
+        : fromDom.delay > 0
+          ? fromDom.delay
+          : 0;
+    if (delayMs > 0) await page.waitForTimeout(delayMs);
+
+    const ignoreSelectors = resolveIgnoreSelectors([
+      ...(request.ignoreSelectors ?? []),
+      ...fromDom.ignoreSelectors,
+    ]);
+    const mask = ignoreSelectors.map((sel) => page.locator(sel));
+    const cropToViewport =
+      request.cropToViewport === true || fromDom.cropToViewport;
+
     onProgress?.({
       phase: "capturing",
       label: PHASE_LABELS.capturing,
     });
     const portalCount = await page.locator(PORTAL_SELECTORS).count();
-    const clip = portalCount > 0 ? await portalUnionClip(page) : null;
+    const clip =
+      cropToViewport || portalCount === 0
+        ? null
+        : await portalUnionClip(page);
 
     let png: Buffer;
-    if (clip) {
+    if (cropToViewport) {
+      png = await page.screenshot({
+        animations: "disabled",
+        caret: "hide",
+        scale: "device",
+        type: "png",
+        ...(mask.length > 0 ? { mask } : {}),
+      });
+    } else if (clip) {
       png = await page.screenshot({
         clip,
         animations: "disabled",
         caret: "hide",
         scale: "device",
         type: "png",
+        ...(mask.length > 0 ? { mask } : {}),
       });
     } else {
       const root = page.locator("#storybook-root");
@@ -262,6 +325,7 @@ export async function captureSubjectWithChromium(
         caret: "hide",
         scale: "device",
         type: "png",
+        ...(mask.length > 0 ? { mask } : {}),
       });
     }
 

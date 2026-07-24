@@ -1,0 +1,104 @@
+/**
+ * Chromatic-style story modes for Visual Delta.
+ * A mode is a named combo of Storybook globals (and optional baseline URL).
+ */
+
+export type VisualDeltaModeDef = {
+  /** Storybook globals applied when this mode is selected (theme, viewport, …). */
+  globals?: Record<string, unknown>;
+  /** When true, removes a higher-level mode of the same name from the stack. */
+  disable?: boolean;
+  /** Explicit baseline URL for this mode (gallery entry). */
+  src?: string;
+};
+
+export type VisualDeltaModes = Record<string, VisualDeltaModeDef>;
+
+/** Filesystem / URL slug for a mode name (`Dark Desktop` → `dark-desktop`). */
+export function modeBaselineSlug(modeName: string): string {
+  return modeName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Stack modes like Chromatic: later levels merge keys; `{ disable: true }`
+ * removes a key from the stack.
+ */
+export function stackModes(
+  ...levels: Array<VisualDeltaModes | undefined | null>
+): VisualDeltaModes {
+  const stacked: VisualDeltaModes = {};
+  for (const level of levels) {
+    if (!level) continue;
+    for (const [name, def] of Object.entries(level)) {
+      if (def?.disable) {
+        delete stacked[name];
+        continue;
+      }
+      stacked[name] = {
+        ...stacked[name],
+        ...def,
+        globals: {
+          ...(stacked[name]?.globals ?? {}),
+          ...(def.globals ?? {}),
+        },
+      };
+    }
+  }
+  return stacked;
+}
+
+export function modeNames(modes: VisualDeltaModes | undefined): string[] {
+  if (!modes) return [];
+  return Object.keys(modes).filter((name) => !modes[name]?.disable);
+}
+
+/**
+ * Build gallery images for modes that declare `src`. Modes without `src` still
+ * appear as selectable named modes (globals-only) via the mode selector.
+ */
+export function imagesFromModes(
+  modes: VisualDeltaModes | undefined,
+  defaults: {
+    align?: "viewport" | "canvas";
+    placement?: string;
+    anchor?: string;
+    offsetX?: number;
+    offsetY?: number;
+  } = {},
+): Array<{
+  src: string;
+  mode: string;
+  align?: "viewport" | "canvas";
+  placement?: string;
+  anchor?: string;
+  offsetX?: number;
+  offsetY?: number;
+}> {
+  if (!modes) return [];
+  const out: Array<{
+    src: string;
+    mode: string;
+    align?: "viewport" | "canvas";
+    placement?: string;
+    anchor?: string;
+    offsetX?: number;
+    offsetY?: number;
+  }> = [];
+  for (const [name, def] of Object.entries(modes)) {
+    if (def?.disable || !def?.src) continue;
+    out.push({
+      src: def.src,
+      mode: name,
+      align: defaults.align,
+      placement: defaults.placement,
+      anchor: defaults.anchor,
+      offsetX: defaults.offsetX,
+      offsetY: defaults.offsetY,
+    });
+  }
+  return out;
+}

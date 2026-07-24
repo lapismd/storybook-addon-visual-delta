@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeImages } from "./normalize.js";
+import { normalizeImages, normalizeImagesWithModes } from "./normalize.js";
 
 describe("normalizeImages", () => {
   it("normalizes a single string src with globals", () => {
@@ -70,6 +70,23 @@ describe("normalizeImages", () => {
         deviceScaleFactor: 1,
         viewport: { width: 1440, height: 960 },
       },
+    ]);
+  });
+});
+
+describe("normalizeImagesWithModes", () => {
+  it("appends mode src baselines with mode labels", () => {
+    const images = normalizeImagesWithModes({
+      images: "/primary.png",
+      modes: {
+        dark: { src: "/dark.png", globals: { theme: "dark" } },
+        light: { globals: { theme: "light" } },
+      },
+      align: "canvas",
+    });
+    expect(images.map((img) => ({ src: img.src, mode: img.mode }))).toEqual([
+      { src: "/primary.png", mode: undefined },
+      { src: "/dark.png", mode: "dark" },
     ]);
   });
 });

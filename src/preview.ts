@@ -1,6 +1,8 @@
 import { addons } from "storybook/preview-api";
 import type { ProjectAnnotations, Renderer } from "storybook/internal/types";
 import { EVENTS, KEY } from "./constants.js";
+import { withCaptureParams } from "./preview/capture-params.js";
+import { withHighlightIgnore } from "./preview/highlight-ignore.js";
 import { withInitImage } from "./preview/init.js";
 import { withOverlayInfo } from "./preview/overlay-info.js";
 import { ensureOverlayChannel, withSelectImage } from "./preview/overlay.js";
@@ -42,6 +44,8 @@ function emitPlaySteps(storyId: string) {
 
 const preview: ProjectAnnotations<Renderer> = {
   decorators: [
+    withCaptureParams,
+    withHighlightIgnore,
     withInitImage,
     withSelectImage,
     withOverlayInfo,

@@ -1,6 +1,14 @@
+import type { VisualDeltaModes } from "./shared/modes.js";
+
+export type {
+  VisualDeltaModeDef,
+  VisualDeltaModes,
+} from "./shared/modes.js";
+
 export const ADDON_ID = "visual-delta";
 export const PANEL_ID = `${ADDON_ID}/panel`;
 export const TOOL_ID = `${ADDON_ID}/tool/review-layout`;
+export const HIGHLIGHT_IGNORE_TOOL_ID = `${ADDON_ID}/tool/highlight-ignore`;
 export const REVIEW_LAYOUT_STATE_ID = `${ADDON_ID}/review-layout`;
 export const TEST_PROVIDER_ID = `${ADDON_ID}/test-provider`;
 export const STATUS_TYPE_ID_VISUAL = `${ADDON_ID}/visual`;
@@ -30,6 +38,8 @@ export const EVENTS = {
   RUN_UNTIL_STEP: `${ADDON_ID}/run-until-step`,
   /** Preview → manager: play is parked at an interaction step. */
   VISUAL_CAPTURE_PARKED: `${ADDON_ID}/visual-capture-parked`,
+  /** Manager → preview: toggle highlight of ignore regions. */
+  SET_HIGHLIGHT_IGNORE: `${ADDON_ID}/set-highlight-ignore`,
 } as const;
 
 export type AlignMode = "viewport" | "canvas";
@@ -81,6 +91,8 @@ export type VisualDeltaImage = {
   deviceScaleFactor?: number;
   /** CSS viewport used to capture this PNG. */
   viewport?: { width: number; height: number };
+  /** Mode name when this image comes from `parameters.visualDelta.modes`. */
+  mode?: string;
 };
 
 /** Opt-in mid-play capture (sibling PNG; primary `images` stay end-of-play). */
@@ -99,6 +111,11 @@ export type VisualDeltaParams = {
    * compared by Playwright in addition to the primary end-of-play baseline.
    */
   interactions?: VisualDeltaInteraction[];
+  /**
+   * Named globals combos (Chromatic-style modes). Modes with `src` become
+   * gallery baselines; selecting a mode applies `globals` via the manager API.
+   */
+  modes?: VisualDeltaModes;
   anchor?: string;
   offsetX?: number;
   offsetY?: number;
@@ -107,8 +124,31 @@ export type VisualDeltaParams = {
   placement?: PlacementMode | "beside" | "over";
   opacity?: number;
   colorInversion?: boolean;
+  /** Live Diff / suite pass threshold as a percent of differing pixels. */
   passThresholdPercent?: number;
+  /**
+   * pixelmatch color threshold in `[0, 1]` (Chromatic `diffThreshold`).
+   * Default `0.2` for Live Diff.
+   */
+  diffThreshold?: number;
+  /** Include anti-aliased pixels in the Live Diff pixelmatch. */
+  diffIncludeAntiAliasing?: boolean;
+  /** Extra settle delay (ms) before Live Diff / Chromium subject capture. */
+  delay?: number;
+  /**
+   * CSS selectors whose painted regions are ignored during Live Diff capture
+   * (plus built-in `data-visual-delta-ignore` / Chromatic ignore markers).
+   */
+  ignoreSelectors?: string[];
+  /**
+   * When true, HTML Live Diff captures the viewport/canvas clip instead of
+   * the story subject element.
+   */
+  cropToViewport?: boolean;
 };
+
+/** Default pixelmatch threshold for Live Diff (Chromatic default is ~0.063). */
+export const DEFAULT_DIFF_THRESHOLD = 0.2;
 
 export const DEFAULT_PASS_THRESHOLD_PERCENT = 0.1;
 export const DEFAULT_PLACEMENT: PlacementMode = "right";
@@ -177,6 +217,8 @@ export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
 export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
 /** Storybook-dev middleware that captures a story subject via Playwright Chromium. */
 export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
+/** Storybook-dev middleware that returns resolved host options (read-only). */
+export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";
 
 /** CSF tag: exclude story from Playwright visual suite / Visual Delta runs. */
 export const SKIP_VISUAL_TAG = "skip-visual";

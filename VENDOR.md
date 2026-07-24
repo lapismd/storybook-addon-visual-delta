@@ -3,6 +3,9 @@
 Reimplemented from **`storybook-addon-visual-delta@0.1.5`** (npm tarball).
 Upstream GitHub is unavailable; edit **`src/`** like any other workspace package.
 
+**Chromatic parity:** see [`PARITY.md`](./PARITY.md) for configuration and
+manager-view gaps vs `@chromatic-com/storybook` (local-achievable vs cloud-only).
+
 |                 |                                      |
 | --------------- | ------------------------------------ |
 | Upstream npm    | `storybook-addon-visual-delta@0.1.5` |
