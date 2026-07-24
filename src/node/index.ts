@@ -13,6 +13,7 @@ export {
 export {
   runBaselineUpdate,
   runInteractionUpdate,
+  runSkipVisualTag,
   type BaselineCliOptions,
 } from "./baseline-cli.js";
 export {
@@ -44,15 +45,8 @@ export {
   snapshotFileName,
   type StoryIndexEntry,
 } from "./snapshot-paths.js";
-export type {
-  VisualDeltaModeDef,
-  VisualDeltaModes,
-} from "../shared/modes.js";
-export {
-  imagesFromModes,
-  modeNames,
-  stackModes,
-} from "../shared/modes.js";
+export type { VisualDeltaModeDef, VisualDeltaModes } from "../shared/modes.js";
+export { imagesFromModes, modeNames, stackModes } from "../shared/modes.js";
 export {
   BUILTIN_IGNORE_SELECTORS,
   resolveIgnoreSelectors,

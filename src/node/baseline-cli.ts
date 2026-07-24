@@ -52,9 +52,7 @@ function packageRootOf(options: BaselineCliOptions): string {
 function snapshotDirOf(options: BaselineCliOptions, root: string): string {
   const configured = options.snapshotDir?.trim();
   if (!configured) return path.join(root, DEFAULT_SNAPSHOT_DIR);
-  return configured.startsWith("/")
-    ? configured
-    : path.join(root, configured);
+  return configured.startsWith("/") ? configured : path.join(root, configured);
 }
 
 function pathModeOf(options: BaselineCliOptions): BaselinePathMode {
@@ -189,17 +187,23 @@ export async function runBaselineUpdate(
     VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
   };
 
-  execFileSync(
-    "pnpm",
-    [
-      "exec",
-      "playwright",
-      "test",
-      "--update-snapshots",
-      ...(grep ? ["-g", grep] : []),
-    ],
-    { cwd: root, stdio: "inherit", env },
-  );
+  try {
+    execFileSync(
+      "pnpm",
+      [
+        "exec",
+        "playwright",
+        "test",
+        // Explicit mode — bare `--update-snapshots` means "all" and overrides config.
+        `--update-snapshots=${options.createOnly ? "missing" : "all"}`,
+        ...(grep ? ["-g", grep] : []),
+      ],
+      { cwd: root, stdio: "inherit", env },
+    );
+  } catch (error) {
+    // Create-only can exit non-zero when existing baselines still mismatch.
+    if (!options.createOnly) throw error;
+  }
 
   const targets = matchingEntries(root, storyId, component).filter(
     (entry) => !(entry.tags ?? []).includes("skip-visual"),
@@ -310,4 +314,39 @@ export async function runInteractionUpdate(
     storyId,
     interaction: { id: stepId, label: stepLabel, src },
   });
+}
+
+/**
+ * Add or remove `skip-visual` on matching stories (packaged CLI).
+ * Requires `storybook-static/index.json` for story → source resolution.
+ */
+export function runSkipVisualTag(
+  options: BaselineCliOptions & {
+    /** `true` = add skip-visual; `false` = remove it. */
+    skip: boolean;
+  },
+): { updated: string[]; errors: string[] } {
+  const root = packageRootOf(options);
+  ensureStorybookStatic(root, true);
+  const targets = matchingEntries(root, options.storyId, options.component);
+  if (!targets.length) {
+    throw new Error(
+      "Provide --story-id <id> or --component <name> matching at least one story in storybook-static/index.json",
+    );
+  }
+  const updated: string[] = [];
+  const errors: string[] = [];
+  for (const entry of targets) {
+    const result = patchStorySkipVisual({
+      packageRoot: root,
+      storyId: entry.id,
+      skip: options.skip,
+    });
+    if (result.ok) updated.push(entry.id);
+    else errors.push(`${entry.id}: ${result.error ?? "patch failed"}`);
+  }
+  if (!updated.length && errors.length) {
+    throw new Error(errors.join("\n"));
+  }
+  return { updated, errors };
 }

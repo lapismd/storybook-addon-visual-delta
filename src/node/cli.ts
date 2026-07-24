@@ -2,6 +2,7 @@
 import {
   runBaselineUpdate,
   runInteractionUpdate,
+  runSkipVisualTag,
   type BaselineCliOptions,
 } from "./baseline-cli.js";
 import { runVisualDeltaInit } from "./init-scaffold.js";
@@ -44,16 +45,20 @@ Usage:
   visual-delta init [--force] [--port <n>]
   visual-delta update --story-id <id> [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
+  visual-delta skip --story-id <id>|--component <name>
+  visual-delta include --story-id <id>|--component <name>
 
 Commands:
   init                      Scaffold suite, Playwright config, snapshot dir, scripts
   update                    Create/overwrite primary baselines + CSF wiring
   interaction-update        Mid-play interaction baseline
+  skip                      Add skip-visual (exclude from Playwright visual runs)
+  include                   Remove skip-visual
 
 Flags:
   --force                   Overwrite existing scaffold files (init)
   --story-id <id>           Storybook story id
-  --component <name>        Grep / title substring (update only)
+  --component <name>        Grep / title substring (update / skip / include)
   --step-label <label>      Play step label (interaction-update)
   --step-id <id>            Override slugified step id
   --create-only             Missing PNGs only (no overwrite)
@@ -94,7 +99,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(`  scripts: ${result.scriptsUpdated.join(", ")}`);
     }
     console.log(
-      "Next: addons: [\"storybook-addon-visual-delta\"] in .storybook/main.ts, then Create visual in the panel.",
+      'Next: addons: ["storybook-addon-visual-delta"] in .storybook/main.ts, then Create visual in the panel.',
     );
     return;
   }
@@ -110,6 +115,20 @@ async function main(argv: string[]): Promise<void> {
     command === "visual-interaction-update"
   ) {
     await runInteractionUpdate(options);
+    return;
+  }
+  if (command === "skip" || command === "include") {
+    const result = runSkipVisualTag({
+      ...options,
+      skip: command === "skip",
+    });
+    console.log(
+      `${command}: ${result.updated.length} stor${result.updated.length === 1 ? "y" : "ies"}`,
+    );
+    if (result.errors.length) {
+      for (const err of result.errors) console.error(`  ${err}`);
+      process.exitCode = 1;
+    }
     return;
   }
 
