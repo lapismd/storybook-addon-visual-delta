@@ -64,7 +64,10 @@ import {
   type VisualCreateProgress,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
-import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
+import {
+  loadDiffCaptureEngine,
+  type DiffCaptureEngine,
+} from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import type { DiffResultData } from "../types.js";
 import {
@@ -148,7 +151,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     colorInversion,
     placement,
     liveVisible,
-    passThresholdPercent,
+    passThresholdByEngine,
     diffThreshold,
     diffIncludeAntiAliasing,
     delay,
@@ -323,7 +326,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     null,
   );
   const diffAbortRef = useRef<AbortController | null>(null);
-  const lastDiffEngineRef = useRef<DiffCaptureEngine>("html");
+  const [diffEngine, setDiffEngine] = useState<DiffCaptureEngine>(() =>
+    loadDiffCaptureEngine(),
+  );
+  const passThresholdPercent = passThresholdByEngine[diffEngine];
   const [isReviewing, setIsReviewing] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState<boolean | null>(null);
   const [onboardingHint, setOnboardingHint] = useState<string | null>(null);
@@ -709,7 +715,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError("No story selected for Chromium Diff");
         return;
       }
-      lastDiffEngineRef.current = engine;
       diffAbortRef.current?.abort();
       const abort = new AbortController();
       diffAbortRef.current = abort;
@@ -1195,10 +1200,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [handleRunVisual],
   );
 
-  const handleReRunDiff = useCallback(() => {
-    void handleDiff(lastDiffEngineRef.current);
-  }, [handleDiff]);
-
   const isEmpty = primaryImages.length === 0 && images.length === 0;
   const needsScaffold = onboardingReady === false;
 
@@ -1301,7 +1302,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 step="0.05"
                 value={passThresholdPercent}
                 onChange={(e) =>
-                  setPassThresholdPercent(parseFloat(e.target.value))
+                  setPassThresholdPercent(
+                    diffEngine,
+                    parseFloat(e.target.value),
+                  )
                 }
               />
               <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
@@ -1321,6 +1325,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       busy,
       captureError,
       colorInversion,
+      diffEngine,
       diffResult,
       handleModeChange,
       images.length,
@@ -1374,7 +1379,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             skipVisual={loading ? false : skipVisual}
             onDiff={(engine) => void handleDiff(engine)}
             onRun={handleRun}
-            onReRunDiff={handleReRunDiff}
+            diffEngine={diffEngine}
+            onDiffEngineChange={setDiffEngine}
             onCreate={() => void handleCreateBaselines()}
             onUpdateBaselines={() => void handleUpdateBaselines()}
             onResetSettings={resetSettings}

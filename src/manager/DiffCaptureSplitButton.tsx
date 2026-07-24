@@ -90,7 +90,7 @@ export function diffEngineTooltip(engine: DiffCaptureEngine): string {
   return "Compare via html-to-image (fast; variable fonts may differ from baselines)";
 }
 
-function loadEngine(): DiffCaptureEngine {
+export function loadDiffCaptureEngine(): DiffCaptureEngine {
   if (typeof localStorage === "undefined") return "html";
   try {
     const raw = localStorage.getItem(DIFF_ENGINE_KEY);
@@ -122,6 +122,8 @@ export function DiffCaptureSplitButton({
   onStop,
   compact = true,
   progressLabel,
+  engine: engineProp,
+  onEngineChange,
 }: {
   isRunning: boolean;
   disabled?: boolean;
@@ -130,18 +132,33 @@ export function DiffCaptureSplitButton({
   onStop: () => void;
   compact?: boolean;
   progressLabel?: string | null;
+  /** Controlled engine; omit to manage selection internally. */
+  engine?: DiffCaptureEngine;
+  onEngineChange?: (engine: DiffCaptureEngine) => void;
 }) {
-  const [engine, setEngine] = useState<DiffCaptureEngine>(() => loadEngine());
+  const [internalEngine, setInternalEngine] = useState<DiffCaptureEngine>(() =>
+    loadDiffCaptureEngine(),
+  );
+  const engine = engineProp ?? internalEngine;
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    saveEngine(engine);
-  }, [engine]);
+    if (engineProp !== undefined) return;
+    saveEngine(internalEngine);
+  }, [engineProp, internalEngine]);
 
-  const selectEngine = useCallback((next: DiffCaptureEngine) => {
-    setEngine(next);
-    setMenuOpen(false);
-  }, []);
+  const selectEngine = useCallback(
+    (next: DiffCaptureEngine) => {
+      if (engineProp === undefined) {
+        setInternalEngine(next);
+      } else {
+        saveEngine(next);
+      }
+      onEngineChange?.(next);
+      setMenuOpen(false);
+    },
+    [engineProp, onEngineChange],
+  );
 
   if (isRunning) {
     const runningLabel = progressLabel?.trim() || "Stop";

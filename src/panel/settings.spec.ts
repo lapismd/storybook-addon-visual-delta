@@ -22,13 +22,28 @@ describe("visual delta settings", () => {
       placement: "beside" as never,
       opacity: 0.4,
       liveVisible: false,
-      passThresholdPercent: 1.5,
+      passThresholdByEngine: { html: 1.5, chromium: 0.25 },
     });
     expect(loadSettings()).toMatchObject({
       placement: "right",
       opacity: 0.4,
       liveVisible: false,
-      passThresholdPercent: 1.5,
+      passThresholdByEngine: { html: 1.5, chromium: 0.25 },
+    });
+  });
+
+  it("migrates legacy passThresholdPercent to both engines", () => {
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        placement: "center",
+        opacity: 0.5,
+        passThresholdPercent: 1.25,
+      }),
+    );
+    expect(loadSettings().passThresholdByEngine).toEqual({
+      html: 1.25,
+      chromium: 1.25,
     });
   });
 

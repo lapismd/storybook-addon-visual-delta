@@ -36,7 +36,6 @@ import {
 import { ReviewStatusPad } from "./ReviewStatusPad.js";
 import { VISUAL_DELTA_HEADER_HEIGHT } from "./styled.js";
 import {
-  BadgeActionButton,
   VisualStatusBadge,
   type VisualBadgeStatus,
 } from "./VisualStatusBadge.js";
@@ -81,7 +80,8 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   skipVisual,
   onDiff,
   onRun,
-  onReRunDiff,
+  diffEngine,
+  onDiffEngineChange,
   onCreate,
   onUpdateBaselines,
   onResetSettings,
@@ -109,8 +109,9 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   skipVisual: boolean;
   onDiff: (engine: DiffCaptureEngine) => void;
   onRun: (mode: VisualRunMode) => void;
-  /** Re-run Diff with the last selected capture engine (HTML or Chromium). */
-  onReRunDiff?: () => void;
+  /** Selected Diff capture engine (HTML vs Chromium). */
+  diffEngine: DiffCaptureEngine;
+  onDiffEngineChange: (engine: DiffCaptureEngine) => void;
   onCreate: () => void;
   onUpdateBaselines: () => void;
   onResetSettings: () => void;
@@ -169,6 +170,8 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
             progressLabel={diffProgressLabel}
             disabled={busy && !isDiffing}
             storyMissing={storyMissing}
+            engine={diffEngine}
+            onEngineChange={onDiffEngineChange}
             onDiff={onDiff}
             onStop={onStopDiff}
           />
@@ -187,21 +190,6 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
             <>
               <Separator />
               <VisualStatusBadge status={badgeStatus} />
-              <WithTooltip
-                hasChrome={false}
-                placement="top"
-                trigger="hover"
-                tooltip={<TooltipNote note="Re-run Diff" />}
-              >
-                <BadgeActionButton
-                  type="button"
-                  disabled={busy || storyMissing}
-                  onClick={() => onReRunDiff?.()}
-                  aria-label="Re-run Diff"
-                >
-                  Diff
-                </BadgeActionButton>
-              </WithTooltip>
             </>
           ) : null}
         </ControlsGroup>

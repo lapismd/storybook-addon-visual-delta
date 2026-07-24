@@ -8,6 +8,12 @@ import {
 
 export const SETTINGS_STORAGE_KEY = "storybook-addon-visual-delta/settings";
 
+/** Live Diff pass threshold, keyed by capture engine. */
+export type PassThresholdByEngine = {
+  html: number;
+  chromium: number;
+};
+
 export type VisualDeltaSettings = {
   /** Whether a baseline overlay is shown (gallery thumb selected). */
   overlayOn: boolean;
@@ -19,7 +25,8 @@ export type VisualDeltaSettings = {
    * (center overlay). Default true = live visible.
    */
   liveVisible: boolean;
-  passThresholdPercent: number;
+  /** Pass threshold (%) for Diff HTML vs Diff Chromium. */
+  passThresholdByEngine: PassThresholdByEngine;
 };
 
 export const DEFAULT_SETTINGS: VisualDeltaSettings = {
@@ -28,15 +35,47 @@ export const DEFAULT_SETTINGS: VisualDeltaSettings = {
   opacity: 1,
   colorInversion: false,
   liveVisible: true,
-  passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
+  passThresholdByEngine: {
+    html: DEFAULT_PASS_THRESHOLD_PERCENT,
+    chromium: DEFAULT_PASS_THRESHOLD_PERCENT,
+  },
 };
 
+function readThreshold(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function loadPassThresholdByEngine(
+  parsed: Partial<VisualDeltaSettings> & { passThresholdPercent?: unknown },
+): PassThresholdByEngine {
+  const defaults = DEFAULT_SETTINGS.passThresholdByEngine;
+  const byEngine = parsed.passThresholdByEngine;
+  if (byEngine && typeof byEngine === "object") {
+    return {
+      html: readThreshold(byEngine.html, defaults.html),
+      chromium: readThreshold(byEngine.chromium, defaults.chromium),
+    };
+  }
+  // Migrate pre–per-engine `passThresholdPercent` to both engines.
+  const legacy = readThreshold(parsed.passThresholdPercent, defaults.html);
+  return { html: legacy, chromium: legacy };
+}
+
+function cloneDefaults(): VisualDeltaSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    passThresholdByEngine: { ...DEFAULT_SETTINGS.passThresholdByEngine },
+  };
+}
+
 export function loadSettings(): VisualDeltaSettings {
-  if (typeof localStorage === "undefined") return { ...DEFAULT_SETTINGS };
+  if (typeof localStorage === "undefined") return cloneDefaults();
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<VisualDeltaSettings>;
+    if (!raw) return cloneDefaults();
+    const parsed = JSON.parse(raw) as Partial<VisualDeltaSettings> & {
+      passThresholdPercent?: unknown;
+    };
     const placement = normalizePlacement(parsed.placement);
     const opacity =
       typeof parsed.opacity === "number" &&
@@ -47,11 +86,6 @@ export function loadSettings(): VisualDeltaSettings {
         : isSplitPlacement(placement)
           ? 1
           : 0.5;
-    const passThresholdPercent =
-      typeof parsed.passThresholdPercent === "number" &&
-      Number.isFinite(parsed.passThresholdPercent)
-        ? parsed.passThresholdPercent
-        : DEFAULT_SETTINGS.passThresholdPercent;
     return {
       overlayOn:
         typeof parsed.overlayOn === "boolean"
@@ -67,10 +101,10 @@ export function loadSettings(): VisualDeltaSettings {
         typeof parsed.liveVisible === "boolean"
           ? parsed.liveVisible
           : DEFAULT_SETTINGS.liveVisible,
-      passThresholdPercent,
+      passThresholdByEngine: loadPassThresholdByEngine(parsed),
     };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return cloneDefaults();
   }
 }
 

@@ -4,7 +4,10 @@ import type {
   VisualDeltaImage,
   VisualReviewStatus,
 } from "../constants.js";
-import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
+import {
+  loadDiffCaptureEngine,
+  type DiffCaptureEngine,
+} from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
@@ -88,6 +91,9 @@ export function PanelShell({
   const [busy, setBusy] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isDiffing, setIsDiffing] = useState(false);
+  const [diffEngine, setDiffEngine] = useState<DiffCaptureEngine>(() =>
+    loadDiffCaptureEngine(),
+  );
   const [diffProgressLabel, setDiffProgressLabel] = useState<string | null>(
     null,
   );
@@ -289,7 +295,8 @@ export function PanelShell({
         skipVisual={skipVisual}
         onDiff={handleDiff}
         onRun={(mode) => void handleRun(mode)}
-        onReRunDiff={() => handleDiff("html")}
+        diffEngine={diffEngine}
+        onDiffEngineChange={setDiffEngine}
         onCreate={() => void handleCreate()}
         onUpdateBaselines={() => void handleUpdate()}
         onResetSettings={() => {
