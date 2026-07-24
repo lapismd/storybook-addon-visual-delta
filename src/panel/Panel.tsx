@@ -651,13 +651,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setDiffResult(null);
     }
     let cancelled = false;
-    void loadPlaywrightDiffResult(
-      baselineStem,
-      diffEpoch || Date.now(),
-    ).then((result) => {
-      diffResultCacheRef.current.set(baselineStem, result);
-      if (!cancelled) setDiffResult(result);
-    });
+    void loadPlaywrightDiffResult(baselineStem, diffEpoch || Date.now()).then(
+      (result) => {
+        diffResultCacheRef.current.set(baselineStem, result);
+        if (!cancelled) setDiffResult(result);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -805,7 +804,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           await overlayHidden;
           let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
           try {
-                capture = await withPlaywrightPreviewViewport(
+            capture = await withPlaywrightPreviewViewport(
               () =>
                 capturePreviewSubject({
                   pixelRatio: deviceScaleFactorForImage(selectedImage),
@@ -893,7 +892,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         );
         const totalPixels = width * height;
         const diffPercent = (diffPixels / totalPixels) * 100;
-        const threshold = passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
+        const threshold =
+          passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
         const passed = diffPercent < threshold;
         setDiffResult({
           actualImage: actualMaskedDataUrl,
@@ -925,8 +925,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         }
       } catch (error) {
         if (abort.signal.aborted) return;
-        const message =
-          error instanceof Error ? error.message : "Diff failed";
+        const message = error instanceof Error ? error.message : "Diff failed";
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
@@ -1155,9 +1154,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       );
     } catch (error) {
       setCaptureError(
-        error instanceof Error
-          ? error.message
-          : "Failed to update skip-visual",
+        error instanceof Error ? error.message : "Failed to update skip-visual",
       );
     } finally {
       setIsReviewing(false);
@@ -1271,9 +1268,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             primaryImages.length > 1 ? (
               <ImageGallery
                 images={primaryImages}
-                selectedIndex={
-                  selectedInteractionId ? 0 : Math.max(0, index)
-                }
+                selectedIndex={selectedInteractionId ? 0 : Math.max(0, index)}
                 onSelect={setIndex}
               />
             ) : null}
@@ -1375,10 +1370,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           {captureError ? <ErrorText>{captureError}</ErrorText> : null}
         </PanelToolbar>
         {diffResult && images.length > 0 ? (
-          <DiffResult
-            result={diffResult}
-            showHistogram={showDistribution}
-          />
+          <DiffResult result={diffResult} showHistogram={showDistribution} />
         ) : null}
       </>
     ),
@@ -1461,9 +1453,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           />
           <PanelBody>
             {showConfiguration ? (
-              <ConfigurationPanel
-                onClose={() => setShowConfiguration(false)}
-              />
+              <ConfigurationPanel onClose={() => setShowConfiguration(false)} />
             ) : null}
             {!showConfiguration && loading ? (
               <SkeletonRoot
@@ -1483,11 +1473,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 title="Visual Delta"
                 description={
                   skipVisual
-                    ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use More → Include in visual tests to opt in, then Create visual."
+                    ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
                     : needsScaffold
                       ? (onboardingHint ??
                         "Set up the Playwright suite and config, then create a baseline for this story.")
-                      : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools."
+                      : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite."
                 }
                 footer={
                   needsScaffold && !skipVisual ? (
@@ -1498,6 +1488,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                       onClick={() => void handleInitScaffold()}
                     >
                       {isIniting ? "Setting up…" : "Set up Visual Delta"}
+                    </Button>
+                  ) : skipVisual ? (
+                    <Button
+                      size="small"
+                      ariaLabel="Include in visual tests"
+                      disabled={!storyId || busy}
+                      onClick={() => void handleToggleSkipVisual()}
+                    >
+                      Include in visual tests
                     </Button>
                   ) : (
                     <Button
@@ -1523,12 +1522,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 busy={busy}
                 showDistribution={showDistribution}
                 onExpand={selectSection}
-                onCreate={(step) =>
-                  void handleCreateInteraction(step, false)
-                }
-                onUpdate={(step) =>
-                  void handleCreateInteraction(step, true)
-                }
+                onCreate={(step) => void handleCreateInteraction(step, false)}
+                onUpdate={(step) => void handleCreateInteraction(step, true)}
                 onUpdateDefault={() => void handleUpdateBaselines()}
                 onToggleDistribution={() =>
                   setShowDistribution((value) => !value)

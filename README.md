@@ -356,11 +356,13 @@ and ready).
 
 ### `skip-visual` from the panel
 
-The Visual Delta panel **More** menu can add or remove `skip-visual` on the
-current story (patches the `.stories.svelte` CSF open tag via
-`POST /__visual-delta/skip-visual`):
+When a story has **no baseline**, the header shows **Skip visual tests** next
+to Create visual. When the story is already skipped, the header shows
+**Include in visual tests**. Stories that already have baselines keep skip /
+include under **More** as well. Both paths patch CSF via
+`POST /__visual-delta/skip-visual`:
 
-| Menu action                 | Effect                                      |
+| Action                      | Effect                                      |
 | --------------------------- | ------------------------------------------- |
 | **Skip visual tests**       | Adds `skip-visual` (and clears review tags) |
 | **Include in visual tests** | Removes `skip-visual`                       |
@@ -368,7 +370,8 @@ current story (patches the `.stories.svelte` CSF open tag via
 Skipped stories are excluded from Playwright visual runs and from Visual Delta
 Testing Module scope. Review status and Update baselines stay disabled while
 skipped. Prefer this over hand-editing tags when flake cannot be stabilized
-(document why in the story if the skip is permanent).
+(document why in the story if the skip is permanent). CLI:
+`pnpm ui visual:tag skip|include` or `visual-delta skip|include`.
 
 ### Review layout (canvas + panel)
 
@@ -453,18 +456,21 @@ export default defineVisualPlaywrightConfig({ port: 6007 });
 | `tsx scripts/ui-generator/cli.ts visual-update`             | Create missing or overwrite primary baselines; patches CSF `parameters.visualDelta` |
 | `tsx scripts/ui-generator/cli.ts visual-interaction-update` | Mid-play step PNG + CSF `interactions` entry                                        |
 | `pnpm ui visual:tag …`                                      | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)   |
+| `pnpm exec visual-delta skip` / `include`                   | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                  |
 | `pnpm test:visual` / `pnpm exec playwright test`            | Compare only (`PLAYWRIGHT_UPDATE_SNAPSHOTS=0` from middleware)                      |
 
 Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
 `--skip-build`, `--rebuild`, `--component <name>`, `--story-id <id>`,
 `--step-label`, `--step-id`. For `visual:tag`: `--status`, `--prefix`.
 
-`visual:tag` examples (requires `storybook-static/index.json` for expansion):
+Skip / include examples (requires `storybook-static/index.json`):
 
 ```bash
-pnpm ui visual:tag review --status ready --component button
 pnpm ui visual:tag skip --story-id shadcn-button--default
-pnpm ui visual:tag include --prefix shadcn-button--
+pnpm ui visual:tag include --component button
+pnpm exec visual-delta skip --story-id shadcn-button--default
+pnpm exec visual-delta include --component button
+pnpm ui visual:tag review --status ready --component button
 pnpm ui visual:tag --help
 ```
 

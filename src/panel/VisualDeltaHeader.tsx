@@ -153,6 +153,8 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   const skipActionNote = skipVisual
     ? "Remove skip-visual so Playwright and Visual Delta run this story"
     : "Add skip-visual to exclude this story from Playwright visual runs";
+  /** Prominent header control when there is no baseline, or skip is already on. */
+  const showSkipHeaderButton = empty || skipVisual;
 
   return (
     <HeaderWrap ref={headerRef} data-vd-header="controls">
@@ -192,7 +194,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
           ) : null}
         </ControlsGroup>
         <RightGroup>
-          {empty ? (
+          {empty && !skipVisual ? (
             <Button
               size="small"
               ariaLabel="Create visual baseline"
@@ -201,7 +203,21 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
             >
               {createLabel}
             </Button>
-          ) : (
+          ) : null}
+          {showSkipHeaderButton ? (
+            <Button
+              size="small"
+              variant={skipVisual ? "solid" : "ghost"}
+              ariaLabel={skipActionLabel}
+              title={skipActionNote}
+              disabled={busy || storyMissing}
+              onClick={onToggleSkipVisual}
+            >
+              {skipVisual ? <EyeIcon /> : <EyeCloseIcon />}
+              {skipActionLabel}
+            </Button>
+          ) : null}
+          {!empty && !skipVisual ? (
             <>
               <AcceptSplitButton
                 busy={busy}
@@ -215,7 +231,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                 onSelect={onReviewStatus}
               />
             </>
-          )}
+          ) : null}
           <ToggleButton
             size="small"
             variant="ghost"
@@ -265,22 +281,24 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                       </ActionList.Action>
                     </ActionList.Item>
                   ) : null}
-                  <ActionList.Item>
-                    <ActionList.Action
-                      ariaLabel={skipActionLabel}
-                      disabled={busy || storyMissing}
-                      title={skipActionNote}
-                      onClick={() => {
-                        setMoreOpen(false);
-                        onToggleSkipVisual();
-                      }}
-                    >
-                      <ActionList.Icon>
-                        {skipVisual ? <EyeIcon /> : <EyeCloseIcon />}
-                      </ActionList.Icon>
-                      <ActionList.Text>{skipActionLabel}</ActionList.Text>
-                    </ActionList.Action>
-                  </ActionList.Item>
+                  {!showSkipHeaderButton ? (
+                    <ActionList.Item>
+                      <ActionList.Action
+                        ariaLabel={skipActionLabel}
+                        disabled={busy || storyMissing}
+                        title={skipActionNote}
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onToggleSkipVisual();
+                        }}
+                      >
+                        <ActionList.Icon>
+                          {skipVisual ? <EyeIcon /> : <EyeCloseIcon />}
+                        </ActionList.Icon>
+                        <ActionList.Text>{skipActionLabel}</ActionList.Text>
+                      </ActionList.Action>
+                    </ActionList.Item>
+                  ) : null}
                   <ActionList.Item>
                     <ActionList.Action
                       ariaLabel={reviewLayoutLabel}
