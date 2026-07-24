@@ -397,9 +397,18 @@ Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 
 ## Advanced host: `@stevejuma/ui` catalog
 
-The UI catalog keeps `baselinePathMode: "nested-import"` and points create/update
-at `scripts/ui-generator/cli.ts` (Tasks/Fava gates, recipes). Portable defaults
-do **not** apply when those options are set.
+The UI catalog uses the packaged Playwright config helper and preset
+`staticDirs`, but keeps catalog-specific overrides:
+
+- `baselinePathMode: "nested-import"`
+- create/update via `scripts/ui-generator/cli.ts` (Tasks/Fava gates, recipes)
+- custom `tests/visual/storybook.spec.ts` (not `defineVisualSuite`)
+
+```ts
+// playwright.config.ts
+import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
+export default defineVisualPlaywrightConfig({ port: 6007 });
+```
 
 ### `package.json` scripts
 
@@ -409,7 +418,8 @@ do **not** apply when those options are set.
     "storybook": "storybook dev -p 9009",
     "build-storybook": "storybook build",
     "test:visual": "playwright test",
-    "test:visual:update": "tsx scripts/ui-generator/cli.ts visual-update"
+    "test:visual:update": "tsx scripts/ui-generator/cli.ts visual-update",
+    "visual-delta": "node packages/storybook-addon-visual-delta/dist/node/cli.js"
   }
 }
 ```
@@ -429,46 +439,35 @@ Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
 ### `.storybook/main.ts`
 
 ```ts
-import type { StorybookConfig } from "@storybook/svelte-vite";
-
-const config: StorybookConfig = {
-  addons: [
-    {
-      name: "storybook-addon-visual-delta",
-      options: {
-        visualDelta: {
-          snapshotDir: "tests/visual/storybook.spec.ts-snapshots",
-          visualUpdateArgs: [
-            "exec",
-            "tsx",
-            "scripts/ui-generator/cli.ts",
-            "visual-update",
-            "--allow-dirty",
-            "--approved",
-          ],
-          visualInteractionUpdateArgs: [
-            "exec",
-            "tsx",
-            "scripts/ui-generator/cli.ts",
-            "visual-interaction-update",
-            "--allow-dirty",
-            "--approved",
-            "--skip-build",
-          ],
-          allowRebuild: true,
-        },
+addons: [
+  {
+    name: "./visual-delta-preset.ts", // or package name when published
+    options: {
+      visualDelta: {
+        baselinePathMode: "nested-import",
+        visualServerPort: 6007,
+        visualUpdateArgs: [
+          "exec",
+          "tsx",
+          "scripts/ui-generator/cli.ts",
+          "visual-update",
+          "--allow-dirty",
+          "--approved",
+        ],
+        visualInteractionUpdateArgs: [
+          "exec",
+          "tsx",
+          "scripts/ui-generator/cli.ts",
+          "visual-interaction-update",
+          "--allow-dirty",
+          "--approved",
+          "--skip-build",
+        ],
       },
     },
-  ],
-  staticDirs: [
-    {
-      from: "../tests/visual/storybook.spec.ts-snapshots",
-      to: "/visual-baselines",
-    },
-  ],
-};
-
-export default config;
+  },
+],
+// `/visual-baselines` is mounted by the addon preset `staticDirs`.
 ```
 
 ### Developing the addon from source (optional)
