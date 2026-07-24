@@ -102,27 +102,35 @@ async function getBrowser(
   return sharedBrowser;
 }
 
+/**
+ * Union clip for portals rendered *outside* `#storybook-root` (dialogs, menus).
+ * Matches `tests/visual/storybook.spec.ts`: in-tree `[data-state="open"]`
+ * (e.g. Accordion) must NOT trigger a root-sized viewport clip.
+ */
 async function portalUnionClip(
   page: Page,
 ): Promise<{ x: number; y: number; width: number; height: number } | null> {
   return page.evaluate((selectors) => {
     const root = document.querySelector("#storybook-root");
-    const nodes: Element[] = [];
-    if (root) nodes.push(root);
+    if (!root) return null;
+    const rects: DOMRect[] = [root.getBoundingClientRect()];
     for (const el of document.querySelectorAll(selectors)) {
+      if (!(el instanceof HTMLElement)) continue;
+      // Accordion/Collapsible mark open items with data-state=open inside root.
+      if (root.contains(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
       const style = getComputedStyle(el);
       if (style.visibility === "hidden" || style.display === "none") continue;
-      nodes.push(el);
+      rects.push(r);
     }
-    if (nodes.length === 0) return null;
+    // No outside portals → caller should screenshot the story subject instead.
+    if (rects.length < 2) return null;
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;
     let bottom = -Infinity;
-    for (const el of nodes) {
-      const r = el.getBoundingClientRect();
+    for (const r of rects) {
       left = Math.min(left, r.left);
       top = Math.min(top, r.top);
       right = Math.max(right, r.right);
@@ -290,11 +298,9 @@ export async function captureSubjectWithChromium(
       phase: "capturing",
       label: PHASE_LABELS.capturing,
     });
-    const portalCount = await page.locator(PORTAL_SELECTORS).count();
-    const clip =
-      cropToViewport || portalCount === 0
-        ? null
-        : await portalUnionClip(page);
+    // Prefer outside-root portal union (dialogs/menus). In-tree open state
+    // (Accordion) yields null → subject screenshot, same as the host suite.
+    const clip = cropToViewport ? null : await portalUnionClip(page);
 
     let png: Buffer;
     if (cropToViewport) {
