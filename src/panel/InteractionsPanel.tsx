@@ -141,6 +141,7 @@ export const InteractionsPanel = memo(function InteractionsPanel({
                 <Button
                   size="small"
                   disabled={busy}
+                  ariaLabel={false}
                   onClick={() => onUpdate(step)}
                 >
                   Update
@@ -149,6 +150,7 @@ export const InteractionsPanel = memo(function InteractionsPanel({
                 <Button
                   size="small"
                   disabled={busy}
+                  ariaLabel={false}
                   onClick={() => onCreate(step)}
                 >
                   Create

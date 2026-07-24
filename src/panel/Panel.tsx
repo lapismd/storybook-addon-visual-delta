@@ -1305,7 +1305,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   size="small"
                   pressed={false}
                   onClick={resetOverlay}
-                  aria-label="Reset overlay position after drag"
+                  ariaLabel={false}
                   title="Reset overlay position after drag"
                 >
                   Reset
@@ -1363,6 +1363,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 <Button
                   size="small"
                   disabled={isUpdatingPlaywrightThreshold || busy}
+                  ariaLabel={false}
                   onClick={() => void handleUpdatePlaywrightThreshold()}
                 >
                   {isUpdatingPlaywrightThreshold

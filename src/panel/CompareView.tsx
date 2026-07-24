@@ -491,7 +491,7 @@ export function CompareView({
               size="small"
               pressed={zoomToChange}
               onClick={() => setZoomToChange((z) => !z)}
-              aria-label={
+              ariaLabel={
                 zoomToChange
                   ? "Fit full image (exit zoom to change)"
                   : "Zoom to first change"
@@ -506,7 +506,8 @@ export function CompareView({
               size="small"
               pressed={false}
               onClick={() => setPosition(50)}
-              aria-label="Reset swipe divider to center"
+              ariaLabel={false}
+              title="Reset swipe divider to center"
             >
               Reset
             </ToggleButton>
@@ -517,7 +518,7 @@ export function CompareView({
               pressed={false}
               disabled={viewZoom <= VIEW_ZOOM_MIN}
               onClick={() => nudgeViewZoom(-VIEW_ZOOM_STEP)}
-              aria-label="Zoom out compare view"
+              ariaLabel="Zoom out compare view"
               title="Zoom out (−)"
             >
               −
@@ -527,7 +528,7 @@ export function CompareView({
               pressed={false}
               disabled={viewZoom === 1}
               onClick={resetViewZoom}
-              aria-label="Reset view zoom"
+              ariaLabel={`View zoom ${Math.round(viewZoom * 100)}%. Reset to 100%`}
               title={
                 viewZoom === 1 ? "View zoom 100%" : "Reset zoom to 100% (0)"
               }
@@ -543,7 +544,7 @@ export function CompareView({
               pressed={false}
               disabled={viewZoom >= VIEW_ZOOM_MAX}
               onClick={() => nudgeViewZoom(VIEW_ZOOM_STEP)}
-              aria-label="Zoom in compare view"
+              ariaLabel="Zoom in compare view"
               title="Zoom in (+)"
             >
               +

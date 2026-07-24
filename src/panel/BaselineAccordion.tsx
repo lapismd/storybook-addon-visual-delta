@@ -282,7 +282,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                         padding="small"
                         pressed={showDistribution}
                         onClick={onToggleDistribution}
-                        aria-label="Difference distribution"
+                        ariaLabel="Difference distribution"
                         aria-expanded={showDistribution}
                       >
                         <GraphBarIcon />
