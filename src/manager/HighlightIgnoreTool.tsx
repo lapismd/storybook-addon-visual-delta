@@ -48,15 +48,16 @@ export function HighlightIgnoreTool() {
     push(enabled);
   }, [enabled, push]);
 
+  const label = enabled
+    ? "Hide ignored regions highlight"
+    : "Highlight ignored regions";
+
   return (
     <IconButton
       key="visual-delta-highlight-ignore"
       active={enabled}
-      title={
-        enabled
-          ? "Hide ignored regions highlight"
-          : "Highlight ignored regions"
-      }
+      title={label}
+      ariaLabel={label}
       onClick={() => {
         setEnabled((prev) => {
           const next = !prev;

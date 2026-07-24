@@ -53,7 +53,7 @@ export function LiveVisibilityToggle({
           size="small"
           pressed={imageOnly}
           disabled={disabled}
-          aria-label={label}
+          ariaLabel={label}
           title={label}
           onClick={() => onToggle(!liveVisible)}
         >
