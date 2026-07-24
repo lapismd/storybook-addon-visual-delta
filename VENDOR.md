@@ -31,7 +31,7 @@ and object-style TypeScript/JavaScript CSF are supported.
 | Owned by the addon package                                                                   | Stays in `@stevejuma/ui` (host)                          |
 | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Panel / Testing Module UI, overlay, Live Diff                                                | Playwright suite `tests/visual/storybook.spec.ts`        |
-| Preset: `managerEntries`, `previewAnnotations`, `staticDirs`, `viteFinal` (middleware + CSF inject + src watch); packaged `visual-delta` CLI + `/playwright` helpers | Committed PNGs + thin Playwright entry (or catalog suite/CLIs) |
+| Preset: `staticDirs`, `viteFinal` (middleware + CSF inject + src watch); package `./manager` + `./preview` auto-loaded by Storybook 10; packaged `visual-delta` CLI + `/playwright` helpers | Committed PNGs + thin Playwright entry (or catalog suite/CLIs) |
 | Preview `runStep` + park / `PLAY_STEPS` channel                                              | CLI pipelines `scripts/ui-generator/pipeline/visual-*`   |
 | Path constants, source patchers, sidecar/index readers, server readiness, and `fetch` client | CLI orchestration under `scripts/ui-generator/pipeline/` |
 | Catalog fixtures + Panel Shell mocks                                                         | Approval gate `VISUAL_UPDATE_APPROVED`                   |
@@ -140,8 +140,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   `parameters.visualDelta.images` includes the new `/visual-baselines/…` URL when
   missing. Progress shows in the panel status bar (**Creating…**, spinner +
   clipped last log line; click for the full monospace log popover). Before
-  Playwright starts, a stale listener on static port `6007` is cleared if
-  `/index.json` is unhealthy (avoids `EADDRINUSE` create failures). Create for a
+  Playwright starts, a stale listener on the visual static port
+  (`STORYBOOK_PORT + 1` by default) is cleared if `/index.json` is unhealthy
+  (avoids `EADDRINUSE` create failures). Create for a
   component (or any leaf under it) removes `skip-visual` from every story under
   that Playwright id prefix, rebuilds the static index when needed, captures
   missing PNGs, then wires `visualDelta.images`. When CSF was already wired (no

@@ -11,8 +11,19 @@ import { watchVisualDeltaSourcePlugin } from "./node/watch-src.js";
 
 export type { VisualDeltaHostOptions } from "./node/options.js";
 
-/** Addon package root (…/storybook-addon-visual-delta). */
-const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+/**
+ * Packaged preset ownership (Storybook 10+):
+ * - `staticDirs` + `viteFinal` live here
+ * - `manager` / `preview` come from bare package registration
+ *   (`storybook-addon-visual-delta/{manager,preview}` via Storybook's
+ *   virtual addon resolution). Do **not** re-append them here — that
+ *   duplicates the module and breaks the build.
+ *
+ * Local source development still needs absolute `managerEntries` /
+ * `previewAnnotations` in a host preset (see catalog
+ * `.storybook/visual-delta-preset.ts`) because that path is not the
+ * package name and does not auto-load those exports.
+ */
 
 /** Addon `src/` — default watch root for preview HMR when developing from source. */
 const defaultAddonSrcDir = fileURLToPath(new URL(".", import.meta.url));
@@ -65,16 +76,6 @@ export function staticDirs(
       to,
     },
   ];
-}
-
-/** Register the manager panel / Testing Module / tools. */
-export function managerEntries(entry: string[] = []): string[] {
-  return [...entry, path.join(packageRoot, "src", "manager.tsx")];
-}
-
-/** Register overlay + runStep preview annotations. */
-export function previewAnnotations(entry: string[] = []): string[] {
-  return [...entry, path.join(packageRoot, "src", "preview.ts")];
 }
 
 /**

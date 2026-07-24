@@ -64,13 +64,17 @@ export default defineVisualPlaywrightConfig();
 }
 ```
 
-What the package preset wires for you:
+What bare package registration + the preset wire for you:
 
-| Preset hook                             | Effect                                                                   |
+| Hook / export                           | Effect                                                                   |
 | --------------------------------------- | ------------------------------------------------------------------------ |
-| `managerEntries` / `previewAnnotations` | Panel, Testing Module, overlay                                           |
-| `staticDirs`                            | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
-| `viteFinal`                             | `/__visual-delta/*` middleware + CSF baseline inject                     |
+| Package `./manager` + `./preview`       | Panel, Testing Module, overlay (Storybook 10 auto-loads these)           |
+| Preset `staticDirs`                     | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
+| Preset `viteFinal`                      | `/__visual-delta/*` middleware + CSF baseline inject                     |
+
+The packaged preset does **not** re-append `managerEntries` /
+`previewAnnotations` — Storybook already resolves `storybook-addon-visual-delta/manager`
+and `…/preview` when the package is listed in `addons`.
 
 Defaults (override via `options.visualDelta`):
 
@@ -107,7 +111,7 @@ pnpm add -D storybook-addon-visual-delta
 | Import                                        | Purpose                                                           |
 | --------------------------------------------- | ----------------------------------------------------------------- |
 | `storybook-addon-visual-delta`                | Package root                                                      |
-| `storybook-addon-visual-delta/preset`         | `managerEntries`, `previewAnnotations`, `staticDirs`, `viteFinal` |
+| `storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports)   |
 | `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                        |
 | `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                       |
 | `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                   |
@@ -209,7 +213,7 @@ Pass under addon `options.visualDelta`. Types from
 | `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes               |
 | `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                     |
 | `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                     |
-| `visualServerPort`            | `6007`                                     | Static Storybook port owned by the visual Playwright config |
+| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`) |
 | `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                    |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
@@ -432,7 +436,8 @@ The UI catalog uses the packaged Playwright config helper and preset
 ```ts
 // playwright.config.ts
 import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
-export default defineVisualPlaywrightConfig({ port: 6007 });
+export default defineVisualPlaywrightConfig();
+// Optional: defineVisualPlaywrightConfig({ port: 9010 }) to pin the static port.
 ```
 
 ### `package.json` scripts
@@ -487,7 +492,7 @@ addons: [
     options: {
       visualDelta: {
         baselinePathMode: "nested-import",
-        visualServerPort: 6007,
+        // visualServerPort defaults to Storybook port + 1
         visualTestArgs: ["exec", "playwright", "test"],
         visualUpdateArgs: [
           "exec",
@@ -519,7 +524,9 @@ addons: [
 When editing this package’s `src/` next to Storybook, Storybook’s manager
 builder may not pick up `node_modules` changes. A small local preset that
 points `manager` / `preview` at absolute `src/` files (and re-exports
-`staticDirs` / `viteFinal` from the package) avoids that:
+`staticDirs` / `viteFinal` from the package) avoids that. Those entry hooks
+are required on the local preset because registering a file path does not
+trigger Storybook’s package `./manager` / `./preview` auto-load:
 
 ```ts
 // .storybook/visual-delta-preset.ts
@@ -541,6 +548,7 @@ export function managerEntries(entry: string[] = []) {
 }
 
 export {
+  staticDirs,
   viteFinal,
   webpack,
 } from "../packages/storybook-addon-visual-delta/src/preset.js";

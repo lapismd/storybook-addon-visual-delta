@@ -67,7 +67,7 @@ Flags:
   --skip-build              Do not run build-storybook when index missing
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
-  --port <n>                Playwright static server port (default 6007)
+  --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)
 `);
 }
 

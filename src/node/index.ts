@@ -2,6 +2,7 @@ export type { BaselinePathMode, VisualDeltaHostOptions } from "./options.js";
 export {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_SNAPSHOT_DIR,
+  DEFAULT_STORYBOOK_PORT,
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   DEFAULT_VISUAL_SERVER_PORT,
   DEFAULT_VISUAL_TEST_ARGS,
@@ -9,6 +10,8 @@ export {
   resolveBaselinePathMode,
   resolveRoot,
   resolveSnapshotDir,
+  resolveStorybookPort,
+  resolveVisualServerPort,
 } from "./options.js";
 export {
   runBaselineUpdate,
