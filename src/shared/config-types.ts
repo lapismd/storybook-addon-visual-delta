@@ -21,6 +21,11 @@ export type VisualDeltaResolvedConfig = {
     visualTestArgs: string[];
     addonSrcDir: string | null;
   };
+  /**
+   * Package-wide Playwright pass threshold (% of pixels), from
+   * `.visual-delta/playwright.json` or the built-in default (1).
+   */
+  playwrightPassThresholdPercent: number;
   onboarding: VisualDeltaOnboardingConfig;
   warnings: string[];
 };

@@ -22,7 +22,13 @@ import {
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
 } from "../constants.js";
-import { VisualBaselineSplitButton } from "./VisualBaselineSplitButton.js";
+import {
+  VisualBaselineSplitButton,
+  baselineWriteRowLabel,
+  loadBaselineWriteMode,
+  saveBaselineWriteMode,
+  type BaselineWriteMode,
+} from "./VisualBaselineSplitButton.js";
 import {
   applyPendingVisualStatuses,
   applyVisualRunResults,
@@ -32,6 +38,7 @@ import {
   formatVisualProgressLabel,
   postVisualCreateBaseline,
   postVisualCreateBaselinesForStoryIds,
+  postVisualReviewStatusesFromResults,
   postVisualRun,
   postVisualUpdateBaseline,
   postVisualUpdateBaselinesForStoryIds,
@@ -43,10 +50,17 @@ import {
   type VisualCreateProgress,
   type VisualLastRunSummary,
   type VisualRunProgress,
+  type VisualRunResultItem,
   type VisualRunScope,
 } from "./run-visual.js";
 
 type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
+
+const RUN_VISUAL_KEY = "storybook-addon-visual-delta/run-visual-enabled-v1";
+const CREATE_BASELINES_KEY =
+  "storybook-addon-visual-delta/create-baselines-enabled-v1";
+const UPDATE_STATUS_KEY =
+  "storybook-addon-visual-delta/update-status-enabled-v1";
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
@@ -133,14 +147,37 @@ function RelativeTime({ timestamp }: { timestamp: number }) {
   return <>{days === 1 ? "yesterday" : `${days} days ago`}</>;
 }
 
-/** One shared status line for Visual Tests + Create Baselines. */
+function readBoolFlag(key: string, defaultValue: boolean): boolean {
+  if (typeof localStorage === "undefined") return defaultValue;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return defaultValue;
+    return raw === "1";
+  } catch {
+    return defaultValue;
+  }
+}
+
+function writeBoolFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** One shared status line for Testing Module actions. */
 function moduleDescription(
   isRunning: boolean,
   isWritingBaselines: boolean,
+  isUpdatingStatus: boolean,
   progress: VisualRunProgress | null,
   createProgress: VisualCreateProgress | null,
   lastRun: VisualLastRunSummary | null,
+  anyActionSelected: boolean,
 ): React.ReactNode {
+  if (!anyActionSelected) return "Select at least one action";
+  if (isUpdatingStatus) return "Updating review status…";
   if (isRunning) return formatVisualProgressLabel(progress);
   if (isWritingBaselines) {
     return createProgress?.label ?? "Writing baselines…";
@@ -189,6 +226,14 @@ const Actions = styled.div({
   gap: 4,
   alignItems: "center",
   flexShrink: 0,
+});
+
+const Trailing = styled.div({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  flexShrink: 0,
+  marginLeft: "auto",
 });
 
 const StyledActionList = styled(ActionList)({
@@ -285,6 +330,22 @@ function sidebarLeafStoryIds(state: {
   return ids;
 }
 
+function resultsFromStatusStore(
+  allStatuses: ReturnType<typeof experimental_useStatusStore>,
+): VisualRunResultItem[] {
+  const results: VisualRunResultItem[] = [];
+  for (const [storyId, byType] of Object.entries(allStatuses)) {
+    const status = byType?.[STATUS_TYPE_ID_VISUAL];
+    if (!status) continue;
+    if (status.value === "status-value:success") {
+      results.push({ storyId, status: "passed", title: storyId });
+    } else if (status.value === "status-value:error") {
+      results.push({ storyId, status: "failed", title: storyId });
+    }
+  }
+  return results;
+}
+
 export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const api = useStorybookApi();
   const storybookState = useStorybookState() as {
@@ -299,23 +360,30 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
-  const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(() => {
-    if (typeof localStorage === "undefined") return false;
-    try {
-      return (
-        localStorage.getItem(
-          "storybook-addon-visual-delta/create-baselines-enabled-v1",
-        ) === "1"
-      );
-    } catch {
-      return false;
-    }
-  });
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusUpdateLabel, setStatusUpdateLabel] = useState<string | null>(
+    null,
+  );
+  const [runVisualEnabled, setRunVisualEnabled] = useState(() =>
+    readBoolFlag(RUN_VISUAL_KEY, true),
+  );
+  const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(() =>
+    readBoolFlag(CREATE_BASELINES_KEY, false),
+  );
+  const [updateStatusEnabled, setUpdateStatusEnabled] = useState(() =>
+    readBoolFlag(UPDATE_STATUS_KEY, false),
+  );
+  const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
+    loadBaselineWriteMode(),
+  );
   const isWritingBaselines = Boolean(createProgress?.running);
   const sidebarStoryIds = useMemo(
     () => sidebarLeafStoryIds(storybookState),
     [storybookState.filteredIndex, storybookState.index],
   );
+
+  const anyActionSelected =
+    runVisualEnabled || createBaselinesEnabled || updateStatusEnabled;
 
   const entryStoryIds = useMemo(() => {
     if (!entry) return undefined;
@@ -345,54 +413,118 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const isRunning = testProviderState === "test-provider-state:running";
   const crashed = testProviderState === "test-provider-state:crashed";
 
-  const run = useCallback(
+  const runCompare = useCallback(
     async (scope: VisualRunScope, ids?: string[]) => {
-      await testProviderStore.runWithState(async () => {
-        const scoped = Array.isArray(ids);
-        const runnable = scoped ? visualRunnableStoryIds(api, ids) : undefined;
-        if (scoped && !runnable?.length) {
-          throw new Error(
-            "No runnable visual stories in this scope (all skip-visual)",
-          );
-        }
-        if (runnable?.length) {
-          applyPendingVisualStatuses(runnable);
-        } else if (!scoped) {
-          clearVisualStatuses();
-        }
-        const data = await postVisualRun({
-          storyIds: runnable,
-          rebuild: false,
-        });
-        if (data.crashed) {
-          const summary: VisualLastRunSummary = {
-            finishedAt: Date.now(),
-            summary: data.summary,
-            error: data.error ?? "Visual test run crashed",
-            scope,
-            logTail: data.logTail,
-          };
-          publishVisualLastRun(summary);
-          throw new Error(data.error ?? "Visual test run crashed");
-        }
-        applyVisualRunResults(runnable, data.results);
-        publishVisualLastRun({
+      const scoped = Array.isArray(ids);
+      const runnable = scoped ? visualRunnableStoryIds(api, ids) : undefined;
+      if (scoped && !runnable?.length) {
+        throw new Error(
+          "No runnable visual stories in this scope (all skip-visual)",
+        );
+      }
+      if (runnable?.length) {
+        applyPendingVisualStatuses(runnable);
+      } else if (!scoped) {
+        clearVisualStatuses();
+      }
+      const data = await postVisualRun({
+        storyIds: runnable,
+        rebuild: false,
+      });
+      if (data.crashed) {
+        const summary: VisualLastRunSummary = {
           finishedAt: Date.now(),
           summary: data.summary,
-          error:
-            data.summary.failed > 0
-              ? `${data.summary.failed} failed`
-              : undefined,
+          error: data.error ?? "Visual test run crashed",
           scope,
           logTail: data.logTail,
-        });
-      });
+          results: data.results,
+        };
+        publishVisualLastRun(summary);
+        throw new Error(data.error ?? "Visual test run crashed");
+      }
+      applyVisualRunResults(runnable, data.results);
+      const summary: VisualLastRunSummary = {
+        finishedAt: Date.now(),
+        summary: data.summary,
+        error:
+          data.summary.failed > 0
+            ? `${data.summary.failed} failed`
+            : undefined,
+        scope,
+        logTail: data.logTail,
+        results: data.results,
+      };
+      publishVisualLastRun(summary);
+      return data.results;
     },
     [api],
   );
 
-  const runRef = useRef(run);
-  runRef.current = run;
+  const runCompareRef = useRef(runCompare);
+  runCompareRef.current = runCompare;
+
+  const runSelectedActions = useCallback(async () => {
+    const runVisual = readBoolFlag(RUN_VISUAL_KEY, true);
+    const writeBaselines = readBoolFlag(CREATE_BASELINES_KEY, false);
+    const updateStatus = readBoolFlag(UPDATE_STATUS_KEY, false);
+    if (!runVisual && !writeBaselines && !updateStatus) {
+      return;
+    }
+
+    await testProviderStore.runWithState(async () => {
+      if (writeBaselines) {
+        if (!sidebarStoryIds.length) {
+          throw new Error("No stories in the sidebar to write baselines for");
+        }
+        const mode = loadBaselineWriteMode();
+        if (mode === "rewrite") {
+          await postVisualUpdateBaselinesForStoryIds(api, sidebarStoryIds);
+        } else {
+          await postVisualCreateBaselinesForStoryIds(api, sidebarStoryIds);
+        }
+      }
+
+      let results: VisualRunResultItem[] | undefined;
+      if (runVisual) {
+        results = await runCompareRef.current("all", undefined);
+      }
+
+      if (updateStatus) {
+        setIsUpdatingStatus(true);
+        try {
+          const source =
+            results ??
+            latestResultsRef.current ??
+            resultsFromStatusStore(allStatusesRef.current);
+          if (!source.length) {
+            throw new Error(
+              "No visual results to update status from — run visual tests first",
+            );
+          }
+          const { updated, errors } =
+            await postVisualReviewStatusesFromResults(source);
+          setStatusUpdateLabel(
+            errors.length
+              ? `Updated ${updated} · ${errors.length} failed`
+              : `Updated ${updated} review tags`,
+          );
+          if (errors.length && updated === 0) {
+            throw new Error(errors[0] ?? "Update status failed");
+          }
+        } finally {
+          setIsUpdatingStatus(false);
+        }
+      }
+    });
+  }, [api, sidebarStoryIds]);
+
+  const runSelectedRef = useRef(runSelectedActions);
+  runSelectedRef.current = runSelectedActions;
+
+  const latestResultsRef = useRef<VisualRunResultItem[] | undefined>(undefined);
+  const allStatusesRef = useRef(allStatuses);
+  allStatusesRef.current = allStatuses;
 
   useEffect(() => {
     return subscribeVisualRunProgress((next) => {
@@ -410,7 +542,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   }, []);
 
   useEffect(() => {
-    return subscribeVisualLastRun(setLastRun);
+    return subscribeVisualLastRun((next) => {
+      setLastRun(next);
+      latestResultsRef.current = next?.results;
+    });
   }, []);
 
   useEffect(() => {
@@ -442,34 +577,16 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     }
   }, [api, entryStoryIds]);
 
-  /** Global Testing Module: create for components currently listed in the sidebar. */
-  const createBaselinesFromSidebar = useCallback(async () => {
-    if (!sidebarStoryIds.length) return;
-    try {
-      await postVisualCreateBaselinesForStoryIds(api, sidebarStoryIds);
-    } catch {
-      // Progress/error surfaces via subscribeVisualCreateProgress.
-    }
-  }, [api, sidebarStoryIds]);
-
-  const rewriteBaselinesFromSidebar = useCallback(async () => {
-    if (!sidebarStoryIds.length) return;
-    try {
-      await postVisualUpdateBaselinesForStoryIds(api, sidebarStoryIds);
-    } catch {
-      // Progress/error surfaces via subscribeVisualCreateProgress.
-    }
-  }, [api, sidebarStoryIds]);
-
   useEffect(() => {
     if (entry) return;
     const offRunAll = testProviderStore.onRunAll(() => {
-      void runRef.current("all", undefined);
+      void runSelectedRef.current();
     });
     const offClear = testProviderStore.onClearAll(() => {
       clearVisualStatuses();
       publishVisualLastRun(null);
       setProgress(null);
+      setStatusUpdateLabel(null);
     });
     const offSelect = statusStore.onSelect((selected) => {
       const storyId = selected[0]?.storyId;
@@ -500,12 +617,24 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       : (lastRun?.summary.failed ?? 0);
   const chipCount = failedCount > 0 ? failedCount : null;
   const hasResults = counts.passed > 0 || counts.failed > 0 || Boolean(lastRun);
-  const description = moduleDescription(
+  const moduleStatusLine = moduleDescription(
     isRunning,
     isWritingBaselines,
+    isUpdatingStatus,
     progress,
     createProgress,
     lastRun,
+    anyActionSelected,
+  );
+  // Context menu always has an explicit Play — never show "select an action".
+  const contextStatusLine = moduleDescription(
+    isRunning,
+    isWritingBaselines,
+    isUpdatingStatus,
+    progress,
+    createProgress,
+    lastRun,
+    true,
   );
 
   // Sidebar context menu: run + create/rewrite for that story/component
@@ -526,7 +655,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         <Heading>
           <Info>
             <Title>Run visual tests</Title>
-            <Description>{description}</Description>
+            <Description>{contextStatusLine}</Description>
           </Info>
           <Actions>
             {isRunning ? (
@@ -550,10 +679,12 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                 disabled={!canPlay || isWritingBaselines}
                 onClick={() => {
                   if (!entryStoryIds?.length) return;
-                  void run(
-                    entry.type === "story" ? "story" : "component",
-                    entryStoryIds,
-                  );
+                  void testProviderStore.runWithState(async () => {
+                    await runCompare(
+                      entry.type === "story" ? "story" : "component",
+                      entryStoryIds,
+                    );
+                  });
                 }}
               >
                 <PlayHollowIcon />
@@ -573,6 +704,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               ariaLabel={baselineDescription}
               tooltip={baselineDescription}
               disabled={!canPlay || isRunning}
+              writeOnMainClick
               onCreateMissing={() => void createBaseline()}
               onRewriteExisting={() => void rewriteBaseline()}
               onStop={() => void cancelVisualRun()}
@@ -584,15 +716,24 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   }
 
   const baselineStatus = baselineChipStatus(isWritingBaselines, createProgress);
-  const baselineLabel = isWritingBaselines
+  const baselineRowLabel = baselineWriteRowLabel(baselineMode);
+  const baselineChipTooltip = isWritingBaselines
     ? (createProgress?.label ?? "Writing…")
     : createProgress?.error
       ? createProgress.error
       : createProgress?.label
         ? createProgress.label
         : sidebarStoryIds.length
-          ? "Create or rewrite baselines for stories in the sidebar"
+          ? `${baselineRowLabel} for stories in the sidebar (via Run tests)`
           : "No stories in the sidebar";
+
+  const statusChipStatus: ChipStatus = isUpdatingStatus
+    ? "warning"
+    : statusUpdateLabel?.includes("failed")
+      ? "negative"
+      : statusUpdateLabel
+        ? "positive"
+        : "unknown";
 
   // Global Testing Module: checklist rows + shared status line
   return (
@@ -601,22 +742,78 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         id="visual-testing-module-description"
         style={{ margin: "4px 0 4px 8px" }}
       >
-        {description}
+        {moduleStatusLine}
       </Description>
       <StyledActionList>
         <ActionList.Item>
-          <ActionList.Action as="label" readOnly ariaLabel={false}>
+          <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
-              <Form.Checkbox name="Visual Tests" checked disabled />
+              <Form.Checkbox
+                name="Run visual tests"
+                checked={runVisualEnabled}
+                disabled={isRunning || isWritingBaselines || isUpdatingStatus}
+                onChange={(event) => {
+                  const next = event.currentTarget.checked;
+                  setRunVisualEnabled(next);
+                  writeBoolFlag(RUN_VISUAL_KEY, next);
+                }}
+              />
             </ActionList.Icon>
-            <ActionList.Text>Visual Tests</ActionList.Text>
+            <ActionList.Text>Run visual tests</ActionList.Text>
+          </ActionList.Action>
+          <Trailing>
+            <ActionList.Button
+              ariaLabel={
+                chipCount != null ? `${label} (${chipCount} failed)` : label
+              }
+              tooltip={label}
+              disabled={!hasResults && !crashed && !isRunning}
+              onClick={() => {
+                openVisualPanel(
+                  api,
+                  statusIds.failedIds[0] ?? statusIds.passedIds[0],
+                );
+              }}
+            >
+              {chipCount}
+              <TestStatusIcon status={chipStatus} isRunning={isRunning} />
+            </ActionList.Button>
+            <VisualBaselineSplitButton
+              status={baselineStatus}
+              isRunning={isWritingBaselines}
+              ariaLabel={baselineChipTooltip}
+              tooltip={baselineChipTooltip}
+              mode={baselineMode}
+              onModeChange={(next) => {
+                setBaselineMode(next);
+                saveBaselineWriteMode(next);
+              }}
+              writeOnMainClick={false}
+              disabled={isRunning || isUpdatingStatus}
+              onStop={() => void cancelVisualRun()}
+            />
+          </Trailing>
+        </ActionList.Item>
+        <ActionList.Item>
+          <ActionList.Action as="label" ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
+                name={baselineRowLabel}
+                checked={createBaselinesEnabled}
+                disabled={isWritingBaselines || isRunning || isUpdatingStatus}
+                onChange={(event) => {
+                  const next = event.currentTarget.checked;
+                  setCreateBaselinesEnabled(next);
+                  writeBoolFlag(CREATE_BASELINES_KEY, next);
+                }}
+              />
+            </ActionList.Icon>
+            <ActionList.Text>{baselineRowLabel}</ActionList.Text>
           </ActionList.Action>
           <ActionList.Button
-            ariaLabel={
-              chipCount != null ? `${label} (${chipCount} failed)` : label
-            }
-            tooltip={label}
-            disabled={!hasResults && !crashed && !isRunning}
+            ariaLabel={baselineChipTooltip}
+            tooltip={baselineChipTooltip}
+            disabled={!createBaselinesEnabled && !isWritingBaselines}
             onClick={() => {
               openVisualPanel(
                 api,
@@ -624,51 +821,47 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               );
             }}
           >
-            {chipCount}
-            <TestStatusIcon status={chipStatus} isRunning={isRunning} />
+            <TestStatusIcon
+              status={baselineStatus}
+              isRunning={isWritingBaselines}
+            />
           </ActionList.Button>
         </ActionList.Item>
         <ActionList.Item>
           <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
               <Form.Checkbox
-                name="Create Baselines"
-                checked={createBaselinesEnabled}
-                disabled={isWritingBaselines}
+                name="Update status"
+                checked={updateStatusEnabled}
+                disabled={isRunning || isWritingBaselines || isUpdatingStatus}
                 onChange={(event) => {
                   const next = event.currentTarget.checked;
-                  setCreateBaselinesEnabled(next);
-                  try {
-                    localStorage.setItem(
-                      "storybook-addon-visual-delta/create-baselines-enabled-v1",
-                      next ? "1" : "0",
-                    );
-                  } catch {
-                    /* ignore */
-                  }
+                  setUpdateStatusEnabled(next);
+                  writeBoolFlag(UPDATE_STATUS_KEY, next);
                 }}
               />
             </ActionList.Icon>
-            <ActionList.Text>Create Baselines</ActionList.Text>
+            <ActionList.Text>Update status</ActionList.Text>
           </ActionList.Action>
-          <VisualBaselineSplitButton
-            status={baselineStatus}
-            isRunning={isWritingBaselines}
-            ariaLabel={baselineLabel}
+          <ActionList.Button
+            ariaLabel={statusUpdateLabel ?? "Update review tags from results"}
             tooltip={
-              createBaselinesEnabled
-                ? baselineLabel
-                : "Enable Create Baselines to write baselines"
+              statusUpdateLabel ??
+              "Stamp Ready / Failed from visual pass/fail (via Run tests)"
             }
-            disabled={
-              !createBaselinesEnabled ||
-              (!sidebarStoryIds.length && !isWritingBaselines) ||
-              isRunning
-            }
-            onCreateMissing={() => void createBaselinesFromSidebar()}
-            onRewriteExisting={() => void rewriteBaselinesFromSidebar()}
-            onStop={() => void cancelVisualRun()}
-          />
+            disabled={!updateStatusEnabled && !isUpdatingStatus}
+            onClick={() => {
+              openVisualPanel(
+                api,
+                statusIds.failedIds[0] ?? statusIds.passedIds[0],
+              );
+            }}
+          >
+            <TestStatusIcon
+              status={statusChipStatus}
+              isRunning={isUpdatingStatus}
+            />
+          </ActionList.Button>
         </ActionList.Item>
       </StyledActionList>
     </ModuleContainer>

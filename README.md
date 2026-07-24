@@ -302,7 +302,13 @@ Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
 `data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
 
 Panel **More → Configuration** shows resolved host options
-(`GET /__visual-delta/config`).
+(`GET /__visual-delta/config`), including `playwrightPassThresholdPercent`
+(from `.visual-delta/playwright.json`, default 1%). Diff Chromium Thresh can
+push that host file via **Update Playwright config**.
+
+Testing Module **Run tests** runs the checked actions: compare, create/update
+baselines (mode from the row-1 split), and/or **Update status** (pass →
+`visual-ready`, fail → `visual-failed`).
 
 Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 

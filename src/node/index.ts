@@ -59,6 +59,12 @@ export {
 } from "../shared/ignore.js";
 export type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 export {
+  PLAYWRIGHT_THRESHOLD_REL,
+  readPlaywrightPassThresholdPercent,
+  resolvePlaywrightPassThresholdPercent,
+  writePlaywrightPassThresholdPercent,
+} from "./playwright-threshold.js";
+export {
   injectTypeScriptStoryBaselines,
   patchStoryBaselineImages,
   patchStoryInteraction,

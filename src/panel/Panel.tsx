@@ -48,6 +48,7 @@ import {
   componentStoryIdsFor,
   formatVisualProgressLabel,
   fetchVisualConfig,
+  postPlaywrightPassThreshold,
   postVisualCreateBaseline,
   postVisualInit,
   postVisualInteractionBaseline,
@@ -330,6 +331,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     loadDiffCaptureEngine(),
   );
   const passThresholdPercent = passThresholdByEngine[diffEngine];
+  const [playwrightPassThresholdPercent, setPlaywrightPassThresholdPercent] =
+    useState<number | null>(null);
+  const [isUpdatingPlaywrightThreshold, setIsUpdatingPlaywrightThreshold] =
+    useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState<boolean | null>(null);
   const [onboardingHint, setOnboardingHint] = useState<string | null>(null);
@@ -385,6 +390,48 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setExpandedId("default");
     setShowDistribution(false);
   }, [storyId, storyTagsKey]);
+
+  useEffect(() => {
+    if (diffEngine !== "chromium") return;
+    let cancelled = false;
+    void fetchVisualConfig()
+      .then((config) => {
+        if (cancelled) return;
+        setPlaywrightPassThresholdPercent(
+          config.playwrightPassThresholdPercent,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPlaywrightPassThresholdPercent(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [diffEngine]);
+
+  const playwrightThresholdMismatch =
+    diffEngine === "chromium" &&
+    playwrightPassThresholdPercent != null &&
+    Math.abs(playwrightPassThresholdPercent - passThresholdPercent) > 1e-6;
+
+  const handleUpdatePlaywrightThreshold = useCallback(async () => {
+    setIsUpdatingPlaywrightThreshold(true);
+    try {
+      const result = await postPlaywrightPassThreshold(passThresholdPercent);
+      setPlaywrightPassThresholdPercent(result.playwrightPassThresholdPercent);
+      setUpdateLog(
+        `Playwright config: pass threshold ${result.playwrightPassThresholdPercent}%`,
+      );
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update Playwright threshold",
+      );
+    } finally {
+      setIsUpdatingPlaywrightThreshold(false);
+    }
+  }, [passThresholdPercent]);
 
   const activeSectionId: BaselineSectionId = selectedInteractionId ?? "default";
   const activeDiffMeta = useMemo(() => {
@@ -1160,6 +1207,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               error: data.error ?? "Visual test run crashed",
               scope,
               logTail: data.logTail,
+              results: data.results,
             });
             throw new Error(data.error ?? "Visual test run crashed");
           }
@@ -1173,6 +1221,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 : undefined,
             scope,
             logTail: data.logTail,
+            results: data.results,
           });
           setDiffEpoch(Date.now());
           if (data.summary.failed > 0) {
@@ -1310,6 +1359,23 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               />
               <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
             </InlineControl>
+            {playwrightThresholdMismatch ? (
+              <InlineControl title="Local Diff Chromium thresh differs from package Playwright default">
+                <ValueDisplay>
+                  Playwright {playwrightPassThresholdPercent}% ≠ local{" "}
+                  {passThresholdPercent}%
+                </ValueDisplay>
+                <Button
+                  size="small"
+                  disabled={isUpdatingPlaywrightThreshold || busy}
+                  onClick={() => void handleUpdatePlaywrightThreshold()}
+                >
+                  {isUpdatingPlaywrightThreshold
+                    ? "Updating…"
+                    : "Update Playwright config"}
+                </Button>
+              </InlineControl>
+            ) : null}
           </ToolbarRow>
           {captureError ? <ErrorText>{captureError}</ErrorText> : null}
         </PanelToolbar>
@@ -1328,15 +1394,19 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffEngine,
       diffResult,
       handleModeChange,
+      handleUpdatePlaywrightThreshold,
       images.length,
       index,
       isSplit,
+      isUpdatingPlaywrightThreshold,
       liveVisible,
       modeNames,
       opacity,
       overlayOn,
       passThresholdPercent,
       placement,
+      playwrightPassThresholdPercent,
+      playwrightThresholdMismatch,
       primaryImages,
       resetOverlay,
       selectedInteractionId,

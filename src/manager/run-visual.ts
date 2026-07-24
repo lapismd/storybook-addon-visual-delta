@@ -6,6 +6,7 @@ import {
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_INIT_PATH,
+  VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
@@ -67,6 +68,8 @@ export type VisualLastRunSummary = {
   scope?: VisualRunScope;
   /** Trailing Playwright / middleware log for the panel status popover. */
   logTail?: string;
+  /** Per-story outcomes for Update status / follow-up actions. */
+  results?: VisualRunResultItem[];
 };
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
@@ -478,6 +481,59 @@ export async function postVisualReviewStatus(body: {
     );
   }
   return data;
+}
+
+/**
+ * Stamp CSF review tags from visual run outcomes:
+ * passed → ready, failed → failed. Skips skipped / timedOut.
+ */
+export async function postVisualReviewStatusesFromResults(
+  results: VisualRunResultItem[],
+): Promise<{ updated: number; errors: string[] }> {
+  let updated = 0;
+  const errors: string[] = [];
+  for (const item of results) {
+    if (item.status !== "passed" && item.status !== "failed") continue;
+    const status: VisualReviewStatus =
+      item.status === "passed" ? "ready" : "failed";
+    try {
+      await postVisualReviewStatus({ storyId: item.storyId, status });
+      updated += 1;
+    } catch (error) {
+      errors.push(
+        `${item.storyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return { updated, errors };
+}
+
+/** Persist package-wide Playwright pass threshold (%) on the host. */
+export async function postPlaywrightPassThreshold(
+  passThresholdPercent: number,
+): Promise<{ ok: true; playwrightPassThresholdPercent: number }> {
+  const response = await fetch(VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passThresholdPercent }),
+  });
+  const data = (await response.json()) as {
+    ok?: boolean;
+    error?: string;
+    playwrightPassThresholdPercent?: number;
+    passThresholdPercent?: number;
+  };
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      data.error || `Playwright threshold update failed (${response.status})`,
+    );
+  }
+  const next =
+    data.playwrightPassThresholdPercent ?? data.passThresholdPercent;
+  if (typeof next !== "number") {
+    throw new Error("Playwright threshold response missing percent");
+  }
+  return { ok: true, playwrightPassThresholdPercent: next };
 }
 
 export type VisualSkipVisualResponse = {

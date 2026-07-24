@@ -170,26 +170,25 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   and Update baselines stay disabled until included again.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
-  Testing Module shows Vitest-style checklist rows for **Visual Tests** (compare
-  only) and **Create Baselines** (missing PNGs + story wiring, or rewrite). A
-  single shared status line above the checklist covers both (`Not run` /
-  `Testing... N/M` / `Creating…` / `Updating…`, then
-  `Tests: Ran N · Baselines: …`). Visual Tests shows an orange status chip while
-  running and a failure-count badge beside the chip. Create Baselines is **off by default** (unchecked); enable the row checkbox
-  to use the split status control: default **Create missing**, menu
-  **Rewrite existing** (overwrite PNGs via `/__visual-delta/update-baseline`).
-  Rewrite clears `visual-approved` / `visual-ready` so the component returns
-  to `visual-pending`. Create/rewrite runs against leaf stories
-  currently listed in the sidebar (search/tag filters), one component family
-  at a time. The
-  global module has no extra top border (context-menu actions still keep a
-  divider). The panel split button shows the same visual-run progress while
-  running. Results map to per-story sidebar status dots from compare metrics
-  (sidecar `%` / threshold, or panel live Diff). Ephemeral artifacts: gitignored
-  `*.json` / `*.actual.png` / `*.diff.png` under
-  `tests/visual/storybook.spec.ts-snapshots/`. The panel hydrates its compare
-  view from those artifacts when present. Never writes baselines from Run
-  Visual Tests.
+  Testing Module checklist: **Run visual tests** (compare; on by default),
+  **Create missing Baselines** / **Update baselines** (off by default; label
+  follows the baseline mode split on row 1), and **Update status** (off by
+  default; stamps `visual-ready` / `visual-failed` from pass/fail). Storybook
+  **Run tests** executes the checked rows in order (baselines → compare →
+  status). With nothing checked, Play no-ops and the status line says
+  “Select at least one action”. The baseline mode split (Create missing /
+  Rewrite existing) lives on the Run visual tests row; writes run via Play,
+  not Sync click. Rewrite clears `visual-approved` / `visual-ready` so the
+  component returns to `visual-pending`. Create/rewrite uses leaf stories in
+  the sidebar (search/tag filters). Context-menu keep scoped compare +
+  write-on-click create/rewrite. Results map to sidebar status dots from
+  compare metrics. Ephemeral artifacts: gitignored `*.json` / `*.actual.png` /
+  `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`.
+- **Playwright pass threshold** — Package-wide default lives in host
+  `.visual-delta/playwright.json` (`passThresholdPercent`, default 1%).
+  `defineVisualPlaywrightConfig` reads it. Panel Diff Chromium shows a
+  mismatch when local Thresh ≠ Playwright config, with **Update Playwright
+  config** (`POST /__visual-delta/playwright-threshold`).
 - **Capture parity with Playwright** — Live Diff blurs the preview's active
   element and temporarily disables animations/transitions/caret (same prep as
   `tests/visual/storybook.spec.ts`) before `html-to-image` capture, so play

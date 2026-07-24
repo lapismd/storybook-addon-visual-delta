@@ -78,7 +78,7 @@ const MenuButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-function loadMode(): BaselineWriteMode {
+export function loadBaselineWriteMode(): BaselineWriteMode {
   if (typeof localStorage === "undefined") return "create";
   try {
     const raw = localStorage.getItem(MODE_KEY);
@@ -88,7 +88,7 @@ function loadMode(): BaselineWriteMode {
   }
 }
 
-function saveMode(mode: BaselineWriteMode) {
+export function saveBaselineWriteMode(mode: BaselineWriteMode) {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(MODE_KEY, mode);
@@ -97,6 +97,7 @@ function saveMode(mode: BaselineWriteMode) {
   }
 }
 
+/** Menu labels for Create missing / Rewrite existing. */
 export function baselineModeLabel(mode: BaselineWriteMode): string {
   return mode === "rewrite" ? "Rewrite existing" : "Create missing";
 }
@@ -105,6 +106,11 @@ export function baselineModeTooltip(mode: BaselineWriteMode): string {
   return mode === "rewrite"
     ? "Overwrite existing baselines (clears approved badges)"
     : "Create missing baselines only";
+}
+
+/** Testing Module row-2 checkbox label driven by write mode. */
+export function baselineWriteRowLabel(mode: BaselineWriteMode): string {
+  return mode === "rewrite" ? "Update baselines" : "Create missing Baselines";
 }
 
 type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
@@ -138,8 +144,11 @@ const StatusDot = styled.span<{
 });
 
 /**
- * Trailing Testing Module control for Create Baselines: Sync + status + split
- * menu to choose create-missing vs rewrite-existing.
+ * Trailing Testing Module / context-menu control: Sync + status + split menu
+ * for create-missing vs rewrite-existing.
+ *
+ * When `writeOnMainClick` is false (global Testing Module), Play owns writes and
+ * the main button is status-only. Context menu keeps write-on-click.
  */
 export function VisualBaselineSplitButton({
   status,
@@ -147,6 +156,9 @@ export function VisualBaselineSplitButton({
   disabled,
   ariaLabel,
   tooltip,
+  mode: modeProp,
+  onModeChange,
+  writeOnMainClick = true,
   onCreateMissing,
   onRewriteExisting,
   onStop,
@@ -156,21 +168,41 @@ export function VisualBaselineSplitButton({
   disabled?: boolean;
   ariaLabel: string;
   tooltip: string;
-  onCreateMissing: () => void;
-  onRewriteExisting: () => void;
+  /** Controlled write mode; omit to manage selection internally. */
+  mode?: BaselineWriteMode;
+  onModeChange?: (mode: BaselineWriteMode) => void;
+  /**
+   * When true (default), main click runs create/rewrite (sidebar context menu).
+   * When false, main click is status-only — Play runs the write.
+   */
+  writeOnMainClick?: boolean;
+  onCreateMissing?: () => void;
+  onRewriteExisting?: () => void;
   onStop: () => void;
 }) {
-  const [mode, setMode] = useState<BaselineWriteMode>(() => loadMode());
+  const [internalMode, setInternalMode] = useState<BaselineWriteMode>(() =>
+    loadBaselineWriteMode(),
+  );
+  const mode = modeProp ?? internalMode;
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    saveMode(mode);
-  }, [mode]);
+    if (modeProp !== undefined) return;
+    saveBaselineWriteMode(internalMode);
+  }, [modeProp, internalMode]);
 
-  const selectMode = useCallback((next: BaselineWriteMode) => {
-    setMode(next);
-    setMenuOpen(false);
-  }, []);
+  const selectMode = useCallback(
+    (next: BaselineWriteMode) => {
+      if (modeProp === undefined) {
+        setInternalMode(next);
+      } else {
+        saveBaselineWriteMode(next);
+      }
+      onModeChange?.(next);
+      setMenuOpen(false);
+    },
+    [modeProp, onModeChange],
+  );
 
   if (isRunning) {
     return (
@@ -199,11 +231,16 @@ export function VisualBaselineSplitButton({
         variant="ghost"
         padding="small"
         ariaLabel={`${ariaLabel}. ${baselineModeLabel(mode)}`}
-        title={tip}
-        disabled={disabled}
+        title={
+          writeOnMainClick
+            ? tip
+            : `${tip}. Use Run tests to write baselines when enabled.`
+        }
+        disabled={writeOnMainClick ? Boolean(disabled) : true}
         onClick={() => {
-          if (mode === "rewrite") onRewriteExisting();
-          else onCreateMissing();
+          if (!writeOnMainClick) return;
+          if (mode === "rewrite") onRewriteExisting?.();
+          else onCreateMissing?.();
         }}
       >
         <SyncIcon />
@@ -246,7 +283,7 @@ export function VisualBaselineSplitButton({
           padding="small"
           ariaLabel="Choose Create missing or Rewrite existing"
           title="Choose Create missing or Rewrite existing"
-          disabled={disabled}
+          disabled={Boolean(disabled)}
         >
           <ChevronSmallDownIcon />
         </MenuButton>
