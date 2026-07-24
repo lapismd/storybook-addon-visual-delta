@@ -40,7 +40,8 @@ type ReviewLayoutSnapshot = {
 };
 
 let saved: ReviewLayoutSnapshot | null = null;
-let applyTimer: ReturnType<typeof setTimeout> | null = null;
+/** DOM timer id (`window.setTimeout`); avoid NodeJS.Timeout from @types/node. */
+let applyTimer: number | null = null;
 
 function visibleSize(current: number, recent: number): number {
   return current > 0 ? current : recent;
