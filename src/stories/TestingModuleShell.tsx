@@ -20,13 +20,13 @@ export function TestingModuleShell({
   variant = "global",
   seedRewriteMode = false,
 }: TestingModuleShellProps) {
-  const [runVisualEnabled, setRunVisualEnabled] = useState(
+  const [runVisualEnabled, setRunVisualEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.runVisualEnabled,
   );
-  const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(
+  const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.createBaselinesEnabled,
   );
-  const [updateStatusEnabled, setUpdateStatusEnabled] = useState(
+  const [updateStatusEnabled, setUpdateStatusEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.updateStatusEnabled,
   );
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>

@@ -27,6 +27,11 @@
       "import": "./dist/node/index.js",
       "default": "./dist/node/index.js"
     },
+    "./src/stories/*": "./src/stories/*",
+    "./src/stories/panel-fixtures": "./src/stories/panel-fixtures.tsx",
+    "./src/stories/PanelShell": "./src/stories/PanelShell.tsx",
+    "./src/stories/TestingModuleShell": "./src/stories/TestingModuleShell.tsx",
+    "./src/stories/mock-visual-backend": "./src/stories/mock-visual-backend.ts",
     "./package.json": "./package.json"
   },
   "files": [
