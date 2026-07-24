@@ -11,6 +11,7 @@ import {
   ScrollArea,
   useCopyButton,
 } from "storybook/internal/components";
+import { lastMeaningfulLogLine } from "../shared/status-log.js";
 import {
   StatusBar,
   StatusLogBody,
@@ -21,7 +22,7 @@ import {
   StatusSpinner,
 } from "./styled.js";
 
-export { lastMeaningfulLogLine } from "../shared/status-log.js";
+export { lastMeaningfulLogLine };
 
 /** Nearest ancestor that actually scrolls (Storybook AddonPanel scroller). */
 function findScrollPort(start: HTMLElement | null): HTMLElement | null {
@@ -103,9 +104,11 @@ const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
       >
         {copyChildren}
       </StatusLogCopyButton>
-      <ScrollArea ref={logRef} vertical style={{ height: "100%" }}>
-        <StatusLogBody>{log}</StatusLogBody>
-      </ScrollArea>
+      <div style={{ height: "100%" }}>
+        <ScrollArea ref={logRef} vertical>
+          <StatusLogBody>{log}</StatusLogBody>
+        </ScrollArea>
+      </div>
     </StatusLogShell>
   );
 });

@@ -5,11 +5,15 @@ import { PanelTitle } from "./PanelTitle.js";
 import { renderWithTheme } from "../test/render.js";
 
 const getSelectedPanel = vi.fn(() => "visual-delta/panel");
-const useAddonState = vi.fn(() => [{ imageCount: 3 }, vi.fn()]);
+const useAddonState = vi.fn((_id?: string, _defaultState?: unknown) => [
+  { imageCount: 3 },
+  vi.fn(),
+]);
 
 vi.mock("storybook/manager-api", () => ({
   useStorybookApi: () => ({ getSelectedPanel }),
-  useAddonState: (...args: unknown[]) => useAddonState(...args),
+  useAddonState: (id: string, defaultState?: unknown) =>
+    useAddonState(id, defaultState),
 }));
 
 vi.mock("storybook/internal/components", async (importOriginal) => {

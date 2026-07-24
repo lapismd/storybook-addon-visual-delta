@@ -125,8 +125,11 @@ function asHtmlElement(
   view: Window | null,
 ): HTMLElement | null {
   if (!node) return null;
-  const Ctor = view?.HTMLElement ?? HTMLElement;
-  return node instanceof Ctor ? node : null;
+  // `Window` typings omit constructor properties; iframe realms expose them.
+  const Ctor =
+    (view as (Window & { HTMLElement?: typeof HTMLElement }) | null)
+      ?.HTMLElement ?? HTMLElement;
+  return node instanceof Ctor ? (node as HTMLElement) : null;
 }
 
 /**

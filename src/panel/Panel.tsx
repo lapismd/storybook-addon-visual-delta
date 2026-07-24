@@ -439,7 +439,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     if (!diffResult) return null;
     const threshold = diffResult.passThresholdPercent ?? 0.1;
     return {
-      status: (diffResult.passed ? "pass" : "fail") as const,
+      status: diffResult.passed ? ("pass" as const) : ("fail" as const),
       stats: `${diffResult.diffPercent.toFixed(4)}% · ${diffResult.diffPixels}/${diffResult.totalPixels} px · <${threshold}%`,
     };
   }, [diffResult]);
@@ -568,7 +568,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const primary = baselineUrlForStoryRef(
           {
             id: storyId,
-            title: entry && "title" in entry ? String(entry.title) : undefined,
             importPath:
               entry && "importPath" in entry
                 ? String(entry.importPath)

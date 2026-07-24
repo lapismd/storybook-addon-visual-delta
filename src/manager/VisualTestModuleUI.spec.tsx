@@ -138,11 +138,13 @@ describe("VisualTestModuleUI", () => {
   });
 
   it("shows row progress under active checkboxes and streams the title", () => {
+    const statusLine =
+      "✓ shadcn-disclosure-accordion--opens-a-section (1/2)";
     renderWithTheme(
       <VisualTestModuleUI
         variant="context"
         {...baseProps}
-        statusLine="✓ shadcn-disclosure-accordion--opens-a-section (1/2)"
+        statusLine={statusLine}
         createBaselinesEnabled
         updateStatusEnabled
         isCompareRunning
@@ -155,9 +157,12 @@ describe("VisualTestModuleUI", () => {
       />,
     );
     const root = screen.getByTestId("visual-test-module-context");
-    expect(
-      root.querySelector("#visual-testing-module-description-context"),
-    ).toHaveTextContent("✓ shadcn-disclosure-accordion--opens-a-section (1/2)");
+    const description = root.querySelector(
+      "#visual-testing-module-description-context",
+    );
+    expect(description).toHaveTextContent(statusLine);
+    expect(description).toHaveAttribute("title", statusLine);
+    expect(description).toHaveStyle({ width: "180px", maxWidth: "180px" });
     expect(within(root).getByTestId("compare-row-progress")).toHaveTextContent(
       "1/2",
     );

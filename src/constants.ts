@@ -102,10 +102,17 @@ export type VisualDeltaInteraction = {
   src: string;
 };
 
+/** CSF / params image entry before `normalizeImages` (allows legacy placement). */
+export type VisualDeltaImageInput = Omit<
+  Partial<VisualDeltaImage>,
+  "placement"
+> & {
+  src: string;
+  placement?: PlacementMode | "beside" | "over";
+};
+
 export type VisualDeltaParams = {
-  images?:
-    | string
-    | Array<string | (Partial<VisualDeltaImage> & { src: string })>;
+  images?: string | Array<string | VisualDeltaImageInput>;
   /**
    * Opted-in play-step captures. Created from the Visual Delta Interactions tab;
    * compared by Playwright in addition to the primary end-of-play baseline.

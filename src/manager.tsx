@@ -43,11 +43,12 @@ addons.register(ADDON_ID, () => {
 
   // Local Playwright visual suite — only available while the Storybook
   // Vite dev server can shell out via middleware.
-  if (globalThis.CONFIG_TYPE === "DEVELOPMENT") {
+  const configType = (globalThis as typeof globalThis & { CONFIG_TYPE?: string })
+    .CONFIG_TYPE;
+  if (configType === "DEVELOPMENT") {
     const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
     addons.add(TEST_PROVIDER_ID, {
       type: Addon_TypesEnum.experimental_TEST_PROVIDER,
-      id: TEST_PROVIDER_ID,
       clear: () => {
         statusStore.unset();
       },
