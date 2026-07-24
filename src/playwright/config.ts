@@ -59,7 +59,9 @@ export function visualPlaywrightWebServer(port = DEFAULT_VISUAL_SERVER_PORT) {
   const baseURL = `http://127.0.0.1:${port}`;
   return {
     command: `python3 -m http.server ${port} --directory storybook-static --bind 127.0.0.1`,
-    url: `${baseURL}/index.json`,
+    // Prefer iframe.html so a partial static tree (index.json only) is not
+    // treated as a healthy Playwright webServer.
+    url: `${baseURL}/iframe.html`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   };

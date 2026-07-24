@@ -56,8 +56,26 @@ export type VisualRunProgress = {
 export type VisualRunStreamEvent =
   | { type: "start"; total: number }
   | ({ type: "progress" } & VisualRunProgress)
+  | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)
   | { type: "error"; error: string; crashed?: boolean };
+
+type LogListener = (line: string) => void;
+const logListeners = new Set<LogListener>();
+
+/** Subscribe to streamed status lines (build reuse / warm server / etc.). */
+export function subscribeVisualRunLog(listener: LogListener) {
+  logListeners.add(listener);
+  return () => {
+    logListeners.delete(listener);
+  };
+}
+
+function emitVisualRunLog(line: string) {
+  for (const listener of logListeners) {
+    listener(line);
+  }
+}
 
 export type VisualRunScope = "story" | "component" | "all";
 
@@ -346,6 +364,12 @@ async function readNdjsonRun(
             },
             onProgress,
           );
+          continue;
+        }
+
+        if (event.type === "log") {
+          const line = event.line?.trim();
+          if (line) emitVisualRunLog(line);
           continue;
         }
 

@@ -49,7 +49,10 @@ import {
   readPlaywrightPassThresholdPercent,
   writePlaywrightPassThresholdPercent,
 } from "./playwright-threshold.js";
-import { ensurePlaywrightWebServerPort } from "./visual-server.js";
+import {
+  ensurePlaywrightWebServerPort,
+  ensureWarmStaticStorybookServer,
+} from "./visual-server.js";
 
 type UpdateBody = {
   storyId?: string;
@@ -124,6 +127,7 @@ export type VisualRunStreamEvent =
       storyId: string;
       status: "passed" | "failed";
     }
+  | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)
   | { type: "error"; error: string; crashed?: boolean };
 
@@ -278,10 +282,11 @@ export function visualTestCommandArgs(
   options: VisualDeltaHostOptions = {},
   grep?: string,
 ): string[] {
+  // List-only: pairing `--reporter=json` on stdout suppresses list lines (or
+  // downgrades to line reporter), so the Testing Module stays at 0/N until done.
   return [
     ...(options.visualTestArgs ?? [...DEFAULT_VISUAL_TEST_ARGS]),
     "--reporter=list",
-    "--reporter=json",
     ...(grep ? ["-g", grep] : []),
   ];
 }
@@ -520,6 +525,11 @@ function beginNdjson(res: ServerResponse) {
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Hint proxies / browsers not to buffer the streamed body.
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
 }
 
 async function handleRun(
@@ -576,9 +586,12 @@ async function handleRun(
   }
 
   const staticIndex = path.join(root, "storybook-static", "index.json");
+  const staticIframe = path.join(root, "storybook-static", "iframe.html");
+  const staticComplete = existsSync(staticIndex) && existsSync(staticIframe);
   const allowRebuild = options.allowRebuild !== false;
   const rebuild =
-    allowRebuild && (Boolean(body.rebuild) || !existsSync(staticIndex));
+    allowRebuild &&
+    (Boolean(body.rebuild) || !staticComplete);
   const grep = grepFromStoryIds(body.storyIds);
   let log = "";
 
@@ -586,6 +599,13 @@ async function handleRun(
 
   try {
     if (rebuild) {
+      const rebuildLine = body.rebuild
+        ? "Rebuilding storybook-static — explicit rebuild requested"
+        : !existsSync(staticIndex)
+          ? "Building storybook-static — index.json missing"
+          : "Rebuilding storybook-static — incomplete (missing iframe.html)";
+      writeNdjson(res, { type: "log", line: rebuildLine });
+      log += `${rebuildLine}\n`;
       const built = await runCommand("pnpm", ["build-storybook"], root);
       log += built.log;
       if (built.code !== 0) {
@@ -609,20 +629,33 @@ async function handleRun(
         res.end();
         return;
       }
+    } else if (staticComplete) {
+      writeNdjson(res, {
+        type: "log",
+        line: "Using existing storybook-static",
+      });
+      log += "Using existing storybook-static\n";
     }
 
     const total = countVisualStories(root, body.storyIds);
     writeNdjson(res, { type: "start", total });
 
     const seenIndexes = new Set<number>();
+    const progressResults: VisualRunResultItem[] = [];
     let completed = 0;
     let passed = 0;
     let failed = 0;
     let lineBuf = "";
 
-    await ensurePlaywrightWebServerPort(
-      options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT,
-    );
+    const visualPort = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
+    const warm = await ensureWarmStaticStorybookServer(root, visualPort);
+    if (warm.message) {
+      writeNdjson(res, { type: "log", line: warm.message });
+      log += `${warm.message}\n`;
+    }
+    if (!warm.ok) {
+      await ensurePlaywrightWebServerPort(visualPort);
+    }
 
     const args = visualTestCommandArgs(options, grep);
     const { code, log: runLog } = await runCommand(
@@ -641,6 +674,11 @@ async function handleRun(
             completed = seenIndexes.size;
             if (item.status === "passed") passed += 1;
             else failed += 1;
+            progressResults.push({
+              storyId: item.storyId,
+              status: item.status,
+              title: item.storyId,
+            });
             writeNdjson(res, {
               type: "progress",
               completed,
@@ -656,19 +694,25 @@ async function handleRun(
     );
     log += runLog;
 
+    // Prefer list-reporter results (live progress). Fall back to a JSON document
+    // in the log when a host still wires `--reporter=json` without a file sink.
     let results: VisualRunResultItem[] = [];
-    const json = extractJsonDocument(runLog);
-    if (json) {
-      try {
-        results = attachSidecars(parsePlaywrightJson(json), root, options);
-      } catch {
-        /* leave empty — UI still shows crash/fail via exit code */
+    if (progressResults.length > 0) {
+      results = attachSidecars(progressResults, root, options);
+    } else {
+      const json = extractJsonDocument(runLog);
+      if (json) {
+        try {
+          results = attachSidecars(parsePlaywrightJson(json), root, options);
+        } catch {
+          /* leave empty — UI still shows crash/fail via exit code */
+        }
       }
     }
 
     const summary = summarize(results);
-    // List-reporter progress is authoritative when the JSON report failed to parse
-    // (dual reporters / interleaved log), so the UI does not show "Ran 0 tests".
+    // List-reporter progress is authoritative when result parsing yielded nothing,
+    // so the UI does not show "Ran 0 tests".
     if (summary.total === 0 && completed > 0) {
       summary.total = completed;
       summary.passed = passed;
@@ -969,9 +1013,15 @@ export function visualDeltaMiddlewarePlugin(
   return {
     name: "visual-delta-middleware",
     configureServer(server) {
+      const root = resolveRoot(options, server.config.root);
+      const visualPort = options.visualServerPort ?? DEFAULT_VISUAL_SERVER_PORT;
+      // Warm :6007 in the background so Testing Module runs can reuse it.
+      void ensureWarmStaticStorybookServer(root, visualPort).catch(() => {
+        /* non-fatal — Playwright can still start its own webServer */
+      });
+
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
-        const root = resolveRoot(options, server.config.root);
 
         if (url === VISUAL_DELTA_CONFIG_PATH) {
           if (req.method !== "GET") {
