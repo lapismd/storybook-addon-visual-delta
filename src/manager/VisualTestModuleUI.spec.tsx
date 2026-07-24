@@ -136,4 +136,36 @@ describe("VisualTestModuleUI", () => {
     );
     expect(onRun).toHaveBeenCalledOnce();
   });
+
+  it("shows row progress under active checkboxes and streams the title", () => {
+    renderWithTheme(
+      <VisualTestModuleUI
+        variant="context"
+        {...baseProps}
+        statusLine="✓ shadcn-disclosure-accordion--opens-a-section (1/2)"
+        createBaselinesEnabled
+        updateStatusEnabled
+        isCompareRunning
+        isWritingBaselines
+        isUpdatingStatus
+        runnerBusy
+        compareRowProgress="1/2"
+        baselineRowProgress="1/1"
+        statusRowProgress="0/2"
+      />,
+    );
+    const root = screen.getByTestId("visual-test-module-context");
+    expect(
+      root.querySelector("#visual-testing-module-description-context"),
+    ).toHaveTextContent("✓ shadcn-disclosure-accordion--opens-a-section (1/2)");
+    expect(within(root).getByTestId("compare-row-progress")).toHaveTextContent(
+      "1/2",
+    );
+    expect(within(root).getByTestId("baseline-row-progress")).toHaveTextContent(
+      "1/1",
+    );
+    expect(within(root).getByTestId("status-row-progress")).toHaveTextContent(
+      "0/2",
+    );
+  });
 });

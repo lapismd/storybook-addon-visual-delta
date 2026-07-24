@@ -74,6 +74,26 @@ const StyledActionList = styled(ActionList)({
   padding: 0,
 });
 
+const RowLabel = styled.div({
+  display: "flex",
+  flexDirection: "column",
+  minWidth: 0,
+  gap: 1,
+});
+
+const RowProgress = styled.small(({ theme }) => ({
+  fontSize: theme.typography.size.s1 - 2,
+  color: theme.textMutedColor,
+  lineHeight: 1.2,
+}));
+
+const ChipProgress = styled.span(({ theme }) => ({
+  fontSize: theme.typography.size.s1 - 2,
+  color: theme.textMutedColor,
+  fontVariantNumeric: "tabular-nums",
+  marginRight: 2,
+}));
+
 const TestStatusIcon = styled.div<{
   status: VisualModuleChipStatus;
   isRunning?: boolean;
@@ -117,6 +137,12 @@ export type VisualTestModuleUIProps = {
   baselineChipTooltip: string;
   statusChipStatus: VisualModuleChipStatus;
   statusChipLabel: string | null;
+  /** Live `completed/total` under the compare checkbox while running. */
+  compareRowProgress?: string | null;
+  /** Live `completed/total` under the baselines checkbox while writing. */
+  baselineRowProgress?: string | null;
+  /** Live `completed/total` under Update status while stamping tags. */
+  statusRowProgress?: string | null;
   isWritingBaselines: boolean;
   isUpdatingStatus: boolean;
   isCompareRunning: boolean;
@@ -151,6 +177,9 @@ export function VisualTestModuleUI({
   baselineChipTooltip,
   statusChipStatus,
   statusChipLabel,
+  compareRowProgress = null,
+  baselineRowProgress = null,
+  statusRowProgress = null,
   isWritingBaselines,
   isUpdatingStatus,
   isCompareRunning,
@@ -171,6 +200,11 @@ export function VisualTestModuleUI({
     : isWritingBaselines
       ? baselineChipStatus
       : compareChipStatus;
+  const compareChipValue = isCompareRunning
+    ? compareRowProgress
+    : compareChipCount;
+  const baselineChipValue = isWritingBaselines ? baselineRowProgress : null;
+  const statusChipValue = isUpdatingStatus ? statusRowProgress : null;
 
   return (
     <Root data-testid={`visual-test-module-${variant}`}>
@@ -214,19 +248,32 @@ export function VisualTestModuleUI({
                 }}
               />
             </ActionList.Icon>
-            <ActionList.Text>Run visual tests</ActionList.Text>
+            <ActionList.Text>
+              <RowLabel>
+                <span>Run visual tests</span>
+                {compareRowProgress ? (
+                  <RowProgress data-testid="compare-row-progress">
+                    {compareRowProgress}
+                  </RowProgress>
+                ) : null}
+              </RowLabel>
+            </ActionList.Text>
           </ActionList.Action>
           <ActionList.Button
             ariaLabel={
-              compareChipCount != null
-                ? `${compareChipLabel} (${compareChipCount} failed)`
-                : compareChipLabel
+              compareRowProgress
+                ? `${compareChipLabel} (${compareRowProgress})`
+                : compareChipCount != null
+                  ? `${compareChipLabel} (${compareChipCount} failed)`
+                  : compareChipLabel
             }
             tooltip={compareChipLabel}
             disabled={compareChipDisabled}
             onClick={onOpenCompareResults}
           >
-            {compareChipCount}
+            {compareChipValue != null ? (
+              <ChipProgress>{compareChipValue}</ChipProgress>
+            ) : null}
             <TestStatusIcon
               status={compareChipStatus}
               isRunning={isCompareRunning}
@@ -245,14 +292,30 @@ export function VisualTestModuleUI({
                 }}
               />
             </ActionList.Icon>
-            <ActionList.Text>{baselineRowLabel}</ActionList.Text>
+            <ActionList.Text>
+              <RowLabel>
+                <span>{baselineRowLabel}</span>
+                {baselineRowProgress ? (
+                  <RowProgress data-testid="baseline-row-progress">
+                    {baselineRowProgress}
+                  </RowProgress>
+                ) : null}
+              </RowLabel>
+            </ActionList.Text>
           </ActionList.Action>
           <ActionList.Button
-            ariaLabel={baselineChipTooltip}
+            ariaLabel={
+              baselineRowProgress
+                ? `${baselineChipTooltip} (${baselineRowProgress})`
+                : baselineChipTooltip
+            }
             tooltip={baselineChipTooltip}
             disabled={!createBaselinesEnabled && !isWritingBaselines}
             onClick={onOpenBaselineStatus}
           >
+            {baselineChipValue != null ? (
+              <ChipProgress>{baselineChipValue}</ChipProgress>
+            ) : null}
             <TestStatusIcon
               status={baselineChipStatus}
               isRunning={isWritingBaselines}
@@ -271,10 +334,23 @@ export function VisualTestModuleUI({
                 }}
               />
             </ActionList.Icon>
-            <ActionList.Text>Update status</ActionList.Text>
+            <ActionList.Text>
+              <RowLabel>
+                <span>Update status</span>
+                {statusRowProgress ? (
+                  <RowProgress data-testid="status-row-progress">
+                    {statusRowProgress}
+                  </RowProgress>
+                ) : null}
+              </RowLabel>
+            </ActionList.Text>
           </ActionList.Action>
           <ActionList.Button
-            ariaLabel={statusChipLabel ?? "Update review tags from results"}
+            ariaLabel={
+              statusRowProgress
+                ? `Updating review tags (${statusRowProgress})`
+                : (statusChipLabel ?? "Update review tags from results")
+            }
             tooltip={
               statusChipLabel ??
               "Stamp Ready / Failed from visual pass/fail (via Run tests)"
@@ -282,6 +358,9 @@ export function VisualTestModuleUI({
             disabled={!updateStatusEnabled && !isUpdatingStatus}
             onClick={onOpenStatusResults}
           >
+            {statusChipValue != null ? (
+              <ChipProgress>{statusChipValue}</ChipProgress>
+            ) : null}
             <TestStatusIcon
               status={statusChipStatus}
               isRunning={isUpdatingStatus}

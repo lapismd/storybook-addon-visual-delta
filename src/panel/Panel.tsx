@@ -70,6 +70,7 @@ import {
   type DiffCaptureEngine,
 } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
+import { appendVisualRunLogLine } from "../shared/status-log.js";
 import type { DiffResultData } from "../types.js";
 import {
   capturePreviewSubject,
@@ -678,13 +679,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (next) {
         sawProgress = true;
         setCaptureError(null);
-        const line = next.storyId
-          ? `${next.status === "failed" ? "✘" : "✓"} ${next.storyId} (${next.completed}/${next.total})`
-          : formatVisualProgressLabel(next);
-        setUpdateLog((prev) => {
-          if (!prev || (next.completed === 0 && !next.storyId)) return line;
-          return `${prev}\n${line}`;
-        });
+        setUpdateLog((prev) => appendVisualRunLogLine(prev, next));
         return;
       }
       if (sawProgress) {
