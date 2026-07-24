@@ -71,6 +71,11 @@ harness (`PanelShell` + in-memory mock `/__visual-delta` backend) so Create /
 Update / Diff / Run / Cancel / Review can be exercised without Playwright.
 Tagged `skip-visual`.
 
+Storybook title **`Visual Delta/Testing Module`** mounts the shared checklist
+via `TestingModuleShell` (global + sidebar context variants). Play covers
+defaults (compare on, baselines/status off, Create missing mode) and scoped
+context-menu parity. Tagged `skip-visual`.
+
 Run via Storybook Vitest / `pnpm test:storybook` (filter the title as needed).
 
 ## Unit / component tests
@@ -171,17 +176,19 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module heading: **Run visual tests** with status under it (`Not run`
-  / progress) and a **play** split (Create missing / Rewrite existing mode).
-  Checklist: compare (on by default), **Create missing Baselines** /
-  **Update baselines**, and **Update status** (pass → `visual-ready`, fail →
-  `visual-failed`). Heading play / Storybook **Run tests** execute checked
-  rows (baselines → compare → status). With nothing checked, play is disabled
-  and the status line says “Select at least one action”. Rewrite clears `visual-approved` / `visual-ready` so the
-  component returns to `visual-pending`. Create/rewrite uses leaf stories in
-  the sidebar (search/tag filters). Context-menu keep scoped compare +
-  write-on-click create/rewrite. Results map to sidebar status dots from
-  compare metrics. Ephemeral artifacts: gitignored `*.json` / `*.actual.png` /
-  `*.diff.png` under `tests/visual/storybook.spec.ts-snapshots/`.
+  / progress) and a **play** split (Create missing / Rewrite existing;
+  **Create missing** default). Checklist: compare (on by default),
+  **Create missing Baselines** / **Update baselines** (off by default), and
+  **Update status** (off by default; pass → `visual-ready`, fail →
+  `visual-failed`). The same checklist is used for the sidebar
+  story/component context menu (scoped to that entry). Heading play /
+  Storybook **Run tests** execute checked rows (baselines → compare →
+  status). With nothing checked, play is disabled. Rewrite clears
+  `visual-approved` / `visual-ready`. Global writes use sidebar leaf stories;
+  context menu uses the selected story/component leaves. Results map to
+  sidebar status dots. Ephemeral artifacts: gitignored `*.json` /
+  `*.actual.png` / `*.diff.png` under
+  `tests/visual/storybook.spec.ts-snapshots/`.
 - **Playwright pass threshold** — Package-wide default lives in host
   `.visual-delta/playwright.json` (`passThresholdPercent`, default 1%).
   `defineVisualPlaywrightConfig` reads it. Panel Diff Chromium shows a

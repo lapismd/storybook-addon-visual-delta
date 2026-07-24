@@ -306,9 +306,12 @@ Panel **More → Configuration** shows resolved host options
 (from `.visual-delta/playwright.json`, default 1%). Diff Chromium Thresh can
 push that host file via **Update Playwright config**.
 
-Testing Module **Run tests** runs the checked actions: compare, create/update
-baselines (mode from the row-1 split), and/or **Update status** (pass →
-`visual-ready`, fail → `visual-failed`).
+Testing Module **Run tests** (global runner and sidebar story/component
+context menu) runs the checked actions: compare (on by default),
+create/update baselines (**Create missing** mode default; baselines row off
+by default), and/or **Update status** (off by default; pass → `visual-ready`,
+fail → `visual-failed`). Context menu scope is the selected entry; the global
+runner uses sidebar leaf stories.
 
 Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
