@@ -78,6 +78,11 @@ let lastSelection: {
   index: number;
   images: VisualDeltaImage[];
 } | null = null;
+/**
+ * Bumped when selection is replaced or cleared so async applySelection /
+ * image-load / rAF callbacks cannot reattach a stale overlay.
+ */
+let selectionGeneration = 0;
 let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
 /** False = image-only: hide live story, show baseline PNG (center + drag). */
 let currentLiveVisible = true;
@@ -1064,17 +1069,30 @@ function applyOverlayPosition(
   applyLiveVisibility(canvasElement);
 }
 
+function selectionStillCurrent(
+  generation: number,
+  imageItem: VisualDeltaImage,
+): boolean {
+  if (generation !== selectionGeneration || !lastSelection) return false;
+  const current = lastSelection.images[lastSelection.index];
+  return Boolean(current && current.src === imageItem.src);
+}
+
 function scheduleOverlayPosition(
   overlay: HTMLElement,
   imageItem: VisualDeltaImage,
-  sizes?: BaselineCompareSizes | null,
+  sizes: BaselineCompareSizes | null | undefined,
+  generation: number,
 ) {
+  if (!selectionStillCurrent(generation, imageItem)) return;
   applyOverlayPosition(overlay, imageItem, sizes);
   requestAnimationFrame(() => {
+    if (!selectionStillCurrent(generation, imageItem)) return;
     applyOverlayPosition(overlay, imageItem, sizes);
-    requestAnimationFrame(() =>
-      applyOverlayPosition(overlay, imageItem, sizes),
-    );
+    requestAnimationFrame(() => {
+      if (!selectionStillCurrent(generation, imageItem)) return;
+      applyOverlayPosition(overlay, imageItem, sizes);
+    });
   });
 }
 
@@ -1120,10 +1138,12 @@ function removeOverlayDom(retainSelection: boolean) {
 }
 
 function clearOverlay() {
+  selectionGeneration += 1;
   removeOverlayDom(false);
 }
 
-function applySelection(attempt: number) {
+function applySelection(attempt: number, generation = selectionGeneration) {
+  if (generation !== selectionGeneration) return;
   if (!lastSelection || lastSelection.index < 0) return;
   const selectedImageItem = lastSelection.images[lastSelection.index];
   if (!selectedImageItem) return;
@@ -1131,7 +1151,7 @@ function applySelection(attempt: number) {
   const canvasElement = resolveStoryCanvas();
   if (!canvasElement?.parentElement) {
     if (attempt < 40) {
-      window.setTimeout(() => applySelection(attempt + 1), 50);
+      window.setTimeout(() => applySelection(attempt + 1, generation), 50);
     }
     return;
   }
@@ -1152,6 +1172,7 @@ function applySelection(attempt: number) {
   const img = overlay.querySelector("img");
   if (img) {
     const onReady = () => {
+      if (!selectionStillCurrent(generation, selectedImageItem)) return;
       sizeOverlayImageToCss(img, selectedImageItem);
       const sizes = baselineCompareSizesFromNatural(
         img.naturalWidth,
@@ -1159,7 +1180,7 @@ function applySelection(attempt: number) {
         VISUAL_COMPARE_PANE_PAD_PX,
         deviceScaleFactorForImage(selectedImageItem),
       );
-      scheduleOverlayPosition(overlay, selectedImageItem, sizes);
+      scheduleOverlayPosition(overlay, selectedImageItem, sizes, generation);
       watchLayout(overlay);
     };
     if (img.getAttribute("src") === selectedImageItem.src && img.complete) {
@@ -1169,7 +1190,7 @@ function applySelection(attempt: number) {
       img.src = selectedImageItem.src;
     }
   }
-  scheduleOverlayPosition(overlay, selectedImageItem);
+  scheduleOverlayPosition(overlay, selectedImageItem, null, generation);
   watchLayout(overlay);
 }
 
@@ -1197,8 +1218,9 @@ export function ensureOverlayChannel(): void {
       }
       const selectedImageItem = data.images[data.index];
       if (!selectedImageItem) return;
+      selectionGeneration += 1;
       lastSelection = { index: data.index, images: data.images };
-      applySelection(0);
+      applySelection(0, selectionGeneration);
     },
   );
 
@@ -1207,7 +1229,12 @@ export function ensureOverlayChannel(): void {
     if (!overlay || !lastSelection) return;
     const imageItem = lastSelection.images[lastSelection.index];
     if (!imageItem) return;
-    scheduleOverlayPosition(overlay, imageItem);
+    scheduleOverlayPosition(
+      overlay,
+      imageItem,
+      null,
+      selectionGeneration,
+    );
   });
 
   channel.on(
@@ -1242,7 +1269,14 @@ export function ensureOverlayChannel(): void {
       }
       if (overlay && lastSelection) {
         const imageItem = lastSelection.images[lastSelection.index];
-        if (imageItem) scheduleOverlayPosition(overlay, imageItem);
+        if (imageItem) {
+          scheduleOverlayPosition(
+            overlay,
+            imageItem,
+            null,
+            selectionGeneration,
+          );
+        }
       } else {
         const canvasElement = resolveStoryCanvas();
         if (canvasElement) applyLiveVisibility(canvasElement);
@@ -1251,15 +1285,10 @@ export function ensureOverlayChannel(): void {
   );
 
   channel.on(EVENTS.HIDE_OVERLAY, () => {
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) {
-      overlay.style.visibility = "hidden";
-      overlay.style.pointerEvents = "none";
-    }
-    const baselinePane = document.getElementById(BASELINE_PANE_ID);
-    if (baselinePane instanceof HTMLElement) {
-      baselinePane.style.visibility = "hidden";
-    }
+    // Soft-hide keeps lastSelection (panel index) but tears down overlay +
+    // split panes so the live canvas reclaims full preview space.
+    selectionGeneration += 1;
+    removeOverlayDom(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         channel.emit(EVENTS.OVERLAY_HIDDEN, {});
@@ -1268,6 +1297,11 @@ export function ensureOverlayChannel(): void {
   });
 
   channel.on(EVENTS.SHOW_OVERLAY, () => {
+    if (lastSelection && lastSelection.index >= 0) {
+      selectionGeneration += 1;
+      applySelection(0, selectionGeneration);
+      return;
+    }
     const overlay = document.getElementById(OVERLAY_ID);
     if (overlay) {
       overlay.style.visibility = "";
@@ -1276,9 +1310,6 @@ export function ensureOverlayChannel(): void {
     const baselinePane = document.getElementById(BASELINE_PANE_ID);
     if (baselinePane instanceof HTMLElement) {
       baselinePane.style.visibility = "";
-    }
-    if (!overlay && lastSelection && lastSelection.index >= 0) {
-      applySelection(0);
     }
   });
 }
@@ -1296,15 +1327,15 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
 
   useEffect(() => {
     ensureOverlayChannel();
-    if (lastSelection && lastSelection.index >= 0) {
-      applySelection(0);
-    }
+    // Never re-paint the previous story's baseline here. Panel re-SELECT_IMAGE
+    // via INIT_IMAGE / OVERLAY_LISTENER_READY after remount.
     addons.getChannel().emit(EVENTS.OVERLAY_LISTENER_READY, {
       storyId: context.id,
     });
     return () => {
-      // Keep the channel listener; only drop DOM so remount can rebuild.
-      removeOverlayDom(true);
+      // Drop DOM + selection on story leave / remount. Same-story remount is
+      // restored when the panel answers OVERLAY_LISTENER_READY.
+      clearOverlay();
     };
   }, [context.id]);
 
