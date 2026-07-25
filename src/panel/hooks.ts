@@ -10,6 +10,7 @@ import {
   type VisualDeltaModes,
 } from "../constants.js";
 import {
+  initImageSelection,
   opacityForPlacementChange,
   placementToggleAction,
   revealCenteredOverlayPatch,
@@ -336,14 +337,14 @@ export function useStoryData() {
                 placement,
               )
             : primaryImages;
-        const hasImages = images.length > 0;
-        // Image-only always shows the overlay; otherwise respect overlayOn.
-        // Interaction pins always re-show the overlay after remount.
-        const initialIndex =
-          hasImages &&
-          (interactionSrc != null || prefs.overlayOn || !liveVisible)
-            ? 0
-            : -1;
+        // Keep gallery index whenever baselines exist. Soft-hide only clears
+        // overlay visibility (`overlayOn` / previewIndex), not Diff selection.
+        const selection = initImageSelection({
+          imageCount: images.length,
+          overlayOnPref: prefs.overlayOn,
+          liveVisible,
+          interactionPinned: interactionSrc != null,
+        });
         const modes = data.modes ?? {};
         const modeNames = data.modeNames ?? Object.keys(modes);
         const next: StoryData = {
@@ -355,8 +356,8 @@ export function useStoryData() {
             prev.storyId === data.storyId ? prev.selectedMode : null,
           storyId: data.storyId,
           storyName: data.storyName,
-          index: initialIndex,
-          overlayOn: initialIndex >= 0,
+          index: selection.index,
+          overlayOn: selection.overlayOn,
           opacity: liveVisible ? prefs.opacity : 1,
           colorInversion: liveVisible ? prefs.colorInversion : false,
           placement,
@@ -381,7 +382,7 @@ export function useStoryData() {
           placement: next.placement,
           liveVisible: next.liveVisible,
         });
-        void selectImage(initialIndex, images);
+        void selectImage(selection.previewIndex, images);
         return next;
       });
     },
@@ -664,14 +665,19 @@ export function useStoryData() {
     prefsRef.current = defaults;
     setStoryData((prev) => {
       const images = withPlacement(prev.images, defaults.placement);
-      const index = defaults.overlayOn && images.length > 0 ? 0 : -1;
+      const selection = initImageSelection({
+        imageCount: images.length,
+        overlayOnPref: defaults.overlayOn,
+        liveVisible: defaults.liveVisible,
+        interactionPinned: false,
+      });
       placementBeforeImageOnlyRef.current = null;
       styleBeforeImageOnlyRef.current = null;
       const next: StoryData = {
         ...prev,
         images,
-        index,
-        overlayOn: index >= 0,
+        index: selection.index,
+        overlayOn: selection.overlayOn,
         opacity: defaults.opacity,
         colorInversion: defaults.colorInversion,
         placement: defaults.placement,
@@ -679,7 +685,7 @@ export function useStoryData() {
         passThresholdByEngine: { ...defaults.passThresholdByEngine },
       };
       emitStyle(next);
-      void selectImage(index, images);
+      void selectImage(selection.previewIndex, images);
       return next;
     });
   }, [emitStyle, selectImage]);

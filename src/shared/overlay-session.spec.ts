@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  initImageSelection,
   opacityForPlacementChange,
   placementToggleAction,
   revealCenteredOverlayPatch,
@@ -59,6 +60,60 @@ describe("shouldSoftShowOverlay", () => {
     expect(shouldSoftShowOverlay(hidden, "right", 0)).toBe(true);
     expect(shouldSoftShowOverlay(hidden, "left", 0)).toBe(false);
     expect(shouldSoftShowOverlay(base, "right", 0)).toBe(false);
+  });
+});
+
+describe("initImageSelection", () => {
+  it("keeps gallery index when soft-hidden so Diff/DiffResult still have a baseline", () => {
+    expect(
+      initImageSelection({
+        imageCount: 1,
+        overlayOnPref: false,
+        liveVisible: true,
+        interactionPinned: false,
+      }),
+    ).toEqual({ index: 0, overlayOn: false, previewIndex: -1 });
+  });
+
+  it("shows overlay when prefs say overlayOn", () => {
+    expect(
+      initImageSelection({
+        imageCount: 2,
+        overlayOnPref: true,
+        liveVisible: true,
+        interactionPinned: false,
+      }),
+    ).toEqual({ index: 0, overlayOn: true, previewIndex: 0 });
+  });
+
+  it("forces overlay on for image-only and interaction pins", () => {
+    expect(
+      initImageSelection({
+        imageCount: 1,
+        overlayOnPref: false,
+        liveVisible: false,
+        interactionPinned: false,
+      }),
+    ).toMatchObject({ index: 0, overlayOn: true, previewIndex: 0 });
+    expect(
+      initImageSelection({
+        imageCount: 1,
+        overlayOnPref: false,
+        liveVisible: true,
+        interactionPinned: true,
+      }),
+    ).toMatchObject({ index: 0, overlayOn: true, previewIndex: 0 });
+  });
+
+  it("uses index -1 when there are no images", () => {
+    expect(
+      initImageSelection({
+        imageCount: 0,
+        overlayOnPref: true,
+        liveVisible: true,
+        interactionPinned: false,
+      }),
+    ).toEqual({ index: -1, overlayOn: false, previewIndex: -1 });
   });
 });
 
