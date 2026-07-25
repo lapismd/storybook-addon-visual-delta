@@ -1,8 +1,7 @@
-import {
-  defineConfig,
-  devices,
-  type PlaywrightTestConfig,
-} from "@playwright/test";
+import { createRequire } from "node:module";
+import path from "node:path";
+import type * as PlaywrightTest from "@playwright/test";
+import type { PlaywrightTestConfig } from "@playwright/test";
 import {
   VISUAL_DEVICE_SCALE_FACTOR,
   VISUAL_VIEWPORT,
@@ -12,6 +11,12 @@ import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-thresh
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
 
 export { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT };
+
+const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
+
+function loadHostPlaywrightTest(): typeof PlaywrightTest {
+  return requireFromHost("@playwright/test") as typeof PlaywrightTest;
+}
 
 /** Playwright `updateSnapshots` gate used by Visual Delta suites. */
 export function visualUpdateSnapshotsMode(): "none" | "missing" | "all" {
@@ -91,6 +96,7 @@ export type DefineVisualPlaywrightConfigOptions = {
 export function defineVisualPlaywrightConfig(
   options: DefineVisualPlaywrightConfigOptions = {},
 ): PlaywrightTestConfig {
+  const { defineConfig, devices } = loadHostPlaywrightTest();
   const port = options.port ?? resolveVisualServerPort();
   const testDir = options.testDir ?? "./tests/visual";
   return defineConfig({
