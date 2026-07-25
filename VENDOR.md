@@ -239,8 +239,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 - **Playwright pass threshold** — Package-wide default lives in host
   `.visual-delta/playwright.json` (`passThresholdPercent`, default 1%).
   `defineVisualPlaywrightConfig` reads it. Panel Diff Chromium shows a
-  mismatch when local Thresh ≠ Playwright config, with **Update Playwright
-  config** (`POST /__visual-delta/playwright-threshold`).
+  mismatch note under Thresh, plus a split control: **Update Playwright**
+  (`POST /__visual-delta/playwright-threshold`) and a reset icon that copies
+  the Playwright value into local Thresh prefs.
 - **Capture parity with Playwright** — Live Diff blurs the preview's active
   element and temporarily disables animations/transitions/caret (same prep as
   `tests/visual/storybook.spec.ts`) before `html-to-image` capture, so play
