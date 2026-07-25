@@ -28,6 +28,8 @@ import {
 import { resolvePaintedBackground } from "../shared/preview-background.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
+/** Icon chip on the baseline PNG so overlay vs live stays obvious. */
+const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
 const SPLIT_ID = "visual-delta-split";
 const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
@@ -943,9 +945,51 @@ function ensureSplit(
   return { livePane, baselinePane };
 }
 
+/** Tiny photo icon — marks the baseline PNG on top of / beside live. */
+function overlayChipIconSvg(): string {
+  return `<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <circle cx="5.5" cy="6.25" r="1.15" fill="currentColor"/>
+  <path d="M2.75 12.25l3.25-3.25 2.25 2.25 2.75-3.25 2.25 3.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>`;
+}
+
+function ensureOverlayChip(overlay: HTMLElement) {
+  let chip = document.getElementById(OVERLAY_CHIP_ID);
+  if (!(chip instanceof HTMLElement) || chip.parentElement !== overlay) {
+    chip?.remove();
+    chip = document.createElement("div");
+    chip.id = OVERLAY_CHIP_ID;
+    chip.setAttribute("role", "img");
+    chip.setAttribute("aria-label", "Baseline overlay");
+    chip.title = "Baseline overlay";
+    chip.innerHTML = overlayChipIconSvg();
+    overlay.appendChild(chip);
+  }
+  chip.style.cssText = `
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: #fff;
+    background: rgba(2, 97, 198, 0.92);
+    border-radius: 4px;
+    pointer-events: none;
+    user-select: none;
+  `;
+}
+
 function ensureOverlayElement(): HTMLElement {
   let overlay = document.getElementById(OVERLAY_ID);
-  if (overlay instanceof HTMLElement) return overlay;
+  if (overlay instanceof HTMLElement) {
+    ensureOverlayChip(overlay);
+    return overlay;
+  }
 
   overlay = document.createElement("div");
   overlay.id = OVERLAY_ID;
@@ -960,6 +1004,7 @@ function ensureOverlayElement(): HTMLElement {
     user-select: none;
   `;
   overlay.appendChild(img);
+  ensureOverlayChip(overlay);
   dragCleanupRef = setupDragOverlay(overlay);
   return overlay;
 }
@@ -1003,14 +1048,17 @@ function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
 
 function updateOverlayStyle(overlay: HTMLElement | null) {
   if (!overlay) return;
+  // Blend/opacity on the PNG only so the identification chip stays crisp.
+  const img = overlay.querySelector("img");
+  overlay.style.mixBlendMode = "normal";
+  overlay.style.opacity = "1";
+  if (!(img instanceof HTMLImageElement)) return;
   if (isSplitPlacement(currentPlacement)) {
-    overlay.style.mixBlendMode = "normal";
-    overlay.style.opacity = "1";
+    img.style.mixBlendMode = "normal";
+    img.style.opacity = "1";
   } else {
-    overlay.style.mixBlendMode = currentColorInversion
-      ? "difference"
-      : "normal";
-    overlay.style.opacity = String(currentOpacity);
+    img.style.mixBlendMode = currentColorInversion ? "difference" : "normal";
+    img.style.opacity = String(currentOpacity);
   }
 }
 
