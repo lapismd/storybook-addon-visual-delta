@@ -65,6 +65,7 @@ import {
   type VisualCreateProgress,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
+import { loadRebuildStaticEnabled } from "../manager/visual-test-module-prefs.js";
 import {
   loadDiffCaptureEngine,
   type DiffCaptureEngine,
@@ -973,7 +974,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setCaptureError(null);
     setUpdateLog(null);
     try {
-      await postVisualUpdateBaseline({ storyId });
+      await postVisualUpdateBaseline({
+        storyId,
+        rebuild: loadRebuildStaticEnabled(),
+      });
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
@@ -987,7 +991,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setCaptureError(null);
     setUpdateLog(null);
     try {
-      await postVisualCreateBaseline({ storyId });
+      await postVisualCreateBaseline({
+        storyId,
+        rebuild: loadRebuildStaticEnabled(),
+      });
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
@@ -1190,7 +1197,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           } else {
             clearVisualStatuses();
           }
-          const data = await postVisualRun({ storyIds, rebuild: false });
+          const data = await postVisualRun({
+            storyIds,
+            rebuild: loadRebuildStaticEnabled(),
+          });
           if (data.crashed) {
             publishVisualLastRun({
               finishedAt: Date.now(),

@@ -883,7 +883,7 @@ export type VisualCreateResponse = {
 
 async function postVisualBaselineWrite(
   kind: VisualBaselineJobKind,
-  body: { storyId: string },
+  body: { storyId: string; rebuild?: boolean },
   options?: {
     /** Override the in-flight status label (e.g. `Creating… 1/3`). */
     runningLabel?: string;
@@ -1069,6 +1069,7 @@ export function componentCreateTargets(api: API, storyIds: string[]): string[] {
  */
 export async function postVisualCreateBaseline(body: {
   storyId: string;
+  rebuild?: boolean;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("create", body);
 }
@@ -1080,6 +1081,7 @@ export async function postVisualCreateBaseline(body: {
 export async function postVisualCreateBaselinesForStoryIds(
   api: API,
   storyIds: string[],
+  options?: { rebuild?: boolean },
 ): Promise<void> {
   const targets = componentCreateTargets(api, storyIds);
   if (!targets.length) {
@@ -1092,6 +1094,7 @@ export async function postVisualCreateBaselinesForStoryIds(
     throw new Error("No stories visible in the sidebar");
   }
   const total = targets.length;
+  const rebuild = options?.rebuild;
   for (let i = 0; i < total; i++) {
     const storyId = targets[i]!;
     const completed = i + 1;
@@ -1100,7 +1103,8 @@ export async function postVisualCreateBaselinesForStoryIds(
     const isLast = i === total - 1;
     await postVisualBaselineWrite(
       "create",
-      { storyId },
+      // Rebuild only on the first target — later components share the fresh static tree.
+      { storyId, rebuild: rebuild && i === 0 ? true : undefined },
       {
         runningLabel,
         completed,
@@ -1122,6 +1126,7 @@ export async function postVisualCreateBaselinesForStoryIds(
 export async function postVisualUpdateBaselinesForStoryIds(
   api: API,
   storyIds: string[],
+  options?: { rebuild?: boolean },
 ): Promise<void> {
   const targets = componentCreateTargets(api, storyIds);
   if (!targets.length) {
@@ -1134,6 +1139,7 @@ export async function postVisualUpdateBaselinesForStoryIds(
     throw new Error("No stories visible in the sidebar");
   }
   const total = targets.length;
+  const rebuild = options?.rebuild;
   for (let i = 0; i < total; i++) {
     const storyId = targets[i]!;
     const completed = i + 1;
@@ -1142,7 +1148,7 @@ export async function postVisualUpdateBaselinesForStoryIds(
     const isLast = i === total - 1;
     await postVisualBaselineWrite(
       "update",
-      { storyId },
+      { storyId, rebuild: rebuild && i === 0 ? true : undefined },
       {
         runningLabel,
         completed,
@@ -1163,6 +1169,7 @@ export async function postVisualUpdateBaselinesForStoryIds(
  */
 export async function postVisualUpdateBaseline(body: {
   storyId: string;
+  rebuild?: boolean;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("update", body);
 }

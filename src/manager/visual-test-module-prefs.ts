@@ -9,6 +9,8 @@ export const CREATE_BASELINES_KEY =
   "storybook-addon-visual-delta/create-baselines-enabled-v1";
 export const UPDATE_STATUS_KEY =
   "storybook-addon-visual-delta/update-status-enabled-v1";
+export const REBUILD_STATIC_KEY =
+  "storybook-addon-visual-delta/rebuild-static-enabled-v1";
 
 /** Defaults for Testing Module checkboxes / baseline write mode. */
 export const VISUAL_TEST_MODULE_DEFAULTS = {
@@ -16,6 +18,11 @@ export const VISUAL_TEST_MODULE_DEFAULTS = {
   /** Create/Update baselines row — off until explicitly enabled. */
   createBaselinesEnabled: false,
   updateStatusEnabled: false,
+  /**
+   * Force `build-storybook` before create/update/compare captures.
+   * Off by default — turn on after component CSS/markup changes.
+   */
+  rebuildStaticEnabled: false,
   /** Baseline write mode when the baselines row is enabled. */
   baselineWriteMode: "create" as BaselineWriteMode,
 } as const;
@@ -58,6 +65,17 @@ export function loadUpdateStatusEnabled(): boolean {
     UPDATE_STATUS_KEY,
     VISUAL_TEST_MODULE_DEFAULTS.updateStatusEnabled,
   );
+}
+
+export function loadRebuildStaticEnabled(): boolean {
+  return readBoolFlag(
+    REBUILD_STATIC_KEY,
+    VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
+  );
+}
+
+export function writeRebuildStaticEnabled(value: boolean): void {
+  writeBoolFlag(REBUILD_STATIC_KEY, value);
 }
 
 /** Persisted baseline mode, falling back to Create missing. */

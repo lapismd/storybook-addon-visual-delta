@@ -39,6 +39,8 @@ export type BaselineCliOptions = {
   approved?: boolean;
   allowDirty?: boolean;
   skipBuild?: boolean;
+  /** Force `build-storybook` even when storybook-static is complete. */
+  forceRebuild?: boolean;
   createOnly?: boolean;
   stepLabel?: string;
   stepId?: string;
@@ -70,24 +72,22 @@ function assertApproved(options: BaselineCliOptions, verb: string): void {
 
 function ensureStorybookStatic(
   root: string,
-  skipBuild: boolean | undefined,
+  options: { skipBuild?: boolean; forceRebuild?: boolean } = {},
 ): void {
   const indexPath = path.join(root, "storybook-static", "index.json");
   const iframePath = path.join(root, "storybook-static", "iframe.html");
   const complete = existsSync(indexPath) && existsSync(iframePath);
+  const { skipBuild, forceRebuild } = options;
 
-  // Playwright captures against storybook-static, not the live Storybook
-  // server. Create/update must rebuild unless the caller passes --skip-build
-  // (agents that already rebuilt, or tag-only paths).
-  if (skipBuild) {
-    if (!complete) {
-      throw new Error(
-        !existsSync(indexPath)
-          ? "storybook-static/index.json missing — run build-storybook first"
-          : "storybook-static incomplete (missing iframe.html) — run build-storybook",
-      );
-    }
-    return;
+  // Playwright captures against storybook-static, not live Storybook.
+  // --skip-build reuses a complete tree; --rebuild forces build-storybook.
+  if (complete && !forceRebuild) return;
+  if (skipBuild && !forceRebuild) {
+    throw new Error(
+      !existsSync(indexPath)
+        ? "storybook-static/index.json missing — run build-storybook first"
+        : "storybook-static incomplete (missing iframe.html) — run build-storybook",
+    );
   }
 
   execFileSync("pnpm", ["build-storybook"], {
@@ -189,7 +189,10 @@ export async function runBaselineUpdate(
     );
   }
 
-  ensureStorybookStatic(root, options.skipBuild);
+  ensureStorybookStatic(root, {
+    skipBuild: options.skipBuild,
+    forceRebuild: options.forceRebuild,
+  });
   const warm = await ensureWarmStaticStorybookServer(root, port);
   if (!warm.ok) await ensurePlaywrightWebServerPort(port);
 
@@ -286,7 +289,10 @@ export async function runInteractionUpdate(
   const port = resolveVisualServerPort(options);
   const stepId = (options.stepId ?? slugifyStepLabel(stepLabel)).trim();
 
-  ensureStorybookStatic(root, options.skipBuild);
+  ensureStorybookStatic(root, {
+    skipBuild: options.skipBuild,
+    forceRebuild: options.forceRebuild,
+  });
 
   const entry = loadStoryIndex(root)[storyId];
   if (!entry) {
@@ -366,7 +372,7 @@ export function runSkipVisualTag(
   },
 ): { updated: string[]; errors: string[] } {
   const root = packageRootOf(options);
-  ensureStorybookStatic(root, true);
+  ensureStorybookStatic(root, { skipBuild: true });
   const targets = matchingEntries(root, options.storyId, options.component);
   if (!targets.length) {
     throw new Error(

@@ -61,11 +61,13 @@ import {
 } from "../shared/status-log.js";
 import {
   CREATE_BASELINES_KEY,
+  REBUILD_STATIC_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
   anyModuleActionSelected,
   loadCreateBaselinesEnabled,
   loadModuleBaselineWriteMode,
+  loadRebuildStaticEnabled,
   loadRunVisualEnabled,
   loadUpdateStatusEnabled,
   writeBoolFlag,
@@ -319,6 +321,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [updateStatusEnabled, setUpdateStatusEnabled] = useState(
     loadUpdateStatusEnabled,
   );
+  const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState(
+    loadRebuildStaticEnabled,
+  );
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
     loadModuleBaselineWriteMode(),
   );
@@ -378,7 +383,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
       const data = await postVisualRun({
         storyIds: runnable,
-        rebuild: false,
+        rebuild: loadRebuildStaticEnabled(),
       });
       if (data.crashed) {
         const summary: VisualLastRunSummary = {
@@ -452,10 +457,15 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             );
           }
           const mode = loadBaselineWriteMode();
+          const rebuild = loadRebuildStaticEnabled();
           if (mode === "rewrite") {
-            await postVisualUpdateBaselinesForStoryIds(api, writeTargets);
+            await postVisualUpdateBaselinesForStoryIds(api, writeTargets, {
+              rebuild,
+            });
           } else {
-            await postVisualCreateBaselinesForStoryIds(api, writeTargets);
+            await postVisualCreateBaselinesForStoryIds(api, writeTargets, {
+              rebuild,
+            });
           }
         }
 
@@ -776,6 +786,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       runVisualEnabled={runVisualEnabled}
       createBaselinesEnabled={createBaselinesEnabled}
       updateStatusEnabled={updateStatusEnabled}
+      rebuildStaticEnabled={rebuildStaticEnabled}
       baselineMode={baselineMode}
       runnerBusy={runnerBusy}
       anyActionSelected={anyActionSelected}
@@ -804,6 +815,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       onUpdateStatusChange={(next) => {
         setUpdateStatusEnabled(next);
         writeBoolFlag(UPDATE_STATUS_KEY, next);
+      }}
+      onRebuildStaticChange={(next) => {
+        setRebuildStaticEnabled(next);
+        writeBoolFlag(REBUILD_STATIC_KEY, next);
       }}
       onBaselineModeChange={(next) => {
         setBaselineMode(next);

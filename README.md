@@ -253,6 +253,7 @@ visualUpdateArgs: [
   "update",
   "--allow-dirty",
   "--approved",
+  "--skip-build",
 ];
 
 visualInteractionUpdateArgs: [
@@ -261,15 +262,17 @@ visualInteractionUpdateArgs: [
   "interaction-update",
   "--allow-dirty",
   "--approved",
+  "--skip-build",
 ];
 ```
 
-Create/update rebuild `storybook-static` by default (Playwright captures the
-static tree, not live Storybook). Pass `--skip-build` only when that tree is
-already fresh. Override these argv lists to point at host scripts when needed
-(see Advanced host below). The middleware appends `--create-only`,
-`--component` / `--story-id`, `--step-label`, `--step-id`, and sets
-`VISUAL_UPDATE_APPROVED=1` in the child environment.
+Playwright captures `storybook-static`, not live Storybook. Hosts default to
+`--skip-build` for speed; enable **Rebuild static** in the Testing Module (or
+pass `--rebuild`) after component CSS/markup changes so create/update/compare
+run `build-storybook` first. Override these argv lists to point at host
+scripts when needed (see Advanced host below). The middleware appends
+`--create-only`, `--component` / `--story-id`, `--step-label`, `--step-id`,
+and sets `VISUAL_UPDATE_APPROVED=1` in the child environment.
 
 ## Story CSF
 

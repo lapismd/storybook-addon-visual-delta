@@ -38,6 +38,7 @@ const baseProps = {
   runVisualEnabled: true,
   createBaselinesEnabled: false,
   updateStatusEnabled: false,
+  rebuildStaticEnabled: false,
   baselineMode: "create" as const,
   runnerBusy: false,
   anyActionSelected: true,
@@ -55,6 +56,7 @@ const baseProps = {
   onRunVisualChange: vi.fn(),
   onCreateBaselinesChange: vi.fn(),
   onUpdateStatusChange: vi.fn(),
+  onRebuildStaticChange: vi.fn(),
   onBaselineModeChange: vi.fn(),
   onRun: vi.fn(),
   onStop: vi.fn(),
@@ -80,6 +82,9 @@ describe("VisualTestModuleUI", () => {
     ).not.toBeChecked();
     expect(
       root.querySelector('input[name="Update status"]'),
+    ).not.toBeChecked();
+    expect(
+      root.querySelector('input[name="Rebuild static"]'),
     ).not.toBeChecked();
   });
 
