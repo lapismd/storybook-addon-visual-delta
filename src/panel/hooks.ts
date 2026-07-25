@@ -14,7 +14,6 @@ import {
   opacityForPlacementChange,
   placementToggleAction,
   revealCenteredOverlayPatch,
-  shouldSoftShowOverlay,
 } from "../shared/overlay-session.js";
 import type { OverlayInfo } from "../types.js";
 import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
@@ -539,6 +538,10 @@ export function useStoryData() {
           placement,
         );
         if (action.type === "soft-hide") {
+          // Keep gallery index + placement for soft-show / DiffResult. Tear
+          // down overlay/split only — pad shows nothing pressed, live canvas
+          // unlocks to natural size (no forced center). Do not emitStyle:
+          // an UPDATE after HIDE can resurrect a ghost overlay.
           const next = { ...prev, overlayOn: false };
           persist(next);
           hideOverlay();
@@ -546,17 +549,6 @@ export function useStoryData() {
         }
 
         const images = withPlacement(prev.images, action.placement);
-        const softShow = shouldSoftShowOverlay(
-          {
-            overlayOn: prev.overlayOn,
-            placement: prev.placement,
-            index: prev.index,
-            imageCount: prev.images.length,
-            opacity: prev.opacity,
-          },
-          action.placement,
-          action.index,
-        );
         const next = {
           ...prev,
           placement: action.placement,
@@ -567,15 +559,13 @@ export function useStoryData() {
         };
         persist(next);
         emitStyle(next);
-        if (softShow) {
-          showOverlay();
-        } else {
-          void selectImage(action.index, images);
-        }
+        // Always re-SELECT (not bare SHOW) so soft-show still works after
+        // remount / HMR cleared preview lastSelection.
+        void selectImage(action.index, images);
         return next;
       });
     },
-    [emitStyle, hideOverlay, persist, selectImage, showOverlay],
+    [emitStyle, hideOverlay, persist, selectImage],
   );
 
   /**

@@ -44,4 +44,13 @@ describe("PlacementPad", () => {
       ).toBe(true);
     }
   });
+
+  it("shows nothing pressed when overlay is soft-hidden", () => {
+    renderWithTheme(
+      <PlacementPad value="center" active={false} onToggle={vi.fn()} />,
+    );
+    for (const control of screen.getAllByRole("switch")) {
+      expect(control).toHaveAttribute("aria-checked", "false");
+    }
+  });
 });

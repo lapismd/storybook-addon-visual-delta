@@ -674,8 +674,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setDiffResult(null);
     }
     let cancelled = false;
-    void loadPlaywrightDiffResult(baselineStem, diffEpoch || Date.now()).then(
-      (result) => {
+    void loadPlaywrightDiffResult(baselineStem, diffEpoch || Date.now())
+      .then((result) => {
         if (cancelled) return;
         if (result) {
           diffResultCacheRef.current.set(baselineStem, result);
@@ -688,10 +688,19 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           setDiffResult(existing);
           return;
         }
-        diffResultCacheRef.current.set(baselineStem, null);
+        // Do not cache null — Playwright may write sidecars moments later, and
+        // a poisoned null entry would skip a successful hydrate after reload.
         setDiffResult(null);
-      },
-    );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const existing = diffResultCacheRef.current.get(baselineStem);
+        if (existing) {
+          setDiffResult(existing);
+          return;
+        }
+        setDiffResult(null);
+      });
     return () => {
       cancelled = true;
     };

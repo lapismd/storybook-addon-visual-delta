@@ -77,7 +77,11 @@ let layoutObserverRef: ResizeObserver | null = null;
 let sharedScrollCleanupRef: (() => void) | null = null;
 let sharedScrollRefreshRef: (() => void) | null = null;
 let liveContentWidthRestoreRef: (() => void) | null = null;
+/** Subject that received compare width locks (may detach on remount). */
+let liveContentWidthSubject: HTMLElement | null = null;
 let liveCanvasSplitRestoreRef: (() => void) | null = null;
+/** Canvas that received split min-height/height locks. */
+let liveCanvasSplitSubject: HTMLElement | null = null;
 let lastCompareSizes: BaselineCompareSizes | null = null;
 let lastSelection: {
   index: number;
@@ -104,6 +108,26 @@ let previewViewMode: string | null = null;
 function isStoryPreviewMode(viewMode: string | null | undefined): boolean {
   return viewMode == null || viewMode === "story";
 }
+
+/**
+ * Indirection so Vite HMR can replace handler bodies without stacking stale
+ * `channel.on` listeners (which would keep pre-teardown soft-hide behavior).
+ */
+const overlayChannelApi = {
+  onSetCurrentStory(_payload?: { viewMode?: string; storyId?: string }) {},
+  onDocsPrepared() {},
+  onDocsRendered() {},
+  onSelectImage(_data: { index: number; images?: VisualDeltaImage[] }) {},
+  onResetOverlay() {},
+  onUpdateOverlayStyle(_data: {
+    opacity: number;
+    colorInversion: boolean;
+    placement?: PlacementMode;
+    liveVisible?: boolean;
+  }) {},
+  onHideOverlay() {},
+  onShowOverlay() {},
+};
 
 const MODE_BADGE_ID = "visual-delta-mode-badge";
 
@@ -297,8 +321,7 @@ function lockLiveContentWidth(
   canvasElement: HTMLElement,
   contentWidth: number,
 ) {
-  liveContentWidthRestoreRef?.();
-  liveContentWidthRestoreRef = null;
+  unlockLiveContentWidth();
   const subject = canvasElement.querySelector(":scope > *");
   if (!(subject instanceof HTMLElement) || contentWidth < 1) return;
   const prev = {
@@ -311,18 +334,33 @@ function lockLiveContentWidth(
   subject.style.width = `${contentWidth}px`;
   subject.style.maxWidth = `${contentWidth}px`;
   subject.style.minWidth = `${contentWidth}px`;
+  liveContentWidthSubject = subject;
   liveContentWidthRestoreRef = () => {
     subject.style.width = prev.width;
     subject.style.maxWidth = prev.maxWidth;
     subject.style.minWidth = prev.minWidth;
     subject.style.boxSizing = prev.boxSizing;
-    liveContentWidthRestoreRef = null;
   };
 }
 
 function unlockLiveContentWidth() {
-  liveContentWidthRestoreRef?.();
+  const restore = liveContentWidthRestoreRef;
+  const locked = liveContentWidthSubject;
   liveContentWidthRestoreRef = null;
+  liveContentWidthSubject = null;
+  if (!restore && !locked) return;
+  if (restore && locked?.isConnected) {
+    restore();
+    return;
+  }
+  // Remount can detach the locked subject — clear compare locks on the
+  // current root child so soft-hide restores natural component width.
+  const current = resolveStoryCanvas()?.querySelector(":scope > *");
+  if (current instanceof HTMLElement) {
+    current.style.removeProperty("width");
+    current.style.removeProperty("max-width");
+    current.style.removeProperty("min-width");
+  }
 }
 
 function measureCanvasInsets(canvasElement: HTMLElement): {
@@ -341,23 +379,35 @@ function measureCanvasInsets(canvasElement: HTMLElement): {
  * content inside short compare panes. Collapse that while split is active.
  */
 function lockLiveCanvasForSplit(canvasElement: HTMLElement) {
-  liveCanvasSplitRestoreRef?.();
+  unlockLiveCanvasForSplit();
   const prev = {
     minHeight: canvasElement.style.minHeight,
     height: canvasElement.style.height,
   };
   canvasElement.style.minHeight = "0";
   canvasElement.style.height = "auto";
+  liveCanvasSplitSubject = canvasElement;
   liveCanvasSplitRestoreRef = () => {
     canvasElement.style.minHeight = prev.minHeight;
     canvasElement.style.height = prev.height;
-    liveCanvasSplitRestoreRef = null;
   };
 }
 
 function unlockLiveCanvasForSplit() {
-  liveCanvasSplitRestoreRef?.();
+  const restore = liveCanvasSplitRestoreRef;
+  const locked = liveCanvasSplitSubject;
   liveCanvasSplitRestoreRef = null;
+  liveCanvasSplitSubject = null;
+  if (!restore && !locked) return;
+  if (restore && locked?.isConnected) {
+    restore();
+    return;
+  }
+  const canvas = resolveStoryCanvas();
+  if (canvas instanceof HTMLElement) {
+    canvas.style.removeProperty("min-height");
+    canvas.style.removeProperty("height");
+  }
 }
 
 const HIDE_PANE_SCROLLBAR_STYLE_ID = "visual-delta-hide-pane-scrollbars";
@@ -1223,57 +1273,41 @@ function applySelection(attempt: number, generation = selectionGeneration) {
   watchLayout(overlay);
 }
 
-/**
- * Permanent channel listener — must outlive FORCE_REMOUNT / GOTO.
- * Decorator `useChannel` unsubscribes on unmount, which is exactly when the
- * panel re-emits SELECT_IMAGE for interaction baselines.
- */
-export function ensureOverlayChannel(): void {
-  if (overlayChannelInstalled) return;
-  if (typeof window === "undefined") return;
-  overlayChannelInstalled = true;
+function syncOverlayChannelApi(): void {
   const channel = addons.getChannel();
 
-  channel.on(
-    SET_CURRENT_STORY,
-    (payload?: { viewMode?: string; storyId?: string }) => {
-      clearOverlayForNonStoryView(payload?.viewMode);
-    },
-  );
-  channel.on(DOCS_PREPARED, () => {
+  overlayChannelApi.onSetCurrentStory = (payload) => {
+    clearOverlayForNonStoryView(payload?.viewMode);
+  };
+  overlayChannelApi.onDocsPrepared = () => {
     previewViewMode = "docs";
     clearOverlay();
-  });
-  channel.on(DOCS_RENDERED, () => {
+  };
+  overlayChannelApi.onDocsRendered = () => {
     previewViewMode = "docs";
     clearOverlay();
-  });
-
-  channel.on(
-    EVENTS.SELECT_IMAGE,
-    (data: { index: number; images?: VisualDeltaImage[] }) => {
-      if (
-        data.index === -1 ||
-        !data.images ||
-        data.index >= data.images.length
-      ) {
-        clearOverlay();
-        return;
-      }
-      // Panel can race Docs navigation and re-SELECT after soft leave.
-      if (!isStoryPreviewMode(previewViewMode)) {
-        clearOverlay();
-        return;
-      }
-      const selectedImageItem = data.images[data.index];
-      if (!selectedImageItem) return;
-      selectionGeneration += 1;
-      lastSelection = { index: data.index, images: data.images };
-      applySelection(0, selectionGeneration);
-    },
-  );
-
-  channel.on(EVENTS.RESET_OVERLAY, () => {
+  };
+  overlayChannelApi.onSelectImage = (data) => {
+    if (
+      data.index === -1 ||
+      !data.images ||
+      data.index >= data.images.length
+    ) {
+      clearOverlay();
+      return;
+    }
+    // Panel can race Docs navigation and re-SELECT after soft leave.
+    if (!isStoryPreviewMode(previewViewMode)) {
+      clearOverlay();
+      return;
+    }
+    const selectedImageItem = data.images[data.index];
+    if (!selectedImageItem) return;
+    selectionGeneration += 1;
+    lastSelection = { index: data.index, images: data.images };
+    applySelection(0, selectionGeneration);
+  };
+  overlayChannelApi.onResetOverlay = () => {
     const overlay = document.getElementById(OVERLAY_ID);
     if (!overlay || !lastSelection) return;
     const imageItem = lastSelection.images[lastSelection.index];
@@ -1284,56 +1318,46 @@ export function ensureOverlayChannel(): void {
       null,
       selectionGeneration,
     );
-  });
-
-  channel.on(
-    EVENTS.UPDATE_OVERLAY_STYLE,
-    (data: {
-      opacity: number;
-      colorInversion: boolean;
-      placement?: PlacementMode;
-      liveVisible?: boolean;
-    }) => {
-      currentOpacity = data.opacity;
-      currentColorInversion = data.colorInversion;
-      if (typeof data.liveVisible === "boolean") {
-        currentLiveVisible = data.liveVisible;
-      }
-      if (data.placement) {
-        currentPlacement = normalizePlacement(data.placement);
-        if (lastSelection) {
-          const item = lastSelection.images[lastSelection.index];
-          if (item) {
-            lastSelection.images[lastSelection.index] = {
-              ...item,
-              placement: currentPlacement,
-            };
-          }
+  };
+  overlayChannelApi.onUpdateOverlayStyle = (data) => {
+    currentOpacity = data.opacity;
+    currentColorInversion = data.colorInversion;
+    if (typeof data.liveVisible === "boolean") {
+      currentLiveVisible = data.liveVisible;
+    }
+    if (data.placement) {
+      currentPlacement = normalizePlacement(data.placement);
+      if (lastSelection) {
+        const item = lastSelection.images[lastSelection.index];
+        if (item) {
+          lastSelection.images[lastSelection.index] = {
+            ...item,
+            placement: currentPlacement,
+          };
         }
       }
-      const overlay = document.getElementById(OVERLAY_ID);
-      if (overlay) {
-        styleOverlayForMode(overlay, currentPlacement);
-        updateOverlayStyle(overlay);
+    }
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) {
+      styleOverlayForMode(overlay, currentPlacement);
+      updateOverlayStyle(overlay);
+    }
+    if (overlay && lastSelection) {
+      const imageItem = lastSelection.images[lastSelection.index];
+      if (imageItem) {
+        scheduleOverlayPosition(
+          overlay,
+          imageItem,
+          null,
+          selectionGeneration,
+        );
       }
-      if (overlay && lastSelection) {
-        const imageItem = lastSelection.images[lastSelection.index];
-        if (imageItem) {
-          scheduleOverlayPosition(
-            overlay,
-            imageItem,
-            null,
-            selectionGeneration,
-          );
-        }
-      } else {
-        const canvasElement = resolveStoryCanvas();
-        if (canvasElement) applyLiveVisibility(canvasElement);
-      }
-    },
-  );
-
-  channel.on(EVENTS.HIDE_OVERLAY, () => {
+    } else {
+      const canvasElement = resolveStoryCanvas();
+      if (canvasElement) applyLiveVisibility(canvasElement);
+    }
+  };
+  overlayChannelApi.onHideOverlay = () => {
     // Soft-hide keeps lastSelection (panel index) but tears down overlay +
     // split panes so the live canvas reclaims full preview space.
     selectionGeneration += 1;
@@ -1343,9 +1367,8 @@ export function ensureOverlayChannel(): void {
         channel.emit(EVENTS.OVERLAY_HIDDEN, {});
       });
     });
-  });
-
-  channel.on(EVENTS.SHOW_OVERLAY, () => {
+  };
+  overlayChannelApi.onShowOverlay = () => {
     if (!isStoryPreviewMode(previewViewMode)) {
       clearOverlay();
       return;
@@ -1364,6 +1387,65 @@ export function ensureOverlayChannel(): void {
     if (baselinePane instanceof HTMLElement) {
       baselinePane.style.visibility = "";
     }
+  };
+}
+
+/**
+ * Permanent channel listener — must outlive FORCE_REMOUNT / GOTO.
+ * Decorator `useChannel` unsubscribes on unmount, which is exactly when the
+ * panel re-emits SELECT_IMAGE for interaction baselines.
+ *
+ * Handlers are installed once via {@link overlayChannelApi} so Vite HMR can
+ * refresh teardown logic without leaving a stale soft-hide listener that only
+ * toggled visibility and kept split panes.
+ */
+export function ensureOverlayChannel(): void {
+  if (typeof window === "undefined") return;
+  syncOverlayChannelApi();
+  if (overlayChannelInstalled) return;
+  overlayChannelInstalled = true;
+  const channel = addons.getChannel();
+
+  channel.on(SET_CURRENT_STORY, (payload?: { viewMode?: string; storyId?: string }) => {
+    overlayChannelApi.onSetCurrentStory(payload);
+  });
+  channel.on(DOCS_PREPARED, () => {
+    overlayChannelApi.onDocsPrepared();
+  });
+  channel.on(DOCS_RENDERED, () => {
+    overlayChannelApi.onDocsRendered();
+  });
+  channel.on(
+    EVENTS.SELECT_IMAGE,
+    (data: { index: number; images?: VisualDeltaImage[] }) => {
+      overlayChannelApi.onSelectImage(data);
+    },
+  );
+  channel.on(EVENTS.RESET_OVERLAY, () => {
+    overlayChannelApi.onResetOverlay();
+  });
+  channel.on(
+    EVENTS.UPDATE_OVERLAY_STYLE,
+    (data: {
+      opacity: number;
+      colorInversion: boolean;
+      placement?: PlacementMode;
+      liveVisible?: boolean;
+    }) => {
+      overlayChannelApi.onUpdateOverlayStyle(data);
+    },
+  );
+  channel.on(EVENTS.HIDE_OVERLAY, () => {
+    overlayChannelApi.onHideOverlay();
+  });
+  channel.on(EVENTS.SHOW_OVERLAY, () => {
+    overlayChannelApi.onShowOverlay();
+  });
+}
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    syncOverlayChannelApi();
   });
 }
 
