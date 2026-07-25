@@ -74,14 +74,22 @@ function ensureStorybookStatic(
 ): void {
   const indexPath = path.join(root, "storybook-static", "index.json");
   const iframePath = path.join(root, "storybook-static", "iframe.html");
-  if (existsSync(indexPath) && existsSync(iframePath)) return;
+  const complete = existsSync(indexPath) && existsSync(iframePath);
+
+  // Playwright captures against storybook-static, not the live Storybook
+  // server. Create/update must rebuild unless the caller passes --skip-build
+  // (agents that already rebuilt, or tag-only paths).
   if (skipBuild) {
-    throw new Error(
-      !existsSync(indexPath)
-        ? "storybook-static/index.json missing — run build-storybook first"
-        : "storybook-static incomplete (missing iframe.html) — run build-storybook",
-    );
+    if (!complete) {
+      throw new Error(
+        !existsSync(indexPath)
+          ? "storybook-static/index.json missing — run build-storybook first"
+          : "storybook-static incomplete (missing iframe.html) — run build-storybook",
+      );
+    }
+    return;
   }
+
   execFileSync("pnpm", ["build-storybook"], {
     cwd: root,
     stdio: "inherit",
