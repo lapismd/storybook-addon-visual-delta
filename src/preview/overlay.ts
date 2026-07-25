@@ -26,6 +26,10 @@ import {
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
 import { resolvePaintedBackground } from "../shared/preview-background.js";
+import {
+  ensureOverlayChip,
+  syncModeBadge,
+} from "../shared/preview-chip.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
 const SPLIT_ID = "visual-delta-split";
@@ -165,68 +169,6 @@ function getOverlayChannelApi(): OverlayChannelApi {
 }
 
 const overlayChannelApi = getOverlayChannelApi();
-
-const MODE_BADGE_ID = "visual-delta-mode-badge";
-/** Chip on the baseline overlay element — rides with drag transforms. */
-const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
-
-/** Shared paint for Image-only (fixed) and Baseline (on-overlay). */
-const PREVIEW_CHIP_PAINT = `
-  z-index: 10000;
-  padding: 3px 8px;
-  font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
-  color: #fff;
-  background: rgba(2, 97, 198, 0.92);
-  border-radius: 4px;
-  pointer-events: none;
-  user-select: none;
-`;
-
-function syncModeBadge(imageOnly: boolean) {
-  let badge = document.getElementById(MODE_BADGE_ID);
-  if (!imageOnly) {
-    badge?.remove();
-    return;
-  }
-  if (!(badge instanceof HTMLElement)) {
-    badge = document.createElement("div");
-    badge.id = MODE_BADGE_ID;
-    badge.textContent = "Image only";
-    document.documentElement.appendChild(badge);
-  }
-  badge.style.cssText = `
-    position: fixed;
-    top: 8px;
-    left: 8px;
-    ${PREVIEW_CHIP_PAINT}
-  `;
-}
-
-/**
- * Attach a Baseline chip to the overlay root (sibling of the PNG). Same paint
- * as Image-only; absolute so it moves with overlay drag transforms. Opacity /
- * difference blend stay on the `<img>` so the chip stays solid.
- */
-function ensureOverlayChip(overlay: HTMLElement) {
-  // Drop any leftover fixed badge from earlier experiments.
-  document.getElementById("visual-delta-overlay-badge")?.remove();
-  let chip = overlay.querySelector(`:scope > #${OVERLAY_CHIP_ID}`);
-  if (!(chip instanceof HTMLElement)) {
-    document.getElementById(OVERLAY_CHIP_ID)?.remove();
-    chip = document.createElement("div");
-    chip.id = OVERLAY_CHIP_ID;
-    chip.textContent = "Baseline";
-    overlay.appendChild(chip);
-  } else if (chip.textContent !== "Baseline") {
-    chip.textContent = "Baseline";
-  }
-  chip.style.cssText = `
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    ${PREVIEW_CHIP_PAINT}
-  `;
-}
 
 function applyLiveVisibility(canvasElement: HTMLElement) {
   const imageOnly = !currentLiveVisible;
@@ -1067,6 +1009,9 @@ function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
       transform: translate(0px, 0px);
     `;
   }
+  // cssText on the overlay must not leave a stale/missing Baseline chip —
+  // re-attach after every mode style pass (split left/right/above/below + center).
+  ensureOverlayChip(overlay);
 }
 
 function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
@@ -1168,6 +1113,8 @@ function applyOverlayPosition(
       baselinePane.appendChild(overlay);
     }
     overlay.style.transform = "none";
+    // Chip rides on the overlay inside the baseline pane for left/right/above/below.
+    ensureOverlayChip(overlay);
     applyLiveVisibility(canvasElement);
     return;
   }

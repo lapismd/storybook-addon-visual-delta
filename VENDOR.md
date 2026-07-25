@@ -64,6 +64,10 @@ use:
 - **Subject with vertical margin** — canvas pad 24 + subject `my-2` (8) →
   baseline pane padding-top 32; play asserts Δ top ≈ 0.
 - **Subject without margin** — padding-top 24; Δ top ≈ 0.
+- **Baseline chip on overlay placements** — `OverlayChipDemo` mounts the same
+  `ensureOverlayChip` helper as the preview for left/right/above/below (split)
+  and center; play asserts five visible “Baseline” chips on the overlay image
+  (not the live pane).
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
   `index` or placement; pad shows nothing pressed and preview tears down
   overlay/split DOM so the live subject unlocks to natural width/height.
