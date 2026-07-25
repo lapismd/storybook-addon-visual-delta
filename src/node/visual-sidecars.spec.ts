@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   baselinePngExistsForStoryId,
   baselinePngPathForStoryId,
+  syncStaticIndexSkipVisual,
 } from "./visual-sidecars.js";
 
 describe("baselinePngExistsForStoryId", () => {
@@ -54,5 +55,45 @@ describe("baselinePngExistsForStoryId", () => {
         "nested-import",
       ),
     ).toBe(true);
+  });
+});
+
+describe("syncStaticIndexSkipVisual", () => {
+  it("removes skip-visual from matching index entries", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-index-"));
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    const indexPath = path.join(root, "storybook-static", "index.json");
+    writeFileSync(
+      indexPath,
+      JSON.stringify({
+        entries: {
+          "forms-input--error": {
+            id: "forms-input--error",
+            type: "story",
+            tags: ["dev", "skip-visual", "test"],
+          },
+          "forms-input--default": {
+            id: "forms-input--default",
+            type: "story",
+            tags: ["dev", "test"],
+          },
+        },
+      }),
+    );
+
+    const result = syncStaticIndexSkipVisual(
+      root,
+      ["forms-input--error", "forms-input--default"],
+      false,
+    );
+    expect(result.updated).toEqual(["forms-input--error"]);
+    const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as {
+      entries: Record<string, { tags?: string[] }>;
+    };
+    expect(parsed.entries["forms-input--error"]?.tags).toEqual(["dev", "test"]);
+    expect(parsed.entries["forms-input--default"]?.tags).toEqual([
+      "dev",
+      "test",
+    ]);
   });
 });
