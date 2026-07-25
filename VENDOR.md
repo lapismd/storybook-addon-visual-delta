@@ -70,6 +70,17 @@ use:
 - **INIT after soft-hide** — `initImageSelection` keeps gallery `index` when
   baselines exist even if persisted `overlayOn` is false, so Diff / DiffResult
   still resolve `baselineStem` (panel body is not toolbar-only).
+- **Accordion compare fill** — `PanelShell` absolutely fills the AddonPanel;
+  expanded `SectionBody` completes the PanelBody → List → Section flex chain
+  (`flex: 1`, `minHeight: 0`, `overflow: auto`) so placement toolbar stays above
+  2-up tabs. Compare / DiffResult use `flex: 1 1 auto` with
+  `minHeight: min-content` so the stage fills leftover height without collapsing
+  to a nested 0-height scrollport; overflow scrolls inside `SectionBody` (no
+  scroll-past-toolbar / auto review layout). Swipe/Diff/Focus/Blink share one
+  aspect-locked stage so baseline and new stay pixel-aligned.
+- **Playwright sidecar artifacts** — portable `defineVisualSuite` writes
+  gitignored `*.json` / `*.actual.png` / `*.diff.png` beside baselines so the
+  panel reloads DiffResult after a backend compare without re-running live Diff.
 
 Storybook title **`Visual Delta/Panel Chrome`** mounts the real React panel
 controls via `ReactThemeHost.svelte` (`createRoot` + Storybook light theme) and

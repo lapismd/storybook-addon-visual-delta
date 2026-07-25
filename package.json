@@ -54,10 +54,12 @@
   "dependencies": {
     "@storybook/icons": "^2.1.0",
     "html-to-image": "^1.11.13",
-    "pixelmatch": "^7.1.0"
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/pngjs": "^6.0.5",
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
