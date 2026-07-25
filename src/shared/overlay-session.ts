@@ -34,11 +34,11 @@ export function opacityForPlacementChange(
 }
 
 /**
- * Placement pad: active position again → soft-hide (keep selection / layout).
+ * Placement pad: active position again → soft-hide (keep selection).
  * Otherwise show overlay at the chosen placement.
  *
- * Soft-hide must not clear `index` — that tore down split + width lock and
- * made the live subject jump.
+ * Soft-hide must not clear `index` (gallery selection stays for re-show), but
+ * the preview tears down overlay/split DOM so the live canvas reclaims space.
  */
 export function placementToggleAction(
   prev: OverlaySessionSnapshot,

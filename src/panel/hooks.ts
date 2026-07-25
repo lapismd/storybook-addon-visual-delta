@@ -389,16 +389,33 @@ export function useStoryData() {
       // Decorator remounted after GOTO / FORCE_REMOUNT — push current selection
       // again now that the preview listener is subscribed.
       setStoryData((prev) => {
-        if (payload?.storyId && prev.storyId && payload.storyId !== prev.storyId) {
+        // Preview moved to a different story than panel state — clear the stale
+        // overlay and ask for INIT instead of re-painting the previous baseline.
+        if (
+          payload?.storyId &&
+          prev.storyId &&
+          payload.storyId !== prev.storyId
+        ) {
+          emitRef.current?.(EVENTS.REQUEST_INIT_IMAGE, {
+            storyId: payload.storyId,
+          });
+          void selectImage(-1, []);
           return prev;
         }
         // Preview just came up without INIT reaching us — ask again.
-        if (!prev.storyId || (payload?.storyId && prev.storyId !== payload.storyId)) {
+        if (
+          !prev.storyId ||
+          (payload?.storyId && prev.storyId !== payload.storyId)
+        ) {
           emitRef.current?.(EVENTS.REQUEST_INIT_IMAGE, {
             storyId: payload?.storyId,
           });
         }
-        if (prev.index < 0 || prev.images.length === 0) return prev;
+        if (prev.index < 0 || prev.images.length === 0 || !prev.overlayOn) {
+          // No baseline, or soft-hidden — keep panel index but leave preview clear.
+          void selectImage(-1, []);
+          return prev;
+        }
         emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
           opacity: prev.opacity,
           colorInversion: prev.colorInversion,
@@ -504,8 +521,8 @@ export function useStoryData() {
 
   /**
    * Direction pad: pick a position (shows overlay), or click the active
-   * position again to soft-hide the overlay without tearing down compare
-   * layout (width lock / split panes) so the live subject does not jump.
+   * position again to soft-hide. Soft-hide keeps gallery selection but tears
+   * down overlay/split DOM so the live canvas reclaims full preview space.
    */
   const togglePlacement = useCallback(
     (placement: PlacementMode) => {
@@ -821,6 +838,9 @@ export function useStoryData() {
         if (hasImages) {
           emitStyle(next);
           void selectImage(next.index, images);
+        } else if (prev.storyId !== storyId) {
+          // New story with no baselines — clear any previous story's overlay.
+          void selectImage(-1, []);
         }
         return next;
       });

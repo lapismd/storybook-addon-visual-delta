@@ -32,6 +32,8 @@ describe("opacityForPlacementChange", () => {
 
 describe("placementToggleAction", () => {
   it("soft-hides when the active placement is pressed again", () => {
+    // Soft-hide keeps gallery index in panel state; preview tears down DOM
+    // separately so the live canvas can reclaim space.
     expect(placementToggleAction(base, "right")).toEqual({ type: "soft-hide" });
   });
 

@@ -65,7 +65,8 @@ use:
   baseline pane padding-top 32; play asserts Δ top ≈ 0.
 - **Subject without margin** — padding-top 24; Δ top ≈ 0.
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
-  `index`; reveal-center matches post create/update.
+  `index`, but tears down overlay/split DOM so the live canvas reclaims space;
+  reveal-center matches post create/update.
 
 Storybook title **`Visual Delta/Panel Chrome`** mounts the real React panel
 controls via `ReactThemeHost.svelte` (`createRoot` + Storybook light theme) and
@@ -173,9 +174,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   popover); on success the panel enables a center overlay with the refreshed
   baseline. Log popovers use monospace.
 - **Placement pad hide** — Clicking the active position soft-hides the baseline
-  (`visibility: hidden`) without tearing down split panes or unlocking the
-  subject width lock, so the live component does not jump. Selection stays;
-  click again to show. Persisted as `overlayOn` in localStorage.
+  by tearing down overlay + split panes (live canvas reclaims full space) while
+  keeping gallery `index` so click-again rebuilds. Persisted as `overlayOn` in
+  localStorage. Story changes clear selection so a story without baselines does
+  not keep showing the previous PNG.
 - **Image only (eye)** — Unselected by default. When selected: hides the live
   story, the baseline gallery (overlay selector), and the placement pad; forces
   center overlay (still draggable). An “Image only” chip marks the mode in the
