@@ -19,14 +19,18 @@ import {
 const List = styled.div({
   display: "flex",
   flexDirection: "column",
+  flex: 1,
+  minHeight: 0,
   marginBottom: "0.5rem",
 });
 
 /** Per-section wrapper so sticky summaries are constrained to their body. */
-const Section = styled.div({
+const Section = styled.div<{ $expanded?: boolean }>(({ $expanded }) => ({
   display: "flex",
   flexDirection: "column",
-});
+  // Expanded section consumes remaining panel height; collapsed stays content-sized.
+  ...($expanded ? { flex: 1, minHeight: 0 } : null),
+}));
 
 const SummaryButton = styled.button<{ $expanded?: boolean }>(
   ({ theme, $expanded }) => ({
@@ -134,6 +138,9 @@ const SummaryActions = styled.div({
 });
 
 const SectionBody = styled.div(({ theme }) => ({
+  flex: 1,
+  minHeight: 0,
+  overflow: "auto",
   padding: "12px 16px 16px",
   borderBottom: `1px solid ${theme.appBorderColor}`,
   background: panelCanvasBackground(theme),
@@ -221,7 +228,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
         const expanded = expandedId === section.id;
         const hasDiff = Boolean(section.status && section.stats);
         return (
-          <Section key={section.id}>
+          <Section key={section.id} $expanded={expanded}>
             {/*
               Avoid Storybook Collapsible’s opacity/translate transition —
               swapping sections animated both collapse + expand and felt like

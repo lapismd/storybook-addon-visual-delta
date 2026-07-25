@@ -66,10 +66,12 @@ function saveViewZoom(zoom: number): void {
 const Root = styled.div({
   display: "flex",
   flexDirection: "column",
+  // Fill leftover SectionBody height when there is room; keep content-sized
+  // minimum so accordion `overflow: auto` scrolls toolbar → tabs → images.
+  flex: "1 1 auto",
+  minHeight: "min-content",
   gap: "0.5rem",
   outline: "none",
-  // Scrollport when view zoom grows the stage past the host.
-  overflow: "auto",
 });
 
 const Toolbar = styled.div({
@@ -120,6 +122,8 @@ const Stage = styled.div({
 const Stack = styled.div(({ theme }) => ({
   position: "relative",
   width: "100%",
+  // Height comes from `aspect-ratio` (see stackStyle). All layer images are
+  // absolutely positioned so natural PNG sizes cannot desync Swipe/Diff/Focus/Blink.
   lineHeight: 0,
   overflow: "hidden",
   outline: `1px solid ${theme.appBorderColor}`,
@@ -128,11 +132,14 @@ const Stack = styled.div(({ theme }) => ({
   ...checkerboard,
 }));
 
+/** Fills the aspect-locked Stack — DiffResult pads/crops to one bitmap size. */
 const LayerImg = styled.img({
   display: "block",
+  position: "absolute",
+  inset: 0,
   width: "100%",
-  height: "auto",
-  objectFit: "contain",
+  height: "100%",
+  objectFit: "fill",
   pointerEvents: "none",
 });
 
@@ -146,7 +153,7 @@ const TopImg = styled.img({
   display: "block",
   width: "100%",
   height: "100%",
-  objectFit: "contain",
+  objectFit: "fill",
   pointerEvents: "none",
 });
 
@@ -296,13 +303,22 @@ export function CompareView({
 
   const stackStyle = useMemo(() => {
     if (imageWidth < 1 || imageHeight < 1) {
-      return { width: "100%" as const, maxHeight: stageMaxHeight };
+      return {
+        width: "100%" as const,
+        maxHeight: stageMaxHeight,
+        // Fallback box so absolute LayerImgs still paint when dims are unknown.
+        minHeight: 120,
+      };
     }
+    // Cap height without breaking aspect: shrink width when maxHeight binds.
+    const maxWidthFromHeight = `min(100%, ${(stageMaxHeight * imageWidth) / imageHeight}px)`;
     return {
-      width: "100%" as const,
+      width: maxWidthFromHeight,
+      maxWidth: "100%" as const,
       height: "auto" as const,
-      maxHeight: stageMaxHeight,
       aspectRatio: `${imageWidth} / ${imageHeight}`,
+      maxHeight: stageMaxHeight,
+      margin: "0 auto" as const,
     };
   }, [imageWidth, imageHeight, stageMaxHeight]);
 
