@@ -99,8 +99,20 @@ let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
 let currentLiveVisible = true;
 let currentOpacity = 0.5;
 let currentColorInversion = false;
-/** Survives FORCE_REMOUNT — decorator useChannel does not. */
-let overlayChannelInstalled = false;
+/** Survives FORCE_REMOUNT / Vite HMR — decorator useChannel does not. */
+const OVERLAY_CHANNEL_INSTALLED_KEY = "__visualDeltaOverlayChannelInstalled";
+function isOverlayChannelInstalled(): boolean {
+  return Boolean(
+    (globalThis as typeof globalThis & Record<string, unknown>)[
+      OVERLAY_CHANNEL_INSTALLED_KEY
+    ],
+  );
+}
+function markOverlayChannelInstalled() {
+  (globalThis as typeof globalThis & Record<string, unknown>)[
+    OVERLAY_CHANNEL_INSTALLED_KEY
+  ] = true;
+}
 /**
  * Last viewMode from SET_CURRENT_STORY. Used to ignore SELECT/SHOW while Docs
  * (or other non-story modes) own the preview iframe.
@@ -114,22 +126,47 @@ function isStoryPreviewMode(viewMode: string | null | undefined): boolean {
 /**
  * Indirection so Vite HMR can replace handler bodies without stacking stale
  * `channel.on` listeners (which would keep pre-teardown soft-hide behavior).
+ * Stored on globalThis so accept() updates the same bag the permanent
+ * channel.on closures close over (module-local consts are replaced on HMR).
  */
-const overlayChannelApi = {
-  onSetCurrentStory(_payload?: { viewMode?: string; storyId?: string }) {},
-  onDocsPrepared() {},
-  onDocsRendered() {},
-  onSelectImage(_data: { index: number; images?: VisualDeltaImage[] }) {},
-  onResetOverlay() {},
-  onUpdateOverlayStyle(_data: {
+type OverlayChannelApi = {
+  onSetCurrentStory(payload?: { viewMode?: string; storyId?: string }): void;
+  onDocsPrepared(): void;
+  onDocsRendered(): void;
+  onSelectImage(data: { index: number; images?: VisualDeltaImage[] }): void;
+  onResetOverlay(): void;
+  onUpdateOverlayStyle(data: {
     opacity: number;
     colorInversion: boolean;
     placement?: PlacementMode;
     liveVisible?: boolean;
-  }) {},
-  onHideOverlay() {},
-  onShowOverlay() {},
+  }): void;
+  onHideOverlay(): void;
+  onShowOverlay(): void;
 };
+
+const OVERLAY_CHANNEL_API_KEY = "__visualDeltaOverlayChannelApi";
+
+function getOverlayChannelApi(): OverlayChannelApi {
+  const g = globalThis as typeof globalThis & {
+    [OVERLAY_CHANNEL_API_KEY]?: OverlayChannelApi;
+  };
+  if (!g[OVERLAY_CHANNEL_API_KEY]) {
+    g[OVERLAY_CHANNEL_API_KEY] = {
+      onSetCurrentStory() {},
+      onDocsPrepared() {},
+      onDocsRendered() {},
+      onSelectImage() {},
+      onResetOverlay() {},
+      onUpdateOverlayStyle() {},
+      onHideOverlay() {},
+      onShowOverlay() {},
+    };
+  }
+  return g[OVERLAY_CHANNEL_API_KEY];
+}
+
+const overlayChannelApi = getOverlayChannelApi();
 
 const MODE_BADGE_ID = "visual-delta-mode-badge";
 
@@ -945,27 +982,25 @@ function ensureSplit(
   return { livePane, baselinePane };
 }
 
-/** Tiny photo icon — marks the baseline PNG on top of / beside live. */
-function overlayChipIconSvg(): string {
-  return `<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
-  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
-  <circle cx="5.5" cy="6.25" r="1.15" fill="currentColor"/>
-  <path d="M2.75 12.25l3.25-3.25 2.25 2.25 2.75-3.25 2.25 3.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-</svg>`;
-}
-
+/**
+ * Icon-only chip on the baseline PNG. Uses a text glyph (no innerHTML) so
+ * Storybook / Trusted Types cannot strip the mark.
+ */
 function ensureOverlayChip(overlay: HTMLElement) {
-  let chip = document.getElementById(OVERLAY_CHIP_ID);
-  if (!(chip instanceof HTMLElement) || chip.parentElement !== overlay) {
-    chip?.remove();
+  let chip = overlay.querySelector(`:scope > #${OVERLAY_CHIP_ID}`);
+  if (!(chip instanceof HTMLElement)) {
+    document.getElementById(OVERLAY_CHIP_ID)?.remove();
     chip = document.createElement("div");
     chip.id = OVERLAY_CHIP_ID;
     chip.setAttribute("role", "img");
     chip.setAttribute("aria-label", "Baseline overlay");
     chip.title = "Baseline overlay";
-    chip.innerHTML = overlayChipIconSvg();
+    chip.textContent = "B";
     overlay.appendChild(chip);
+  } else if (chip.textContent !== "B") {
+    chip.textContent = "B";
   }
+  // Keep the chip above the PNG and out of blend/opacity on the image.
   chip.style.cssText = `
     position: absolute;
     top: 4px;
@@ -974,13 +1009,19 @@ function ensureOverlayChip(overlay: HTMLElement) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
+    font: 700 11px/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0;
     color: #fff;
-    background: rgba(2, 97, 198, 0.92);
+    background: #0261c6;
+    border: 1px solid rgba(255, 255, 255, 0.9);
     border-radius: 4px;
     pointer-events: none;
     user-select: none;
+    isolation: isolate;
+    mix-blend-mode: normal;
+    opacity: 1;
   `;
 }
 
@@ -1048,8 +1089,9 @@ function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
 
 function updateOverlayStyle(overlay: HTMLElement | null) {
   if (!overlay) return;
+  ensureOverlayChip(overlay);
   // Blend/opacity on the PNG only so the identification chip stays crisp.
-  const img = overlay.querySelector("img");
+  const img = overlay.querySelector(":scope > img");
   overlay.style.mixBlendMode = "normal";
   overlay.style.opacity = "1";
   if (!(img instanceof HTMLImageElement)) return;
@@ -1285,6 +1327,7 @@ function applySelection(attempt: number, generation = selectionGeneration) {
 
   currentPlacement = effectivePlacement(selectedImageItem);
   const overlay = ensureOverlayElement();
+  ensureOverlayChip(overlay);
   styleOverlayForMode(overlay, currentPlacement);
   updateOverlayStyle(overlay);
   overlay.style.visibility = "";
@@ -1449,28 +1492,29 @@ function syncOverlayChannelApi(): void {
  */
 export function ensureOverlayChannel(): void {
   if (typeof window === "undefined") return;
+  const api = getOverlayChannelApi();
   syncOverlayChannelApi();
-  if (overlayChannelInstalled) return;
-  overlayChannelInstalled = true;
+  if (isOverlayChannelInstalled()) return;
+  markOverlayChannelInstalled();
   const channel = addons.getChannel();
 
   channel.on(SET_CURRENT_STORY, (payload?: { viewMode?: string; storyId?: string }) => {
-    overlayChannelApi.onSetCurrentStory(payload);
+    api.onSetCurrentStory(payload);
   });
   channel.on(DOCS_PREPARED, () => {
-    overlayChannelApi.onDocsPrepared();
+    api.onDocsPrepared();
   });
   channel.on(DOCS_RENDERED, () => {
-    overlayChannelApi.onDocsRendered();
+    api.onDocsRendered();
   });
   channel.on(
     EVENTS.SELECT_IMAGE,
     (data: { index: number; images?: VisualDeltaImage[] }) => {
-      overlayChannelApi.onSelectImage(data);
+      api.onSelectImage(data);
     },
   );
   channel.on(EVENTS.RESET_OVERLAY, () => {
-    overlayChannelApi.onResetOverlay();
+    api.onResetOverlay();
   });
   channel.on(
     EVENTS.UPDATE_OVERLAY_STYLE,
@@ -1480,14 +1524,14 @@ export function ensureOverlayChannel(): void {
       placement?: PlacementMode;
       liveVisible?: boolean;
     }) => {
-      overlayChannelApi.onUpdateOverlayStyle(data);
+      api.onUpdateOverlayStyle(data);
     },
   );
   channel.on(EVENTS.HIDE_OVERLAY, () => {
-    overlayChannelApi.onHideOverlay();
+    api.onHideOverlay();
   });
   channel.on(EVENTS.SHOW_OVERLAY, () => {
-    overlayChannelApi.onShowOverlay();
+    api.onShowOverlay();
   });
 }
 

@@ -136,7 +136,7 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   the baseline CSS width. Split baseline panes mirror canvas padding **and**
   the subject’s margins (e.g. `my-2`) so side-by-side tops align. Center stacks
   a ghost overlay (opacity / difference blend on the PNG only). A small
-  icon-only chip (top-left on the baseline image) marks the overlay vs live.
+  “B” chip (top-left on the baseline image) marks the overlay vs live.
   Legacy `beside`/`over` map to `right`/`center`. Split panes / scroll rails use
   the live preview’s painted background (canvas → body → `--background`), not
   Storybook chrome `--sb-color-bg`.
