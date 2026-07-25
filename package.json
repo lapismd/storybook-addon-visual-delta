@@ -36,6 +36,7 @@
     "./src/stories/PanelShell": "./src/stories/PanelShell.tsx",
     "./src/stories/TestingModuleShell": "./src/stories/TestingModuleShell.tsx",
     "./src/stories/mock-visual-backend": "./src/stories/mock-visual-backend.ts",
+    "./src/shared/*": "./src/shared/*",
     "./package.json": "./package.json"
   },
   "files": [
