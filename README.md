@@ -340,8 +340,8 @@ skipped, not stamped failed).
 
 | Tag               | Meaning                                                | How it is set                                     |
 | ----------------- | ------------------------------------------------------ | ------------------------------------------------- |
-| `visual-pending`  | Baseline exists; awaiting review                       | Create / rewrite baselines; **Unaccept**          |
-| `visual-ready`    | Agent/dev finished visual work; ready for human review | Panel **Ready** pad, or `tags={["visual-ready"]}` |
+| `visual-pending`  | Baseline exists; awaiting review after unaccept        | **Unaccept**                                      |
+| `visual-ready`    | Agent/dev finished visual work; ready for human review | Create / rewrite baselines; panel **Ready** pad   |
 | `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)             |
 | `visual-failed`   | Review rejected / known bad                            | Panel **Failed** pad                              |
 
@@ -352,11 +352,10 @@ skipped, not stamped failed).
 - **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
   on this pad; use Accept/Unaccept for those).
 
-**Agent guidance:** after updating pixels or stabilizing a story, mark
-`visual-ready` so humans can scan the sidebar for `⚑ Ready`. Do **not** set
-`visual-approved` from agent work — leave Accept to a human. Rewrite / Update
-baselines always resets matching stories to `visual-pending` (clears approved
-and ready).
+**Agent guidance:** Create / Update baselines stamp `visual-ready` (and clear
+`visual-pending` / approved / failed) so humans can scan the sidebar for
+`⚑ Ready`. Do **not** set `visual-approved` from agent work — leave Accept to
+a human. **Unaccept** returns a story to `visual-pending`.
 
 ### `skip-visual` from the panel
 

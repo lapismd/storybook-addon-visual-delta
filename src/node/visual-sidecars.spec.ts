@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   baselinePngExistsForStoryId,
   baselinePngPathForStoryId,
+  syncStaticIndexReviewStatus,
   syncStaticIndexSkipVisual,
 } from "./visual-sidecars.js";
 
@@ -94,6 +95,63 @@ describe("syncStaticIndexSkipVisual", () => {
     expect(parsed.entries["forms-input--default"]?.tags).toEqual([
       "dev",
       "test",
+    ]);
+  });
+
+  it("clears review tags when marking skip-visual on the index", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-index-skip-"));
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    const indexPath = path.join(root, "storybook-static", "index.json");
+    writeFileSync(
+      indexPath,
+      JSON.stringify({
+        entries: {
+          "forms-input--error": {
+            id: "forms-input--error",
+            type: "story",
+            tags: ["dev", "visual-pending", "visual-ready"],
+          },
+        },
+      }),
+    );
+    syncStaticIndexSkipVisual(root, ["forms-input--error"], true);
+    const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as {
+      entries: Record<string, { tags?: string[] }>;
+    };
+    expect(parsed.entries["forms-input--error"]?.tags).toEqual([
+      "dev",
+      "skip-visual",
+    ]);
+  });
+});
+
+describe("syncStaticIndexReviewStatus", () => {
+  it("keeps a single review tag on the static index", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-index-review-"));
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    const indexPath = path.join(root, "storybook-static", "index.json");
+    writeFileSync(
+      indexPath,
+      JSON.stringify({
+        entries: {
+          "forms-input--error": {
+            id: "forms-input--error",
+            type: "story",
+            tags: ["dev", "visual-pending", "visual-failed"],
+          },
+        },
+      }),
+    );
+    const result = syncStaticIndexReviewStatus(root, [
+      { storyId: "forms-input--error", status: "ready" },
+    ]);
+    expect(result.updated).toEqual(["forms-input--error"]);
+    const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as {
+      entries: Record<string, { tags?: string[] }>;
+    };
+    expect(parsed.entries["forms-input--error"]?.tags).toEqual([
+      "dev",
+      "visual-ready",
     ]);
   });
 });

@@ -172,10 +172,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   `visual-pending` (orange clock), `visual-ready` (blue flag), `visual-approved`
   (green shield), `visual-failed` (red ✕). Accept / Unaccept set approved /
   pending; the panel pad toggles ready / failed (agents mark `visual-ready`
-  when work is ready for human review). Create-baseline stamps `visual-pending`
-  on newly wired stories that are not already approved. **Rewrite/update**
-  baselines always resets matching stories to `visual-pending` (clears
-  `visual-approved` / `visual-ready`).
+  when work is ready for human review). Create/update baselines stamp
+  `visual-ready` and clear sibling review tags (`visual-pending`,
+  `visual-approved`, `visual-failed`). Tag patchers always normalize via
+  `normalizeVisualStoryTags` and sync `storybook-static/index.json`.
 - **skip-visual** — Panel **More** menu: **Skip visual tests** /
   **Include in visual tests** posts to `/__visual-delta/skip-visual` to add or
   remove the CSF tag on the current story. Adding skip clears review tags.
