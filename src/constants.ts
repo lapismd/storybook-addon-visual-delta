@@ -208,6 +208,9 @@ export const VISUAL_COMPARE_PANE_PAD_PX = 16;
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";
 /** Storybook-dev middleware that creates missing baselines only (no overwrite). */
 export const VISUAL_DELTA_CREATE_PATH = "/__visual-delta/create-baseline";
+/** Storybook-dev middleware that runs `build-storybook` only (no capture). */
+export const VISUAL_DELTA_REBUILD_STATIC_PATH =
+  "/__visual-delta/rebuild-static";
 /**
  * Storybook-dev middleware that creates/updates one mid-play interaction baseline
  * (`?visualCaptureUntil=<stepId>`).

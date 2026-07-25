@@ -7,6 +7,7 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
+  VISUAL_DELTA_REBUILD_STATIC_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_EVENTS_PATH,
   VISUAL_DELTA_RUN_PATH,
@@ -839,12 +840,16 @@ export async function postVisualSkipVisual(body: {
   return data;
 }
 
-export type VisualBaselineJobKind = "create" | "update" | "interaction";
+export type VisualBaselineJobKind =
+  | "create"
+  | "update"
+  | "interaction"
+  | "rebuild";
 
 export type VisualCreateProgress = {
   running: boolean;
   label: string;
-  /** Which baseline write endpoint produced this progress. */
+  /** Which baseline write / rebuild endpoint produced this progress. */
   kind: VisualBaselineJobKind;
   error?: string;
   logTail?: string;
@@ -882,7 +887,7 @@ export type VisualCreateResponse = {
 };
 
 async function postVisualBaselineWrite(
-  kind: VisualBaselineJobKind,
+  kind: Extract<VisualBaselineJobKind, "create" | "update">,
   body: { storyId: string; rebuild?: boolean },
   options?: {
     /** Override the in-flight status label (e.g. `Creating… 1/3`). */
@@ -1172,6 +1177,99 @@ export async function postVisualUpdateBaseline(body: {
   rebuild?: boolean;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("update", body);
+}
+
+/**
+ * Force `pnpm build-storybook` via middleware (no Playwright capture).
+ * Streams logs into the shared create/update progress channel.
+ */
+export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
+  const kind = "rebuild" as const;
+  const runningLabel = "Rebuilding static…";
+  const failedLabel = "Rebuild failed";
+  emitVisualCreateProgress({
+    running: true,
+    label: runningLabel,
+    kind,
+    logTail: "",
+  });
+  try {
+    const response = await fetch(VISUAL_DELTA_REBUILD_STATIC_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+
+    let log = "";
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        log += decoder.decode(value, { stream: true });
+        emitVisualCreateProgress({
+          running: true,
+          label: runningLabel,
+          kind,
+          logTail: log.slice(-12_000),
+        });
+      }
+      log += decoder.decode();
+    } else {
+      log = await response.text();
+    }
+    log = log.trim();
+
+    if (!response.ok) {
+      const error = log || `${failedLabel} (${response.status})`;
+      emitVisualCreateProgress({
+        running: false,
+        label: failedLabel,
+        kind,
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    const exitMatch = log.match(/\[exit (\d+)\]/);
+    if (exitMatch && exitMatch[1] !== "0") {
+      const error = `build-storybook exited with code ${exitMatch[1]}`;
+      emitVisualCreateProgress({
+        running: false,
+        label: failedLabel,
+        kind,
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+
+    emitVisualCreateProgress({
+      running: false,
+      label: "Static rebuilt",
+      kind,
+      logTail: log || undefined,
+    });
+    return { ok: true, log };
+  } catch (error) {
+    if (
+      latestCreateProgress?.running === false &&
+      latestCreateProgress.error &&
+      latestCreateProgress.kind === kind
+    ) {
+      throw error;
+    }
+    const message =
+      error instanceof Error ? error.message : "Rebuild storybook-static failed";
+    emitVisualCreateProgress({
+      running: false,
+      label: failedLabel,
+      kind,
+      error: message,
+    });
+    throw error instanceof Error ? error : new Error(message);
+  }
 }
 
 /**

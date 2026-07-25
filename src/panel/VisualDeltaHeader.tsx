@@ -5,6 +5,7 @@ import {
   ExpandIcon,
   EyeCloseIcon,
   EyeIcon,
+  RefreshIcon,
   SyncIcon,
   UndoIcon,
 } from "@storybook/icons";
@@ -82,6 +83,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onDiffEngineChange,
   onCreate,
   onUpdateBaselines,
+  onRebuildStatic,
   onResetSettings,
   onStopDiff,
   onStopRun,
@@ -91,6 +93,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onToggleSkipVisual,
   onOpenConfiguration,
   isUpdating,
+  isRebuilding,
   onHeightChange,
 }: {
   badgeStatus: VisualBadgeStatus | null;
@@ -112,6 +115,8 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onDiffEngineChange: (engine: DiffCaptureEngine) => void;
   onCreate: () => void;
   onUpdateBaselines: () => void;
+  /** Force `build-storybook` without capturing baselines. */
+  onRebuildStatic: () => void;
   onResetSettings: () => void;
   onStopDiff: () => void;
   onStopRun: () => void;
@@ -121,6 +126,7 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   onToggleSkipVisual: () => void;
   onOpenConfiguration: () => void;
   isUpdating: boolean;
+  isRebuilding: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
 }) {
@@ -281,6 +287,26 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
                       </ActionList.Action>
                     </ActionList.Item>
                   ) : null}
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel="Rebuild storybook static"
+                      title="Run build-storybook so Playwright captures pick up live CSS/markup edits"
+                      disabled={busy}
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onRebuildStatic();
+                      }}
+                    >
+                      <ActionList.Icon>
+                        <RefreshIcon />
+                      </ActionList.Icon>
+                      <ActionList.Text>
+                        {isRebuilding
+                          ? "Rebuilding static…"
+                          : "Rebuild storybook static"}
+                      </ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
                   {!showSkipHeaderButton ? (
                     <ActionList.Item>
                       <ActionList.Action

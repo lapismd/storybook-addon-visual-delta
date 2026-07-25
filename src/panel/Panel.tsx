@@ -52,6 +52,7 @@ import {
   postVisualCreateBaseline,
   postVisualInit,
   postVisualInteractionBaseline,
+  postVisualRebuildStatic,
   postVisualReviewStatus,
   postVisualRun,
   postVisualSkipVisual,
@@ -364,6 +365,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const isUpdating = Boolean(
     baselineJob?.running && baselineJob.kind === "update",
   );
+  const isRebuilding = Boolean(
+    baselineJob?.running && baselineJob.kind === "rebuild",
+  );
   const isInteractionJob = Boolean(
     baselineJob?.running && baselineJob.kind === "interaction",
   );
@@ -373,6 +377,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isDiffing ||
     isUpdating ||
     isCreating ||
+    isRebuilding ||
     isInteractionJob ||
     isRunningVisual ||
     runProgress != null ||
@@ -624,6 +629,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     loading ||
     isCreating ||
     isUpdating ||
+    isRebuilding ||
     isInteractionJob ||
     runInFlight ||
     isDiffing;
@@ -723,6 +729,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError(next.error);
         return;
       }
+      // Rebuild-static only refreshes storybook-static — no baseline hydrate.
+      if (next.kind === "rebuild") return;
       // CSF may already be wired (no HMR) or index tags still say skip-visual —
       // hydrate from the known PNG path so the empty-state panel fills.
       const entry = currentStoryId ? api.getData(currentStoryId) : undefined;
@@ -982,6 +990,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       // Error/log surface via subscribeVisualCreateProgress.
     }
   }, [storyId]);
+
+  const handleRebuildStatic = useCallback(async () => {
+    setCaptureError(null);
+    setUpdateLog(null);
+    try {
+      await postVisualRebuildStatic();
+    } catch {
+      // Error/log surface via subscribeVisualCreateProgress.
+    }
+  }, []);
 
   const handleCreateBaselines = useCallback(async () => {
     if (!storyId) {
@@ -1450,6 +1468,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             onDiffEngineChange={setDiffEngine}
             onCreate={() => void handleCreateBaselines()}
             onUpdateBaselines={() => void handleUpdateBaselines()}
+            onRebuildStatic={() => void handleRebuildStatic()}
             onResetSettings={resetSettings}
             onStopDiff={handleStopDiff}
             onStopRun={() => void cancelVisualRun()}
@@ -1459,6 +1478,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             onToggleSkipVisual={() => void handleToggleSkipVisual()}
             onOpenConfiguration={() => setShowConfiguration(true)}
             isUpdating={isUpdating}
+            isRebuilding={isRebuilding}
             onHeightChange={setHeaderStickyTop}
           />
           <PanelBody>

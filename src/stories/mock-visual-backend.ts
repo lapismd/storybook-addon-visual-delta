@@ -6,6 +6,7 @@
 export type MockVisualAction =
   | "create-baseline"
   | "update-baseline"
+  | "rebuild-static"
   | "create-interaction"
   | "run-tests"
   | "cancel-tests"
@@ -22,6 +23,7 @@ export type MockVisualBackend = {
   reset: () => void;
   createBaseline: (storyId: string) => Promise<string>;
   updateBaseline: (storyId: string) => Promise<string>;
+  rebuildStatic: () => Promise<string>;
   createInteraction: (args: {
     storyId: string;
     stepLabel: string;
@@ -84,6 +86,11 @@ export function createMockVisualBackend(): MockVisualBackend {
       actions.push("update-baseline");
       await delay(40);
       return `Updated baseline for ${storyId}\n[exit 0]\n`;
+    },
+    async rebuildStatic() {
+      actions.push("rebuild-static");
+      await delay(40);
+      return "Rebuilding storybook-static…\n[exit 0]\n";
     },
     async createInteraction({ storyId, stepLabel, stepId }) {
       actions.push("create-interaction");
