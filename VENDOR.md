@@ -67,6 +67,9 @@ use:
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
   `index`, but tears down overlay/split DOM so the live canvas reclaims space;
   reveal-center matches post create/update.
+- **Docs clears overlay** — leaving Canvas (`viewMode !== "story"`) hard-clears
+  preview overlay/split DOM (manager `SELECT_IMAGE(-1)` + preview Docs/SET_CURRENT_STORY
+  listeners) so baseline PNGs cannot linger on the Docs page.
 - **INIT after soft-hide** — `initImageSelection` keeps gallery `index` when
   baselines exist even if persisted `overlayOn` is false, so Diff / DiffResult
   still resolve `baselineStem` (panel body is not toolbar-only).
