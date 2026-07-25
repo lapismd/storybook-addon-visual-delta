@@ -11,6 +11,7 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
+  VISUAL_DELTA_REBUILD_STATIC_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_EVENTS_PATH,
   VISUAL_DELTA_RUN_PATH,
@@ -410,6 +411,47 @@ function runCommand(
       resolve({ code: code ?? 1, log });
     });
   });
+}
+
+/**
+ * Run `pnpm build-storybook` only (no Playwright capture). Streams plain-text
+ * logs like baseline create/update so the panel status bar can show progress.
+ */
+async function handleRebuildStatic(
+  res: ServerResponse,
+  root: string,
+  visualPort: number,
+) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.write("Rebuilding storybook-static…\n");
+
+  try {
+    const { code } = await runCommand(
+      "pnpm",
+      ["build-storybook"],
+      root,
+      undefined,
+      (chunk) => {
+        res.write(chunk);
+      },
+    );
+    if (code === 0) {
+      const warm = await ensureWarmStaticStorybookServer(root, visualPort);
+      if (warm.message) {
+        res.write(`${warm.message}\n`);
+      }
+    }
+    res.write(`\n[exit ${code}]\n`);
+  } catch (error) {
+    res.write(
+      `\n[spawn error] ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+  }
+  res.end();
 }
 
 async function handleBaselineWrite(
@@ -1068,6 +1110,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * Dev-only Visual Delta endpoints:
  * - POST /__visual-delta/update-baseline — regenerate baselines (overwrite)
  * - POST /__visual-delta/create-baseline — create missing baselines only
+ * - POST /__visual-delta/rebuild-static — run build-storybook only (no capture)
  * - POST /__visual-delta/create-interaction-baseline — mid-play step capture
  * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
@@ -1130,6 +1173,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           handleInit(req, res, root, options, visualPort);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_REBUILD_STATIC_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleRebuildStatic(res, root, visualPort);
           return;
         }
 

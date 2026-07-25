@@ -89,6 +89,7 @@ export function PanelShell({
   const [badgeStatus, setBadgeStatus] = useState<"pass" | "fail" | null>(null);
   const [diffResult, setDiffResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isRebuilding, setIsRebuilding] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isDiffing, setIsDiffing] = useState(false);
   const [diffEngine, setDiffEngine] = useState<DiffCaptureEngine>(() =>
@@ -144,6 +145,21 @@ export function PanelShell({
       recordActions();
     } finally {
       setBusy(false);
+      setRunProgressLabel(null);
+    }
+  }, [appendLog, backend, recordActions]);
+
+  const handleRebuildStatic = useCallback(async () => {
+    setBusy(true);
+    setIsRebuilding(true);
+    setRunProgressLabel("Rebuilding static…");
+    try {
+      const log = await backend.rebuildStatic();
+      appendLog(log);
+      recordActions();
+    } finally {
+      setBusy(false);
+      setIsRebuilding(false);
       setRunProgressLabel(null);
     }
   }, [appendLog, backend, recordActions]);
@@ -299,6 +315,7 @@ export function PanelShell({
         onDiffEngineChange={setDiffEngine}
         onCreate={() => void handleCreate()}
         onUpdateBaselines={() => void handleUpdate()}
+        onRebuildStatic={() => void handleRebuildStatic()}
         onResetSettings={() => {
           setDiffResult(null);
           setBadgeStatus(null);
@@ -315,7 +332,8 @@ export function PanelShell({
         onOpenConfiguration={() => {
           setStatusLog("Configuration (mock)");
         }}
-        isUpdating={busy}
+        isUpdating={busy && !isRebuilding}
+        isRebuilding={isRebuilding}
       />
       <PanelBody>
         <div data-testid="panel-shell-meta" style={{ display: "none" }}>

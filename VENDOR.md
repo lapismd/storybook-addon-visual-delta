@@ -138,9 +138,11 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
   still sees the story under `--skip-build`. Testing Module **Rebuild
-  static** (or CLI `--rebuild`) forces `build-storybook` before capture when
-  live edits outran the static tree. Create fails if the expected PNG was
-  not written (no more silent `No tests found` + exit 0).
+  static**, panel kebab **Rebuild storybook static**, or CLI `--rebuild`
+  forces `build-storybook` (kebab runs build only via
+  `/__visual-delta/rebuild-static`; the checkbox/CLI flag rebuilds before
+  capture). Create fails if the expected PNG was not written (no more silent
+  `No tests found` + exit 0).
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).
@@ -173,6 +175,11 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   Logs stream into the panel status bar like create (progress button +
   popover); on success the panel enables a center overlay with the refreshed
   baseline. Log popovers use monospace.
+- **Rebuild storybook static** — Dev-only kebab action posts to
+  `/__visual-delta/rebuild-static` and runs `pnpm build-storybook` only (no
+  Playwright capture). Use after CSS/markup edits when you want a fresh
+  static tree before the next create/update/compare. Progress uses the same
+  status-bar log channel as create/update.
 - **Placement pad hide** — Clicking the active position soft-hides the baseline
   by tearing down overlay + split panes (live canvas reclaims full space) while
   keeping gallery `index` so click-again rebuilds. Persisted as `overlayOn` in

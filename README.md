@@ -267,8 +267,9 @@ visualInteractionUpdateArgs: [
 ```
 
 Playwright captures `storybook-static`, not live Storybook. Hosts default to
-`--skip-build` for speed; enable **Rebuild static** in the Testing Module (or
-pass `--rebuild`) after component CSS/markup changes so create/update/compare
+`--skip-build` for speed; enable **Rebuild static** in the Testing Module, use
+the panel kebab **Rebuild storybook static**, or pass `--rebuild` after
+component CSS/markup changes so create/update/compare
 run `build-storybook` first. Override these argv lists to point at host
 scripts when needed (see Advanced host below). The middleware appends
 `--create-only`, `--component` / `--story-id`, `--step-label`, `--step-id`,
