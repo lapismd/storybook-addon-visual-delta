@@ -65,11 +65,17 @@ use:
   baseline pane padding-top 32; play asserts Δ top ≈ 0.
 - **Subject without margin** — padding-top 24; Δ top ≈ 0.
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
-  `index`, but tears down overlay/split DOM so the live canvas reclaims space;
-  reveal-center matches post create/update.
+  `index` or placement; pad shows nothing pressed and preview tears down
+  overlay/split DOM so the live subject unlocks to natural width/height.
+  Clicking the same placement again soft-shows. Reveal-center matches post
+  create/update. Preview channel handlers go through a mutable API bag so Vite
+  HMR cannot leave a stale soft-hide listener that only toggled visibility.
 - **Docs clears overlay** — leaving Canvas (`viewMode !== "story"`) hard-clears
   preview overlay/split DOM (manager `SELECT_IMAGE(-1)` + preview Docs/SET_CURRENT_STORY
   listeners) so baseline PNGs cannot linger on the Docs page.
+- **Playwright DiffResult hydrate** — panel loads gitignored sidecar
+  `.json` / `.actual.png` / `.diff.png` under `/visual-baselines` on story load
+  (not localStorage). Failed/missing fetches do not poison the in-memory cache.
 - **INIT after soft-hide** — `initImageSelection` keeps gallery `index` when
   baselines exist even if persisted `overlayOn` is false, so Diff / DiffResult
   still resolve `baselineStem` (panel body is not toolbar-only).
@@ -198,10 +204,11 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   static tree before the next create/update/compare. Progress uses the same
   status-bar log channel as create/update.
 - **Placement pad hide** — Clicking the active position soft-hides the baseline
-  by tearing down overlay + split panes (live canvas reclaims full space) while
-  keeping gallery `index` so click-again rebuilds. Persisted as `overlayOn` in
-  localStorage. Story changes clear selection so a story without baselines does
-  not keep showing the previous PNG.
+  by tearing down overlay + split panes and unlocking subject width / canvas
+  height locks (natural viewport) while keeping gallery `index` and placement
+  so click-again rebuilds. Pad shows no pressed cell while hidden. Persisted as
+  `overlayOn` in localStorage. Story changes clear selection so a story without
+  baselines does not keep showing the previous PNG.
 - **Image only (eye)** — Unselected by default. When selected: hides the live
   story, the baseline gallery (overlay selector), and the placement pad; forces
   center overlay (still draggable). An “Image only” chip marks the mode in the

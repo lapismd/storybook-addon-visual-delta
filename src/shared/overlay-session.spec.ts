@@ -56,6 +56,7 @@ describe("placementToggleAction", () => {
 
 describe("shouldSoftShowOverlay", () => {
   it("is true only when re-showing the same hidden selection", () => {
+    // Soft-hide keeps prior placement; soft-show is clicking that cell again.
     const hidden = { ...base, overlayOn: false };
     expect(shouldSoftShowOverlay(hidden, "right", 0)).toBe(true);
     expect(shouldSoftShowOverlay(hidden, "left", 0)).toBe(false);
