@@ -27,9 +27,16 @@ const spin = keyframes({
 });
 
 export const DiffResultContainer = styled.div(({ theme }) => ({
+  // Grow into leftover SectionBody space; do not shrink below content or the
+  // compare stage collapses to a 0-height nested scrollport.
+  flex: "1 1 auto",
+  minHeight: "min-content",
+  display: "flex",
+  flexDirection: "column",
   padding: "0.75rem 1rem 1rem",
   borderTop: `1px solid ${theme.appBorderColor}`,
   backgroundColor: panelCanvasBackground(theme),
+  boxSizing: "border-box",
 }));
 
 export const DiffStats = styled.div(({ theme }) => ({
@@ -434,23 +441,26 @@ export const ErrorText = styled.p({
 });
 
 /**
- * Panel frame. Status bar is position:fixed to the AddonPanel scrollport
- * (see PanelStatusBar) so Storybook's outer panel scroller cannot move it.
+ * Panel frame. Absolutely fills the AddonPanel content box (nearest
+ * positioned ancestor) so the accordion flex chain gets a definite height
+ * instead of growing the outer Storybook scroller.
+ * Status bar is position:fixed to the AddonPanel scrollport (see PanelStatusBar).
  */
 export const PanelShell = styled.div(({ theme }) => ({
-  position: "relative",
+  position: "absolute",
+  inset: 0,
   display: "flex",
   flexDirection: "column",
-  height: "100%",
-  minHeight: "100%",
+  minHeight: 0,
   boxSizing: "border-box",
   background: panelCanvasBackground(theme),
 }));
 
-/** Main panel body (Storybook may also scroll the AddonPanel wrapper). */
+/** Main panel body — keeps scroll inside expanded SectionBody. */
 export const PanelScroll = styled.div(({ theme }) => ({
   flex: "1 1 auto",
   minHeight: 0,
+  overflow: "hidden",
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
@@ -463,6 +473,8 @@ export const PanelScroll = styled.div(({ theme }) => ({
 export const PanelBody = styled.div(({ theme }) => ({
   flex: "1 1 auto",
   minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
   background: panelCanvasBackground(theme),
   boxSizing: "border-box",
 }));

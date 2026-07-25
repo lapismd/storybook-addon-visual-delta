@@ -457,7 +457,7 @@ export async function capturePreviewIframe(options?: {
 
 /**
  * Fit actual → baseline size without stretching (center pad / crop).
- * Matches Playwright sidecar compare (`fitRgba` in compare-pixels.ts).
+ * Matches Playwright sidecar compare (`fitRgba` in playwright/compare-pixels.ts).
  */
 export function fitImageData(
   imgData: ImageData,
