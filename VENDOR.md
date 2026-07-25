@@ -12,14 +12,21 @@ manager-view gaps vs `@chromatic-com/storybook` (local-achievable vs cloud-only)
 | License         | MIT (see `LICENSE`)                  |
 | Original author | houjinlong                           |
 
-Storybook compiles the TypeScript/`tsx` entry points directly — there is no
-committed `dist/` build. The catalog loads the addon via
-`.storybook/visual-delta-preset.ts` (absolute `src/manager.tsx` +
-`src/preview.ts`), not the `node_modules` package name, so edits are not
-masked by Storybook/Vite ignoring `node_modules`. `pnpm storybook` runs
-`scripts/storybook-run.mjs`, which restarts on manager/panel (and related
-addon `src/node` + preset) changes — the manager builder is a one-shot
-esbuild bundle and does not HMR. Preview overlay edits reload via Vite.
+Storybook compiles the TypeScript/`tsx` manager/preview/preset entries from
+`src/` (Vite). The catalog loads those via `.storybook/visual-delta-preset.ts`
+(absolute `src/manager.tsx` + `src/preview.ts`), not the `node_modules`
+package name, so edits are not masked by Storybook/Vite ignoring
+`node_modules`. `pnpm storybook` runs `scripts/storybook-run.mjs`, which
+restarts on manager/panel (and related addon `src/node` + preset) changes —
+the manager builder is a one-shot esbuild bundle and does not HMR. Preview
+overlay edits reload via Vite.
+
+Node consumers (`./playwright`, `./node`, `visual-delta` CLI) must use the
+compiled `dist/` build (`pnpm build:node` / `prepare`). Node's type stripper
+refuses `.ts` under `node_modules`
+(`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so those package exports
+point at `dist/*.js`, not `src/*.ts`. After editing `src/playwright` or
+`src/node`, rebuild before Update baselines / `playwright test`.
 
 The package owns every runtime dependency used by its preset and middleware.
 It must not import UI-repository scripts outside this package. Host repositories

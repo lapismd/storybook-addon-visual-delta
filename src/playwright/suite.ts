@@ -1,4 +1,6 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { createRequire } from "node:module";
+import type * as PlaywrightTest from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -21,6 +23,12 @@ import {
   screenshotRelativePath,
   type StoryIndexEntry,
 } from "../node/snapshot-paths.js";
+
+const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
+
+function loadHostPlaywrightTest(): typeof PlaywrightTest {
+  return requireFromHost("@playwright/test") as typeof PlaywrightTest;
+}
 
 const PORTAL_SELECTORS = [
   '[role="dialog"]',
@@ -124,6 +132,7 @@ async function prepareStoryPage(
   storyId: string,
   options?: { visualCaptureUntil?: string },
 ): Promise<void> {
+  const { expect } = loadHostPlaywrightTest();
   const params = new URLSearchParams({
     id: storyId,
     viewMode: "story",
@@ -166,6 +175,7 @@ async function screenshotStorySubject(
   page: Page,
   name: string | string[],
 ): Promise<void> {
+  const { expect } = loadHostPlaywrightTest();
   const crop = await page.locator("html").getAttribute(VISUAL_DELTA_CROP_ATTR);
   const ignoreAttr = await page
     .locator("html")
@@ -223,6 +233,7 @@ async function screenshotStorySubject(
  * `VISUAL_DELTA_SNAPSHOT_DIR` from that CLI.
  */
 export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
+  const { expect, test } = loadHostPlaywrightTest();
   const packageRoot = resolveRoot(options);
   const mode = resolveMode(options);
   const stories = loadVisualStories(packageRoot, options.includeStory);
