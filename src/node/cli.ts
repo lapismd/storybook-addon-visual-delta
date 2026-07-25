@@ -64,7 +64,7 @@ Flags:
   --create-only             Missing PNGs only (no overwrite)
   --approved                Required unless VISUAL_UPDATE_APPROVED=1
   --allow-dirty             Reserved (host git gates may use this)
-  --skip-build              Do not run build-storybook when index missing
+  --skip-build              Use existing storybook-static (do not rebuild)
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
   --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)

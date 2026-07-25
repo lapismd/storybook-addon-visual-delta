@@ -29,7 +29,6 @@ describe("portable Visual Delta host options", () => {
       "update",
       "--allow-dirty",
       "--approved",
-      "--skip-build",
     ]);
   });
 

@@ -136,8 +136,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   popovers do not explode to a full-viewport PNG.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
-  still sees the story under `--skip-build`. Create fails if the expected
-  PNG was not written (no more silent `No tests found` + exit 0).
+  still sees the story. Create/update rebuild `storybook-static` unless
+  `--skip-build` (captures must not reuse a stale static tree from before
+  component CSS/markup fixes). Create fails if the expected PNG was not
+  written (no more silent `No tests found` + exit 0).
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).

@@ -68,7 +68,6 @@ export const DEFAULT_VISUAL_UPDATE_ARGS = [
   "update",
   "--allow-dirty",
   "--approved",
-  "--skip-build",
 ] as const;
 
 export const DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS = [
@@ -77,7 +76,6 @@ export const DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS = [
   "interaction-update",
   "--allow-dirty",
   "--approved",
-  "--skip-build",
 ] as const;
 
 export const DEFAULT_VISUAL_TEST_ARGS = ["exec", "playwright", "test"] as const;
