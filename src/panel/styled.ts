@@ -308,6 +308,26 @@ export const InlineControl = styled.label(({ theme }) => ({
   whiteSpace: "nowrap",
 }));
 
+/** Thresh slider + optional Playwright mismatch note stacked under it. */
+export const ThreshStack = styled.div({
+  display: "inline-flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 2,
+  flex: "0 0 auto",
+  minWidth: 0,
+});
+
+export const ThreshMismatchNote = styled.span(({ theme }) => ({
+  fontSize: "10px",
+  fontWeight: 500,
+  color: theme.color.mediumdark,
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+  lineHeight: 1.2,
+  paddingLeft: "0.1rem",
+}));
+
 export const Slider = styled.input({
   width: "72px",
   flex: "0 0 auto",
@@ -390,6 +410,10 @@ export const ButtonGroup = styled.div(({ theme }) => ({
   },
   "& > button + button": {
     borderLeft: `1px solid ${theme.appBorderColor}`,
+  },
+  "& > button svg": {
+    width: 12,
+    height: 12,
   },
 }));
 

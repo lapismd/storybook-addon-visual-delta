@@ -112,6 +112,7 @@ import {
   usePlaySteps,
   type PlayStepInfo,
 } from "./usePlaySteps.js";
+import { SyncIcon } from "@storybook/icons";
 import {
   ButtonGroup,
   Checkbox,
@@ -126,6 +127,8 @@ import {
   SkeletonBone,
   SkeletonRoot,
   Slider,
+  ThreshMismatchNote,
+  ThreshStack,
   Toolbar as PanelToolbar,
   ToolbarRow,
   ToolbarSpacer,
@@ -439,6 +442,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setIsUpdatingPlaywrightThreshold(false);
     }
   }, [passThresholdPercent]);
+
+  /** Copy package Playwright thresh into local Diff Chromium localStorage. */
+  const handleResetLocalThresholdToPlaywright = useCallback(() => {
+    if (playwrightPassThresholdPercent == null) return;
+    setPassThresholdPercent("chromium", playwrightPassThresholdPercent);
+    setUpdateLog(
+      `Local thresh reset to Playwright ${playwrightPassThresholdPercent}%`,
+    );
+  }, [playwrightPassThresholdPercent, setPassThresholdPercent]);
 
   const activeSectionId: BaselineSectionId = selectedInteractionId ?? "default";
   const activeDiffMeta = useMemo(() => {
@@ -1388,40 +1400,57 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 </CheckboxContainer>
               </>
             ) : null}
-            <InlineControl title="Pass if diff % is below this">
-              <span>Thresh</span>
-              <Slider
-                type="range"
-                min="0"
-                max="2"
-                step="0.05"
-                value={passThresholdPercent}
-                onChange={(e) =>
-                  setPassThresholdPercent(
-                    diffEngine,
-                    parseFloat(e.target.value),
-                  )
-                }
-              />
-              <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
-            </InlineControl>
-            {playwrightThresholdMismatch ? (
-              <InlineControl title="Local Diff Chromium thresh differs from package Playwright default">
-                <ValueDisplay>
+            <ThreshStack>
+              <InlineControl title="Pass if diff % is below this">
+                <span>Thresh</span>
+                <Slider
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  value={passThresholdPercent}
+                  onChange={(e) =>
+                    setPassThresholdPercent(
+                      diffEngine,
+                      parseFloat(e.target.value),
+                    )
+                  }
+                />
+                <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
+              </InlineControl>
+              {playwrightThresholdMismatch ? (
+                <ThreshMismatchNote title="Local Diff Chromium thresh differs from package Playwright default">
                   Playwright {playwrightPassThresholdPercent}% ≠ local{" "}
                   {passThresholdPercent}%
-                </ValueDisplay>
+                </ThreshMismatchNote>
+              ) : null}
+            </ThreshStack>
+            {playwrightThresholdMismatch ? (
+              <ButtonGroup
+                role="group"
+                aria-label="Sync pass threshold with Playwright"
+              >
                 <Button
                   size="small"
                   disabled={isUpdatingPlaywrightThreshold || busy}
                   ariaLabel={false}
+                  title="Write local Thresh into package Playwright config"
                   onClick={() => void handleUpdatePlaywrightThreshold()}
                 >
                   {isUpdatingPlaywrightThreshold
                     ? "Updating…"
-                    : "Update Playwright config"}
+                    : "Update Playwright"}
                 </Button>
-              </InlineControl>
+                <Button
+                  size="small"
+                  disabled={busy || playwrightPassThresholdPercent == null}
+                  ariaLabel="Reset local thresh to Playwright value"
+                  title="Reset local thresh to Playwright value"
+                  onClick={handleResetLocalThresholdToPlaywright}
+                >
+                  <SyncIcon />
+                </Button>
+              </ButtonGroup>
             ) : null}
           </ToolbarRow>
           {captureError ? <ErrorText>{captureError}</ErrorText> : null}
@@ -1438,6 +1467,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffEngine,
       diffResult,
       handleModeChange,
+      handleResetLocalThresholdToPlaywright,
       handleUpdatePlaywrightThreshold,
       images.length,
       index,
