@@ -20,7 +20,9 @@
     "src/shared/modes.ts",
     "src/shared/ignore.ts",
     "src/shared/config-types.ts",
-    "src/node/**/*.ts"
+    "src/shared/capture-params-attrs.ts",
+    "src/node/**/*.ts",
+    "src/playwright/**/*.ts"
   ],
   "exclude": ["src/**/*.spec.ts"]
 }

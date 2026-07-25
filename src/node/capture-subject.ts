@@ -104,8 +104,9 @@ async function getBrowser(
 
 /**
  * Union clip for portals rendered *outside* `#storybook-root` (dialogs, menus).
- * Matches `tests/visual/storybook.spec.ts`: in-tree `[data-state="open"]`
- * (e.g. Accordion) must NOT trigger a root-sized viewport clip.
+ * Bases the clip on the story subject (`#storybook-root > *`), not the root
+ * itself — root is often `min-height: 100vh` and would capture the viewport.
+ * In-tree `[data-state="open"]` (e.g. Accordion) must NOT trigger this path.
  */
 async function portalUnionClip(
   page: Page,
@@ -113,7 +114,8 @@ async function portalUnionClip(
   return page.evaluate((selectors) => {
     const root = document.querySelector("#storybook-root");
     if (!root) return null;
-    const rects: DOMRect[] = [root.getBoundingClientRect()];
+    const subject = root.querySelector(":scope > *") ?? root;
+    const rects: DOMRect[] = [];
     for (const el of document.querySelectorAll(selectors)) {
       if (!(el instanceof HTMLElement)) continue;
       // Accordion/Collapsible mark open items with data-state=open inside root.
@@ -125,7 +127,8 @@ async function portalUnionClip(
       rects.push(r);
     }
     // No outside portals → caller should screenshot the story subject instead.
-    if (rects.length < 2) return null;
+    if (rects.length === 0) return null;
+    rects.unshift(subject.getBoundingClientRect());
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;
