@@ -127,6 +127,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   approximate vs real Chromium screenshots. Portal clips use the story
   subject box — not `#storybook-root` (`min-height: 100vh`) — so open
   popovers do not explode to a full-viewport PNG.
+- **Create + skip-visual** — `visual-delta update --create-only` removes
+  `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
+  still sees the story under `--skip-build`. Create fails if the expected
+  PNG was not written (no more silent `No tests found` + exit 0).
 - **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard

@@ -27,7 +27,7 @@ import {
   ensurePlaywrightWebServerPort,
   ensureWarmStaticStorybookServer,
 } from "./visual-server.js";
-import { loadStoryIndex } from "./visual-sidecars.js";
+import { loadStoryIndex, syncStaticIndexSkipVisual } from "./visual-sidecars.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -162,7 +162,8 @@ export async function runBaselineUpdate(
   const port = resolveVisualServerPort(options);
 
   if (options.createOnly) {
-    for (const entry of matchingEntries(root, storyId, component)) {
+    const matched = matchingEntries(root, storyId, component);
+    for (const entry of matched) {
       if ((entry.tags ?? []).includes("skip-visual")) {
         patchStorySkipVisual({
           packageRoot: root,
@@ -171,11 +172,34 @@ export async function runBaselineUpdate(
         });
       }
     }
+    // Playwright loads stories from storybook-static/index.json. With
+    // --skip-build, CSF tag edits alone leave the suite empty ("No tests found").
+    syncStaticIndexSkipVisual(
+      root,
+      matched.map((entry) => entry.id),
+      false,
+    );
   }
 
   ensureStorybookStatic(root, options.skipBuild);
   const warm = await ensureWarmStaticStorybookServer(root, port);
   if (!warm.ok) await ensurePlaywrightWebServerPort(port);
+
+  const targets = matchingEntries(root, storyId, component).filter(
+    (entry) => !(entry.tags ?? []).includes("skip-visual"),
+  );
+  if (!targets.length) {
+    throw new Error(
+      `No runnable visual stories for ${storyId ?? component} (all skip-visual or missing from index)`,
+    );
+  }
+
+  const needingCreate = options.createOnly
+    ? targets.filter(
+        (entry) =>
+          !existsSync(path.join(snapshotDir, snapshotFileName(entry, mode))),
+      )
+    : [];
 
   const grep = playwrightGrep(storyId, component);
   const env: NodeJS.ProcessEnv = {
@@ -205,9 +229,6 @@ export async function runBaselineUpdate(
     if (!options.createOnly) throw error;
   }
 
-  const targets = matchingEntries(root, storyId, component).filter(
-    (entry) => !(entry.tags ?? []).includes("skip-visual"),
-  );
   for (const entry of targets) {
     const png = path.join(snapshotDir, snapshotFileName(entry, mode));
     if (!existsSync(png)) continue;
@@ -222,6 +243,20 @@ export async function runBaselineUpdate(
       storyId: entry.id,
       status: "pending",
     });
+  }
+
+  if (options.createOnly && needingCreate.length) {
+    const stillMissing = needingCreate.filter(
+      (entry) =>
+        !existsSync(path.join(snapshotDir, snapshotFileName(entry, mode))),
+    );
+    if (stillMissing.length) {
+      throw new Error(
+        `Create failed — no baseline PNG written for: ${stillMissing
+          .map((entry) => entry.id)
+          .join(", ")}`,
+      );
+    }
   }
 }
 
@@ -344,6 +379,9 @@ export function runSkipVisualTag(
     });
     if (result.ok) updated.push(entry.id);
     else errors.push(`${entry.id}: ${result.error ?? "patch failed"}`);
+  }
+  if (updated.length) {
+    syncStaticIndexSkipVisual(root, updated, options.skip);
   }
   if (!updated.length && errors.length) {
     throw new Error(errors.join("\n"));

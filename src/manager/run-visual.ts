@@ -961,8 +961,29 @@ async function postVisualBaselineWrite(
         ? "Playwright static server failed to start (visual port busy or stale)."
         : /No recipe for/i.test(log)
           ? log.match(/No recipe for[^\n]+/)?.[0]
-          : undefined;
+          : /No tests found/i.test(log)
+            ? "No Playwright visual tests matched (stale skip-visual index or empty scope)."
+            : /Create failed — no baseline PNG/i.test(log)
+              ? log.match(/Create failed — no baseline PNG[^\n]*/)?.[0]
+              : undefined;
       const error = detail ?? `${exitVerb} exited with code ${exitMatch[1]}`;
+      emitVisualCreateProgress({
+        running: false,
+        label: failedLabel,
+        kind,
+        error,
+        logTail: log || undefined,
+      });
+      throw new Error(error);
+    }
+    // Older CLIs swallowed Playwright "No tests found" and still exited 0.
+    if (
+      kind === "create" &&
+      (/No tests found/i.test(log) ||
+        /Create failed — no baseline PNG/i.test(log))
+    ) {
+      const error = /Create failed — no baseline PNG[^\n]*/i.exec(log)?.[0]
+        ?? "No Playwright visual tests matched (stale skip-visual index or empty scope).";
       emitVisualCreateProgress({
         running: false,
         label: failedLabel,
