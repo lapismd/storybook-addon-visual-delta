@@ -84,9 +84,13 @@ async function portalUnionClip(
   return page.evaluate((portalSelector) => {
     const root = document.querySelector("#storybook-root");
     if (!root) return null;
+    // Base on the story subject — not `#storybook-root`, which is often
+    // `min-height: 100vh` and would explode the clip to the full viewport.
+    const subject = root.querySelector(":scope > *") ?? root;
     const rects: DOMRect[] = [];
     for (const el of document.querySelectorAll(portalSelector)) {
       if (!(el instanceof HTMLElement)) continue;
+      // Accordion/Collapsible mark open items with data-state=open inside root.
       if (root.contains(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
@@ -95,7 +99,7 @@ async function portalUnionClip(
       rects.push(r);
     }
     if (rects.length === 0) return null;
-    rects.unshift(root.getBoundingClientRect());
+    rects.unshift(subject.getBoundingClientRect());
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;

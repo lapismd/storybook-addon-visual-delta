@@ -122,8 +122,11 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 - **Quiet preset** — No Vite/Webpack console logs.
 - **Run Diff capture** — Forces the preview iframe to the Playwright viewport
   (`1280×900`) before `html-to-image` of the story subject
-  (`#storybook-root > *`, or body when portals are open), so layout/wrapping
-  matches baselines. Still approximate vs real Chromium screenshots.
+  (`#storybook-root > *`, or body cropped to the subject+portal union when
+  menus/dialogs are open), so layout/wrapping matches baselines. Still
+  approximate vs real Chromium screenshots. Portal clips use the story
+  subject box — not `#storybook-root` (`min-height: 100vh`) — so open
+  popovers do not explode to a full-viewport PNG.
 - **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard

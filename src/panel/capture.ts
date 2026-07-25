@@ -195,13 +195,23 @@ function resolveCaptureBackground(doc: Document): string {
   return toOpaqueRgb(resolvePaintedBackground(doc), document);
 }
 
-function resolveCaptureTarget(doc: Document): HTMLElement {
+type CaptureTarget = {
+  element: HTMLElement;
+  /**
+   * When set, `element` is the preview body (so portaled nodes paint) and the
+   * PNG is cropped to this subject+portal union in CSS pixels.
+   */
+  cropCss?: { x: number; y: number; width: number; height: number };
+};
+
+function measureSubjectPortalUnion(
+  doc: Document,
+): { x: number; y: number; width: number; height: number } | null {
   const view = doc.defaultView;
   const root = asHtmlElement(doc.querySelector("#storybook-root"), view);
-  if (!root) {
-    throw new Error("#storybook-root not found in preview");
-  }
-  const portals: HTMLElement[] = [];
+  if (!root) return null;
+  const subject = asHtmlElement(root.firstElementChild, view) ?? root;
+  const rects: DOMRect[] = [];
   for (const el of doc.querySelectorAll(PORTAL_SELECTORS)) {
     const portal = asHtmlElement(el, view);
     if (!portal) continue;
@@ -210,23 +220,86 @@ function resolveCaptureTarget(doc: Document): HTMLElement {
     if (r.width < 1 || r.height < 1) continue;
     const style = getComputedStyle(portal);
     if (style.visibility === "hidden" || style.display === "none") continue;
-    portals.push(portal);
+    rects.push(r);
   }
-  if (portals.length === 0) {
-    return asHtmlElement(root.firstElementChild, view) ?? root;
+  if (rects.length === 0) return null;
+  rects.unshift(subject.getBoundingClientRect());
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const r of rects) {
+    left = Math.min(left, r.left);
+    top = Math.min(top, r.top);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
   }
-  // Capture the root wrapper when portals are open so html-to-image can include
-  // in-tree content; portals outside root are drawn via a union clip on body.
+  const x = Math.max(0, Math.floor(left));
+  const y = Math.max(0, Math.floor(top));
+  const width = Math.ceil(right - left);
+  const height = Math.ceil(bottom - top);
+  if (width < 1 || height < 1) return null;
+  return { x, y, width, height };
+}
+
+function resolveCaptureTarget(doc: Document): CaptureTarget {
+  const view = doc.defaultView;
+  const root = asHtmlElement(doc.querySelector("#storybook-root"), view);
+  if (!root) {
+    throw new Error("#storybook-root not found in preview");
+  }
+  const subject = asHtmlElement(root.firstElementChild, view) ?? root;
+  const cropCss = measureSubjectPortalUnion(doc);
+  if (!cropCss) {
+    return { element: subject };
+  }
+  // Capture body so portaled menus/dialogs are in the bitmap, then crop to the
+  // subject+portal union (not full `100vh` root / viewport).
   const body = asHtmlElement(doc.body, view);
   if (!body) {
     throw new Error("Preview document body not found");
   }
-  return body;
+  return { element: body, cropCss };
+}
+
+async function cropDataUrlToCssRect(
+  dataUrl: string,
+  cropCss: { x: number; y: number; width: number; height: number },
+  /** Top-left of the captured element in the same CSS space as `cropCss`. */
+  originCss: { x: number; y: number },
+  pixelRatio: number,
+): Promise<CaptureResult> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("Failed to decode capture for crop"));
+    el.src = dataUrl;
+  });
+  const sx = Math.max(
+    0,
+    Math.floor((cropCss.x - originCss.x) * pixelRatio),
+  );
+  const sy = Math.max(
+    0,
+    Math.floor((cropCss.y - originCss.y) * pixelRatio),
+  );
+  const sw = Math.max(1, Math.ceil(cropCss.width * pixelRatio));
+  const sh = Math.max(1, Math.ceil(cropCss.height * pixelRatio));
+  const width = Math.min(sw, Math.max(1, img.naturalWidth - sx));
+  const height = Math.min(sh, Math.max(1, img.naturalHeight - sy));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to get canvas context for crop");
+  ctx.drawImage(img, sx, sy, width, height, 0, 0, width, height);
+  return { dataUrl: canvas.toDataURL("image/png"), width, height };
 }
 
 /**
- * Capture the story subject (first #storybook-root child, or body when portals
- * are open) — matches Playwright component-clipped baselines.
+ * Capture the story subject (first `#storybook-root` child, or body cropped to
+ * the subject+portal union when menus/dialogs are open) — matches Playwright
+ * component-clipped baselines.
  */
 export async function capturePreviewSubject(options?: {
   pixelRatio?: number;
@@ -263,25 +336,37 @@ export async function capturePreviewSubject(options?: {
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    const target = options?.cropToViewport
-      ? (asHtmlElement(doc.documentElement, doc.defaultView) ??
-        resolveCaptureTarget(doc))
+    const pixelRatio = options?.pixelRatio ?? VISUAL_DEVICE_SCALE_FACTOR;
+    const target: CaptureTarget = options?.cropToViewport
+      ? {
+          element:
+            asHtmlElement(doc.documentElement, doc.defaultView) ??
+            resolveCaptureTarget(doc).element,
+        }
       : resolveCaptureTarget(doc);
-    const rect = target.getBoundingClientRect();
+    const rect = target.element.getBoundingClientRect();
     const width = Math.max(1, Math.ceil(rect.width));
     const height = Math.max(1, Math.ceil(rect.height));
 
     try {
-      const dataUrl = await toPng(target, {
+      const dataUrl = await toPng(target.element, {
         width,
         height,
         canvasWidth: width,
         canvasHeight: height,
-        pixelRatio: options?.pixelRatio ?? VISUAL_DEVICE_SCALE_FACTOR,
+        pixelRatio,
         backgroundColor: resolveCaptureBackground(doc),
         cacheBust: true,
         skipAutoScale: true,
       });
+      if (target.cropCss) {
+        return cropDataUrlToCssRect(
+          dataUrl,
+          target.cropCss,
+          { x: rect.left, y: rect.top },
+          pixelRatio,
+        );
+      }
       return { dataUrl, width, height };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

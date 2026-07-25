@@ -21,7 +21,11 @@
     "./preset": "./src/preset.ts",
     "./manager": "./src/manager.tsx",
     "./visual-capture": "./src/shared/visual-capture-step.ts",
-    "./playwright": "./src/playwright/index.ts",
+    "./playwright": {
+      "types": "./dist/playwright/index.d.ts",
+      "import": "./dist/playwright/index.js",
+      "default": "./dist/playwright/index.js"
+    },
     "./node": {
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js",
