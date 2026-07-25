@@ -1,4 +1,9 @@
 import { addons, useEffect } from "storybook/preview-api";
+import {
+  DOCS_PREPARED,
+  DOCS_RENDERED,
+  SET_CURRENT_STORY,
+} from "storybook/internal/core-events";
 import type { DecoratorFunction } from "storybook/internal/types";
 import {
   DEFAULT_PLACEMENT,
@@ -90,6 +95,15 @@ let currentOpacity = 0.5;
 let currentColorInversion = false;
 /** Survives FORCE_REMOUNT — decorator useChannel does not. */
 let overlayChannelInstalled = false;
+/**
+ * Last viewMode from SET_CURRENT_STORY. Used to ignore SELECT/SHOW while Docs
+ * (or other non-story modes) own the preview iframe.
+ */
+let previewViewMode: string | null = null;
+
+function isStoryPreviewMode(viewMode: string | null | undefined): boolean {
+  return viewMode == null || viewMode === "story";
+}
 
 const MODE_BADGE_ID = "visual-delta-mode-badge";
 
@@ -1133,6 +1147,14 @@ function removeOverlayDom(retainSelection: boolean) {
   if (canvasElement) {
     teardownSplit(canvasElement);
     canvasElement.style.visibility = "";
+  } else {
+    // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
+    // still tear down split chrome by id so the baseline PNG cannot orphan.
+    unbindSharedScroll();
+    unlockLiveContentWidth();
+    unlockLiveCanvasForSplit();
+    lastCompareSizes = null;
+    document.getElementById(SPLIT_ID)?.remove();
   }
   syncModeBadge(false);
 }
@@ -1140,6 +1162,13 @@ function removeOverlayDom(retainSelection: boolean) {
 function clearOverlay() {
   selectionGeneration += 1;
   removeOverlayDom(false);
+}
+
+/** Hard-clear when the preview leaves Canvas story mode (Docs, etc.). */
+function clearOverlayForNonStoryView(viewMode?: string | null) {
+  if (viewMode != null) previewViewMode = viewMode;
+  if (isStoryPreviewMode(previewViewMode)) return;
+  clearOverlay();
 }
 
 function applySelection(attempt: number, generation = selectionGeneration) {
@@ -1206,6 +1235,21 @@ export function ensureOverlayChannel(): void {
   const channel = addons.getChannel();
 
   channel.on(
+    SET_CURRENT_STORY,
+    (payload?: { viewMode?: string; storyId?: string }) => {
+      clearOverlayForNonStoryView(payload?.viewMode);
+    },
+  );
+  channel.on(DOCS_PREPARED, () => {
+    previewViewMode = "docs";
+    clearOverlay();
+  });
+  channel.on(DOCS_RENDERED, () => {
+    previewViewMode = "docs";
+    clearOverlay();
+  });
+
+  channel.on(
     EVENTS.SELECT_IMAGE,
     (data: { index: number; images?: VisualDeltaImage[] }) => {
       if (
@@ -1213,6 +1257,11 @@ export function ensureOverlayChannel(): void {
         !data.images ||
         data.index >= data.images.length
       ) {
+        clearOverlay();
+        return;
+      }
+      // Panel can race Docs navigation and re-SELECT after soft leave.
+      if (!isStoryPreviewMode(previewViewMode)) {
         clearOverlay();
         return;
       }
@@ -1297,6 +1346,10 @@ export function ensureOverlayChannel(): void {
   });
 
   channel.on(EVENTS.SHOW_OVERLAY, () => {
+    if (!isStoryPreviewMode(previewViewMode)) {
+      clearOverlay();
+      return;
+    }
     if (lastSelection && lastSelection.index >= 0) {
       selectionGeneration += 1;
       applySelection(0, selectionGeneration);
@@ -1327,6 +1380,15 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
 
   useEffect(() => {
     ensureOverlayChannel();
+    const viewMode =
+      typeof context.viewMode === "string" ? context.viewMode : null;
+    if (viewMode != null) previewViewMode = viewMode;
+    if (!isStoryPreviewMode(viewMode)) {
+      clearOverlay();
+      return () => {
+        clearOverlay();
+      };
+    }
     // Never re-paint the previous story's baseline here. Panel re-SELECT_IMAGE
     // via INIT_IMAGE / OVERLAY_LISTENER_READY after remount.
     addons.getChannel().emit(EVENTS.OVERLAY_LISTENER_READY, {
@@ -1337,7 +1399,7 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
       // restored when the panel answers OVERLAY_LISTENER_READY.
       clearOverlay();
     };
-  }, [context.id]);
+  }, [context.id, context.viewMode]);
 
   return storyFn();
 };

@@ -4,9 +4,11 @@ import {
   experimental_getStatusStore,
   types,
 } from "storybook/manager-api";
+import { SET_CURRENT_STORY } from "storybook/internal/core-events";
 import { Addon_TypesEnum, type API_HashEntry } from "storybook/internal/types";
 import {
   ADDON_ID,
+  EVENTS,
   HIGHLIGHT_IGNORE_TOOL_ID,
   PANEL_ID,
   STATUS_TYPE_ID_VISUAL,
@@ -19,7 +21,22 @@ import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
-addons.register(ADDON_ID, () => {
+addons.register(ADDON_ID, (api) => {
+  // Panel match drops Docs without unmount cleanup — clear the preview overlay
+  // so baseline PNGs cannot linger on the Docs page.
+  let lastViewMode: string | undefined = api.getUrlState?.().viewMode;
+  api.on(SET_CURRENT_STORY, (payload?: { viewMode?: string }) => {
+    const nextViewMode = payload?.viewMode;
+    if (
+      lastViewMode === "story" &&
+      nextViewMode != null &&
+      nextViewMode !== "story"
+    ) {
+      addons.getChannel().emit(EVENTS.SELECT_IMAGE, { index: -1, images: [] });
+    }
+    if (nextViewMode != null) lastViewMode = nextViewMode;
+  });
+
   addons.add(PANEL_ID, {
     type: types.PANEL,
     title: () => <PanelTitle />,
