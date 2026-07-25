@@ -73,6 +73,30 @@ export function shouldSoftShowOverlay(
 }
 
 /**
+ * Resolve gallery selection vs overlay visibility on INIT_IMAGE.
+ *
+ * Soft-hide persists `overlayOn: false` but must keep a gallery index when
+ * baselines exist — otherwise Diff / DiffResult lose `baselineStem` and the
+ * panel body looks empty (toolbar only). Preview attach uses `previewIndex`.
+ */
+export function initImageSelection(args: {
+  imageCount: number;
+  overlayOnPref: boolean;
+  liveVisible: boolean;
+  interactionPinned: boolean;
+}): { index: number; overlayOn: boolean; previewIndex: number } {
+  const index = args.imageCount > 0 ? 0 : -1;
+  const overlayOn =
+    index >= 0 &&
+    (args.interactionPinned || args.overlayOnPref || !args.liveVisible);
+  return {
+    index,
+    overlayOn,
+    previewIndex: overlayOn ? index : -1,
+  };
+}
+
+/**
  * After create/update baseline: enable center overlay for review.
  * When there are no images yet, still return center prefs for the next INIT.
  */

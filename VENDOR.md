@@ -67,6 +67,9 @@ use:
 - **Soft hide keeps selection** — placement toggle soft-hides without clearing
   `index`, but tears down overlay/split DOM so the live canvas reclaims space;
   reveal-center matches post create/update.
+- **INIT after soft-hide** — `initImageSelection` keeps gallery `index` when
+  baselines exist even if persisted `overlayOn` is false, so Diff / DiffResult
+  still resolve `baselineStem` (panel body is not toolbar-only).
 
 Storybook title **`Visual Delta/Panel Chrome`** mounts the real React panel
 controls via `ReactThemeHost.svelte` (`createRoot` + Storybook light theme) and

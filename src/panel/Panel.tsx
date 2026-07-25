@@ -618,7 +618,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     ],
   );
 
-  const baselineSrc = images[index]?.src;
+  // Soft-hide may clear the preview attach while keeping gallery selection.
+  // Fall back to the first baseline so DiffResult / Diff still have a stem.
+  const selectedBaselineIndex =
+    index >= 0 ? index : images.length > 0 ? 0 : -1;
+  const baselineSrc = images[selectedBaselineIndex]?.src;
   const baselineStem = baselineSrc?.split("?")[0] ?? "";
   /** True for panel-initiated runs and sidebar / Testing Module runs. */
   const runInFlight = isRunningVisual || runProgress != null;
@@ -756,7 +760,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const handleDiff = useCallback(
     async (engine: DiffCaptureEngine = "html") => {
-      if (index === -1 || !images[index]) {
+      const diffIndex = index >= 0 ? index : images.length > 0 ? 0 : -1;
+      if (diffIndex === -1 || !images[diffIndex]) {
         setCaptureError("Please select a baseline image first");
         return;
       }
@@ -774,14 +779,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError(null);
       setDiffResult(null);
       try {
-        const currentOverlayInfo = await getOverlayInfo();
-        if (!currentOverlayInfo?.image?.src) {
+        const selectedImage = images[diffIndex];
+        // Soft-hide clears the preview overlay attach — load from gallery src.
+        const currentOverlayInfo = await getOverlayInfo().catch(() => null);
+        const baselineSrcForDiff =
+          currentOverlayInfo?.image?.src ?? selectedImage.src;
+        if (!baselineSrcForDiff) {
           throw new Error(
             "Unable to get baseline image; make sure an image is selected",
           );
         }
-        const baseline = await loadImage(currentOverlayInfo.image.src);
-        const selectedImage = images[index];
+        const baseline = await loadImage(baselineSrcForDiff);
         let actual: Awaited<ReturnType<typeof loadImage>>;
         let captureTag: string;
 
