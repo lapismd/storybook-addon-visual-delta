@@ -36,6 +36,9 @@ export function TestingModuleShell({
       ? true
       : VISUAL_TEST_MODULE_DEFAULTS.updateStatusEnabled,
   );
+  const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState<boolean>(
+    VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
+  );
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
     seedRewriteMode
       ? "rewrite"
@@ -77,6 +80,7 @@ export function TestingModuleShell({
         runVisualEnabled={runVisualEnabled}
         createBaselinesEnabled={createBaselinesEnabled}
         updateStatusEnabled={updateStatusEnabled}
+        rebuildStaticEnabled={rebuildStaticEnabled}
         baselineMode={baselineMode}
         runnerBusy={seedRunningProgress}
         anyActionSelected={anyActionSelected}
@@ -103,6 +107,7 @@ export function TestingModuleShell({
         onRunVisualChange={setRunVisualEnabled}
         onCreateBaselinesChange={setCreateBaselinesEnabled}
         onUpdateStatusChange={setUpdateStatusEnabled}
+        onRebuildStaticChange={setRebuildStaticEnabled}
         onBaselineModeChange={setBaselineMode}
         onRun={() => {
           setLastAction(selectedSummary);

@@ -136,6 +136,8 @@ export type VisualTestModuleUIProps = {
   runVisualEnabled: boolean;
   createBaselinesEnabled: boolean;
   updateStatusEnabled: boolean;
+  /** Force build-storybook before create/update/compare captures. */
+  rebuildStaticEnabled: boolean;
   baselineMode: BaselineWriteMode;
   runnerBusy: boolean;
   anyActionSelected: boolean;
@@ -159,6 +161,7 @@ export type VisualTestModuleUIProps = {
   onRunVisualChange: (enabled: boolean) => void;
   onCreateBaselinesChange: (enabled: boolean) => void;
   onUpdateStatusChange: (enabled: boolean) => void;
+  onRebuildStaticChange: (enabled: boolean) => void;
   onBaselineModeChange: (mode: BaselineWriteMode) => void;
   onRun: () => void;
   onStop: () => void;
@@ -176,6 +179,7 @@ export function VisualTestModuleUI({
   runVisualEnabled,
   createBaselinesEnabled,
   updateStatusEnabled,
+  rebuildStaticEnabled,
   baselineMode,
   runnerBusy,
   anyActionSelected,
@@ -196,6 +200,7 @@ export function VisualTestModuleUI({
   onRunVisualChange,
   onCreateBaselinesChange,
   onUpdateStatusChange,
+  onRebuildStaticChange,
   onBaselineModeChange,
   onRun,
   onStop,
@@ -381,6 +386,28 @@ export function VisualTestModuleUI({
               isRunning={isUpdatingStatus}
             />
           </ActionList.Button>
+        </ActionList.Item>
+        <ActionList.Item>
+          <ActionList.Action as="label" ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
+                name="Rebuild static"
+                checked={rebuildStaticEnabled}
+                disabled={runnerBusy}
+                onChange={(event) => {
+                  onRebuildStaticChange(event.currentTarget.checked);
+                }}
+              />
+            </ActionList.Icon>
+            <ActionList.Text>
+              <RowLabel>
+                <span>Rebuild static</span>
+                <RowProgress>
+                  build-storybook before capture
+                </RowProgress>
+              </RowLabel>
+            </ActionList.Text>
+          </ActionList.Action>
         </ActionList.Item>
       </StyledActionList>
     </Root>

@@ -73,6 +73,8 @@ import {
 type UpdateBody = {
   storyId?: string;
   component?: string;
+  /** Force build-storybook before capture (strips host --skip-build). */
+  rebuild?: boolean;
 };
 
 type InteractionUpdateBody = {
@@ -435,9 +437,13 @@ async function handleBaselineWrite(
   }
 
   const createOnly = mode === "create";
+  const rebuild = Boolean(body.rebuild);
   const baseArgs = options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS];
   const args = [
-    ...baseArgs,
+    ...(rebuild
+      ? baseArgs.filter((arg) => arg !== "--skip-build")
+      : baseArgs),
+    ...(rebuild ? ["--rebuild"] : []),
     ...(createOnly ? ["--create-only"] : []),
     ...(component ? ["--component", component] : ["--story-id", storyId!]),
   ];
@@ -450,6 +456,9 @@ async function handleBaselineWrite(
   res.setHeader("X-Accel-Buffering", "no");
   const verb = createOnly ? "Creating missing baselines" : "Updating baselines";
   res.write(`${verb}${component ? ` for ${component}` : ` for ${storyId}`}…\n`);
+  if (rebuild) {
+    res.write("Rebuilding storybook-static before capture…\n");
+  }
 
   try {
     const { code } = await runCommand(

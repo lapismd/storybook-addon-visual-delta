@@ -34,6 +34,7 @@ function parseShared(argv: string[]): BaselineCliOptions {
     approved: hasFlag(argv, "--approved"),
     allowDirty: hasFlag(argv, "--allow-dirty"),
     skipBuild: hasFlag(argv, "--skip-build"),
+    forceRebuild: hasFlag(argv, "--rebuild"),
     createOnly: hasFlag(argv, "--create-only"),
   };
 }
@@ -64,7 +65,8 @@ Flags:
   --create-only             Missing PNGs only (no overwrite)
   --approved                Required unless VISUAL_UPDATE_APPROVED=1
   --allow-dirty             Reserved (host git gates may use this)
-  --skip-build              Use existing storybook-static (do not rebuild)
+  --skip-build              Prefer existing storybook-static when complete
+  --rebuild                 Force build-storybook before capture (overrides --skip-build)
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
   --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)

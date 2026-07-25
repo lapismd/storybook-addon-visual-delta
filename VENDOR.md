@@ -136,10 +136,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   popovers do not explode to a full-viewport PNG.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
-  still sees the story. Create/update rebuild `storybook-static` unless
-  `--skip-build` (captures must not reuse a stale static tree from before
-  component CSS/markup fixes). Create fails if the expected PNG was not
-  written (no more silent `No tests found` + exit 0).
+  still sees the story under `--skip-build`. Testing Module **Rebuild
+  static** (or CLI `--rebuild`) forces `build-storybook` before capture when
+  live edits outran the static tree. Create fails if the expected PNG was
+  not written (no more silent `No tests found` + exit 0).
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).
@@ -200,8 +200,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   idle shows `Not run` / summary) and a **play** split (Create missing /
   Rewrite existing; **Create missing** default). Checklist: compare (on by
   default), **Create missing Baselines** / **Update baselines** (off by
-  default), and **Update status** (off by default; pass → `visual-ready`,
-  fail → `visual-failed`). While running, each checked row shows
+  default), **Update status** (off by default; pass → `visual-ready`,
+  fail → `visual-failed`), and **Rebuild static** (off — forces
+  `build-storybook` before capture). While running, each checked row shows
   `completed/total` under the checkbox (compare = stories in scope; baselines
   = component targets; status = result count). The same checklist is used for
   the sidebar story/component context menu (scoped to that entry). Heading
