@@ -131,6 +131,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
   still sees the story under `--skip-build`. Create fails if the expected
   PNG was not written (no more silent `No tests found` + exit 0).
+- **Agent commits** — After each verified slice of work in this package,
+  commit with `jj` immediately (do not leave finished plugin changes only in
+  `@`).
 - **Compact compare** — Chromatic-style modes via Storybook `ToggleButton`:
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard
