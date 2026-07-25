@@ -23,6 +23,10 @@ import {
   screenshotRelativePath,
   type StoryIndexEntry,
 } from "../node/snapshot-paths.js";
+import {
+  baselinePngAbs,
+  writeDiffArtifactsForBaseline,
+} from "./write-diff-artifacts.js";
 
 const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
@@ -64,6 +68,28 @@ function resolveMode(options: VisualSuiteOptions): BaselinePathMode {
   if (fromEnv === "story-id" || fromEnv === "nested-import") return fromEnv;
   return options.baselinePathMode ?? DEFAULT_BASELINE_PATH_MODE;
 }
+
+function resolveSnapshotDirRel(options: VisualSuiteOptions): string {
+  const fromEnv = process.env.VISUAL_DELTA_SNAPSHOT_DIR?.trim();
+  if (fromEnv) {
+    return path.isAbsolute(fromEnv)
+      ? path.relative(resolveRoot(options), fromEnv) || DEFAULT_SNAPSHOT_DIR
+      : fromEnv;
+  }
+  if (options.snapshotDir?.trim()) {
+    const dir = options.snapshotDir.trim();
+    return path.isAbsolute(dir)
+      ? path.relative(resolveRoot(options), dir) || DEFAULT_SNAPSHOT_DIR
+      : dir;
+  }
+  return DEFAULT_SNAPSHOT_DIR;
+}
+
+type ShotTarget = {
+  subject: Locator | null;
+  clip: { x: number; y: number; width: number; height: number } | null;
+  fullViewport: boolean;
+};
 
 function loadVisualStories(
   packageRoot: string,
@@ -174,7 +200,7 @@ async function settleAfterPlay(page: Page): Promise<void> {
 async function screenshotStorySubject(
   page: Page,
   name: string | string[],
-): Promise<void> {
+): Promise<ShotTarget> {
   const { expect } = loadHostPlaywrightTest();
   const crop = await page.locator("html").getAttribute(VISUAL_DELTA_CROP_ATTR);
   const ignoreAttr = await page
@@ -199,24 +225,47 @@ async function screenshotStorySubject(
       ...expectOpts,
       fullPage: false,
     });
-    return;
+    return { subject: null, clip: null, fullViewport: true };
   }
 
   const clip = await portalUnionClip(page);
   if (clip) {
     await expect(page).toHaveScreenshot(name, { ...expectOpts, clip });
-    return;
+    return { subject: null, clip, fullViewport: false };
   }
 
   const subject: Locator = page.locator("#storybook-root > *").first();
   if ((await subject.count()) > 0) {
     await expect(subject).toHaveScreenshot(name, expectOpts);
-    return;
+    return { subject, clip: null, fullViewport: false };
   }
   await expect(page).toHaveScreenshot(name, {
     ...expectOpts,
     fullPage: false,
   });
+  return { subject: null, clip: null, fullViewport: true };
+}
+
+async function captureActualPng(
+  page: Page,
+  target: ShotTarget,
+): Promise<Buffer> {
+  const shotOpts = {
+    animations: "disabled" as const,
+    caret: "hide" as const,
+    scale: "device" as const,
+    type: "png" as const,
+  };
+  if (target.fullViewport) {
+    return page.screenshot({ ...shotOpts, fullPage: false });
+  }
+  if (target.clip) {
+    return page.screenshot({ ...shotOpts, clip: target.clip });
+  }
+  if (target.subject) {
+    return target.subject.screenshot(shotOpts);
+  }
+  return page.screenshot({ ...shotOpts, fullPage: false });
 }
 
 /**
@@ -233,9 +282,10 @@ async function screenshotStorySubject(
  * `VISUAL_DELTA_SNAPSHOT_DIR` from that CLI.
  */
 export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
-  const { expect, test } = loadHostPlaywrightTest();
+  const { test } = loadHostPlaywrightTest();
   const packageRoot = resolveRoot(options);
   const mode = resolveMode(options);
+  const snapshotDir = resolveSnapshotDirRel(options);
   const stories = loadVisualStories(packageRoot, options.includeStory);
 
   const interactionEnv = process.env.PLAYWRIGHT_INTERACTION_CAPTURE?.trim();
@@ -264,7 +314,42 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         screenshotRelativePath(entry, mode),
         interactionRequest.stepId,
       );
-      await screenshotStorySubject(page, rel.split("/"));
+      let target: ShotTarget = {
+        subject: null,
+        clip: null,
+        fullViewport: false,
+      };
+      let status: "passed" | "failed" = "passed";
+      let error: string | undefined;
+      try {
+        target = await screenshotStorySubject(page, rel.split("/"));
+      } catch (err) {
+        status = "failed";
+        error = err instanceof Error ? err.message : String(err);
+        throw err;
+      } finally {
+        const actualPng = await captureActualPng(page, target).catch(() => null);
+        // `{slug}--{stepId}-chromium-darwin.png` beside the primary baseline.
+        const baselinePngAbsPath = baselinePngAbs(
+          entry,
+          packageRoot,
+          snapshotDir,
+          mode,
+        ).replace(
+          /-chromium-([a-z0-9]+)\.png$/i,
+          `--${interactionRequest.stepId}-chromium-$1.png`,
+        );
+        writeDiffArtifactsForBaseline({
+          entry,
+          packageRoot,
+          snapshotDir,
+          mode,
+          baselinePngAbsPath,
+          status,
+          error,
+          actualPng,
+        });
+      }
     });
     return;
   }
@@ -274,7 +359,37 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
       await prepareStoryPage(page, story.id);
       await settleAfterPlay(page);
       const rel = screenshotRelativePath(story, mode);
-      await screenshotStorySubject(page, rel.split("/"));
+      let target: ShotTarget = {
+        subject: null,
+        clip: null,
+        fullViewport: false,
+      };
+      let status: "passed" | "failed" = "passed";
+      let error: string | undefined;
+      try {
+        target = await screenshotStorySubject(page, rel.split("/"));
+      } catch (err) {
+        status = "failed";
+        error = err instanceof Error ? err.message : String(err);
+        throw err;
+      } finally {
+        const actualPng = await captureActualPng(page, target).catch(() => null);
+        writeDiffArtifactsForBaseline({
+          entry: story,
+          packageRoot,
+          snapshotDir,
+          mode,
+          baselinePngAbsPath: baselinePngAbs(
+            story,
+            packageRoot,
+            snapshotDir,
+            mode,
+          ),
+          status,
+          error,
+          actualPng,
+        });
+      }
     });
   }
 }

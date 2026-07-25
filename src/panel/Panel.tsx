@@ -664,8 +664,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     let cancelled = false;
     void loadPlaywrightDiffResult(baselineStem, diffEpoch || Date.now()).then(
       (result) => {
-        diffResultCacheRef.current.set(baselineStem, result);
-        if (!cancelled) setDiffResult(result);
+        if (cancelled) return;
+        if (result) {
+          diffResultCacheRef.current.set(baselineStem, result);
+          setDiffResult(result);
+          return;
+        }
+        // Missing on-disk artifacts must not wipe a live Diff still cached.
+        const existing = diffResultCacheRef.current.get(baselineStem);
+        if (existing) {
+          setDiffResult(existing);
+          return;
+        }
+        diffResultCacheRef.current.set(baselineStem, null);
+        setDiffResult(null);
       },
     );
     return () => {
@@ -912,7 +924,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const threshold =
           passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
         const passed = diffPercent < threshold;
-        setDiffResult({
+        const nextResult = {
           actualImage: actualMaskedDataUrl,
           diffImage: diffCanvas.toDataURL("image/png"),
           baselineImage: baseline.dataUrl,
@@ -927,7 +939,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           passed,
           sizeNote,
           diffHistogram,
-        });
+        };
+        // Cache under the gallery stem so soft-hide / reload effects keep DiffResult.
+        const stemKey =
+          (baselineSrcForDiff.split("?")[0] ||
+            selectedImage.src.split("?")[0]) ??
+          "";
+        if (stemKey) {
+          diffResultCacheRef.current.set(stemKey, nextResult);
+        }
+        setDiffResult(nextResult);
         if (storyId) {
           applyVisualStatuses([
             visualResultFromLiveDiff({
