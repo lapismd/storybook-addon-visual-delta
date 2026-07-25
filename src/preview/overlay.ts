@@ -28,8 +28,6 @@ import {
 import { resolvePaintedBackground } from "../shared/preview-background.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
-/** Icon chip on the baseline PNG so overlay vs live stays obvious. */
-const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
 const SPLIT_ID = "visual-delta-split";
 const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
@@ -169,6 +167,20 @@ function getOverlayChannelApi(): OverlayChannelApi {
 const overlayChannelApi = getOverlayChannelApi();
 
 const MODE_BADGE_ID = "visual-delta-mode-badge";
+/** Chip on the baseline overlay element — rides with drag transforms. */
+const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
+
+/** Shared paint for Image-only (fixed) and Baseline (on-overlay). */
+const PREVIEW_CHIP_PAINT = `
+  z-index: 10000;
+  padding: 3px 8px;
+  font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+  color: #fff;
+  background: rgba(2, 97, 198, 0.92);
+  border-radius: 4px;
+  pointer-events: none;
+  user-select: none;
+`;
 
 function syncModeBadge(imageOnly: boolean) {
   let badge = document.getElementById(MODE_BADGE_ID);
@@ -186,14 +198,33 @@ function syncModeBadge(imageOnly: boolean) {
     position: fixed;
     top: 8px;
     left: 8px;
-    z-index: 10000;
-    padding: 3px 8px;
-    font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
-    color: #fff;
-    background: rgba(2, 97, 198, 0.92);
-    border-radius: 4px;
-    pointer-events: none;
-    user-select: none;
+    ${PREVIEW_CHIP_PAINT}
+  `;
+}
+
+/**
+ * Attach a Baseline chip to the overlay root (sibling of the PNG). Same paint
+ * as Image-only; absolute so it moves with overlay drag transforms. Opacity /
+ * difference blend stay on the `<img>` so the chip stays solid.
+ */
+function ensureOverlayChip(overlay: HTMLElement) {
+  // Drop any leftover fixed badge from earlier experiments.
+  document.getElementById("visual-delta-overlay-badge")?.remove();
+  let chip = overlay.querySelector(`:scope > #${OVERLAY_CHIP_ID}`);
+  if (!(chip instanceof HTMLElement)) {
+    document.getElementById(OVERLAY_CHIP_ID)?.remove();
+    chip = document.createElement("div");
+    chip.id = OVERLAY_CHIP_ID;
+    chip.textContent = "Baseline";
+    overlay.appendChild(chip);
+  } else if (chip.textContent !== "Baseline") {
+    chip.textContent = "Baseline";
+  }
+  chip.style.cssText = `
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    ${PREVIEW_CHIP_PAINT}
   `;
 }
 
@@ -982,49 +1013,6 @@ function ensureSplit(
   return { livePane, baselinePane };
 }
 
-/**
- * Icon-only chip on the baseline PNG. Uses a text glyph (no innerHTML) so
- * Storybook / Trusted Types cannot strip the mark.
- */
-function ensureOverlayChip(overlay: HTMLElement) {
-  let chip = overlay.querySelector(`:scope > #${OVERLAY_CHIP_ID}`);
-  if (!(chip instanceof HTMLElement)) {
-    document.getElementById(OVERLAY_CHIP_ID)?.remove();
-    chip = document.createElement("div");
-    chip.id = OVERLAY_CHIP_ID;
-    chip.setAttribute("role", "img");
-    chip.setAttribute("aria-label", "Baseline overlay");
-    chip.title = "Baseline overlay";
-    chip.textContent = "B";
-    overlay.appendChild(chip);
-  } else if (chip.textContent !== "B") {
-    chip.textContent = "B";
-  }
-  // Keep the chip above the PNG and out of blend/opacity on the image.
-  chip.style.cssText = `
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    z-index: 2;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    font: 700 11px/1 ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: 0;
-    color: #fff;
-    background: #0261c6;
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    border-radius: 4px;
-    pointer-events: none;
-    user-select: none;
-    isolation: isolate;
-    mix-blend-mode: normal;
-    opacity: 1;
-  `;
-}
-
 function ensureOverlayElement(): HTMLElement {
   let overlay = document.getElementById(OVERLAY_ID);
   if (overlay instanceof HTMLElement) {
@@ -1090,7 +1078,7 @@ function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
 function updateOverlayStyle(overlay: HTMLElement | null) {
   if (!overlay) return;
   ensureOverlayChip(overlay);
-  // Blend/opacity on the PNG only so the identification chip stays crisp.
+  // Blend/opacity on the PNG only so the Baseline chip stays solid.
   const img = overlay.querySelector(":scope > img");
   overlay.style.mixBlendMode = "normal";
   overlay.style.opacity = "1";

@@ -135,8 +135,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   `min-height: 100vh` is suppressed in split mode; subject width stays locked to
   the baseline CSS width. Split baseline panes mirror canvas padding **and**
   the subject’s margins (e.g. `my-2`) so side-by-side tops align. Center stacks
-  a ghost overlay (opacity / difference blend on the PNG only). A small
-  “B” chip (top-left on the baseline image) marks the overlay vs live.
+  a ghost overlay (opacity / difference blend on the PNG only). A
+  “Baseline” chip (same chrome as Image-only, top-left on the overlay so it
+  follows drag) marks the overlay vs live.
   Legacy `beside`/`over` map to `right`/`center`. Split panes / scroll rails use
   the live preview’s painted background (canvas → body → `--background`), not
   Storybook chrome `--sb-color-bg`.
