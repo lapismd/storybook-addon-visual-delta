@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   VISUAL_REVIEW_TAGS,
+  normalizeVisualStoryTags,
   visualReviewTagFor,
   type VisualReviewStatus,
 } from "../constants.js";
@@ -9,15 +10,26 @@ import { visualBaselineVisualDeltaParameter } from "./baseline-design.js";
 import { findStoryOpenTagEnd, sanitizeStoryName } from "./source-utils.js";
 import type { BaselinePathMode } from "./options.js";
 import { baselinePublicUrl, type StoryIndexEntry } from "./snapshot-paths.js";
-import { loadStoryIndex } from "./visual-sidecars.js";
+import {
+  loadStoryIndex,
+  syncStaticIndexReviewStatus,
+  syncStaticIndexSkipVisual,
+} from "./visual-sidecars.js";
 
 export type StorySourceMutation =
   | { kind: "skip"; skip: boolean }
   | { kind: "review"; status: VisualReviewStatus }
-  | { kind: "baseline"; url: string }
+  | {
+      kind: "baseline";
+      url: string;
+      /** When set, review tags are normalized to this status in the same write. */
+      reviewStatus?: VisualReviewStatus;
+    }
   | {
       kind: "interaction";
       interaction: { id: string; label: string; src: string };
+      /** When set, review tags are normalized to this status in the same write. */
+      reviewStatus?: VisualReviewStatus;
     };
 function resolveStoriesPath(
   packageRoot: string,
@@ -36,19 +48,12 @@ function nextTags(
   current: string[],
   mutation: Extract<StorySourceMutation, { kind: "skip" | "review" }>,
 ): string[] {
-  const reviewTags = new Set<string>(VISUAL_REVIEW_TAGS);
-  const filtered = current.filter((tag) => {
-    if (mutation.kind === "skip") {
-      return tag !== "skip-visual" && !reviewTags.has(tag);
-    }
-    return !reviewTags.has(tag);
-  });
-  if (mutation.kind === "skip") {
-    if (mutation.skip) filtered.push("skip-visual");
-  } else {
-    filtered.push(visualReviewTagFor(mutation.status));
-  }
-  return [...new Set(filtered)];
+  return normalizeVisualStoryTags(
+    current,
+    mutation.kind === "skip"
+      ? { kind: "skip", skip: mutation.skip }
+      : { kind: "review", status: mutation.status },
+  );
 }
 
 function storyNameCandidates(openTag: string): string[] {
@@ -102,32 +107,43 @@ function mutateSvelteOpenTag(
   mutation: StorySourceMutation,
 ): string {
   if (mutation.kind === "baseline") {
-    if (openTag.includes("skip-visual") || openTag.includes(mutation.url)) {
-      return openTag;
+    let next = openTag;
+    if (!(openTag.includes("skip-visual") || openTag.includes(mutation.url))) {
+      const visualDelta = JSON.stringify(
+        visualBaselineVisualDeltaParameter(mutation.url),
+      );
+      if (/\bvisualDelta\s*:/.test(openTag)) {
+        const match = /\bimages\s*:\s*\[/.exec(openTag);
+        if (match) {
+          const start = openTag.indexOf("[", match.index);
+          const end = findBalancedEnd(openTag, start, "[", "]");
+          if (end >= 0) {
+            const inside = openTag.slice(start + 1, end).trim();
+            const appended = inside
+              ? `${inside.replace(/,\s*$/, "")}, ${JSON.stringify(mutation.url)}`
+              : JSON.stringify(mutation.url);
+            next = `${openTag.slice(0, start + 1)}${appended}${openTag.slice(end)}`;
+          }
+        }
+      } else {
+        const parametersIndex = openTag.indexOf("parameters={{");
+        if (parametersIndex >= 0) {
+          const insert = parametersIndex + "parameters={{".length;
+          next = `${openTag.slice(0, insert)}\n    visualDelta: ${visualDelta},${openTag.slice(insert)}`;
+        } else {
+          const attribute = `\n  parameters={{\n    visualDelta: ${visualDelta},\n  }}`;
+          const closeLength = openTag.endsWith("/>") ? 2 : 1;
+          next = `${openTag.slice(0, -closeLength)}${attribute}\n${openTag.slice(-closeLength)}`;
+        }
+      }
     }
-    const visualDelta = JSON.stringify(
-      visualBaselineVisualDeltaParameter(mutation.url),
-    );
-    if (/\bvisualDelta\s*:/.test(openTag)) {
-      const match = /\bimages\s*:\s*\[/.exec(openTag);
-      if (!match) return openTag;
-      const start = openTag.indexOf("[", match.index);
-      const end = findBalancedEnd(openTag, start, "[", "]");
-      if (end < 0) return openTag;
-      const inside = openTag.slice(start + 1, end).trim();
-      const appended = inside
-        ? `${inside.replace(/,\s*$/, "")}, ${JSON.stringify(mutation.url)}`
-        : JSON.stringify(mutation.url);
-      return `${openTag.slice(0, start + 1)}${appended}${openTag.slice(end)}`;
+    if (mutation.reviewStatus) {
+      next = mutateSvelteOpenTag(next, {
+        kind: "review",
+        status: mutation.reviewStatus,
+      });
     }
-    const parametersIndex = openTag.indexOf("parameters={{");
-    if (parametersIndex >= 0) {
-      const insert = parametersIndex + "parameters={{".length;
-      return `${openTag.slice(0, insert)}\n    visualDelta: ${visualDelta},${openTag.slice(insert)}`;
-    }
-    const attribute = `\n  parameters={{\n    visualDelta: ${visualDelta},\n  }}`;
-    const closeLength = openTag.endsWith("/>") ? 2 : 1;
-    return `${openTag.slice(0, -closeLength)}${attribute}\n${openTag.slice(-closeLength)}`;
+    return next;
   }
 
   if (mutation.kind === "interaction") {
@@ -146,11 +162,17 @@ function mutateSvelteOpenTag(
     );
     without.push({ ...mutation.interaction });
     parsed.interactions = without;
-    return (
+    let next =
       openTag.slice(0, range.start) +
       JSON.stringify(parsed) +
-      openTag.slice(range.end)
-    );
+      openTag.slice(range.end);
+    if (mutation.reviewStatus) {
+      next = mutateSvelteOpenTag(next, {
+        kind: "review",
+        status: mutation.reviewStatus,
+      });
+    }
+    return next;
   }
 
   const match = /\btags=\{\[([\s\S]*?)\]\}/.exec(openTag);
@@ -492,8 +514,20 @@ function patchTsStory(
   let next = objectText;
   if (mutation.kind === "baseline") {
     next = mutateTsBaseline(objectText, mutation.url);
+    if (mutation.reviewStatus) {
+      next = mutateTsTags(next, {
+        kind: "review",
+        status: mutation.reviewStatus,
+      });
+    }
   } else if (mutation.kind === "interaction") {
     next = mutateTsInteraction(objectText, mutation.interaction);
+    if (mutation.reviewStatus) {
+      next = mutateTsTags(next, {
+        kind: "review",
+        status: mutation.reviewStatus,
+      });
+    }
   } else {
     next = mutateTsTags(objectText, mutation);
   }
@@ -544,21 +578,25 @@ export function patchStorySkipVisual(options: {
       error: `Story not found in index: ${options.storyId}`,
     };
   }
-  if ((entry.tags ?? []).includes("skip-visual") === options.skip) {
-    return { ok: true, storyId: options.storyId, skip: options.skip };
-  }
   const changed = patchStoryFile(options.packageRoot, entry, {
     kind: "skip",
     skip: options.skip,
   });
-  return changed
-    ? { ok: true, storyId: options.storyId, skip: options.skip }
-    : {
-        ok: false,
-        storyId: options.storyId,
-        skip: options.skip,
-        error: `Could not patch story source for ${options.storyId}`,
-      };
+  // CSF may already match; always normalize the static index (and clear review
+  // tags when skipping) so --skip-build create/include paths stay consistent.
+  syncStaticIndexSkipVisual(options.packageRoot, [options.storyId], options.skip);
+  if (
+    !changed &&
+    (entry.tags ?? []).includes("skip-visual") !== options.skip
+  ) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      skip: options.skip,
+      error: `Could not patch story source for ${options.storyId}`,
+    };
+  }
+  return { ok: true, storyId: options.storyId, skip: options.skip };
 }
 
 export function patchStoryVisualReviewStatus(options: {
@@ -598,26 +636,35 @@ export function patchStoryVisualReviewStatus(options: {
     presentReviewTags.length === 1 &&
     presentReviewTags[0] === desired
   ) {
+    syncStaticIndexReviewStatus(options.packageRoot, [
+      { storyId: options.storyId, status: options.status },
+    ]);
     return { ok: true, storyId: options.storyId, status: options.status };
   }
   const changed = patchStoryFile(options.packageRoot, entry, {
     kind: "review",
     status: options.status,
   });
-  return changed
-    ? { ok: true, storyId: options.storyId, status: options.status }
-    : {
-        ok: false,
-        storyId: options.storyId,
-        status: options.status,
-        error: `Could not patch story source for ${options.storyId}`,
-      };
+  if (!changed) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      status: options.status,
+      error: `Could not patch story source for ${options.storyId}`,
+    };
+  }
+  syncStaticIndexReviewStatus(options.packageRoot, [
+    { storyId: options.storyId, status: options.status },
+  ]);
+  return { ok: true, storyId: options.storyId, status: options.status };
 }
 
 export function patchStoryBaselineImages(options: {
   packageRoot: string;
   storyId: string;
   url: string;
+  /** Defaults to `ready` — create/update clear `visual-pending` and siblings. */
+  reviewStatus?: VisualReviewStatus;
 }): { ok: boolean; storyId: string; error?: string } {
   const entry = loadStoryIndex(options.packageRoot)[options.storyId];
   if (!entry?.importPath) {
@@ -634,23 +681,25 @@ export function patchStoryBaselineImages(options: {
       error: "Cannot wire baselines on skip-visual stories",
     };
   }
-  const changed = patchStoryFile(options.packageRoot, entry, {
+  const reviewStatus = options.reviewStatus ?? "ready";
+  patchStoryFile(options.packageRoot, entry, {
     kind: "baseline",
     url: options.url,
+    reviewStatus,
   });
-  return changed
-    ? { ok: true, storyId: options.storyId }
-    : {
-        ok: false,
-        storyId: options.storyId,
-        error: `Could not patch baseline images for ${options.storyId}`,
-      };
+  // Always normalize index tags — CSF may already have the URL/tag pair.
+  syncStaticIndexReviewStatus(options.packageRoot, [
+    { storyId: options.storyId, status: reviewStatus },
+  ]);
+  return { ok: true, storyId: options.storyId };
 }
 
 export function patchStoryInteraction(options: {
   packageRoot: string;
   storyId: string;
   interaction: { id: string; label: string; src: string };
+  /** Defaults to `ready` — clears `visual-pending` and other review siblings. */
+  reviewStatus?: VisualReviewStatus;
 }): { ok: boolean; storyId: string; error?: string } {
   const entry = loadStoryIndex(options.packageRoot)[options.storyId];
   if (!entry?.importPath) {
@@ -667,17 +716,23 @@ export function patchStoryInteraction(options: {
       error: "Cannot wire interactions on skip-visual stories",
     };
   }
+  const reviewStatus = options.reviewStatus ?? "ready";
   const changed = patchStoryFile(options.packageRoot, entry, {
     kind: "interaction",
     interaction: options.interaction,
+    reviewStatus,
   });
-  return changed
-    ? { ok: true, storyId: options.storyId }
-    : {
-        ok: false,
-        storyId: options.storyId,
-        error: `Could not patch interaction for ${options.storyId}`,
-      };
+  if (!changed) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: `Could not patch interaction for ${options.storyId}`,
+    };
+  }
+  syncStaticIndexReviewStatus(options.packageRoot, [
+    { storyId: options.storyId, status: reviewStatus },
+  ]);
+  return { ok: true, storyId: options.storyId };
 }
 
 export function injectTypeScriptStoryBaselines(

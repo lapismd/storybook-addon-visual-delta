@@ -74,6 +74,24 @@ export const Light: Story = {
     expect(failed).not.toContain("visual-ready");
   });
 
+  it("baseline wiring clears visual-pending when stamping ready", () => {
+    const svelteEntry: StoryIndexEntry = {
+      id: "demo--light",
+      name: "Light",
+      importPath: "src/Demo.stories.svelte",
+    };
+    const source = `<Story name="Light" tags={["visual-pending", "visual-approved"]}>\n`;
+    const next = patchStorySourceText(source, svelteEntry, {
+      kind: "baseline",
+      url: "/visual-baselines/forms/demo/light-chromium-darwin.png",
+      reviewStatus: "ready",
+    });
+    expect(next).toContain("visualDelta");
+    expect(next).toContain('"visual-ready"');
+    expect(next).not.toContain("visual-pending");
+    expect(next).not.toContain("visual-approved");
+  });
+
   it("injects story-id baselines during Vite transforms", () => {
     const source = `
 const meta = { title: "Workspace shell/Demo" };

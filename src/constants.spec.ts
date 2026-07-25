@@ -4,6 +4,7 @@ import {
   isSplitPlacement,
   isVisualReviewStatus,
   normalizePlacement,
+  normalizeVisualStoryTags,
   visualReviewStatusFromTags,
   visualReviewTagFor,
 } from "./constants.js";
@@ -58,5 +59,25 @@ describe("visual review tags", () => {
     expect(isVisualReviewStatus("pending")).toBe(true);
     expect(isVisualReviewStatus("ready")).toBe(true);
     expect(isVisualReviewStatus("nope")).toBe(false);
+  });
+
+  it("normalizes to a single review tag and clears them when skipping", () => {
+    expect(
+      normalizeVisualStoryTags(
+        ["dev", "visual-pending", "visual-failed", "example"],
+        { kind: "review", status: "ready" },
+      ),
+    ).toEqual(["dev", "example", "visual-ready"]);
+    expect(
+      normalizeVisualStoryTags(["dev", "visual-ready", "skip-visual"], {
+        kind: "skip",
+        skip: true,
+      }),
+    ).toEqual(["dev", "skip-visual"]);
+    expect(
+      normalizeVisualStoryTags(["dev", "visual-pending"], {
+        kind: "clear-review",
+      }),
+    ).toEqual(["dev"]);
   });
 });

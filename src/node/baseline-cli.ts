@@ -21,7 +21,6 @@ import {
   patchStoryBaselineImages,
   patchStoryInteraction,
   patchStorySkipVisual,
-  patchStoryVisualReviewStatus,
 } from "./story-source.js";
 import {
   ensurePlaywrightWebServerPort,
@@ -141,7 +140,8 @@ function interactionSnapshotFileName(
 
 /**
  * Create missing or overwrite primary baselines via Playwright, then wire CSF
- * `parameters.visualDelta.images` and stamp `visual-pending`.
+ * `parameters.visualDelta.images` and stamp `visual-ready` (clears pending /
+ * approved / failed).
  */
 export async function runBaselineUpdate(
   options: BaselineCliOptions,
@@ -237,11 +237,7 @@ export async function runBaselineUpdate(
       packageRoot: root,
       storyId: entry.id,
       url,
-    });
-    patchStoryVisualReviewStatus({
-      packageRoot: root,
-      storyId: entry.id,
-      status: "pending",
+      reviewStatus: "ready",
     });
   }
 

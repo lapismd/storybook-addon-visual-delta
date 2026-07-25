@@ -295,3 +295,31 @@ export function isVisualReviewStatus(
     value === "failed"
   );
 }
+
+export type VisualStoryTagChange =
+  | { kind: "skip"; skip: boolean }
+  | { kind: "review"; status: VisualReviewStatus }
+  | { kind: "clear-review" };
+
+/**
+ * Mutually exclusive visual tags: at most one review tag, and never a review
+ * tag alongside `skip-visual`. Used by every CSF tag patcher.
+ */
+export function normalizeVisualStoryTags(
+  current: readonly string[],
+  change: VisualStoryTagChange,
+): string[] {
+  const reviewTags = new Set<string>(VISUAL_REVIEW_TAGS);
+  const filtered = current.filter((tag) => {
+    if (change.kind === "skip") {
+      return tag !== SKIP_VISUAL_TAG && !reviewTags.has(tag);
+    }
+    return !reviewTags.has(tag);
+  });
+  if (change.kind === "skip") {
+    if (change.skip) filtered.push(SKIP_VISUAL_TAG);
+  } else if (change.kind === "review") {
+    filtered.push(visualReviewTagFor(change.status));
+  }
+  return [...new Set(filtered)];
+}
