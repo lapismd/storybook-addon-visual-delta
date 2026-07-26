@@ -147,6 +147,7 @@ export function BaselineAccordionFixture() {
     "default",
   );
   const [showDistribution, setShowDistribution] = useState(false);
+  const [historyOpened, setHistoryOpened] = useState("none");
   const sections = useMemo(
     () => [
       {
@@ -156,6 +157,10 @@ export function BaselineAccordionFixture() {
         thumbSrc: SAMPLE_IMAGES[0]?.src,
         status: "pass" as const,
         stats: "0.0000% · 0/100 px · <1%",
+        history: {
+          path: "forms/entry-actions/single-entry-chromium-darwin.png",
+          label: "Default",
+        },
       },
       {
         id: "opens-chooser",
@@ -183,6 +188,7 @@ export function BaselineAccordionFixture() {
         onUpdate={() => undefined}
         onUpdateDefault={() => undefined}
         onToggleDistribution={() => setShowDistribution((v) => !v)}
+        onOpenHistory={(target) => setHistoryOpened(target.label)}
         renderBody={(section) => (
           <FormPlaceholder data-testid={`fixture-section-body-${section.id}`}>
             Body for {section.label}
@@ -191,6 +197,9 @@ export function BaselineAccordionFixture() {
       />
       <div data-testid="fixture-expanded-id" style={metaStyle}>
         {expandedId ?? "none"}
+      </div>
+      <div data-testid="fixture-history-opened" style={metaStyle}>
+        {historyOpened}
       </div>
     </div>
   );
@@ -208,11 +217,13 @@ export function BaselineHistoryViewFixture() {
       `<svg xmlns="http://www.w3.org/2000/svg" width="440" height="220"><rect width="440" height="220" fill="#f6f7fb"/><rect x="65" y="45" width="330" height="130" rx="18" fill="#00897b"/><text x="95" y="120" fill="#fff" font-size="24">Updated baseline</text></svg>`,
     );
   return (
-    <div style={{ height: 560, position: "relative" }}>
+    <div style={{ height: 760, position: "relative" }}>
       <BaselineHistoryView
         target={{
           path: "forms/entry-actions/single-entry-chromium-darwin.png",
           label: "Default",
+          componentPath:
+            "src/shared/forms/entry-actions/EntryActions.stories.svelte",
         }}
         onClose={() => undefined}
         loadHistory={async ({ cursor }) => ({
@@ -258,6 +269,39 @@ export function BaselineHistoryViewFixture() {
                 },
               ],
           nextCursor: cursor ? null : "older",
+        })}
+        loadComponentDiff={async ({ beforeRevisionId, afterRevisionId }) => ({
+          ok: true,
+          beforeRevisionId,
+          afterRevisionId,
+          truncated: false,
+          files: [
+            {
+              beforePath: "src/shared/forms/entry-actions/EntryActions.svelte",
+              afterPath: "src/shared/forms/entry-actions/EntryActions.svelte",
+              hunks: [
+                {
+                  header: "@@ -18,3 +18,3 @@",
+                  lines: [
+                    {
+                      beforeNumber: 18,
+                      afterNumber: 18,
+                      before: '<div class="entry-actions compact">',
+                      after: '<div class="entry-actions comfortable">',
+                      kind: "changed",
+                    },
+                    {
+                      beforeNumber: 19,
+                      afterNumber: 19,
+                      before: "  <button>Save</button>",
+                      after: "  <button>Save</button>",
+                      kind: "context",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         })}
       />
     </div>

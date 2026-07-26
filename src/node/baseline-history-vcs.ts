@@ -40,6 +40,10 @@ export interface BaselineHistoryVcs {
     revisionId: string,
   ): Promise<VcsFileRevision | null>;
   readFileAtRevision(revision: VcsFileRevision): Promise<Buffer>;
+  diffRevisions(
+    beforeRevisionId: string,
+    afterRevisionId: string,
+  ): Promise<string>;
 }
 
 type CommandRunner = (
@@ -172,6 +176,29 @@ export class JjBaselineHistoryVcs implements BaselineHistoryVcs {
       },
     );
     return Buffer.from(result.stdout);
+  }
+
+  async diffRevisions(
+    beforeRevisionId: string,
+    afterRevisionId: string,
+  ): Promise<string> {
+    const revision = (value: string) =>
+      value === "working-copy" ? "@" : value;
+    return this.run(
+      "jj",
+      [
+        "--ignore-working-copy",
+        "--no-pager",
+        "--color=never",
+        "diff",
+        "--git",
+        "--from",
+        revision(beforeRevisionId),
+        "--to",
+        revision(afterRevisionId),
+      ],
+      this.root,
+    );
   }
 }
 
@@ -320,6 +347,28 @@ export class GitBaselineHistoryVcs implements BaselineHistoryVcs {
       },
     );
     return Buffer.from(result.stdout);
+  }
+
+  async diffRevisions(
+    beforeRevisionId: string,
+    afterRevisionId: string,
+  ): Promise<string> {
+    const args = [
+      "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--find-renames",
+      "--unified=3",
+    ];
+    if (beforeRevisionId === "working-copy") {
+      if (afterRevisionId === "working-copy") return "";
+      args.push("-R", afterRevisionId);
+    } else {
+      args.push(beforeRevisionId);
+      if (afterRevisionId !== "working-copy") args.push(afterRevisionId);
+    }
+    args.push("--");
+    return this.run("git", args, this.root);
   }
 }
 

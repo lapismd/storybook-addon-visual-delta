@@ -3,6 +3,7 @@ import {
   AddIcon,
   CheckIcon,
   ChevronSmallDownIcon,
+  CommitIcon,
   CrossIcon,
   GraphBarIcon,
   SyncIcon,
@@ -166,6 +167,12 @@ export type BaselineSectionId = "default" | string;
 
 export type BaselineSectionStatus = "pass" | "fail";
 
+export type BaselineSectionHistory = {
+  path: string;
+  label: string;
+  componentPath?: string;
+};
+
 export type BaselineSection = {
   id: BaselineSectionId;
   label: string;
@@ -177,6 +184,8 @@ export type BaselineSection = {
   status?: BaselineSectionStatus | null;
   /** Compact pass/fail stats shown on the right of the accordion header. */
   stats?: string | null;
+  /** Development-only VCS history target for this concrete baseline. */
+  history?: BaselineSectionHistory;
 };
 
 /** Baseline preview shown in the expanded section toolbar. */
@@ -218,6 +227,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onUpdate,
   onUpdateDefault,
   onToggleDistribution,
+  onOpenHistory,
   renderBody,
 }: {
   sections: BaselineSection[];
@@ -230,6 +240,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   /** Rewrite the story's primary (Default) baseline. */
   onUpdateDefault: () => void;
   onToggleDistribution: () => void;
+  onOpenHistory?: (target: BaselineSectionHistory) => void;
   renderBody: (section: BaselineSection) => React.ReactNode;
 }) {
   const labelWidth = useMemo(() => {
@@ -287,6 +298,18 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                 </SummaryRight>
               </SummaryButton>
               <SummaryActions>
+                {section.history && onOpenHistory ? (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    padding="small"
+                    ariaLabel={`Open ${section.history.label} baseline history`}
+                    title={`Open ${section.history.label} baseline history`}
+                    onClick={() => onOpenHistory(section.history!)}
+                  >
+                    <CommitIcon />
+                  </Button>
+                ) : null}
                 {expanded && hasDiff ? (
                   <ToggleButton
                     size="small"

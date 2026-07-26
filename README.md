@@ -183,6 +183,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                  |
 | `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG           |
 | `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision         |
+| `GET`  | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions      |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -204,11 +205,17 @@ reconnects via `/run-status` + `/run-events` instead of losing progress.
 
 ### Baseline history
 
-In Storybook development, expand a baseline and choose **History** beside its
-thumbnail. The history view is scoped to the concrete Default, named mode, or
-interaction PNG currently selected. Choose any **Before** and **After**
-revisions to use the same 2-up, Diff, Focus, Swipe, Blink, zoom, and lightbox
-tools as the live comparison.
+In Storybook development, use the icon-only **History** action in a baseline's
+accordion header. The history view is scoped to the concrete Default, named
+mode, or interaction PNG currently selected. Choose any **Before** and
+**After** revisions to use the same 2-up, Diff, Focus, Swipe, Blink, zoom, and
+lightbox tools as the live comparison.
+
+The revision timeline and image comparison remain equal-height panes. Beneath
+them, **Component diff** shows an aligned source diff for files in the current
+story/component folder, excluding binary baseline files. Existing PNG history
+does not contain historical DOM snapshots, so this is the VCS-backed source
+equivalent rather than reconstructed DOM.
 
 Visual Delta prefers Jujutsu when `jj root` succeeds, including colocated
 JJ/Git checkouts, and otherwise falls back to Git. JJ shows the stable change

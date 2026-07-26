@@ -1,4 +1,5 @@
 import {
+  VISUAL_DELTA_BASELINE_HISTORY_DIFF_PATH,
   VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH,
   VISUAL_DELTA_BASELINE_HISTORY_PATH,
 } from "../constants.js";
@@ -33,6 +34,33 @@ export type BaselineHistoryErrorResponse = {
   ok: false;
   error: string;
   unavailable?: boolean;
+};
+
+export type BaselineHistoryDiffLine = {
+  beforeNumber: number | null;
+  afterNumber: number | null;
+  before: string | null;
+  after: string | null;
+  kind: "context" | "changed" | "removed" | "added";
+};
+
+export type BaselineHistoryDiffHunk = {
+  header: string;
+  lines: BaselineHistoryDiffLine[];
+};
+
+export type BaselineHistoryDiffFile = {
+  beforePath: string;
+  afterPath: string;
+  hunks: BaselineHistoryDiffHunk[];
+};
+
+export type BaselineHistoryDiffResponse = {
+  ok: true;
+  beforeRevisionId: string;
+  afterRevisionId: string;
+  files: BaselineHistoryDiffFile[];
+  truncated: boolean;
 };
 
 export function baselinePathFromPublicUrl(
@@ -73,6 +101,40 @@ export async function fetchBaselineHistory(args: {
       payload && !payload.ok
         ? payload.error
         : `Baseline history failed (${response.status})`,
+    );
+  }
+  return payload;
+}
+
+export async function fetchBaselineHistoryDiff(args: {
+  path: string;
+  beforeRevisionId: string;
+  afterRevisionId: string;
+  componentPath?: string;
+  signal?: AbortSignal;
+}): Promise<BaselineHistoryDiffResponse> {
+  const query = new URLSearchParams({
+    path: args.path,
+    before: args.beforeRevisionId,
+    after: args.afterRevisionId,
+  });
+  if (args.componentPath) query.set("componentPath", args.componentPath);
+  const response = await fetch(
+    `${VISUAL_DELTA_BASELINE_HISTORY_DIFF_PATH}?${query}`,
+    {
+      cache: "no-store",
+      signal: args.signal,
+    },
+  );
+  const payload = (await response.json().catch(() => null)) as
+    | BaselineHistoryDiffResponse
+    | BaselineHistoryErrorResponse
+    | null;
+  if (!response.ok || !payload?.ok) {
+    throw new Error(
+      payload && !payload.ok
+        ? payload.error
+        : `Baseline component diff failed (${response.status})`,
     );
   }
   return payload;

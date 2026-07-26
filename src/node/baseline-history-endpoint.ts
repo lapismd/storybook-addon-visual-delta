@@ -2,14 +2,17 @@ import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import {
+  VISUAL_DELTA_BASELINE_HISTORY_DIFF_PATH,
   VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH,
   VISUAL_DELTA_BASELINE_HISTORY_PATH,
 } from "../constants.js";
 import {
   baselineHistoryImageUrl,
+  type BaselineHistoryDiffResponse,
   type BaselineHistoryEntry,
   type BaselineHistoryResponse,
 } from "../shared/baseline-history.js";
+import { parseBaselineComponentDiff } from "./baseline-history-diff.js";
 import type { VisualDeltaHostOptions } from "./options.js";
 import { resolveSnapshotDir } from "./options.js";
 import {
@@ -67,6 +70,22 @@ function repoRelativePath(
     return null;
   }
   return relative.split(path.sep).join("/");
+}
+
+function normalizeComponentPath(
+  requested: string | null,
+): string | undefined | null {
+  if (!requested) return undefined;
+  const normalized = requested.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (
+    !normalized ||
+    normalized.startsWith("/") ||
+    normalized.split("/").includes("..") ||
+    normalized.includes("\0")
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function encodeCursor(offset: number): string {
@@ -289,6 +308,75 @@ export function createBaselineHistoryEndpoint(options: {
     }
   }
 
+  async function componentDiff(
+    req: IncomingMessage,
+    res: ServerResponse,
+    requestUrl: URL,
+  ): Promise<void> {
+    if (req.method !== "GET") {
+      res.statusCode = 405;
+      res.setHeader("Allow", "GET");
+      res.end("Method Not Allowed");
+      return;
+    }
+    const resolved = await resolveRequest(requestUrl);
+    if ("error" in resolved) {
+      writeJson(res, resolved.unavailable ? 503 : 400, {
+        ok: false,
+        ...resolved,
+      });
+      return;
+    }
+    const beforeRevisionId = requestUrl.searchParams.get("before") ?? "";
+    const afterRevisionId = requestUrl.searchParams.get("after") ?? "";
+    const componentPath = normalizeComponentPath(
+      requestUrl.searchParams.get("componentPath"),
+    );
+    if (!beforeRevisionId || !afterRevisionId || componentPath === null) {
+      writeJson(res, 400, {
+        ok: false,
+        error: "Provide valid before, after, and component path values",
+      });
+      return;
+    }
+    try {
+      for (const revisionId of [beforeRevisionId, afterRevisionId]) {
+        if (revisionId === "working-copy") continue;
+        const revision = await resolved.vcs.findFileRevision(
+          resolved.repoRelative,
+          revisionId,
+        );
+        if (!revision) {
+          writeJson(res, 404, {
+            ok: false,
+            error:
+              "A selected revision is not in the reachable history for this baseline",
+          });
+          return;
+        }
+      }
+      const patch =
+        beforeRevisionId === afterRevisionId
+          ? ""
+          : await resolved.vcs.diffRevisions(beforeRevisionId, afterRevisionId);
+      const parsed = parseBaselineComponentDiff(patch, componentPath);
+      writeJson(res, 200, {
+        ok: true,
+        beforeRevisionId,
+        afterRevisionId,
+        ...parsed,
+      } satisfies BaselineHistoryDiffResponse);
+    } catch (error) {
+      writeJson(res, 500, {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to compare component revisions",
+      });
+    }
+  }
+
   return {
     async handle(
       req: IncomingMessage,
@@ -301,6 +389,10 @@ export function createBaselineHistoryEndpoint(options: {
       }
       if (requestUrl.pathname === VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH) {
         await image(req, res, requestUrl);
+        return true;
+      }
+      if (requestUrl.pathname === VISUAL_DELTA_BASELINE_HISTORY_DIFF_PATH) {
+        await componentDiff(req, res, requestUrl);
         return true;
       }
       return false;
