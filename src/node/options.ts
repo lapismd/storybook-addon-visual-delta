@@ -6,6 +6,11 @@
 
 export type VisualDeltaHostOptions = {
   /**
+   * Show the current story's named visual-review status in the Storybook
+   * toolbar. The icon-only sidebar status is unaffected. Defaults to true.
+   */
+  showToolbarStatusLabels?: boolean;
+  /**
    * Repo root for spawn cwd and host script resolution.
    * Defaults to Vite `config.root` / `process.cwd()`.
    */
@@ -101,7 +106,11 @@ function parsePortEnv(value: string | undefined): number | undefined {
 
 /** Storybook UI port: explicit arg → `STORYBOOK_PORT` → 6006. */
 export function resolveStorybookPort(explicit?: number): number {
-  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
+  if (
+    typeof explicit === "number" &&
+    Number.isFinite(explicit) &&
+    explicit > 0
+  ) {
     return explicit;
   }
   return parsePortEnv(process.env.STORYBOOK_PORT) ?? DEFAULT_STORYBOOK_PORT;

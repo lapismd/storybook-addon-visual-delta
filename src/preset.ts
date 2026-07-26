@@ -7,6 +7,10 @@ import {
   DEFAULT_SNAPSHOT_DIR,
   type VisualDeltaHostOptions,
 } from "./node/options.js";
+import {
+  renderToolbarStatusManagerHead,
+  resolveToolbarStatusEnabled,
+} from "./shared/manager-options.js";
 import { watchVisualDeltaSourcePlugin } from "./node/watch-src.js";
 
 export type { VisualDeltaHostOptions } from "./node/options.js";
@@ -42,6 +46,21 @@ function resolveHostOptions(
     ...options.options?.visualDelta,
     ...options.visualDelta,
   };
+}
+
+/**
+ * Pass the narrow manager-only host option into Storybook's separately bundled
+ * manager runtime. Keep this independent from preview parameters and persisted
+ * project defaults.
+ */
+export function managerHead(
+  existing = "",
+  options: PresetOptions = {},
+): string {
+  const enabled = resolveToolbarStatusEnabled(
+    resolveHostOptions(options).showToolbarStatusLabels,
+  );
+  return `${existing}${renderToolbarStatusManagerHead(enabled)}`;
 }
 
 function resolveSnapshotDirFromOptions(options: PresetOptions = {}): string {

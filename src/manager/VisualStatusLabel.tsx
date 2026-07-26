@@ -11,7 +11,7 @@ import {
 
 type VisualSidebarStatus = "skip" | "failed" | "ready" | "pending" | "approved";
 
-type VisualSidebarBadge = {
+export type VisualSidebarBadge = {
   status: VisualSidebarStatus;
   tag: string;
   glyph: string;
@@ -181,4 +181,43 @@ export function installVisualStatusSidebarLabels() {
       renderLabel: renderVisualStatusSidebarLabel,
     },
   });
+}
+
+const ToolbarBadge = styled.span({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  minHeight: 22,
+  padding: "0 8px",
+  border: "1px solid transparent",
+  borderRadius: 11,
+  boxSizing: "border-box",
+  color: "#ffffff",
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+});
+
+export function VisualStatusToolbarLabel({
+  tags,
+}: {
+  tags: readonly string[] | undefined;
+}) {
+  const badge = visualSidebarBadgeFromTags(tags);
+  if (!badge) return null;
+  return (
+    <ToolbarBadge
+      aria-label={`${badge.label}: ${badge.title}`}
+      data-tag={badge.tag}
+      title={badge.title}
+      style={{
+        backgroundColor: badge.background,
+        borderColor: badge.border,
+      }}
+    >
+      <span aria-hidden>{badge.glyph}</span>
+      <span>{badge.label}</span>
+    </ToolbarBadge>
+  );
 }
