@@ -78,7 +78,7 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 | --------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- | -------------------- |
 | Visual tests panel                                  | Auth → run → neon review | Create / run / diff / overlay / review                                                    | Different onboarding |
 | Testing Module                                      | Run/stop + warnings      | Visual Tests + Create Baselines                                                           | Partial              |
-| Sidebar change badges                               | Yellow for changes       | Sidecar status + host tag badges                                                          | Close                |
+| Sidebar visual labels                               | Addon-owned              | Addon-owned skip/failed/ready/pending/approved labels + native transient run status       | Done                 |
 | Accept / Unaccept (story / component / current run) | Cloud baseline accept    | Review tags; current run batches distinct eligible results and excludes missing baselines | Done                 |
 | Deny                                                | CI only                  | N/A                                                                                       | Parity               |
 | Browser selector                                    | Project browsers         | None                                                                                      | Cloud-only           |
@@ -126,7 +126,8 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 - A development-manager lane opens Storybook's real sidebar Testing Module,
   story context menu, and baseline-mode chooser. It verifies the provider is
   registered only where Storybook supports it and intercepts every Visual Delta
-  write endpoint.
+  write endpoint. The same lane covers all five committed visual labels without
+  relying on a second badge addon.
 - The host and packaged visual suites share capture readiness: wait for
   Storybook `storyFinished`, clear preparation overlays, await fonts, then
   apply only the story's explicit delay.
@@ -143,5 +144,5 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 | 3        | CSF capture knobs (`diffThreshold`, AA, `delay`, `cropToViewport`) | **Done** — Live Diff + Chromium Diff; Playwright reads DOM markers from the preview decorator |
 | 4        | Accept / Unaccept batch UX                                         | **Done** — Story, Component, and Current run                                                  |
 | 5        | Configuration panel                                                | **Done** — structured sections + typed diagnostics                                            |
-| 6        | Sidebar “has changes” polish                                       | Existing sidecar status; further polish optional                                              |
+| 6        | Visual sidebar status ownership                                    | **Done** — committed visual tags are rendered by Visual Delta; transient runs use Storybook   |
 | 7        | `forcedColors` / reduced-motion / guided tour                      | Not yet                                                                                       |
