@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -83,9 +84,12 @@ const Viewport = styled.div({
 });
 
 const Centerer = styled.div({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  display: "grid",
+  placeItems: "center",
+  width: "max-content",
+  height: "max-content",
+  minWidth: "100%",
+  minHeight: "100%",
 });
 
 const FullImage = styled.img({
@@ -104,32 +108,38 @@ export function ImageLightbox({
   onClose: () => void;
 }) {
   const [zoomState, setZoomState] = useState<CompareZoomState>({
-    mode: "fit",
+    mode: "custom",
     scale: 1,
   });
   const [available, setAvailable] = useState({ width: 1, height: 1 });
   const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (image) setZoomState({ mode: "fit", scale: 1 });
+    if (image) setZoomState({ mode: "custom", scale: 1 });
   }, [image?.src, image?.label]);
+
+  const measureViewport = useCallback(() => {
+    const element = viewportRef.current;
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const next = { width: rect.width, height: rect.height };
+    setAvailable(next);
+    return next;
+  }, []);
 
   useLayoutEffect(() => {
     if (!image) return;
     const element = viewportRef.current;
     if (!element) return;
-    const update = () => {
-      const rect = element.getBoundingClientRect();
-      setAvailable({
-        width: Math.max(1, rect.width),
-        height: Math.max(1, rect.height),
-      });
-    };
-    update();
-    const observer = new ResizeObserver(update);
+    const observer = new ResizeObserver(measureViewport);
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [image]);
+    const frame = window.requestAnimationFrame(measureViewport);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [image, measureViewport]);
 
   const fitInput = useMemo(
     () => ({
@@ -143,6 +153,13 @@ export function ImageLightbox({
   const scale = resolvedCompareZoomScale(zoomState, fitInput);
   const scaledWidth = Math.max(1, (image?.width ?? 1) * scale);
   const scaledHeight = Math.max(1, (image?.height ?? 1) * scale);
+  const handleZoomChange = useCallback(
+    (next: CompareZoomState) => {
+      if (next.mode === "fit") measureViewport();
+      setZoomState(next);
+    },
+    [measureViewport],
+  );
 
   if (!image) return null;
 
@@ -166,7 +183,7 @@ export function ImageLightbox({
           <Tools>
             <CompareZoomControl
               value={{ ...zoomState, scale }}
-              onChange={setZoomState}
+              onChange={handleZoomChange}
               label="Image zoom"
               subject="full image"
             />
@@ -174,12 +191,7 @@ export function ImageLightbox({
           </Tools>
         </Header>
         <Viewport ref={viewportRef} data-testid="image-lightbox-viewport">
-          <Centerer
-            style={{
-              width: Math.max(available.width, scaledWidth),
-              height: Math.max(available.height, scaledHeight),
-            }}
-          >
+          <Centerer data-testid="image-lightbox-centerer">
             <FullImage
               src={image.src}
               alt={`${image.label} full image`}

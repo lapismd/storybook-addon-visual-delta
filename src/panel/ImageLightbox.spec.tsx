@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("ImageLightbox", () => {
-  it("opens fitted, supports custom and 100% zoom, and closes accessibly", async () => {
+  it("opens at native size, centers by axis, and closes accessibly", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     renderWithTheme(
@@ -45,8 +45,20 @@ describe("ImageLightbox", () => {
     ).toBeVisible();
     expect(screen.getByTestId("image-lightbox")).toHaveAttribute(
       "data-zoom-mode",
-      "fit",
+      "custom",
     );
+    expect(screen.getByTestId("image-lightbox")).toHaveAttribute(
+      "data-zoom-scale",
+      "1.0000",
+    );
+    expect(screen.getByAltText("Baseline full image")).toHaveStyle({
+      width: "1280px",
+      height: "900px",
+    });
+    expect(screen.getByTestId("image-lightbox-centerer")).toHaveStyle({
+      minWidth: "100%",
+      minHeight: "100%",
+    });
 
     const zoom = screen.getByLabelText("Image zoom percentage");
     await user.clear(zoom);
@@ -56,15 +68,49 @@ describe("ImageLightbox", () => {
       "1.3700",
     );
 
-    await user.click(
-      screen.getByRole("switch", { name: "Show full image at 100%" }),
-    );
-    expect(screen.getByAltText("Baseline full image")).toHaveStyle({
-      width: "1280px",
-      height: "900px",
-    });
-
     await user.click(screen.getByRole("button", { name: "Close modal" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("measures the painted viewport before applying explicit Fit", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ImageLightbox
+        image={{
+          src: "baseline.png",
+          label: "Baseline",
+          width: 1280,
+          height: 900,
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const viewport = await screen.findByTestId("image-lightbox-viewport");
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 640,
+      bottom: 450,
+      width: 640,
+      height: 450,
+      toJSON: () => ({}),
+    });
+    await user.click(screen.getByRole("switch", { name: /Fit full image/ }));
+
+    expect(screen.getByTestId("image-lightbox")).toHaveAttribute(
+      "data-zoom-mode",
+      "fit",
+    );
+    expect(screen.getByTestId("image-lightbox")).toHaveAttribute(
+      "data-zoom-scale",
+      "0.5000",
+    );
+    expect(screen.getByAltText("Baseline full image")).toHaveStyle({
+      width: "640px",
+      height: "450px",
+    });
   });
 });

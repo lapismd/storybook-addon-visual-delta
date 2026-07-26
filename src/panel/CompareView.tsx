@@ -26,6 +26,9 @@ const LOUPE_SIZE = 120;
 const LOUPE_ZOOM = 2.5;
 const BLINK_MS = 280;
 const SWIPE_NUDGE = 5;
+const COMPARE_MIN_HEIGHT = 300;
+const SIDE_BY_SIDE_GAP = 12;
+const SHARED_SCROLL_RAIL_SIZE = 12;
 const VIEW_ZOOM_STORAGE_KEY = "storybook-addon-visual-delta/compare-view-zoom";
 
 const TAB_DEFS: { id: CompareTab; title: string }[] = [
@@ -42,7 +45,7 @@ const Root = styled.div({
   // Fill leftover SectionBody height when there is room; keep content-sized
   // minimum so accordion `overflow: auto` scrolls toolbar → tabs → images.
   flex: "1 1 auto",
-  minHeight: 0,
+  minHeight: "min-content",
   gap: "0.5rem",
   outline: "none",
   overflow: "hidden",
@@ -109,12 +112,15 @@ const CompareTabButton = styled.button<{ $selected: boolean }>(
   }),
 );
 
-const ContentViewport = styled.div({
-  flex: "1 1 auto",
-  minWidth: 0,
-  minHeight: 120,
-  overflow: "auto",
-});
+const ContentViewport = styled.div<{ $sideBySide: boolean }>(
+  ({ $sideBySide }) => ({
+    flex: "1 1 auto",
+    minWidth: 0,
+    minHeight: COMPARE_MIN_HEIGHT,
+    overflow: $sideBySide ? "hidden" : "auto",
+    overscrollBehavior: "contain",
+  }),
+);
 
 const Labels = styled.div(({ theme }) => ({
   display: "flex",
@@ -211,37 +217,94 @@ const Handle = styled.div(({ theme }) => ({
 
 const SideBySide = styled.div({
   display: "grid",
-  gap: "0.75rem",
-  alignItems: "start",
-  margin: "0 auto",
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
 });
 
-const SideColumn = styled.div({
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.35rem",
+const SidePanes = styled.div({
+  gridColumn: 1,
+  gridRow: 1,
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+  gridTemplateRows: "auto minmax(0, 1fr)",
+  gap: `0.35rem ${SIDE_BY_SIDE_GAP}px`,
   minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
 });
+
+const SidePaneViewport = styled.div(({ theme }) => ({
+  ...checkerboard,
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "auto",
+  overscrollBehavior: "contain",
+  border: `1px solid ${theme.appBorderColor}`,
+  boxSizing: "border-box",
+  scrollbarWidth: "none",
+  "&::-webkit-scrollbar": {
+    display: "none",
+    width: 0,
+    height: 0,
+  },
+}));
 
 const SidePane = styled.button(({ theme }) => ({
-  ...checkerboard,
   display: "block",
   margin: 0,
   padding: 0,
-  border: `1px solid ${theme.appBorderColor}`,
-  overflow: "hidden",
+  border: 0,
+  background: "transparent",
   lineHeight: 0,
   boxSizing: "border-box",
   cursor: "zoom-in",
   "&:focus-visible": {
     outline: `2px solid ${theme.color.secondary}`,
-    outlineOffset: 2,
+    outlineOffset: -2,
   },
 }));
 
-const SideImg = styled.img({
-  display: "block",
-  objectFit: "fill",
+const SharedScrollRail = styled.div({
+  minWidth: 0,
+  minHeight: 0,
+  scrollbarWidth: "auto",
+});
+
+const VerticalScrollRail = styled(SharedScrollRail)<{ $visible: boolean }>(
+  ({ $visible }) => ({
+    gridColumn: 2,
+    gridRow: 1,
+    width: $visible ? SHARED_SCROLL_RAIL_SIZE : 0,
+    overflowX: "hidden",
+    overflowY: $visible ? "scroll" : "hidden",
+    visibility: $visible ? "visible" : "hidden",
+  }),
+);
+
+const HorizontalScrollRail = styled(SharedScrollRail)<{ $visible: boolean }>(
+  ({ $visible }) => ({
+    gridColumn: 1,
+    gridRow: 2,
+    height: $visible ? SHARED_SCROLL_RAIL_SIZE : 0,
+    overflowX: $visible ? "scroll" : "hidden",
+    overflowY: "hidden",
+    visibility: $visible ? "visible" : "hidden",
+  }),
+);
+
+const ScrollCorner = styled.div<{ $visible: boolean }>(({ $visible }) => ({
+  gridColumn: 2,
+  gridRow: 2,
+  width: $visible ? SHARED_SCROLL_RAIL_SIZE : 0,
+  height: $visible ? SHARED_SCROLL_RAIL_SIZE : 0,
+}));
+
+const ScrollSpacer = styled.div({
+  width: 1,
+  height: 1,
   pointerEvents: "none",
 });
 
@@ -249,7 +312,14 @@ const SideLabel = styled.div(({ theme }) => ({
   fontSize: "12px",
   fontWeight: 700,
   color: theme.color.defaultText,
+  minWidth: 0,
 }));
+
+const SideImg = styled.img({
+  display: "block",
+  objectFit: "fill",
+  pointerEvents: "none",
+});
 
 const Loupe = styled.div(({ theme }) => ({
   position: "absolute",
@@ -275,7 +345,7 @@ export function CompareView({
   cssWidth,
   cssHeight,
   deviceScaleFactor = 3,
-  defaultZoom = "fit",
+  defaultZoom = "100%",
   resultKey,
 }: {
   baselineSrc: string;
@@ -302,6 +372,7 @@ export function CompareView({
     null,
   );
   const [available, setAvailable] = useState({ width: 1, height: 1 });
+  const [sideOverflow, setSideOverflow] = useState({ x: false, y: false });
   const [loupe, setLoupe] = useState<{
     x: number;
     y: number;
@@ -315,6 +386,15 @@ export function CompareView({
   const stageRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const baselinePaneRef = useRef<HTMLDivElement>(null);
+  const actualPaneRef = useRef<HTMLDivElement>(null);
+  const horizontalRailRef = useRef<HTMLDivElement>(null);
+  const horizontalSpacerRef = useRef<HTMLDivElement>(null);
+  const verticalRailRef = useRef<HTMLDivElement>(null);
+  const verticalSpacerRef = useRef<HTMLDivElement>(null);
+  const sideScrollSyncing = useRef(false);
+  const sideScrollFrame = useRef<number | null>(null);
+  const desiredSideScroll = useRef({ top: 0, left: 0 });
   const dragging = useRef(false);
   const swipeClick = useRef<{
     image: LightboxImage;
@@ -367,7 +447,7 @@ export function CompareView({
       contentWidth: Math.max(1, nativeWidth),
       contentHeight: Math.max(1, nativeHeight),
       columns: tab === "sidebyside" ? (2 as const) : (1 as const),
-      columnGap: tab === "sidebyside" ? 12 : 0,
+      columnGap: tab === "sidebyside" ? SIDE_BY_SIDE_GAP : 0,
       labelHeight:
         tab === "sidebyside" || tab === "swipe" || tab === "blink" ? 24 : 0,
     }),
@@ -381,16 +461,165 @@ export function CompareView({
     [scaledHeight, scaledWidth],
   );
   const stackStyle = stageSizeStyle;
-  const sideBySideSizeStyle = useMemo(
-    () => ({
-      width: scaledWidth * 2 + 12,
-      gridTemplateColumns: `${scaledWidth}px ${scaledWidth}px`,
-    }),
-    [scaledWidth],
-  );
   const imageSizeStyle = useMemo(
     () => ({ width: scaledWidth, height: scaledHeight }),
     [scaledHeight, scaledWidth],
+  );
+
+  const synchronizeSideScroll = useCallback((top: number, left: number) => {
+    const baselinePane = baselinePaneRef.current;
+    const actualPane = actualPaneRef.current;
+    if (!baselinePane || !actualPane) return;
+
+    const maxTop = Math.max(
+      0,
+      baselinePane.scrollHeight - baselinePane.clientHeight,
+      actualPane.scrollHeight - actualPane.clientHeight,
+    );
+    const maxLeft = Math.max(
+      0,
+      baselinePane.scrollWidth - baselinePane.clientWidth,
+      actualPane.scrollWidth - actualPane.clientWidth,
+    );
+    const nextTop = Math.max(0, Math.min(maxTop, top));
+    const nextLeft = Math.max(0, Math.min(maxLeft, left));
+    desiredSideScroll.current = { top: nextTop, left: nextLeft };
+    sideScrollSyncing.current = true;
+    baselinePane.scrollTop = nextTop;
+    baselinePane.scrollLeft = nextLeft;
+    actualPane.scrollTop = nextTop;
+    actualPane.scrollLeft = nextLeft;
+    if (verticalRailRef.current) {
+      verticalRailRef.current.scrollTop = nextTop;
+    }
+    if (horizontalRailRef.current) {
+      horizontalRailRef.current.scrollLeft = nextLeft;
+    }
+
+    if (sideScrollFrame.current != null) {
+      window.cancelAnimationFrame(sideScrollFrame.current);
+    }
+    sideScrollFrame.current = window.requestAnimationFrame(() => {
+      sideScrollFrame.current = null;
+      sideScrollSyncing.current = false;
+      const desired = desiredSideScroll.current;
+      baselinePane.scrollTop = desired.top;
+      baselinePane.scrollLeft = desired.left;
+      actualPane.scrollTop = desired.top;
+      actualPane.scrollLeft = desired.left;
+    });
+  }, []);
+
+  const refreshSideScroll = useCallback(() => {
+    const baselinePane = baselinePaneRef.current;
+    const actualPane = actualPaneRef.current;
+    const horizontalRail = horizontalRailRef.current;
+    const horizontalSpacer = horizontalSpacerRef.current;
+    const verticalRail = verticalRailRef.current;
+    const verticalSpacer = verticalSpacerRef.current;
+    if (
+      !baselinePane ||
+      !actualPane ||
+      !horizontalRail ||
+      !horizontalSpacer ||
+      !verticalRail ||
+      !verticalSpacer
+    ) {
+      return;
+    }
+
+    const fitting = zoomState.mode === "fit";
+    const maxTop = fitting
+      ? 0
+      : Math.max(
+          0,
+          baselinePane.scrollHeight - baselinePane.clientHeight,
+          actualPane.scrollHeight - actualPane.clientHeight,
+        );
+    const maxLeft = fitting
+      ? 0
+      : Math.max(
+          0,
+          baselinePane.scrollWidth - baselinePane.clientWidth,
+          actualPane.scrollWidth - actualPane.clientWidth,
+        );
+    const nextOverflow = { x: maxLeft > 1, y: maxTop > 1 };
+    setSideOverflow((current) =>
+      current.x === nextOverflow.x && current.y === nextOverflow.y
+        ? current
+        : nextOverflow,
+    );
+    horizontalSpacer.style.width = `${horizontalRail.clientWidth + maxLeft}px`;
+    verticalSpacer.style.height = `${verticalRail.clientHeight + maxTop}px`;
+    synchronizeSideScroll(
+      fitting ? 0 : desiredSideScroll.current.top,
+      fitting ? 0 : desiredSideScroll.current.left,
+    );
+  }, [synchronizeSideScroll, zoomState.mode]);
+
+  useLayoutEffect(() => {
+    if (tab !== "sidebyside") {
+      setSideOverflow({ x: false, y: false });
+      return;
+    }
+    const observed = [
+      baselinePaneRef.current,
+      actualPaneRef.current,
+      horizontalRailRef.current,
+      verticalRailRef.current,
+    ].filter((element): element is HTMLDivElement => element != null);
+    const observer = new ResizeObserver(refreshSideScroll);
+    for (const element of observed) observer.observe(element);
+    const frame = window.requestAnimationFrame(refreshSideScroll);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+      if (sideScrollFrame.current != null) {
+        window.cancelAnimationFrame(sideScrollFrame.current);
+        sideScrollFrame.current = null;
+      }
+      sideScrollSyncing.current = false;
+    };
+  }, [
+    refreshSideScroll,
+    scaledHeight,
+    scaledWidth,
+    sideOverflow.x,
+    sideOverflow.y,
+    tab,
+  ]);
+
+  const onSidePaneScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (sideScrollSyncing.current) return;
+      synchronizeSideScroll(
+        event.currentTarget.scrollTop,
+        event.currentTarget.scrollLeft,
+      );
+    },
+    [synchronizeSideScroll],
+  );
+
+  const onHorizontalRailScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (sideScrollSyncing.current) return;
+      synchronizeSideScroll(
+        desiredSideScroll.current.top,
+        event.currentTarget.scrollLeft,
+      );
+    },
+    [synchronizeSideScroll],
+  );
+
+  const onVerticalRailScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (sideScrollSyncing.current) return;
+      synchronizeSideScroll(
+        event.currentTarget.scrollTop,
+        desiredSideScroll.current.left,
+      );
+    },
+    [synchronizeSideScroll],
   );
 
   const nudgeViewZoom = useCallback(
@@ -732,43 +961,89 @@ export function CompareView({
         role="tabpanel"
         aria-labelledby={`visual-delta-compare-tab-${tab}`}
         data-testid="compare-scroll-viewport"
+        $sideBySide={tab === "sidebyside"}
       >
         {tab === "sidebyside" ? (
-          <SideBySide style={sideBySideSizeStyle}>
-            <SideColumn>
-              <SideLabel>Baseline</SideLabel>
-              <SidePane
-                type="button"
-                aria-label="Open Baseline full image"
-                style={imageSizeStyle}
-                onClick={() =>
-                  setLightboxImage(lightbox(baselineSrc, "Baseline"))
-                }
+          <SideBySide
+            data-testid="compare-side-by-side"
+            style={{
+              gridTemplateColumns: `minmax(0, 1fr) ${
+                sideOverflow.y ? SHARED_SCROLL_RAIL_SIZE : 0
+              }px`,
+              gridTemplateRows: `minmax(0, 1fr) ${
+                sideOverflow.x ? SHARED_SCROLL_RAIL_SIZE : 0
+              }px`,
+            }}
+          >
+            <SidePanes>
+              <SideLabel style={{ gridColumn: 1, gridRow: 1 }}>
+                Baseline
+              </SideLabel>
+              <SideLabel style={{ gridColumn: 2, gridRow: 1 }}>New</SideLabel>
+              <SidePaneViewport
+                ref={baselinePaneRef}
+                data-testid="compare-baseline-scroll"
+                style={{ gridColumn: 1, gridRow: 2 }}
+                onScroll={onSidePaneScroll}
               >
-                <SideImg
-                  src={baselineSrc}
-                  alt="Baseline"
-                  draggable={false}
+                <SidePane
+                  type="button"
+                  aria-label="Open Baseline full image"
                   style={imageSizeStyle}
-                />
-              </SidePane>
-            </SideColumn>
-            <SideColumn>
-              <SideLabel>New</SideLabel>
-              <SidePane
-                type="button"
-                aria-label="Open New full image"
-                style={imageSizeStyle}
-                onClick={() => setLightboxImage(lightbox(actualSrc, "New"))}
+                  onClick={() =>
+                    setLightboxImage(lightbox(baselineSrc, "Baseline"))
+                  }
+                >
+                  <SideImg
+                    src={baselineSrc}
+                    alt="Baseline"
+                    draggable={false}
+                    style={imageSizeStyle}
+                    onLoad={refreshSideScroll}
+                  />
+                </SidePane>
+              </SidePaneViewport>
+              <SidePaneViewport
+                ref={actualPaneRef}
+                data-testid="compare-new-scroll"
+                style={{ gridColumn: 2, gridRow: 2 }}
+                onScroll={onSidePaneScroll}
               >
-                <SideImg
-                  src={actualSrc}
-                  alt="New"
-                  draggable={false}
+                <SidePane
+                  type="button"
+                  aria-label="Open New full image"
                   style={imageSizeStyle}
-                />
-              </SidePane>
-            </SideColumn>
+                  onClick={() => setLightboxImage(lightbox(actualSrc, "New"))}
+                >
+                  <SideImg
+                    src={actualSrc}
+                    alt="New"
+                    draggable={false}
+                    style={imageSizeStyle}
+                    onLoad={refreshSideScroll}
+                  />
+                </SidePane>
+              </SidePaneViewport>
+            </SidePanes>
+            <VerticalScrollRail
+              ref={verticalRailRef}
+              data-testid="compare-shared-scroll-y"
+              aria-label="Shared vertical comparison scroll"
+              $visible={sideOverflow.y}
+              onScroll={onVerticalRailScroll}
+            >
+              <ScrollSpacer ref={verticalSpacerRef} />
+            </VerticalScrollRail>
+            <HorizontalScrollRail
+              ref={horizontalRailRef}
+              data-testid="compare-shared-scroll-x"
+              aria-label="Shared horizontal comparison scroll"
+              $visible={sideOverflow.x}
+              onScroll={onHorizontalRailScroll}
+            >
+              <ScrollSpacer ref={horizontalSpacerRef} />
+            </HorizontalScrollRail>
+            <ScrollCorner $visible={sideOverflow.x && sideOverflow.y} />
           </SideBySide>
         ) : null}
 
