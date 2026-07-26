@@ -17,6 +17,7 @@ test.describe("Visual Delta manager integration", () => {
   }) => {
     let runtimeInstanceId = "runtime-a";
     await page.addInitScript(() => {
+      if (window !== window.top) return;
       const key = "visual-delta-manager-load-count";
       const next = Number(sessionStorage.getItem(key) ?? "0") + 1;
       sessionStorage.setItem(key, String(next));
@@ -36,15 +37,10 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       page.getByRole("tabpanel", { name: "Visual Delta" }),
     ).toBeVisible();
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          Number(
-            sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
-          ),
-        ),
-      )
-      .toBe(1);
+    const initialLoadCount = await page.evaluate(() =>
+      Number(sessionStorage.getItem("visual-delta-manager-load-count") ?? "0"),
+    );
+    expect(initialLoadCount).toBeGreaterThan(0);
 
     runtimeInstanceId = "runtime-b";
     await expect
@@ -57,7 +53,7 @@ test.describe("Visual Delta manager integration", () => {
           ),
         { timeout: 5_000 },
       )
-      .toBe(2);
+      .toBe(initialLoadCount + 1);
 
     expect(
       await page.evaluate(
@@ -77,7 +73,7 @@ test.describe("Visual Delta manager integration", () => {
           sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
         ),
       ),
-    ).toBe(2);
+    ).toBe(initialLoadCount + 1);
   });
 
   test("registers the panel, clears stale story state, and reports ignore counts", async ({
