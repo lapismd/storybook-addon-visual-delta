@@ -11,7 +11,8 @@ import { FormPlaceholder } from "./FormPlaceholder.js";
 
 const SAMPLE_IMAGES: VisualDeltaImage[] = [
   {
-    src: "data:image/svg+xml;charset=utf-8," +
+    src:
+      "data:image/svg+xml;charset=utf-8," +
       encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="48"><rect width="120" height="48" fill="#5c6bc0"/><text x="12" y="30" fill="#fff" font-size="14">A</text></svg>`,
       ),
@@ -21,7 +22,8 @@ const SAMPLE_IMAGES: VisualDeltaImage[] = [
     placement: "center",
   },
   {
-    src: "data:image/svg+xml;charset=utf-8," +
+    src:
+      "data:image/svg+xml;charset=utf-8," +
       encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="48"><rect width="120" height="48" fill="#00897b"/><text x="12" y="30" fill="#fff" font-size="14">B</text></svg>`,
       ),
@@ -175,9 +177,7 @@ export function BaselineAccordionFixture() {
         expandedId={expandedId}
         busy={false}
         showDistribution={showDistribution}
-        onExpand={(id) =>
-          setExpandedId((prev) => (prev === id ? null : id))
-        }
+        onExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
         onCreate={() => undefined}
         onUpdate={() => undefined}
         onUpdateDefault={() => undefined}

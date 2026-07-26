@@ -22,10 +22,7 @@ export const PanelTitle = memo(function PanelTitle() {
   );
   const suffix =
     imageCount === 0 ? null : (
-      <Badge
-        compact
-        status={selectedPanel === PANEL_ID ? "active" : "neutral"}
-      >
+      <Badge compact status={selectedPanel === PANEL_ID ? "active" : "neutral"}>
         {imageCount}
       </Badge>
     );

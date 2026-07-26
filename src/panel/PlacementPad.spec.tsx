@@ -13,9 +13,7 @@ describe("PlacementPad", () => {
   it("renders five placement controls and toggles on click", async () => {
     const user = userEvent.setup();
     const onToggle = vi.fn();
-    renderWithTheme(
-      <PlacementPad value="right" active onToggle={onToggle} />,
-    );
+    renderWithTheme(<PlacementPad value="right" active onToggle={onToggle} />);
 
     expect(
       screen.getByRole("group", { name: "Baseline position" }),
@@ -35,7 +33,12 @@ describe("PlacementPad", () => {
 
   it("marks all switches unavailable when disabled", () => {
     renderWithTheme(
-      <PlacementPad value="center" active={false} onToggle={vi.fn()} disabled />,
+      <PlacementPad
+        value="center"
+        active={false}
+        onToggle={vi.fn()}
+        disabled
+      />,
     );
     for (const control of screen.getAllByRole("switch")) {
       expect(

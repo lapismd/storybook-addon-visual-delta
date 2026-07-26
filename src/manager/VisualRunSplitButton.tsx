@@ -95,11 +95,7 @@ function loadMode(
   try {
     const raw = localStorage.getItem(key);
     // Migrate older panel prefs that mixed Diff into this control.
-    if (
-      raw === "diff" ||
-      raw === "diff-html" ||
-      raw === "diff-chromium"
-    ) {
+    if (raw === "diff" || raw === "diff-html" || raw === "diff-chromium") {
       return fallback;
     }
     if (raw && (allowed as readonly string[]).includes(raw)) {

@@ -427,7 +427,8 @@ function mutateTsInteraction(
 ): string {
   if (objectText.includes("skip-visual")) return objectText;
   const parameters = findTopLevelProperty(objectText, "parameters");
-  if (!parameters || objectText[parameters.valueStart] !== "{") return objectText;
+  if (!parameters || objectText[parameters.valueStart] !== "{")
+    return objectText;
   const end = findBalancedEnd(objectText, parameters.valueStart, "{", "}");
   if (end < 0) return objectText;
   const parametersObject = objectText.slice(parameters.valueStart, end + 1);
@@ -584,11 +585,12 @@ export function patchStorySkipVisual(options: {
   });
   // CSF may already match; always normalize the static index (and clear review
   // tags when skipping) so --skip-build create/include paths stay consistent.
-  syncStaticIndexSkipVisual(options.packageRoot, [options.storyId], options.skip);
-  if (
-    !changed &&
-    (entry.tags ?? []).includes("skip-visual") !== options.skip
-  ) {
+  syncStaticIndexSkipVisual(
+    options.packageRoot,
+    [options.storyId],
+    options.skip,
+  );
+  if (!changed && (entry.tags ?? []).includes("skip-visual") !== options.skip) {
     return {
       ok: false,
       storyId: options.storyId,
@@ -632,10 +634,7 @@ export function patchStoryVisualReviewStatus(options: {
   );
   // Only skip the write when the desired tag is alone — otherwise strip
   // stale siblings (e.g. visual-failed lingering next to visual-ready).
-  if (
-    presentReviewTags.length === 1 &&
-    presentReviewTags[0] === desired
-  ) {
+  if (presentReviewTags.length === 1 && presentReviewTags[0] === desired) {
     syncStaticIndexReviewStatus(options.packageRoot, [
       { storyId: options.storyId, status: options.status },
     ]);

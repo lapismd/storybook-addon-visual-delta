@@ -26,7 +26,10 @@ import {
   ensurePlaywrightWebServerPort,
   ensureWarmStaticStorybookServer,
 } from "./visual-server.js";
-import { loadStoryIndex, syncStaticIndexSkipVisual } from "./visual-sidecars.js";
+import {
+  loadStoryIndex,
+  syncStaticIndexSkipVisual,
+} from "./visual-sidecars.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;

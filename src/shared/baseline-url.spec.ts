@@ -27,7 +27,9 @@ describe("storySlugFromId", () => {
   });
 
   it("throws when the id has no story separator", () => {
-    expect(() => storySlugFromId("no-separator")).toThrow(/Unexpected story id/);
+    expect(() => storySlugFromId("no-separator")).toThrow(
+      /Unexpected story id/,
+    );
   });
 });
 
@@ -39,9 +41,7 @@ describe("baselineUrlForStoryRef", () => {
         importPath: "./src/shared/shadcn/button/Button.stories.svelte",
         tags: [],
       }),
-    ).toBe(
-      "/visual-baselines/shadcn/button/default-chromium-darwin.png",
-    );
+    ).toBe("/visual-baselines/shadcn/button/default-chromium-darwin.png");
   });
 
   it("skips skip-visual unless allowSkipVisual", () => {

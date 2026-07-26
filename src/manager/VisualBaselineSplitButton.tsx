@@ -219,8 +219,12 @@ export function VisualBaselineSplitButton({
           size="small"
           variant="ghost"
           padding="small"
-          ariaLabel={mainIcon === "play" ? "Stop visual run" : "Stop baseline write"}
-          title={mainIcon === "play" ? "Stop visual run" : "Stop baseline write"}
+          ariaLabel={
+            mainIcon === "play" ? "Stop visual run" : "Stop baseline write"
+          }
+          title={
+            mainIcon === "play" ? "Stop visual run" : "Stop baseline write"
+          }
           onClick={onStop}
         >
           <StopAltIcon />

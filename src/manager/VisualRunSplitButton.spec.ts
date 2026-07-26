@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  modeActionLabel,
-  modeActionTooltip,
-} from "./VisualRunSplitButton.js";
+import { modeActionLabel, modeActionTooltip } from "./VisualRunSplitButton.js";
 import {
   diffEngineLabel,
   diffEngineTooltip,

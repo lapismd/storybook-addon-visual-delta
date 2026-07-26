@@ -4,7 +4,8 @@ import type { VisualDeltaHostOptions } from "./options.js";
 /**
  * Watch the workspace addon source (outside node_modules) so preview HMR
  * picks up overlay/decorator edits. Manager/panel edits still need a full
- * Storybook restart — the manager builder is a one-shot esbuild compile.
+ * Storybook restart because the manager builder is a one-shot esbuild compile;
+ * the manager runtime watcher reloads the open page after that restart.
  */
 export function watchVisualDeltaSourcePlugin(
   options: VisualDeltaHostOptions = {},
