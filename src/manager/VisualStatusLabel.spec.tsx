@@ -5,6 +5,7 @@ import type { HashEntry } from "storybook/manager-api";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   renderVisualStatusSidebarLabel,
+  VisualStatusToolbarLabel,
   visualSidebarBadgeFromTags,
 } from "./VisualStatusLabel.js";
 
@@ -88,5 +89,26 @@ describe("renderVisualStatusSidebarLabel", () => {
         "Approved: Visual baseline has been reviewed and accepted",
       ),
     ).toBeVisible();
+  });
+});
+
+describe("VisualStatusToolbarLabel", () => {
+  it("renders the named status with the shared glyph and description", () => {
+    render(<VisualStatusToolbarLabel tags={["visual-pending"]} />);
+
+    expect(screen.getByText("Pending review")).toBeVisible();
+    expect(screen.getByText("⏱")).toHaveAttribute("aria-hidden", "true");
+    expect(
+      screen.getByLabelText(
+        "Pending review: Visual baseline is awaiting review",
+      ),
+    ).toHaveAttribute("data-tag", "visual-pending");
+  });
+
+  it("renders nothing without a visual status", () => {
+    const { container } = render(
+      <VisualStatusToolbarLabel tags={["autodocs"]} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

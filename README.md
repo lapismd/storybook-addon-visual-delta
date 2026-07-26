@@ -204,17 +204,18 @@ reconnects via `/run-status` + `/run-events` instead of losing progress.
 Pass under addon `options.visualDelta`. Types from
 `storybook-addon-visual-delta/preset` or `…/node`.
 
-| Option                        | Default                                    | Purpose                                                           |
-| ----------------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
-| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                     |
-| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                           |
-| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts         |
-| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                             |
-| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                     |
-| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                           |
-| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                           |
-| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`) |
-| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                          |
+| Option                        | Default                                    | Purpose                                                            |
+| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
+| `showToolbarStatusLabels`     | `true`                                     | Show the current story's named visual-review status in the toolbar |
+| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                      |
+| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                            |
+| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts          |
+| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                              |
+| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                      |
+| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                            |
+| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                            |
+| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`)  |
+| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                           |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
 Playwright-server readiness checks are package-owned. A packed or file-linked

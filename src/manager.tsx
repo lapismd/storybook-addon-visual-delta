@@ -11,6 +11,7 @@ import {
   EVENTS,
   HIGHLIGHT_IGNORE_TOOL_ID,
   PANEL_ID,
+  STATUS_LABEL_TOOL_ID,
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
   TOOL_ID,
@@ -19,6 +20,7 @@ import { HighlightIgnoreTool } from "./manager/HighlightIgnoreTool.js";
 import { PanelTitle } from "./manager/PanelTitle.js";
 import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
 import { installVisualStatusSidebarLabels } from "./manager/VisualStatusLabel.js";
+import { VisualStatusToolbarTool } from "./manager/VisualStatusToolbarTool.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
@@ -59,6 +61,13 @@ addons.register(ADDON_ID, (api) => {
     title: "Highlight ignored regions",
     match: ({ viewMode, tabId }) => viewMode === "story" && !tabId,
     render: () => <HighlightIgnoreTool />,
+  });
+
+  addons.add(STATUS_LABEL_TOOL_ID, {
+    type: types.TOOLEXTRA,
+    title: "Visual review status",
+    match: ({ viewMode, tabId }) => viewMode === "story" && !tabId,
+    render: () => <VisualStatusToolbarTool />,
   });
 
   // Local Playwright visual suite — only available while the Storybook
