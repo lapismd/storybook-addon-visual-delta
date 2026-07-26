@@ -7,6 +7,14 @@ export type VisualDeltaOnboardingConfig = {
   hint: string;
 };
 
+export type VisualDeltaConfigDiagnostic = {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  setting?: string;
+  suggestion?: string;
+};
+
 /** Serializable host options exposed by GET /__visual-delta/config. */
 export type VisualDeltaResolvedConfig = {
   ok: true;
@@ -27,5 +35,7 @@ export type VisualDeltaResolvedConfig = {
    */
   playwrightPassThresholdPercent: number;
   onboarding: VisualDeltaOnboardingConfig;
+  diagnostics?: VisualDeltaConfigDiagnostic[];
+  /** Legacy flat messages retained for existing hosts and consumers. */
   warnings: string[];
 };

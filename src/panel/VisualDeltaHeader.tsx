@@ -52,9 +52,9 @@ const HeaderWrap = styled.div(({ theme }) => ({
 const ControlsGroup = styled.div({
   display: "flex",
   alignItems: "center",
-  flex: 1,
+  flex: "1 0 auto",
   gap: 6,
-  minWidth: 0,
+  minWidth: "max-content",
 });
 
 const RightGroup = styled.div({
@@ -63,6 +63,8 @@ const RightGroup = styled.div({
   gap: 6,
   flexShrink: 0,
   marginLeft: "auto",
+  maxWidth: "100%",
+  overflowX: "auto",
 });
 
 export type VisualDeltaHeaderProps = {
@@ -93,6 +95,7 @@ export type VisualDeltaHeaderProps = {
   onReviewStatus: (status: VisualReviewStatus) => void;
   onAccept: (scope: AcceptScope) => void;
   onUnaccept: (scope: AcceptScope) => void;
+  acceptRunAvailable?: boolean;
   onToggleSkipVisual: () => void;
   onOpenConfiguration: () => void;
   isUpdating: boolean;
@@ -131,6 +134,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   onReviewStatus,
   onAccept,
   onUnaccept,
+  acceptRunAvailable = false,
   onToggleSkipVisual,
   onOpenConfiguration,
   isUpdating,
@@ -174,7 +178,13 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
     <HeaderWrap ref={headerRef} data-vd-header="controls">
       <Toolbar
         backgroundColor={theme.background.app}
-        innerStyle={{ gap: 6, paddingInline: 15 }}
+        innerStyle={{
+          gap: 6,
+          paddingInline: 15,
+          paddingBlock: 4,
+          flexWrap: "wrap",
+          height: "auto",
+        }}
         aria-label="Visual Delta controls"
       >
         <ControlsGroup>
@@ -236,6 +246,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
               <AcceptSplitButton
                 busy={busy}
                 disabled={storyMissing || skipVisual}
+                runAvailable={acceptRunAvailable}
                 onAccept={onAccept}
                 onUnaccept={onUnaccept}
               />

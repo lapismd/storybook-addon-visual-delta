@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isMissingBaselineFailure,
+  reviewableStoryIdsFromLastRun,
   reviewUpdatesFromRunResults,
   type VisualRunResultItem,
 } from "./run-visual.js";
@@ -54,5 +55,27 @@ describe("reviewUpdatesFromRunResults", () => {
           "Error: A snapshot doesn't exist at /tmp/foo.png, writing actual.",
       }),
     ).toBe(true);
+  });
+});
+
+describe("reviewableStoryIdsFromLastRun", () => {
+  it("deduplicates completed results and excludes missing baselines", () => {
+    expect(
+      reviewableStoryIdsFromLastRun({
+        finishedAt: 1,
+        summary: { total: 4, passed: 2, failed: 2, skipped: 0 },
+        results: [
+          { storyId: "a", title: "A", status: "passed" },
+          { storyId: "a", title: "A mode", status: "passed" },
+          {
+            storyId: "b",
+            title: "B",
+            status: "failed",
+            missingBaseline: true,
+          },
+          { storyId: "c", title: "C", status: "failed" },
+        ],
+      }),
+    ).toEqual(["a", "c"]);
   });
 });

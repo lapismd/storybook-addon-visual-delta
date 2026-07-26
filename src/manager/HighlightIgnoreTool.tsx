@@ -1,11 +1,31 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { EyeIcon } from "@storybook/icons";
 import { ToggleButton } from "storybook/internal/components";
-import { useChannel, useStorybookApi } from "storybook/manager-api";
+import {
+  useChannel,
+  useStorybookApi,
+  useStorybookState,
+} from "storybook/manager-api";
+import { styled } from "storybook/theming";
 import { EVENTS } from "../constants.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
 
 const STORAGE_KEY = "storybook-addon-visual-delta/highlight-ignore";
+
+const CountBadge = styled.span(({ theme }) => ({
+  minWidth: 14,
+  height: 14,
+  paddingInline: 3,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 7,
+  background: theme.color.secondary,
+  color: theme.color.lightest,
+  fontSize: 9,
+  lineHeight: 1,
+  fontVariantNumeric: "tabular-nums",
+}));
 
 function loadEnabled(): boolean {
   try {
@@ -29,28 +49,43 @@ function saveEnabled(on: boolean): void {
  */
 export function HighlightIgnoreTool() {
   const api = useStorybookApi();
-  const emit = useChannel({});
+  const { storyId } = useStorybookState();
+  const [count, setCount] = useState(0);
+  const emit = useChannel({
+    [EVENTS.IGNORE_REGIONS_STATUS]: (payload: {
+      storyId?: string;
+      count?: number;
+    }) => {
+      if (payload.storyId && payload.storyId !== storyId) return;
+      setCount(Math.max(0, payload.count ?? 0));
+    },
+  });
   const [enabled, setEnabled] = useState(loadEnabled);
 
   const push = useCallback(
     (on: boolean) => {
       const story = api.getCurrentStoryData();
       const params = (
-        story as { parameters?: { visualDelta?: { ignoreSelectors?: string[] } } } | undefined
+        story as
+          | { parameters?: { visualDelta?: { ignoreSelectors?: string[] } } }
+          | undefined
       )?.parameters?.visualDelta;
       const selectors = resolveIgnoreSelectors(params?.ignoreSelectors);
       emit(EVENTS.SET_HIGHLIGHT_IGNORE, { enabled: on, selectors });
     },
-    [api, emit],
+    [api, emit, storyId],
   );
 
   useEffect(() => {
+    setCount(0);
     push(enabled);
-  }, [enabled, push]);
+  }, [enabled, push, storyId]);
 
   const label = enabled
-    ? "Hide ignored regions highlight"
-    : "Highlight ignored regions";
+    ? `Hide ${count} ignored region${count === 1 ? "" : "s"} highlight`
+    : `Highlight ${count} ignored region${count === 1 ? "" : "s"}`;
+
+  if (count === 0) return null;
 
   return (
     <ToggleButton
@@ -70,6 +105,7 @@ export function HighlightIgnoreTool() {
       }}
     >
       <EyeIcon />
+      <CountBadge aria-hidden>{count}</CountBadge>
     </ToggleButton>
   );
 }

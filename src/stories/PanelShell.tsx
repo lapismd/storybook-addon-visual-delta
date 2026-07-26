@@ -10,16 +10,24 @@ import {
 } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
+import { ConfigurationPanel } from "../panel/ConfigurationPanel.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
 import { LiveVisibilityToggle } from "../panel/LiveVisibilityToggle.js";
+import {
+  PanelResultSummary,
+  type PanelResultState,
+} from "../panel/PanelResultSummary.js";
 import { PanelView } from "../panel/PanelView.js";
 import { PlacementPad } from "../panel/PlacementPad.js";
+import { ModeSelector } from "../panel/ModeSelector.js";
 import {
   ErrorText,
   Toolbar as PanelToolbar,
   ToolbarRow,
 } from "../panel/styled.js";
 import { placementToggleAction } from "../shared/overlay-session.js";
+import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import type { VisualModeResultStatus } from "../shared/mode-results.js";
 import { FormPlaceholder } from "./FormPlaceholder.js";
 import {
   createMockVisualBackend,
@@ -53,11 +61,50 @@ const SAMPLE_IMAGES: VisualDeltaImage[] = [
   },
 ];
 
+const SAMPLE_CONFIG: VisualDeltaResolvedConfig = {
+  ok: true,
+  options: {
+    root: "/workspace/ui",
+    snapshotDir: "/workspace/ui/tests/visual/storybook.spec.ts-snapshots",
+    baselinePathMode: "nested-import",
+    visualServerPort: 9010,
+    allowRebuild: true,
+    visualUpdateArgs: ["visual-delta", "update"],
+    visualInteractionUpdateArgs: ["visual-delta", "interaction-update"],
+    visualTestArgs: ["playwright", "test"],
+    addonSrcDir: "packages/storybook-addon-visual-delta/src",
+  },
+  playwrightPassThresholdPercent: 1,
+  onboarding: {
+    suiteReady: true,
+    playwrightConfigReady: true,
+    snapshotDirExists: true,
+    ready: true,
+    hint: "Visual Delta is ready.",
+  },
+  diagnostics: [
+    {
+      code: "static-baseline-mount",
+      severity: "info",
+      setting: "snapshotDir",
+      message: "Snapshot directory is mounted at /visual-baselines.",
+    },
+  ],
+  warnings: ["Snapshot directory is mounted at /visual-baselines."],
+};
+
 export type PanelShellProps = {
   /** Injected backend (tests/stories share one instance for assertions). */
   backend?: MockVisualBackend;
   /** Start with no baselines so the Create visual CTA is shown. */
   seedEmpty?: boolean;
+  initialState?: PanelResultState;
+  initialSkipVisual?: boolean;
+  configurationOpen?: boolean;
+  captureError?: string;
+  runAvailable?: boolean;
+  modeNames?: string[];
+  modeResults?: Record<string, VisualModeResultStatus>;
 };
 
 /**
@@ -67,6 +114,13 @@ export type PanelShellProps = {
 export function PanelShell({
   backend: backendProp,
   seedEmpty = false,
+  initialState = "ready",
+  initialSkipVisual = false,
+  configurationOpen = false,
+  captureError = "",
+  runAvailable = true,
+  modeNames = [],
+  modeResults = {},
 }: PanelShellProps) {
   const backend = useMemo(
     () => backendProp ?? createMockVisualBackend(),
@@ -83,7 +137,7 @@ export function PanelShell({
   const [reviewStatus, setReviewStatus] = useState<VisualReviewStatus | null>(
     null,
   );
-  const [skipVisual, setSkipVisual] = useState(false);
+  const [skipVisual, setSkipVisual] = useState(initialSkipVisual);
   const [badgeStatus, setBadgeStatus] = useState<"pass" | "fail" | null>(null);
   const [diffResult, setDiffResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,6 +162,9 @@ export function PanelShell({
 
   const [actionLog, setActionLog] = useState<string>("");
   const [interactionStepLabel, setInteractionStepLabel] = useState("none");
+  const [acceptScope, setAcceptScope] = useState("none");
+  const [showConfiguration, setShowConfiguration] = useState(configurationOpen);
+  const [selectedMode, setSelectedMode] = useState<string | null>(null);
 
   const recordActions = useCallback(() => {
     setActionLog(backend.actions.join(","));
@@ -291,6 +348,75 @@ export function PanelShell({
     [badgeStatus, diffResult, images, interactionSteps],
   );
 
+  const summaryState: PanelResultState = captureError
+    ? "error"
+    : isRunning
+      ? "running"
+      : skipVisual
+        ? "skipped"
+        : images.length === 0
+          ? initialState === "setup"
+            ? "setup"
+            : "missing"
+          : badgeStatus === "pass"
+            ? "passed"
+            : badgeStatus === "fail"
+              ? "failed"
+              : initialState;
+  const summaryCopy: Record<
+    PanelResultState,
+    { title: string; detail: string }
+  > = {
+    setup: {
+      title: "Setup required",
+      detail: "Create the Playwright suite and configuration first.",
+    },
+    skipped: {
+      title: "Visual tests skipped",
+      detail: "This story is excluded with skip-visual.",
+    },
+    missing: {
+      title: "Baseline missing",
+      detail: "Create a visual baseline to enable comparison.",
+    },
+    ready: {
+      title: "Baseline ready",
+      detail: "Run the visual test to refresh its comparison result.",
+    },
+    running: {
+      title: "Visual test running",
+      detail: runProgressLabel ?? "Comparing the current story.",
+    },
+    passed: {
+      title: "Visual test passed",
+      detail: "0.0000% different · 0 changed pixels.",
+    },
+    failed: {
+      title: "Visual test failed",
+      detail: "1.4200% different · pass threshold exceeded.",
+    },
+    error: {
+      title: "Capture error",
+      detail: captureError,
+    },
+  };
+  const modeSummary = useMemo(() => {
+    const statuses = Object.values(modeResults);
+    if (statuses.length === 0) return null;
+    const failed = statuses.filter((status) => status === "failed").length;
+    const passed = statuses.filter((status) => status === "passed").length;
+    const fresh = statuses.filter((status) => status === "new").length;
+    const errors = statuses.filter((status) => status === "error").length;
+    return [
+      passed && `${passed} passed`,
+      failed && `${failed} failed`,
+      fresh && `${fresh} new`,
+      errors && `${errors} error`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }, [modeResults]);
+
   return (
     <PanelView
       active
@@ -323,15 +449,41 @@ export function PanelShell({
         onStopDiff: handleStopDiff,
         onStopRun: () => void handleStopRun(),
         onReviewStatus: (status) => void handleReview(status),
-        onAccept: () => void handleReview("approved"),
-        onUnaccept: () => void handleReview("pending"),
-        onToggleSkipVisual: () => void handleToggleSkipVisual(),
-        onOpenConfiguration: () => {
-          setStatusLog("Configuration (mock)");
+        onAccept: (scope) => {
+          setAcceptScope(scope);
+          void handleReview("approved");
         },
+        onUnaccept: (scope) => {
+          setAcceptScope(scope);
+          void handleReview("pending");
+        },
+        acceptRunAvailable: runAvailable,
+        onToggleSkipVisual: () => void handleToggleSkipVisual(),
+        onOpenConfiguration: () => setShowConfiguration(true),
         isUpdating: busy && !isRebuilding,
         isRebuilding,
       }}
+      configuration={
+        showConfiguration ? (
+          <ConfigurationPanel
+            initialConfig={SAMPLE_CONFIG}
+            onClose={() => setShowConfiguration(false)}
+          />
+        ) : null
+      }
+      summary={
+        <PanelResultSummary
+          state={summaryState}
+          title={summaryCopy[summaryState].title}
+          detail={summaryCopy[summaryState].detail}
+          finishedAt={
+            summaryState === "passed" || summaryState === "failed"
+              ? Date.UTC(2026, 6, 26, 8, 30)
+              : null
+          }
+          modeSummary={modeSummary}
+        />
+      }
       content={
         <>
           <div data-testid="panel-shell-meta" style={{ display: "none" }}>
@@ -351,11 +503,20 @@ export function PanelShell({
             <span data-testid="fixture-interaction">
               {interactionStepLabel}
             </span>
+            <span data-testid="fixture-accept-scope">{acceptScope}</span>
             <span data-testid="fixture-log">{statusLog}</span>
+            <span data-testid="fixture-mode">{selectedMode ?? "Default"}</span>
           </div>
 
           <PanelToolbar>
             <ToolbarRow>
+              <ModeSelector
+                modeNames={modeNames}
+                value={selectedMode}
+                onChange={setSelectedMode}
+                results={modeResults}
+                disabled={busy}
+              />
               <LiveVisibilityToggle
                 liveVisible={liveVisible}
                 onToggle={setLiveVisible}
@@ -423,7 +584,7 @@ export function PanelShell({
         running: busy || isDiffing || isRunning,
         label: runProgressLabel ?? diffProgressLabel,
         log: statusLog,
-        error: null,
+        error: captureError || null,
       }}
     />
   );

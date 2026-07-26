@@ -2,6 +2,7 @@ import { addons, useEffect } from "storybook/preview-api";
 import type { DecoratorFunction } from "storybook/internal/types";
 import { EVENTS } from "../constants.js";
 import {
+  countIgnoredElements,
   HIGHLIGHT_IGNORE_STYLE_ID,
   highlightIgnoreCss,
   resolveIgnoreSelectors,
@@ -26,14 +27,16 @@ let lastSelectors: string[] = [];
 function ensureListener() {
   if (listenerInstalled) return;
   listenerInstalled = true;
-  addons.getChannel().on(
-    EVENTS.SET_HIGHLIGHT_IGNORE,
-    (payload: { enabled?: boolean; selectors?: string[] }) => {
-      lastEnabled = Boolean(payload.enabled);
-      lastSelectors = payload.selectors ?? lastSelectors;
-      applyHighlight(lastEnabled, lastSelectors);
-    },
-  );
+  addons
+    .getChannel()
+    .on(
+      EVENTS.SET_HIGHLIGHT_IGNORE,
+      (payload: { enabled?: boolean; selectors?: string[] }) => {
+        lastEnabled = Boolean(payload.enabled);
+        lastSelectors = payload.selectors ?? lastSelectors;
+        applyHighlight(lastEnabled, lastSelectors);
+      },
+    );
 }
 
 /** Preview decorator: apply ignore-region outline from manager toolbar. */
@@ -47,10 +50,32 @@ export const withHighlightIgnore: DecoratorFunction = (storyFn, context) => {
   useEffect(() => {
     lastSelectors = selectors;
     applyHighlight(lastEnabled, selectors);
-    return () => {
-      applyHighlight(false, []);
+    const channel = addons.getChannel();
+    let frame = 0;
+    const publishCount = () => {
+      frame = 0;
+      channel.emit(EVENTS.IGNORE_REGIONS_STATUS, {
+        storyId: context.id,
+        count: countIgnoredElements(document, selectors),
+      });
     };
-  }, [selectors.join("\0")]);
+    const scheduleCount = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(publishCount);
+    };
+    publishCount();
+    const observer = new MutationObserver(scheduleCount);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+      applyHighlight(false, []);
+      channel.emit(EVENTS.IGNORE_REGIONS_STATUS, {
+        storyId: context.id,
+        count: 0,
+      });
+    };
+  }, [context.id, selectors.join("\0")]);
 
   return storyFn();
 };

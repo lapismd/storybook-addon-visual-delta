@@ -21,7 +21,14 @@ import {
   isVisualReviewStatus,
   type VisualReviewStatus,
 } from "../constants.js";
-import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import type {
+  VisualDeltaConfigDiagnostic,
+  VisualDeltaResolvedConfig,
+} from "../shared/config-types.js";
+import {
+  modeResultStatus,
+  type VisualModeRunResult,
+} from "../shared/mode-results.js";
 import {
   captureSubjectWithChromium,
   type CaptureSubjectRequest,
@@ -45,6 +52,7 @@ import {
 } from "./story-source.js";
 import {
   baselinePngExistsForStoryId,
+  loadModeSidecarsForStoryId,
   loadSidecarForStoryId,
 } from "./visual-sidecars.js";
 import {
@@ -247,9 +255,45 @@ export function attachSidecars(
       snapshotDir,
       mode,
     );
+    const modeSidecars = loadModeSidecarsForStoryId(
+      item.storyId,
+      packageRoot,
+      snapshotDir,
+      mode,
+    );
+    const modeResults: VisualModeRunResult[] = [
+      ...(sidecar
+        ? [
+            {
+              mode: null,
+              status: modeResultStatus(sidecar, hasBaseline),
+              sidecar,
+              ...(sidecar.error ? { error: sidecar.error } : {}),
+            } satisfies VisualModeRunResult,
+          ]
+        : []),
+      ...modeSidecars.map((modeSidecar) => {
+        const modeBaseline = path.join(
+          snapshotDir,
+          modeSidecar.snapshotRel.replace(
+            /\.png$/i,
+            `-chromium-${process.platform}.png`,
+          ),
+        );
+        return {
+          mode: modeSidecar.mode ?? null,
+          status: modeResultStatus(modeSidecar, existsSync(modeBaseline)),
+          sidecar: modeSidecar,
+          ...(modeSidecar.error ? { error: modeSidecar.error } : {}),
+        } satisfies VisualModeRunResult;
+      }),
+    ];
     let next: VisualRunResultItem = sidecar
-      ? { ...item, sidecar }
+      ? { ...item, sidecar, modeResults }
       : { ...item };
+    if (!sidecar && modeResults.length > 0) {
+      next = { ...next, modeResults };
+    }
     if (item.status === "failed" && !hasBaseline) {
       next = {
         ...next,
@@ -482,9 +526,7 @@ async function handleBaselineWrite(
   const rebuild = Boolean(body.rebuild);
   const baseArgs = options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS];
   const args = [
-    ...(rebuild
-      ? baseArgs.filter((arg) => arg !== "--skip-build")
-      : baseArgs),
+    ...(rebuild ? baseArgs.filter((arg) => arg !== "--skip-build") : baseArgs),
     ...(rebuild ? ["--rebuild"] : []),
     ...(createOnly ? ["--create-only"] : []),
     ...(component ? ["--component", component] : ["--story-id", storyId!]),
@@ -958,16 +1000,33 @@ function handleConfig(
 ) {
   const snapshotDir = resolveSnapshotDir(options, root);
   const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
-  const warnings: string[] = [];
+  const diagnostics: VisualDeltaConfigDiagnostic[] = [];
   if (!existsSync(snapshotDir)) {
-    warnings.push(`snapshotDir does not exist yet: ${snapshotDir}`);
+    diagnostics.push({
+      code: "snapshot-dir-missing",
+      severity: "warning",
+      setting: "snapshotDir",
+      message: `Snapshot directory does not exist yet: ${snapshotDir}`,
+      suggestion: "Create the first visual baseline to initialize it.",
+    });
   }
   if (!onboardingStatus.ready) {
-    warnings.push(onboardingStatus.hint);
+    diagnostics.push({
+      code: "playwright-setup-incomplete",
+      severity: "error",
+      setting: "onboarding",
+      message: onboardingStatus.hint,
+      suggestion: "Run pnpm exec visual-delta init from the package root.",
+    });
   }
   const staticHint =
     "Preset staticDirs mounts snapshotDir at /visual-baselines (or host maps it).";
-  warnings.push(staticHint);
+  diagnostics.push({
+    code: "static-baseline-mount",
+    severity: "info",
+    setting: "snapshotDir",
+    message: staticHint,
+  });
   const payload: VisualDeltaResolvedConfig = {
     ok: true,
     options: {
@@ -997,7 +1056,8 @@ function handleConfig(
       ready: onboardingStatus.ready,
       hint: onboardingStatus.hint,
     },
-    warnings,
+    diagnostics,
+    warnings: diagnostics.map((diagnostic) => diagnostic.message),
   };
   writeJson(res, 200, payload);
 }

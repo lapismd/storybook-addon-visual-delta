@@ -57,6 +57,22 @@ export function modeNames(modes: VisualDeltaModes | undefined): string[] {
 }
 
 /**
+ * Fill a convention-based local mode URL beside a primary Playwright
+ * baseline. Explicit `mode.src` always wins.
+ */
+export function modeBaselineSrc(
+  primarySrc: string | undefined,
+  modeName: string,
+): string | undefined {
+  if (!primarySrc || primarySrc.startsWith("data:")) return undefined;
+  const slug = modeBaselineSlug(modeName);
+  if (!slug) return undefined;
+  const match = primarySrc.match(/^(.*)(-chromium-[a-z0-9]+\.png)([?#].*)?$/i);
+  if (!match) return undefined;
+  return `${match[1]}--${slug}${match[2]}${match[3] ?? ""}`;
+}
+
+/**
  * Build gallery images for modes that declare `src`. Modes without `src` still
  * appear as selectable named modes (globals-only) via the mode selector.
  */
@@ -68,6 +84,7 @@ export function imagesFromModes(
     anchor?: string;
     offsetX?: number;
     offsetY?: number;
+    primarySrc?: string;
   } = {},
 ): Array<{
   src: string;
@@ -89,9 +106,11 @@ export function imagesFromModes(
     offsetY?: number;
   }> = [];
   for (const [name, def] of Object.entries(modes)) {
-    if (def?.disable || !def?.src) continue;
+    if (def?.disable) continue;
+    const src = def.src ?? modeBaselineSrc(defaults.primarySrc, name);
+    if (!src) continue;
     out.push({
-      src: def.src,
+      src,
       mode: name,
       align: defaults.align,
       placement: defaults.placement,

@@ -26,6 +26,24 @@ export function resolveIgnoreSelectors(
   return out;
 }
 
+/** Count distinct elements, tolerating malformed custom selectors. */
+export function countIgnoredElements(
+  root: ParentNode,
+  selectors: readonly string[],
+): number {
+  const matches = new Set<Element>();
+  for (const selector of selectors) {
+    try {
+      for (const element of root.querySelectorAll(selector)) {
+        matches.add(element);
+      }
+    } catch {
+      // One invalid custom selector must not hide valid ignore-region feedback.
+    }
+  }
+  return matches.size;
+}
+
 export const HIGHLIGHT_IGNORE_STYLE_ID = "visual-delta-highlight-ignore";
 
 export function highlightIgnoreCss(selectors: readonly string[]): string {

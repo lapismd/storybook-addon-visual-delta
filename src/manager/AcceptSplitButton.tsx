@@ -12,16 +12,16 @@ import {
 } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 
-export type AcceptScope = "story" | "component";
+export type AcceptScope = "story" | "component" | "run";
 
 const STORAGE_KEY = "storybook-addon-visual-delta/accept-scope-v1";
 
-const SCOPES: readonly AcceptScope[] = ["story", "component"];
+const SCOPES: readonly AcceptScope[] = ["story", "component", "run"];
 
 function loadScope(): AcceptScope {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === "component") return "component";
+    if (raw === "component" || raw === "run") return raw;
   } catch {
     /* ignore */
   }
@@ -37,7 +37,9 @@ function saveScope(scope: AcceptScope): void {
 }
 
 function scopeLabel(scope: AcceptScope): string {
-  return scope === "component" ? "Component scope" : "Story scope";
+  if (scope === "component") return "Component scope";
+  if (scope === "run") return "Current run scope";
+  return "Story scope";
 }
 
 const Split = styled.div(({ theme }) => ({
@@ -104,11 +106,14 @@ const MenuButton = styled(Button)(({ theme }) => ({
 export function AcceptSplitButton({
   busy = false,
   disabled = false,
+  runAvailable = false,
   onAccept,
   onUnaccept,
 }: {
   busy?: boolean;
   disabled?: boolean;
+  /** Latest completed run contains at least one reviewable result. */
+  runAvailable?: boolean;
   onAccept: (scope: AcceptScope) => void;
   onUnaccept: (scope: AcceptScope) => void;
 }) {
@@ -122,9 +127,18 @@ export function AcceptSplitButton({
   }, []);
 
   const acceptLabel =
-    scope === "component" ? "Accept component" : "Accept story";
+    scope === "component"
+      ? "Accept component"
+      : scope === "run"
+        ? "Accept current run"
+        : "Accept story";
   const unacceptLabel =
-    scope === "component" ? "Unaccept component" : "Unaccept story";
+    scope === "component"
+      ? "Unaccept component"
+      : scope === "run"
+        ? "Unaccept current run"
+        : "Unaccept story";
+  const scopeDisabled = disabled || (scope === "run" && !runAvailable);
 
   return (
     <Split role="group" aria-label="Accept or unaccept baselines">
@@ -132,19 +146,19 @@ export function AcceptSplitButton({
         size="small"
         variant="ghost"
         padding="small"
-        disabled={disabled || busy}
+        disabled={scopeDisabled || busy}
         ariaLabel={acceptLabel}
         title={acceptLabel}
         onClick={() => onAccept(scope)}
       >
         <VerifiedIcon />
-        {scope === "component" ? "Accept all" : "Accept"}
+        {scope === "story" ? "Accept" : "Accept all"}
       </MainButton>
       <MidButton
         size="small"
         variant="ghost"
         padding="small"
-        disabled={disabled || busy}
+        disabled={scopeDisabled || busy}
         ariaLabel={unacceptLabel}
         title={unacceptLabel}
         onClick={() => onUnaccept(scope)}
@@ -165,6 +179,7 @@ export function AcceptSplitButton({
                 <ActionList.Item key={item} active={scope === item}>
                   <ActionList.Action
                     ariaLabel={scopeLabel(item)}
+                    disabled={item === "run" && !runAvailable}
                     onClick={() => chooseScope(item)}
                   >
                     <ActionList.Icon>
@@ -183,7 +198,7 @@ export function AcceptSplitButton({
           variant="ghost"
           padding="small"
           disabled={disabled || busy}
-          ariaLabel="Choose Accept story or component scope"
+          ariaLabel="Choose Accept story, component, or current run scope"
           title="Choose Accept scope"
         >
           <ChevronSmallDownIcon />

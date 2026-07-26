@@ -26,6 +26,7 @@ describe("visual test module prefs", () => {
     expect(VISUAL_TEST_MODULE_DEFAULTS).toEqual({
       runVisualEnabled: true,
       createBaselinesEnabled: false,
+      rebuildStaticEnabled: false,
       updateStatusEnabled: false,
       baselineWriteMode: "create",
     });
