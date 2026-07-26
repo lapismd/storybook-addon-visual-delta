@@ -1,8 +1,5 @@
 import type { Browser, Page } from "playwright";
-import {
-  VISUAL_DEVICE_SCALE_FACTOR,
-  VISUAL_VIEWPORT,
-} from "../constants.js";
+import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import {
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
@@ -12,6 +9,10 @@ import {
   VISUAL_DELTA_DELAY_ATTR,
   VISUAL_DELTA_IGNORE_ATTR_LIST,
 } from "../shared/capture-params-attrs.js";
+import {
+  settleVisualStoryPage,
+  waitForVisualStoryFinished,
+} from "../playwright/readiness.js";
 import type {
   CaptureSubjectPhase,
   CaptureSubjectProgress,
@@ -148,7 +149,7 @@ async function portalUnionClip(
   }, PORTAL_SELECTORS);
 }
 
-async function settleAfterPlay(page: Page, storyId: string): Promise<void> {
+async function waitForOpenState(page: Page, storyId: string): Promise<void> {
   await page
     .waitForFunction(
       (id) => {
@@ -171,12 +172,6 @@ async function settleAfterPlay(page: Page, storyId: string): Promise<void> {
     .catch(() => {
       /* still screenshot */
     });
-
-  await page.waitForTimeout(100);
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) active.blur();
-  });
 }
 
 /**
@@ -240,10 +235,6 @@ export async function captureSubjectWithChromium(
       phase: "settling",
       label: PHASE_LABELS.settling,
     });
-    await page.evaluate(async () => {
-      if (document.fonts?.ready) await document.fonts.ready;
-    });
-
     if (request.visualCaptureUntil) {
       await page
         .waitForFunction(
@@ -254,16 +245,14 @@ export async function captureSubjectWithChromium(
         .catch(() => {
           /* fall through to settle */
         });
+    } else {
+      await waitForVisualStoryFinished(page, request.storyId);
     }
 
-    await settleAfterPlay(page, request.storyId);
+    await waitForOpenState(page, request.storyId);
 
     const fromDom = await page.evaluate(
-      (attrs: {
-        delay: string;
-        ignore: string;
-        crop: string;
-      }) => {
+      (attrs: { delay: string; ignore: string; crop: string }) => {
         const root = document.documentElement;
         const delayRaw = root.getAttribute(attrs.delay);
         const ignoreRaw = root.getAttribute(attrs.ignore);
@@ -282,12 +271,10 @@ export async function captureSubjectWithChromium(
       },
     );
     const delayMs =
-      typeof request.delay === "number" && request.delay > 0
-        ? request.delay
-        : fromDom.delay > 0
-          ? fromDom.delay
-          : 0;
-    if (delayMs > 0) await page.waitForTimeout(delayMs);
+      typeof request.delay === "number"
+        ? Math.max(0, request.delay)
+        : Math.max(0, fromDom.delay);
+    await settleVisualStoryPage(page, { delay: delayMs });
 
     const ignoreSelectors = resolveIgnoreSelectors([
       ...(request.ignoreSelectors ?? []),

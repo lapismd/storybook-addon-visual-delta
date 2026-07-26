@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
 import {
+  CUSTOM_VIEWPORT_MANAGER_FIXTURE,
   MANAGER_FIXTURE,
   OVERVIEW,
   mockVisualBackend,
   openManager,
   previewFrame,
 } from "./manager-test-support.js";
+
+const DEV_STORYBOOK = "http://127.0.0.1:9013";
 
 test.describe("Visual Delta manager integration", () => {
   test("registers the panel, clears stale story state, and reports ignore counts", async ({
@@ -84,6 +87,33 @@ test.describe("Visual Delta manager integration", () => {
       .getByRole("button", { name: "Dark desktop mode, not run" })
       .click();
     await expect(previewFrame(page).locator("html")).toHaveClass(/dark/);
+    expect(writes).toEqual([]);
+  });
+
+  test("Diff HTML proves a per-image viewport from narrow right docking", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 800, height: 700 });
+    const writes = await mockVisualBackend(page);
+    await openManager(page, CUSTOM_VIEWPORT_MANAGER_FIXTURE, DEV_STORYBOOK);
+
+    const moveRight = page.getByRole("button", {
+      name: "Move addon panel to right",
+    });
+    if (await moveRight.isVisible()) await moveRight.click();
+
+    await page
+      .getByRole("button", { name: /Compare via html-to-image/ })
+      .click();
+    await expect(page.getByLabel(/Visual compare/)).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const diagnostics = page.getByTestId("diff-capture-diagnostics");
+    await expect(diagnostics).toContainText(
+      "viewport requested 1440×960, observed 1440×960 at 3×",
+    );
+    await expect(diagnostics).toContainText("bitmap 4320×2880");
     expect(writes).toEqual([]);
   });
 });

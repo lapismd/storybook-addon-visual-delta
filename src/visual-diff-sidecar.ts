@@ -27,6 +27,10 @@ export type VisualDiffSidecar = {
   tool: "playwright";
   imageWidth?: number;
   imageHeight?: number;
+  /** CSS viewport used by the Playwright page. */
+  viewport?: { width: number; height: number };
+  /** Device-pixel density used to rasterize the PNG. */
+  deviceScaleFactor?: number;
   diffPixels?: number;
   totalPixels?: number;
   /** Percent of pixels that differ (0–100). */

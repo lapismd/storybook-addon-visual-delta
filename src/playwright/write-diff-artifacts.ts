@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import type { BaselinePathMode } from "../node/options.js";
 import {
   screenshotRelativePath,
@@ -70,6 +71,8 @@ function buildSidecarBase(
   VisualDiffSidecar,
   | "imageWidth"
   | "imageHeight"
+  | "viewport"
+  | "deviceScaleFactor"
   | "diffPixels"
   | "totalPixels"
   | "diffPercent"
@@ -107,6 +110,8 @@ export function writeDiffArtifactsForBaseline(input: {
   error?: string;
   actualPng: Buffer | null;
   visualModeName?: string;
+  viewport?: { width: number; height: number };
+  deviceScaleFactor?: number;
 }): void {
   const {
     entry,
@@ -118,9 +123,15 @@ export function writeDiffArtifactsForBaseline(input: {
     error,
     actualPng,
     visualModeName,
+    viewport = VISUAL_VIEWPORT,
+    deviceScaleFactor = VISUAL_DEVICE_SCALE_FACTOR,
   } = input;
   const outPath = sidecarJsonPath(baselinePngAbsPath);
-  const base = buildSidecarBase(entry, mode, status, error, visualModeName);
+  const base = {
+    ...buildSidecarBase(entry, mode, status, error, visualModeName),
+    viewport,
+    deviceScaleFactor,
+  };
   if (!actualPng || !existsSync(baselinePngAbsPath)) {
     writeVisualDiffSidecar(outPath, base);
     return;

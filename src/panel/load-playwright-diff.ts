@@ -1,5 +1,6 @@
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import type { DiffResultData } from "../types.js";
+import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import { loadImage } from "./capture.js";
 import { buildFocusAssets } from "./diff-assets.js";
 
@@ -96,6 +97,9 @@ export async function loadPlaywrightDiffResult(
   const passed =
     sidecar.passed ??
     (sidecar.status === "passed" || diffPercent < passThresholdPercent);
+  const deviceScaleFactor =
+    sidecar.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
+  const captureViewport = sidecar.viewport ?? VISUAL_VIEWPORT;
 
   return {
     actualImage: actual.dataUrl,
@@ -105,6 +109,16 @@ export async function loadPlaywrightDiffResult(
     changeBounds: sidecar.changeBounds ?? changeBounds,
     imageWidth: width,
     imageHeight: height,
+    cssWidth: width / deviceScaleFactor,
+    cssHeight: height / deviceScaleFactor,
+    deviceScaleFactor,
+    captureViewport,
+    observedCaptureViewport: captureViewport,
+    capturedBitmap: { width: actual.width, height: actual.height },
+    sizeNote:
+      `playwright · viewport requested ${captureViewport.width}×${captureViewport.height}, ` +
+      `observed ${captureViewport.width}×${captureViewport.height} at ${deviceScaleFactor}× · ` +
+      `bitmap ${actual.width}×${actual.height}`,
     diffPixels,
     totalPixels,
     diffPercent,

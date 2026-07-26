@@ -49,6 +49,17 @@ export type DiffResultData = {
   changeBounds: ChangeBounds | null;
   imageWidth: number;
   imageHeight: number;
+  /** Native CSS display size derived from bitmap pixels / device scale. */
+  cssWidth?: number;
+  cssHeight?: number;
+  /** Device-pixel density used for this baseline/capture. */
+  deviceScaleFactor?: number;
+  /** CSS viewport requested for capture. */
+  captureViewport?: { width: number; height: number };
+  /** CSS viewport actually observed before rasterization. */
+  observedCaptureViewport?: { width: number; height: number };
+  /** Actual raster dimensions produced by the capture engine. */
+  capturedBitmap?: { width: number; height: number };
   diffPixels: number;
   totalPixels: number;
   diffPercent: number;

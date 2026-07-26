@@ -373,6 +373,8 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           status,
           error,
           actualPng,
+          viewport: page.viewportSize() ?? undefined,
+          deviceScaleFactor: await page.evaluate(() => window.devicePixelRatio),
         });
       }
     });
@@ -440,6 +442,10 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
               error,
               actualPng,
               visualModeName: capture.modeName,
+              viewport: page.viewportSize() ?? undefined,
+              deviceScaleFactor: await page.evaluate(
+                () => window.devicePixelRatio,
+              ),
             });
           }
         });
