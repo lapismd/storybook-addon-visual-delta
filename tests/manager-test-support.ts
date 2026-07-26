@@ -66,7 +66,27 @@ export async function mockVisualBackend(page: Page) {
   await page.route("**/__visual-delta/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (request.method() !== "GET") writes.push(url.pathname);
+    const isStoryFacts = url.pathname.endsWith("/story-facts");
+    if (request.method() !== "GET" && !isStoryFacts) {
+      writes.push(url.pathname);
+    }
+    if (isStoryFacts) {
+      const body = request.postDataJSON() as {
+        stories?: Array<{ id?: string }>;
+      };
+      await route.fulfill({
+        status: 200,
+        json: {
+          ok: true,
+          version: 1,
+          generatedAt: Date.now(),
+          stories: (body.stories ?? []).flatMap((story) =>
+            story.id ? [{ storyId: story.id, baseline: "present" }] : [],
+          ),
+        },
+      });
+      return;
+    }
     if (url.pathname.endsWith("/config")) {
       await route.fulfill({ status: 200, json: CONFIG });
       return;
