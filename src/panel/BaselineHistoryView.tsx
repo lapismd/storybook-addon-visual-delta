@@ -117,7 +117,6 @@ const Timeline = styled.div(({ theme }) => ({
   minHeight: 0,
   overflow: "auto",
   borderRight: `1px solid ${theme.appBorderColor}`,
-  borderBottom: `1px solid ${theme.appBorderColor}`,
   background: theme.background.content,
 }));
 
@@ -126,7 +125,8 @@ const TimelineHeader = styled.div(({ theme }) => ({
   top: 0,
   zIndex: 1,
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 42px 42px",
+  gridTemplateColumns: "minmax(0, 1fr) 48px 48px",
+  columnGap: 8,
   alignItems: "center",
   minHeight: 30,
   padding: "0 10px",
@@ -137,12 +137,16 @@ const TimelineHeader = styled.div(({ theme }) => ({
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.04em",
+  "& > span:not(:first-of-type)": {
+    justifySelf: "center",
+  },
 }));
 
 const TimelineRow = styled.div<{ $working: boolean }>(
   ({ theme, $working }) => ({
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 42px 42px",
+    gridTemplateColumns: "minmax(0, 1fr) 48px 48px",
+    columnGap: 8,
     alignItems: "center",
     minHeight: 68,
     padding: "8px 10px",
