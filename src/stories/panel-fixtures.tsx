@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { PlacementMode, VisualDeltaImage } from "../constants.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
+import { BaselineHistoryView } from "../panel/BaselineHistoryView.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
 import { LiveVisibilityToggle } from "../panel/LiveVisibilityToggle.js";
 import { PlacementPad } from "../panel/PlacementPad.js";
@@ -191,6 +192,74 @@ export function BaselineAccordionFixture() {
       <div data-testid="fixture-expanded-id" style={metaStyle}>
         {expandedId ?? "none"}
       </div>
+    </div>
+  );
+}
+
+export function BaselineHistoryViewFixture() {
+  const oldImage =
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="440" height="220"><rect width="440" height="220" fill="#f6f7fb"/><rect x="45" y="45" width="350" height="130" rx="12" fill="#5c6bc0"/><text x="75" y="120" fill="#fff" font-size="24">Original baseline</text></svg>`,
+    );
+  const newImage =
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="440" height="220"><rect width="440" height="220" fill="#f6f7fb"/><rect x="65" y="45" width="330" height="130" rx="18" fill="#00897b"/><text x="95" y="120" fill="#fff" font-size="24">Updated baseline</text></svg>`,
+    );
+  return (
+    <div style={{ height: 560, position: "relative" }}>
+      <BaselineHistoryView
+        target={{
+          path: "forms/entry-actions/single-entry-chromium-darwin.png",
+          label: "Default",
+        }}
+        onClose={() => undefined}
+        loadHistory={async ({ cursor }) => ({
+          ok: true,
+          vcs: "jj",
+          followsRenames: false,
+          entries: cursor
+            ? [
+                {
+                  revisionId: "c".repeat(40),
+                  displayId: "qpvuntsmznwk",
+                  secondaryId: "cccccccccccc",
+                  subject: "Create entry actions baseline",
+                  message: "Create entry actions baseline",
+                  author: "Steve Juma",
+                  authoredAt: "2026-07-20T09:15:00Z",
+                  source: "commit",
+                  imageUrl: oldImage,
+                },
+              ]
+            : [
+                {
+                  revisionId: "working-copy",
+                  displayId: "Working copy",
+                  subject: "Uncommitted baseline",
+                  message: "Current baseline bytes from the working directory.",
+                  author: "Local workspace",
+                  authoredAt: "2026-07-26T17:45:00Z",
+                  source: "working-copy",
+                  imageUrl: newImage,
+                },
+                {
+                  revisionId: "a".repeat(40),
+                  displayId: "kmrusxzponml",
+                  secondaryId: "aaaaaaaaaaaa",
+                  subject: "Tune entry action spacing",
+                  message:
+                    "Tune entry action spacing\n\nAlign the action row with the updated form density.",
+                  author: "Steve Juma",
+                  authoredAt: "2026-07-25T14:20:00Z",
+                  source: "commit",
+                  imageUrl: oldImage,
+                },
+              ],
+          nextCursor: cursor ? null : "older",
+        })}
+      />
     </div>
   );
 }

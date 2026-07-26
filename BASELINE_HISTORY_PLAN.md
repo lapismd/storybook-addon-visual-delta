@@ -5,7 +5,7 @@ version-control system and reuse the existing compare tools for revision
 inspection.
 
 - [x] VCS detection, normalized history service, and guarded image endpoint
-- [ ] Baseline History panel with working-copy and revision metadata
+- [x] Baseline History panel with working-copy and revision metadata
 - [ ] Image-to-image comparison, stories, browser acceptance, and docs
 
 Decisions:
