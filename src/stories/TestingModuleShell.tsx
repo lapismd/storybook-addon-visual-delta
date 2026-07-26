@@ -42,6 +42,9 @@ export function TestingModuleShell({
   const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
   );
+  const [affectedOnlyEnabled, setAffectedOnlyEnabled] = useState<boolean>(
+    VISUAL_TEST_MODULE_DEFAULTS.affectedOnlyEnabled,
+  );
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
     seedRewriteMode ? "rewrite" : VISUAL_TEST_MODULE_DEFAULTS.baselineWriteMode,
   );
@@ -86,6 +89,10 @@ export function TestingModuleShell({
         runVisualEnabled={runVisualEnabled}
         createBaselinesEnabled={createBaselinesEnabled}
         updateStatusEnabled={updateStatusEnabled}
+        affectedOnlyEnabled={affectedOnlyEnabled}
+        affectedSummaryLabel={
+          seedRunningProgress ? "2 affected · 275 unchanged" : "Up to date"
+        }
         rebuildStaticEnabled={rebuildStaticEnabled}
         baselineMode={baselineMode}
         runnerBusy={seedRunningProgress}
@@ -113,6 +120,7 @@ export function TestingModuleShell({
         onRunVisualChange={setRunVisualEnabled}
         onCreateBaselinesChange={setCreateBaselinesEnabled}
         onUpdateStatusChange={setUpdateStatusEnabled}
+        onAffectedOnlyChange={setAffectedOnlyEnabled}
         onRebuildStaticChange={setRebuildStaticEnabled}
         onBaselineModeChange={setBaselineMode}
         onRun={() => {
@@ -141,6 +149,9 @@ export function TestingModuleShell({
         <span data-testid="fixture-selected">{selectedSummary}</span>
         <span data-testid="fixture-last-action">{lastAction}</span>
         <span data-testid="fixture-baseline-mode">{baselineMode}</span>
+        <span data-testid="fixture-affected-only">
+          {affectedOnlyEnabled ? "affected" : "all"}
+        </span>
         <span data-testid="fixture-visual-filters">
           {activeFilterIds.join(",") || "none"}
         </span>

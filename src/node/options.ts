@@ -4,6 +4,24 @@
  * The UI catalog overrides argv / path mode in `.storybook/main.ts`.
  */
 
+export type AffectedVisualTestsOptions = {
+  /**
+   * Local disposable state and Storybook `preview-stats.json`.
+   * Default: `.cache/visual-delta`.
+   */
+  cacheDir?: string;
+  /**
+   * Project-relative globs whose changes can affect every story, including
+   * static assets that Storybook serves outside the preview module graph.
+   */
+  externals?: string[];
+  /**
+   * Project-relative globs to ignore while tracing. Disabled by default;
+   * enabling this reduces visual-test coverage.
+   */
+  untraced?: string[];
+};
+
 export type VisualDeltaHostOptions = {
   /**
    * Show the current story's named visual-review status in the Storybook
@@ -54,6 +72,11 @@ export type VisualDeltaHostOptions = {
   visualServerPort?: number;
   /** Whether `/__visual-delta/run-tests` may run `build-storybook` first. */
   allowRebuild?: boolean;
+  /**
+   * TurboSnap-style local affected selection. Disabled unless configured.
+   * Full runs remain available and continue to seed this disposable cache.
+   */
+  affectedTests?: false | AffectedVisualTestsOptions;
 };
 
 export type BaselinePathMode = "nested-import" | "story-id";

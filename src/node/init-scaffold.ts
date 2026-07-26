@@ -132,8 +132,11 @@ function updatePackageScripts(
   }
   const scripts = { ...(pkg.scripts ?? {}) };
   const desired: Record<string, string> = {
-    "test:visual": "playwright test",
+    "test:visual": "visual-delta test --all",
+    "test:visual:affected": "visual-delta test --affected",
     "visual-delta": "visual-delta",
+    "build-storybook":
+      "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta",
   };
   let changed = false;
   for (const [name, value] of Object.entries(desired)) {
@@ -143,14 +146,30 @@ function updatePackageScripts(
       changed = true;
     }
   }
-  if (!scripts["build-storybook"]) {
-    scripts["build-storybook"] = "storybook build";
-    scriptsUpdated.push("build-storybook");
-    changed = true;
-  }
   if (!changed) return;
   pkg.scripts = scripts;
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+}
+
+function ensureAffectedCacheIgnored(packageRoot: string): void {
+  const ignorePath = path.join(packageRoot, ".gitignore");
+  const existing = existsSync(ignorePath)
+    ? readFileSync(ignorePath, "utf8")
+    : "";
+  if (
+    existing
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .includes(".cache/visual-delta/")
+  ) {
+    return;
+  }
+  const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    ignorePath,
+    `${existing}${prefix}.cache/visual-delta/\n`,
+    "utf8",
+  );
 }
 
 /**
@@ -166,6 +185,7 @@ export function runVisualDeltaInit(
   const written: string[] = [];
   const skipped: string[] = [];
   const scriptsUpdated: string[] = [];
+  ensureAffectedCacheIgnored(packageRoot);
 
   const paths = resolveOnboardingPaths(packageRoot);
   ensureFile(

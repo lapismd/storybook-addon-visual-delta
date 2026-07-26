@@ -20,6 +20,7 @@ import {
   TEST_PROVIDER_ID,
   VISUAL_DELTA_STORY_FACTS_PATH,
 } from "../constants.js";
+import type { AffectedVisualSummary } from "../shared/affected-types.js";
 import type {
   VisualStoryDescriptor,
   VisualStoryFact,
@@ -38,6 +39,7 @@ import {
   applyVisualStatuses,
   cancelVisualRun,
   clearVisualStatuses,
+  fetchAffectedVisualPlan,
   fetchVisualRunStatus,
   formatVisualProgressLabel,
   loadPersistedVisualLastRun,
@@ -66,12 +68,14 @@ import {
   lastMeaningfulLogLine,
 } from "../shared/status-log.js";
 import {
+  AFFECTED_ONLY_KEY,
   CREATE_BASELINES_KEY,
   REBUILD_STATIC_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
   anyModuleActionSelected,
   loadCreateBaselinesEnabled,
+  loadAffectedOnlyEnabled,
   loadModuleBaselineWriteMode,
   loadRebuildStaticEnabled,
   loadRunVisualEnabled,
@@ -179,16 +183,21 @@ export function moduleDescription(
 
   const parts: React.ReactNode[] = [];
   if (lastRun) {
+    if (lastRun.affected?.noChange) {
+      parts.push("Up to date");
+    }
     const total = Math.max(
       lastRun.summary.total,
       lastRun.summary.passed + lastRun.summary.failed + lastRun.summary.skipped,
     );
-    parts.push(
-      <React.Fragment key="tests">
-        Ran {total} {total === 1 ? "test" : "tests"}{" "}
-        <RelativeTime timestamp={lastRun.finishedAt} />
-      </React.Fragment>,
-    );
+    if (!lastRun.affected?.noChange) {
+      parts.push(
+        <React.Fragment key="tests">
+          Ran {total} {total === 1 ? "test" : "tests"}{" "}
+          <RelativeTime timestamp={lastRun.finishedAt} />
+        </React.Fragment>,
+      );
+    }
   }
   if (createProgress?.error) {
     parts.push(
@@ -236,6 +245,7 @@ function chipLabel(
   if (status === "critical") {
     return lastRun?.error ?? "Visual tests crashed";
   }
+  if (lastRun?.affected?.noChange) return "Up to date";
   if (status === "negative") {
     return `${counts.failed} failed · ${counts.passed} passed`;
   }
@@ -247,6 +257,15 @@ function chipLabel(
     return `${summary.passed} passed · ${summary.failed} failed`;
   }
   return "Run tests to see results";
+}
+
+export function affectedSummaryLabel(
+  summary: AffectedVisualSummary | null,
+): string | null {
+  if (!summary) return null;
+  if (summary.noChange) return "Up to date";
+  const label = `${summary.selected} affected · ${summary.unchanged} unchanged`;
+  return summary.fallbackReason ? `${label} · full fallback` : label;
 }
 
 function baselineChipStatus(
@@ -357,6 +376,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState(
     loadRebuildStaticEnabled,
   );
+  const [affectedOnlyEnabled, setAffectedOnlyEnabled] = useState(
+    entry ? false : loadAffectedOnlyEnabled,
+  );
+  const [affectedSummary, setAffectedSummary] =
+    useState<AffectedVisualSummary | null>(null);
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
     loadModuleBaselineWriteMode(),
   );
@@ -411,6 +435,19 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     if ("id" in entry) return api.findAllLeafStoryIds(entry.id);
     return undefined;
   }, [api, entry]);
+
+  useEffect(() => {
+    if (entry) return;
+    const controller = new AbortController();
+    void fetchAffectedVisualPlan()
+      .then((summary) => {
+        if (!controller.signal.aborted) setAffectedSummary(summary);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAffectedSummary(null);
+      });
+    return () => controller.abort();
+  }, [entry]);
 
   const statusIds = useMemo(() => {
     let passedIds: string[] = [];
@@ -481,6 +518,12 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
       const data = await postVisualRun({
         storyIds: runnable,
+        selection:
+          scope === "affected"
+            ? "affected"
+            : scope === "all"
+              ? "all"
+              : "selected",
         rebuild: loadRebuildStaticEnabled(),
       });
       if (data.crashed) {
@@ -492,6 +535,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           scope,
           logTail: data.logTail,
           results: data.results,
+          affected: data.affected,
         };
         publishVisualLastRun(summary);
         throw new Error(data.error ?? "Visual test run crashed");
@@ -506,8 +550,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         scope,
         logTail: data.logTail,
         results: data.results,
+        affected: data.affected,
       };
       publishVisualLastRun(summary);
+      if (data.affected) setAffectedSummary(data.affected);
       return data.results;
     },
     [api],
@@ -543,7 +589,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         ? scope.length === 1
           ? "story"
           : "component"
-        : "all";
+        : affectedOnlyEnabled
+          ? "affected"
+          : "all";
 
       await testProviderStore.runWithState(async () => {
         setStatusLog(null);
@@ -623,7 +671,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         }
       });
     },
-    [api],
+    [affectedOnlyEnabled, api],
   );
 
   const runSelectedRef = useRef(runSelectedActions);
@@ -632,6 +680,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   useEffect(() => {
     return subscribeVisualRunProgress((next) => {
       setProgress(next);
+      if (next?.affected) setAffectedSummary(next.affected);
       if (next) {
         setStatusLog((prev) => appendVisualRunLogLine(prev, next));
       }
@@ -723,6 +772,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       setLastRun(next);
       latestResultsRef.current = next?.results;
       if (!next) return;
+      if (next.affected) setAffectedSummary(next.affected);
       const summaryLine = next.error
         ? `Visual: ${next.error}${next.scope ? ` (${next.scope})` : ""}`
         : next.summary.failed > 0
@@ -782,6 +832,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                 : undefined,
             logTail: data.logTail,
             results: data.results,
+            affected: data.affected,
           });
           if (data.crashed) {
             throw new Error(data.error ?? "Visual test run crashed");
@@ -802,6 +853,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                 : undefined,
             logTail: data.logTail,
             results: data.results,
+            affected: data.affected,
           });
         }
       }
@@ -953,6 +1005,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       runVisualEnabled={runVisualEnabled}
       createBaselinesEnabled={createBaselinesEnabled}
       updateStatusEnabled={updateStatusEnabled}
+      affectedOnlyEnabled={!entry && affectedOnlyEnabled}
+      affectedSummaryLabel={affectedSummaryLabel(affectedSummary)}
       rebuildStaticEnabled={rebuildStaticEnabled}
       baselineMode={baselineMode}
       runnerBusy={runnerBusy}
@@ -982,6 +1036,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       onUpdateStatusChange={(next) => {
         setUpdateStatusEnabled(next);
         writeBoolFlag(UPDATE_STATUS_KEY, next);
+      }}
+      onAffectedOnlyChange={(next) => {
+        setAffectedOnlyEnabled(next);
+        writeBoolFlag(AFFECTED_ONLY_KEY, next);
       }}
       onRebuildStaticChange={(next) => {
         setRebuildStaticEnabled(next);

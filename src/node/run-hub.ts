@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import type { AffectedVisualSummary } from "../shared/affected-types.js";
 
 /** Per-story outcome from a visual Playwright run. */
 export type VisualRunResultItem = {
@@ -27,12 +28,14 @@ export type VisualRunResponse = {
   };
   results: VisualRunResultItem[];
   logTail: string;
+  /** Affected/all/selected scope details for status and explanations. */
+  affected?: AffectedVisualSummary;
 };
 
 /** NDJSON events streamed while a visual run is in progress or replayed on reconnect. */
 export type VisualRunStreamEvent =
   | { type: "idle" }
-  | { type: "start"; total: number }
+  | { type: "start"; total: number; affected?: AffectedVisualSummary }
   | {
       type: "progress";
       completed: number;

@@ -34,9 +34,21 @@ describe("visual-delta init scaffold", () => {
     expect(result.scriptsUpdated).toEqual(
       expect.arrayContaining([
         "test:visual",
+        "test:visual:affected",
         "visual-delta",
         "build-storybook",
       ]),
+    );
+    const pkg = JSON.parse(
+      readFileSync(path.join(root, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts["test:visual"]).toBe("visual-delta test --all");
+    expect(pkg.scripts["test:visual:affected"]).toBe(
+      "visual-delta test --affected",
+    );
+    expect(pkg.scripts["build-storybook"]).toContain("--stats-json");
+    expect(readFileSync(path.join(root, ".gitignore"), "utf8")).toContain(
+      ".cache/visual-delta/",
     );
 
     const suite = readFileSync(

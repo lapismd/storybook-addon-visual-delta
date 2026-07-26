@@ -137,6 +137,10 @@ export type VisualTestModuleUIProps = {
   runVisualEnabled: boolean;
   createBaselinesEnabled: boolean;
   updateStatusEnabled: boolean;
+  /** Global visual compares use dependency-traced affected selection. */
+  affectedOnlyEnabled: boolean;
+  /** "Up to date" or "N affected · M unchanged" planner summary. */
+  affectedSummaryLabel?: string | null;
   /** Force build-storybook before create/update/compare captures. */
   rebuildStaticEnabled: boolean;
   baselineMode: BaselineWriteMode;
@@ -162,6 +166,7 @@ export type VisualTestModuleUIProps = {
   onRunVisualChange: (enabled: boolean) => void;
   onCreateBaselinesChange: (enabled: boolean) => void;
   onUpdateStatusChange: (enabled: boolean) => void;
+  onAffectedOnlyChange: (enabled: boolean) => void;
   onRebuildStaticChange: (enabled: boolean) => void;
   onBaselineModeChange: (mode: BaselineWriteMode) => void;
   onRun: () => void;
@@ -187,6 +192,8 @@ export function VisualTestModuleUI({
   runVisualEnabled,
   createBaselinesEnabled,
   updateStatusEnabled,
+  affectedOnlyEnabled,
+  affectedSummaryLabel = null,
   rebuildStaticEnabled,
   baselineMode,
   runnerBusy,
@@ -208,6 +215,7 @@ export function VisualTestModuleUI({
   onRunVisualChange,
   onCreateBaselinesChange,
   onUpdateStatusChange,
+  onAffectedOnlyChange,
   onRebuildStaticChange,
   onBaselineModeChange,
   onRun,
@@ -314,6 +322,31 @@ export function VisualTestModuleUI({
             />
           </ActionList.Button>
         </ActionList.Item>
+        {variant === "global" ? (
+          <ActionList.Item>
+            <ActionList.Action as="label" ariaLabel={false}>
+              <ActionList.Icon>
+                <Form.Checkbox
+                  name="Affected only"
+                  checked={affectedOnlyEnabled}
+                  disabled={runnerBusy || !runVisualEnabled}
+                  onChange={(event) => {
+                    onAffectedOnlyChange(event.currentTarget.checked);
+                  }}
+                />
+              </ActionList.Icon>
+              <ActionList.Text>
+                <RowLabel>
+                  <span>Affected only</span>
+                  <RowProgress data-testid="affected-run-summary">
+                    {affectedSummaryLabel ??
+                      "Trace changes from the last passing run"}
+                  </RowProgress>
+                </RowLabel>
+              </ActionList.Text>
+            </ActionList.Action>
+          </ActionList.Item>
+        ) : null}
         <ActionList.Item>
           <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
