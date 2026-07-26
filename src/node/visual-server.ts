@@ -5,6 +5,19 @@ import path from "node:path";
 
 let warmServer: ChildProcess | null = null;
 
+export function invalidateWarmStaticStorybookServer(): void {
+  if (!warmServer || warmServer.killed) {
+    warmServer = null;
+    return;
+  }
+  try {
+    warmServer.kill("SIGKILL");
+  } catch {
+    /* it may have already exited */
+  }
+  warmServer = null;
+}
+
 async function isStaticServerHealthy(port: number): Promise<boolean> {
   // index.json alone is not enough — a partial build can serve the index while
   // /iframe.html 404s and hang every Playwright story navigation.

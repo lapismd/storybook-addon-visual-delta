@@ -15,6 +15,23 @@ export type VisualDeltaConfigDiagnostic = {
   suggestion?: string;
 };
 
+export type VisualDeltaZoomDefault = "fit" | "100%";
+
+export type VisualDeltaProjectDefaults = {
+  passThresholdPercent: number;
+  diffThreshold: number;
+  diffIncludeAntiAliasing: boolean;
+  delay: number;
+  cropToViewport: boolean;
+  placement: "left" | "right" | "above" | "below" | "center";
+  opacity: number;
+  baselineLabelOffset: { x: number; y: number };
+  previewSplitZoomDefault: VisualDeltaZoomDefault;
+  diffResultZoomDefault: VisualDeltaZoomDefault;
+};
+
+export type VisualDeltaProjectDefaultSource = "project" | "legacy" | "built-in";
+
 /** Serializable host options exposed by GET /__visual-delta/config. */
 export type VisualDeltaResolvedConfig = {
   ok: true;
@@ -34,6 +51,14 @@ export type VisualDeltaResolvedConfig = {
    * `.visual-delta/playwright.json` or the built-in default (1).
    */
   playwrightPassThresholdPercent: number;
+  /** Editable values resolved from project file → legacy fallback → built-ins. */
+  projectDefaults: VisualDeltaProjectDefaults;
+  projectDefaultSources: Record<
+    keyof VisualDeltaProjectDefaults,
+    VisualDeltaProjectDefaultSource
+  >;
+  projectConfigPath: string;
+  projectConfigExists: boolean;
   onboarding: VisualDeltaOnboardingConfig;
   diagnostics?: VisualDeltaConfigDiagnostic[];
   /** Legacy flat messages retained for existing hosts and consumers. */

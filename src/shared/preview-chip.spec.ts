@@ -6,6 +6,7 @@ import {
   OVERLAY_CHIP_LABEL,
   ensureOverlayChip,
   isPreviewChipVisible,
+  positionOverlayChip,
   syncModeBadge,
 } from "./preview-chip.js";
 
@@ -54,10 +55,64 @@ describe("ensureOverlayChip", () => {
     const overlay = document.createElement("div");
     document.body.appendChild(overlay);
 
-    const chip = ensureOverlayChip(overlay, { id: "visual-delta-demo-chip-left" });
+    const chip = ensureOverlayChip(overlay, {
+      id: "visual-delta-demo-chip-left",
+    });
     expect(chip.id).toBe("visual-delta-demo-chip-left");
     expect(chip.textContent).toBe(OVERLAY_CHIP_LABEL);
     overlay.remove();
+  });
+
+  it("keeps the label outside the image and applies X/Y offsets", () => {
+    const parent = document.createElement("div");
+    const overlay = document.createElement("div");
+    parent.appendChild(overlay);
+    document.body.appendChild(parent);
+    const chip = ensureOverlayChip(overlay, {
+      offset: { x: 4, y: -2 },
+      position: false,
+    });
+    Object.defineProperty(parent, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 300,
+        bottom: 200,
+        width: 300,
+        height: 200,
+      }),
+    });
+    Object.defineProperty(overlay, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 20,
+        top: 40,
+        right: 220,
+        bottom: 140,
+        width: 200,
+        height: 100,
+      }),
+    });
+    Object.defineProperty(chip, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 60,
+        bottom: 18,
+        width: 60,
+        height: 18,
+      }),
+    });
+
+    positionOverlayChip(overlay, { x: 4, y: -2 });
+
+    expect(chip.style.left).toBe("4px");
+    expect(chip.style.top).toBe("-26px");
+    // 18px chip + 6px gap + 2px additional upward offset.
+    expect(Number.parseFloat(chip.style.top) + 18).toBeLessThan(0);
+    parent.remove();
   });
 });
 

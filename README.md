@@ -299,6 +299,8 @@ parameters: {
     diffIncludeAntiAliasing: false,
     /** Extra settle ms before capture (Live Diff + Playwright). */
     delay: 0,
+    /** Fine-tune the external Baseline chip after its 6px top-start anchor. */
+    baselineLabelOffset: { x: 0, y: 0 },
     /** Hide these CSS regions during capture (plus data-visual-delta-ignore). */
     ignoreSelectors: [".toast"],
     cropToViewport: false,
@@ -317,10 +319,21 @@ parameters: {
 Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
 `data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
 
-Panel **More → Configuration** shows resolved host options
-(`GET /__visual-delta/config`), including `playwrightPassThresholdPercent`
-(from `.visual-delta/playwright.json`, default 1%). Diff Chromium Thresh can
-push that host file via **Update Playwright config**.
+Panel **More → Configuration** opens a scrolling, tabbed settings surface.
+**Defaults** edits the allow-listed project defaults in
+`.visual-delta/config.json`: pass and pixel thresholds, anti-aliasing,
+capture delay/cropping, placement/opacity, Baseline-label offsets, and the
+opening zoom for preview splits and Diff results. **Resolved** keeps the
+read-only host paths, commands, diagnostics, setting sources, and raw JSON.
+Stories/components may override capture and overlay values through
+`parameters.visualDelta`; resolution order is story/component parameters →
+project defaults → built-ins.
+
+`GET /__visual-delta/config` returns both editable defaults and resolved host
+configuration. Validated `PUT` updates are written atomically, broadcast to the
+manager and preview, and invalidate the next static build. The legacy
+`.visual-delta/playwright.json` threshold remains a fallback when no project
+config exists.
 
 Testing Module **Run tests** (global runner and sidebar story/component
 context menu) runs the checked actions: compare (on by default),

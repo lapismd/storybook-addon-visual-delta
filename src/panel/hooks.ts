@@ -75,6 +75,7 @@ type StoryData = {
    */
   overlayOn: boolean;
   opacity: number;
+  baselineLabelOffset: { x: number; y: number };
   colorInversion: boolean;
   placement: PlacementMode;
   /** False = image-only (live hidden, center overlay). Default true. */
@@ -191,6 +192,7 @@ export function useStoryData() {
       index: -1,
       overlayOn: false,
       opacity: prefs.opacity,
+      baselineLabelOffset: { x: 0, y: 0 },
       colorInversion: prefs.colorInversion,
       placement: liveVisible ? prefs.placement : "center",
       liveVisible,
@@ -259,6 +261,7 @@ export function useStoryData() {
       storyId: string;
       storyName: string;
       opacity?: number;
+      baselineLabelOffset?: { x: number; y: number };
       colorInversion?: boolean;
       placement?: PlacementMode;
       passThresholdPercent?: number;
@@ -267,6 +270,7 @@ export function useStoryData() {
       delay?: number;
       ignoreSelectors?: string[];
       cropToViewport?: boolean;
+      configUpdated?: boolean;
     }) => {
       const imagesArray = Array.isArray(data.images)
         ? data.images
@@ -280,12 +284,6 @@ export function useStoryData() {
       }
       const liveVisible =
         interactionSrcEarly != null ? true : prefs.liveVisible;
-      const placement =
-        interactionSrcEarly != null
-          ? "center"
-          : liveVisible
-            ? prefs.placement
-            : "center";
       if (!liveVisible) {
         placementBeforeImageOnlyRef.current = prefs.placement;
         styleBeforeImageOnlyRef.current = {
@@ -294,6 +292,24 @@ export function useStoryData() {
         };
       }
       setStoryData((prev) => {
+        const resetDefaults =
+          !prev.storyId ||
+          prev.storyId !== data.storyId ||
+          data.configUpdated === true;
+        const resolvedPlacement =
+          interactionSrcEarly != null
+            ? "center"
+            : liveVisible
+              ? resetDefaults
+                ? (data.placement ?? prefs.placement)
+                : prefs.placement
+              : "center";
+        const resolvedOpacity =
+          liveVisible && resetDefaults && typeof data.opacity === "number"
+            ? data.opacity
+            : liveVisible
+              ? prefs.opacity
+              : 1;
         // Create/unskip can HMR an empty parameters payload after the panel
         // already hydrated the new PNG — don't wipe the gallery for that race.
         if (
@@ -311,7 +327,7 @@ export function useStoryData() {
         if (prev.storyId && prev.storyId !== data.storyId) {
           pinInteractionSrc(activeInteractionSrcRef, null);
         }
-        const primaryImages = withPlacement(imagesArray, placement);
+        const primaryImages = withPlacement(imagesArray, resolvedPlacement);
         primaryImagesRef.current = primaryImages;
         const interactionSrc =
           activeInteractionSrcRef.current ?? readPinnedInteractionSrc();
@@ -326,14 +342,14 @@ export function useStoryData() {
             ? withPlacement(
                 [
                   {
-                    src: `${(wiredInteraction?.src.split("?")[0] ?? interactionSrc)}?t=${Date.now()}`,
+                    src: `${wiredInteraction?.src.split("?")[0] ?? interactionSrc}?t=${Date.now()}`,
                     offsetX: 0,
                     offsetY: 0,
                     align: "canvas" as const,
-                    placement,
+                    placement: resolvedPlacement,
                   },
                 ],
-                placement,
+                resolvedPlacement,
               )
             : primaryImages;
         // Keep gallery index whenever baselines exist. Soft-hide only clears
@@ -357,9 +373,13 @@ export function useStoryData() {
           storyName: data.storyName,
           index: selection.index,
           overlayOn: selection.overlayOn,
-          opacity: liveVisible ? prefs.opacity : 1,
+          opacity: resolvedOpacity,
+          baselineLabelOffset: data.baselineLabelOffset ?? {
+            x: 0,
+            y: 0,
+          },
           colorInversion: liveVisible ? prefs.colorInversion : false,
-          placement,
+          placement: resolvedPlacement,
           liveVisible,
           passThresholdByEngine: {
             html: prefs.passThresholdByEngine.html,
@@ -380,6 +400,7 @@ export function useStoryData() {
           colorInversion: next.colorInversion,
           placement: next.placement,
           liveVisible: next.liveVisible,
+          baselineLabelOffset: next.baselineLabelOffset,
         });
         void selectImage(selection.previewIndex, images);
         return next;
@@ -421,6 +442,7 @@ export function useStoryData() {
           colorInversion: prev.colorInversion,
           placement: prev.placement,
           liveVisible: prev.liveVisible,
+          baselineLabelOffset: prev.baselineLabelOffset,
         });
         void selectImage(prev.index, prev.images);
         return prev;
@@ -463,7 +485,11 @@ export function useStoryData() {
     (
       next: Pick<
         StoryData,
-        "opacity" | "colorInversion" | "placement" | "liveVisible"
+        | "opacity"
+        | "colorInversion"
+        | "placement"
+        | "liveVisible"
+        | "baselineLabelOffset"
       >,
     ) => {
       emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
@@ -471,6 +497,7 @@ export function useStoryData() {
         colorInversion: next.colorInversion,
         placement: next.placement,
         liveVisible: next.liveVisible,
+        baselineLabelOffset: next.baselineLabelOffset,
       });
     },
     [],
@@ -786,10 +813,11 @@ export function useStoryData() {
       const { storyId, storyName, imageSrcs } = args;
       if (!storyId) return;
       setStoryData((prev) => {
-        if (prev.storyId === storyId && (prev.images.length > 0 || !imageSrcs?.length)) {
-          return prev.storyName === storyName
-            ? prev
-            : { ...prev, storyName };
+        if (
+          prev.storyId === storyId &&
+          (prev.images.length > 0 || !imageSrcs?.length)
+        ) {
+          return prev.storyName === storyName ? prev : { ...prev, storyName };
         }
         const bust = `t=${Date.now()}`;
         const images =
@@ -827,8 +855,16 @@ export function useStoryData() {
           storyName,
           images,
           placement: hasImages ? "center" : prev.placement,
-          index: patch ? patch.index : prev.storyId === storyId ? prev.index : -1,
-          overlayOn: patch ? patch.overlayOn : prev.storyId === storyId ? prev.overlayOn : false,
+          index: patch
+            ? patch.index
+            : prev.storyId === storyId
+              ? prev.index
+              : -1,
+          overlayOn: patch
+            ? patch.overlayOn
+            : prev.storyId === storyId
+              ? prev.overlayOn
+              : false,
         };
         persist(next);
         if (hasImages) {
@@ -932,7 +968,10 @@ export function useStoryData() {
     (modeName: string | null) => {
       setStoryData((prev) => {
         if (modeName == null) {
-          const images = withPlacement(primaryImagesRef.current, prev.placement);
+          const images = withPlacement(
+            primaryImagesRef.current,
+            prev.placement,
+          );
           const index = images.length > 0 ? 0 : -1;
           const next: StoryData = {
             ...prev,

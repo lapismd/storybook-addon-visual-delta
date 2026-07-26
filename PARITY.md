@@ -37,11 +37,11 @@ flowchart TB
 
 ### Addon / project config
 
-| Chromatic                                                                                            | Visual Delta                                                                                          | Status                                          |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `chromatic.config.json` (`projectId`, `buildScriptName`, `debug`, `zip`, `onlyChanged`/TurboSnap, …) | `options.visualDelta` in Storybook main + panel **Configuration** view (`GET /__visual-delta/config`) | Local config UI; no TurboSnap / projectId / zip |
-| Addon `options.configFile`                                                                           | Options object only                                                                                   | Intentional (host wires main.ts)                |
-| CI `projectToken`                                                                                    | `VISUAL_UPDATE_APPROVED=1` + host CLI                                                                 | Different model                                 |
+| Chromatic                                                                                            | Visual Delta                                                                                                    | Status                                                                  |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `chromatic.config.json` (`projectId`, `buildScriptName`, `debug`, `zip`, `onlyChanged`/TurboSnap, …) | Allow-listed `.visual-delta/config.json` defaults + read-only `options.visualDelta` resolution in Configuration | Editable local capture/compare defaults; no TurboSnap / projectId / zip |
+| Addon `options.configFile`                                                                           | Options object only                                                                                             | Intentional (host wires main.ts)                                        |
+| CI `projectToken`                                                                                    | `VISUAL_UPDATE_APPROVED=1` + host CLI                                                                           | Different model                                                         |
 
 ### Story parameters
 
@@ -87,7 +87,7 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 | Live canvas overlay                                 | No                       | Placement pad + split panes                                                               | Advantage            |
 | Highlight ignored                                   | Toolbar + matched count  | Toolbar hidden at zero; distinct live count otherwise                                     | Done                 |
 | Share Storybook                                     | Toolbar publish          | None                                                                                      | Cloud-only           |
-| Configuration screen                                | Structured settings      | Read-only Setup, Baselines, Capture, Commands, setting diagnostics, collapsed raw details | Done                 |
+| Configuration screen                                | Structured settings      | Editable Defaults plus read-only Resolved sections, diagnostics, sources, and raw details | Done                 |
 | Guided tour                                         | Onboarding               | Empty-state Create CTA                                                                    | Optional later       |
 | Review layout                                       | No                       | Yes                                                                                       | Advantage            |
 | Interaction accordion                               | No                       | Yes                                                                                       | Advantage            |
@@ -131,6 +131,10 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 - The host and packaged visual suites share capture readiness: wait for
   Storybook `storyFinished`, clear preparation overlays, await fonts, then
   apply only the story's explicit delay.
+- The Baseline chip is outside the image pixels, with symmetric pane clearance,
+  viewport clamping, and project/story X/Y offsets.
+- Editable project defaults are allow-listed, validated, atomically persisted,
+  and broadcast without exposing host paths or commands to mutation.
 - `test:visual-delta-panel:update` is separately gated with
   `VISUAL_UPDATE_APPROVED=1`; product-component baselines are outside its
   snapshot directory.
@@ -143,6 +147,6 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 | 2        | Ignore regions + highlight toolbar                                 | **Done** — distinct matched-element count and stale-state reset                               |
 | 3        | CSF capture knobs (`diffThreshold`, AA, `delay`, `cropToViewport`) | **Done** — Live Diff + Chromium Diff; Playwright reads DOM markers from the preview decorator |
 | 4        | Accept / Unaccept batch UX                                         | **Done** — Story, Component, and Current run                                                  |
-| 5        | Configuration panel                                                | **Done** — structured sections + typed diagnostics                                            |
+| 5        | Configuration panel                                                | **Done** — editable Defaults, structured Resolved sections, sources, and typed diagnostics    |
 | 6        | Visual sidebar status ownership                                    | **Done** — committed visual tags are rendered by Visual Delta; transient runs use Storybook   |
 | 7        | `forcedColors` / reduced-motion / guided tour                      | Not yet                                                                                       |

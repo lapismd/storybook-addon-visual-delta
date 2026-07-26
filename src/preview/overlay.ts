@@ -27,7 +27,9 @@ import {
 } from "../shared/compare-viewport.js";
 import { resolvePaintedBackground } from "../shared/preview-background.js";
 import {
+  BASELINE_CHIP_GUTTER_PX,
   ensureOverlayChip,
+  positionOverlayChip,
   syncModeBadge,
 } from "../shared/preview-chip.js";
 
@@ -101,6 +103,37 @@ let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
 let currentLiveVisible = true;
 let currentOpacity = 0.5;
 let currentColorInversion = false;
+let currentBaselineLabelOffset = { x: 0, y: 0 };
+let centerLabelGutterRestoreRef: (() => void) | null = null;
+let centerLabelGutterSubject: HTMLElement | null = null;
+
+function syncOverlayChip(overlay: HTMLElement) {
+  return ensureOverlayChip(overlay, {
+    offset: currentBaselineLabelOffset,
+  });
+}
+
+function applyCenterLabelGutter(canvasElement: HTMLElement) {
+  if (centerLabelGutterSubject === canvasElement) return;
+  restoreCenterLabelGutter();
+  const previous = canvasElement.style.paddingTop;
+  const computed = Number.parseFloat(
+    getComputedStyle(canvasElement).paddingTop,
+  );
+  canvasElement.style.paddingTop = `${
+    (Number.isFinite(computed) ? computed : 0) + BASELINE_CHIP_GUTTER_PX
+  }px`;
+  centerLabelGutterSubject = canvasElement;
+  centerLabelGutterRestoreRef = () => {
+    canvasElement.style.paddingTop = previous;
+  };
+}
+
+function restoreCenterLabelGutter() {
+  centerLabelGutterRestoreRef?.();
+  centerLabelGutterRestoreRef = null;
+  centerLabelGutterSubject = null;
+}
 /** Survives FORCE_REMOUNT / Vite HMR — decorator useChannel does not. */
 const OVERLAY_CHANNEL_INSTALLED_KEY = "__visualDeltaOverlayChannelInstalled";
 function isOverlayChannelInstalled(): boolean {
@@ -142,6 +175,7 @@ type OverlayChannelApi = {
     colorInversion: boolean;
     placement?: PlacementMode;
     liveVisible?: boolean;
+    baselineLabelOffset?: { x: number; y: number };
   }): void;
   onHideOverlay(): void;
   onShowOverlay(): void;
@@ -313,7 +347,7 @@ function syncBaselinePaneInset(
     subject instanceof Element ? getComputedStyle(subject) : null;
   const pad = baselinePanePaddingPx(style, subjectStyle);
 
-  baselinePane.style.paddingTop = `${pad.top}px`;
+  baselinePane.style.paddingTop = `${pad.top + BASELINE_CHIP_GUTTER_PX}px`;
   baselinePane.style.paddingRight = `${pad.right}px`;
   baselinePane.style.paddingBottom = `${pad.bottom}px`;
   baselinePane.style.paddingLeft = `${pad.left}px`;
@@ -917,6 +951,7 @@ function ensureSplit(
   livePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
   baselinePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
   livePane.style.padding = "0";
+  livePane.style.paddingTop = `${BASELINE_CHIP_GUTTER_PX}px`;
   syncBaselinePaneInset(canvasElement, baselinePane);
 
   const baselineFirst = placement === "left" || placement === "above";
@@ -958,7 +993,7 @@ function ensureSplit(
 function ensureOverlayElement(): HTMLElement {
   let overlay = document.getElementById(OVERLAY_ID);
   if (overlay instanceof HTMLElement) {
-    ensureOverlayChip(overlay);
+    syncOverlayChip(overlay);
     return overlay;
   }
 
@@ -975,13 +1010,14 @@ function ensureOverlayElement(): HTMLElement {
     user-select: none;
   `;
   overlay.appendChild(img);
-  ensureOverlayChip(overlay);
+  syncOverlayChip(overlay);
   dragCleanupRef = setupDragOverlay(overlay);
   return overlay;
 }
 
 function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
   if (isSplitPlacement(placement)) {
+    restoreCenterLabelGutter();
     overlay.style.cssText = `
       position: relative;
       top: auto;
@@ -1011,7 +1047,7 @@ function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
   }
   // cssText on the overlay must not leave a stale/missing Baseline chip —
   // re-attach after every mode style pass (split left/right/above/below + center).
-  ensureOverlayChip(overlay);
+  syncOverlayChip(overlay);
 }
 
 function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
@@ -1022,7 +1058,7 @@ function effectivePlacement(imageItem: VisualDeltaImage): PlacementMode {
 
 function updateOverlayStyle(overlay: HTMLElement | null) {
   if (!overlay) return;
-  ensureOverlayChip(overlay);
+  syncOverlayChip(overlay);
   // Blend/opacity on the PNG only so the Baseline chip stays solid.
   const img = overlay.querySelector(":scope > img");
   overlay.style.mixBlendMode = "normal";
@@ -1114,12 +1150,13 @@ function applyOverlayPosition(
     }
     overlay.style.transform = "none";
     // Chip rides on the overlay inside the baseline pane for left/right/above/below.
-    ensureOverlayChip(overlay);
+    syncOverlayChip(overlay);
     applyLiveVisibility(canvasElement);
     return;
   }
 
   teardownSplit(canvasElement);
+  applyCenterLabelGutter(canvasElement);
   const canvasParent = canvasElement.parentElement;
   if (!canvasParent) return;
   const compareSizes =
@@ -1155,6 +1192,11 @@ function applyOverlayPosition(
     canvasElement,
   );
   overlay.style.transform = `translate(${x}px, ${y}px)`;
+  requestAnimationFrame(() => {
+    if (overlay.isConnected) {
+      positionOverlayChip(overlay, currentBaselineLabelOffset);
+    }
+  });
   applyLiveVisibility(canvasElement);
 }
 
@@ -1221,6 +1263,7 @@ function removeOverlayDom(retainSelection: boolean) {
   const canvasElement = resolveStoryCanvas();
   if (canvasElement) {
     teardownSplit(canvasElement);
+    restoreCenterLabelGutter();
     canvasElement.style.visibility = "";
   } else {
     // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
@@ -1228,6 +1271,7 @@ function removeOverlayDom(retainSelection: boolean) {
     unbindSharedScroll();
     unlockLiveContentWidth();
     unlockLiveCanvasForSplit();
+    restoreCenterLabelGutter();
     lastCompareSizes = null;
     document.getElementById(SPLIT_ID)?.remove();
   }
@@ -1262,7 +1306,7 @@ function applySelection(attempt: number, generation = selectionGeneration) {
 
   currentPlacement = effectivePlacement(selectedImageItem);
   const overlay = ensureOverlayElement();
-  ensureOverlayChip(overlay);
+  syncOverlayChip(overlay);
   styleOverlayForMode(overlay, currentPlacement);
   updateOverlayStyle(overlay);
   overlay.style.visibility = "";
@@ -1314,11 +1358,7 @@ function syncOverlayChannelApi(): void {
     clearOverlay();
   };
   overlayChannelApi.onSelectImage = (data) => {
-    if (
-      data.index === -1 ||
-      !data.images ||
-      data.index >= data.images.length
-    ) {
+    if (data.index === -1 || !data.images || data.index >= data.images.length) {
       clearOverlay();
       return;
     }
@@ -1338,18 +1378,16 @@ function syncOverlayChannelApi(): void {
     if (!overlay || !lastSelection) return;
     const imageItem = lastSelection.images[lastSelection.index];
     if (!imageItem) return;
-    scheduleOverlayPosition(
-      overlay,
-      imageItem,
-      null,
-      selectionGeneration,
-    );
+    scheduleOverlayPosition(overlay, imageItem, null, selectionGeneration);
   };
   overlayChannelApi.onUpdateOverlayStyle = (data) => {
     currentOpacity = data.opacity;
     currentColorInversion = data.colorInversion;
     if (typeof data.liveVisible === "boolean") {
       currentLiveVisible = data.liveVisible;
+    }
+    if (data.baselineLabelOffset) {
+      currentBaselineLabelOffset = { ...data.baselineLabelOffset };
     }
     if (data.placement) {
       currentPlacement = normalizePlacement(data.placement);
@@ -1371,12 +1409,7 @@ function syncOverlayChannelApi(): void {
     if (overlay && lastSelection) {
       const imageItem = lastSelection.images[lastSelection.index];
       if (imageItem) {
-        scheduleOverlayPosition(
-          overlay,
-          imageItem,
-          null,
-          selectionGeneration,
-        );
+        scheduleOverlayPosition(overlay, imageItem, null, selectionGeneration);
       }
     } else {
       const canvasElement = resolveStoryCanvas();
@@ -1433,9 +1466,12 @@ export function ensureOverlayChannel(): void {
   markOverlayChannelInstalled();
   const channel = addons.getChannel();
 
-  channel.on(SET_CURRENT_STORY, (payload?: { viewMode?: string; storyId?: string }) => {
-    api.onSetCurrentStory(payload);
-  });
+  channel.on(
+    SET_CURRENT_STORY,
+    (payload?: { viewMode?: string; storyId?: string }) => {
+      api.onSetCurrentStory(payload);
+    },
+  );
   channel.on(DOCS_PREPARED, () => {
     api.onDocsPrepared();
   });
@@ -1458,6 +1494,7 @@ export function ensureOverlayChannel(): void {
       colorInversion: boolean;
       placement?: PlacementMode;
       liveVisible?: boolean;
+      baselineLabelOffset?: { x: number; y: number };
     }) => {
       api.onUpdateOverlayStyle(data);
     },
@@ -1486,6 +1523,10 @@ export const withSelectImage: DecoratorFunction = (storyFn, context) => {
     visualDeltaParams?.opacity ??
     (isSplitPlacement(currentPlacement) ? 1 : 0.5);
   currentColorInversion = visualDeltaParams?.colorInversion ?? false;
+  currentBaselineLabelOffset = visualDeltaParams?.baselineLabelOffset ?? {
+    x: 0,
+    y: 0,
+  };
 
   useEffect(() => {
     ensureOverlayChannel();

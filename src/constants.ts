@@ -39,6 +39,8 @@ export const EVENTS = {
   SET_HIGHLIGHT_IGNORE: `${ADDON_ID}/set-highlight-ignore`,
   /** Preview → manager: distinct DOM nodes covered by ignore selectors. */
   IGNORE_REGIONS_STATUS: `${ADDON_ID}/ignore-regions-status`,
+  /** Manager → preview: persisted project defaults changed. */
+  CONFIG_UPDATED: `${ADDON_ID}/config-updated`,
 } as const;
 
 export type AlignMode = "viewport" | "canvas";
@@ -129,6 +131,8 @@ export type VisualDeltaParams = {
   /** Accepts legacy `"beside"` / `"over"` (normalized at runtime). */
   placement?: PlacementMode | "beside" | "over";
   opacity?: number;
+  /** Fine tune the Baseline chip after its default top-start anchor. */
+  baselineLabelOffset?: { x: number; y: number };
   colorInversion?: boolean;
   /** Live Diff / suite pass threshold as a percent of differing pixels. */
   passThresholdPercent?: number;
