@@ -2,6 +2,7 @@ import { addons } from "storybook/preview-api";
 import type { ProjectAnnotations, Renderer } from "storybook/internal/types";
 import { EVENTS, KEY } from "./constants.js";
 import { withCaptureParams } from "./preview/capture-params.js";
+import { withCaptureReady } from "./preview/capture-ready.js";
 import { withHighlightIgnore } from "./preview/highlight-ignore.js";
 import { withInitImage } from "./preview/init.js";
 import { withOverlayInfo } from "./preview/overlay-info.js";
@@ -26,12 +27,14 @@ function ensureRunUntilListener() {
   if (runUntilListenerInstalled) return;
   runUntilListenerInstalled = true;
   ensureOverlayChannel();
-  addons.getChannel().on(
-    EVENTS.RUN_UNTIL_STEP,
-    (payload: { storyId?: string; stepId?: string | null }) => {
-      setVisualCaptureUntilSession(payload.stepId ?? null);
-    },
-  );
+  addons
+    .getChannel()
+    .on(
+      EVENTS.RUN_UNTIL_STEP,
+      (payload: { storyId?: string; stepId?: string | null }) => {
+        setVisualCaptureUntilSession(payload.stepId ?? null);
+      },
+    );
 }
 
 function emitPlaySteps(storyId: string) {
@@ -44,6 +47,7 @@ function emitPlaySteps(storyId: string) {
 
 const preview: ProjectAnnotations<Renderer> = {
   decorators: [
+    withCaptureReady,
     withCaptureParams,
     withHighlightIgnore,
     withInitImage,

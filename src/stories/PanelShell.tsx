@@ -12,12 +12,10 @@ import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
 import { LiveVisibilityToggle } from "../panel/LiveVisibilityToggle.js";
+import { PanelView } from "../panel/PanelView.js";
 import { PlacementPad } from "../panel/PlacementPad.js";
-import { VisualDeltaHeader } from "../panel/VisualDeltaHeader.js";
 import {
   ErrorText,
-  PanelBody,
-  PanelShell as Shell,
   Toolbar as PanelToolbar,
   ToolbarRow,
 } from "../panel/styled.js";
@@ -168,9 +166,7 @@ export function PanelShell({
     (engine: DiffCaptureEngine) => {
       backend.actions.push("diff");
       setIsDiffing(true);
-      setDiffProgressLabel(
-        engine === "chromium" ? "Capturing…" : "Diffing…",
-      );
+      setDiffProgressLabel(engine === "chromium" ? "Capturing…" : "Diffing…");
       setDiffResult(
         engine === "chromium"
           ? "Live Diff Chromium: 0.0000% (mock)"
@@ -296,124 +292,139 @@ export function PanelShell({
   );
 
   return (
-    <Shell data-testid="panel-shell" style={{ minHeight: 420 }}>
-      <VisualDeltaHeader
-        badgeStatus={badgeStatus}
-        empty={images.length === 0}
-        busy={busy || isDiffing || isRunning}
-        storyMissing={false}
-        isDiffing={isDiffing}
-        isRunning={isRunning}
-        diffProgressLabel={diffProgressLabel}
-        runProgressLabel={runProgressLabel}
-        createLabel={busy ? "Creating…" : "Create visual"}
-        reviewStatus={reviewStatus}
-        skipVisual={skipVisual}
-        onDiff={handleDiff}
-        onRun={(mode) => void handleRun(mode)}
-        diffEngine={diffEngine}
-        onDiffEngineChange={setDiffEngine}
-        onCreate={() => void handleCreate()}
-        onUpdateBaselines={() => void handleUpdate()}
-        onRebuildStatic={() => void handleRebuildStatic()}
-        onResetSettings={() => {
+    <PanelView
+      active
+      standalone
+      testId="panel-shell"
+      header={{
+        badgeStatus,
+        empty: images.length === 0,
+        busy: busy || isDiffing || isRunning,
+        storyMissing: false,
+        isDiffing,
+        isRunning,
+        diffProgressLabel,
+        runProgressLabel,
+        createLabel: busy ? "Creating…" : "Create visual",
+        reviewStatus,
+        skipVisual,
+        onDiff: handleDiff,
+        onRun: (mode) => void handleRun(mode),
+        diffEngine,
+        onDiffEngineChange: setDiffEngine,
+        onCreate: () => void handleCreate(),
+        onUpdateBaselines: () => void handleUpdate(),
+        onRebuildStatic: () => void handleRebuildStatic(),
+        onResetSettings: () => {
           setDiffResult(null);
           setBadgeStatus(null);
           setStatusLog("");
-        }}
-        onStopDiff={handleStopDiff}
-        onStopRun={() => void handleStopRun()}
-        onReviewStatus={(status) => void handleReview(status)}
-        onAccept={(scope) =>
-          void handleReview(scope === "component" ? "approved" : "approved")
-        }
-        onUnaccept={() => void handleReview("pending")}
-        onToggleSkipVisual={() => void handleToggleSkipVisual()}
-        onOpenConfiguration={() => {
+        },
+        onStopDiff: handleStopDiff,
+        onStopRun: () => void handleStopRun(),
+        onReviewStatus: (status) => void handleReview(status),
+        onAccept: () => void handleReview("approved"),
+        onUnaccept: () => void handleReview("pending"),
+        onToggleSkipVisual: () => void handleToggleSkipVisual(),
+        onOpenConfiguration: () => {
           setStatusLog("Configuration (mock)");
-        }}
-        isUpdating={busy && !isRebuilding}
-        isRebuilding={isRebuilding}
-      />
-      <PanelBody>
-        <div data-testid="panel-shell-meta" style={{ display: "none" }}>
-          <span data-testid="fixture-actions">{actionLog}</span>
-          <span data-testid="fixture-review">{reviewStatus ?? "none"}</span>
-          <span data-testid="fixture-skip-visual">{String(skipVisual)}</span>
-          <span data-testid="fixture-diff">{diffResult ?? "none"}</span>
-          <span data-testid="fixture-placement">{placement}</span>
-          <span data-testid="fixture-overlay-on">{String(overlayOn)}</span>
-          <span data-testid="fixture-live-visible">{String(liveVisible)}</span>
-          <span data-testid="fixture-gallery-index">{index}</span>
-          <span data-testid="fixture-expanded-id">{expandedId ?? "none"}</span>
-          <span data-testid="fixture-interaction">{interactionStepLabel}</span>
-          <span data-testid="fixture-log">{statusLog}</span>
-        </div>
+        },
+        isUpdating: busy && !isRebuilding,
+        isRebuilding,
+      }}
+      content={
+        <>
+          <div data-testid="panel-shell-meta" style={{ display: "none" }}>
+            <span data-testid="fixture-actions">{actionLog}</span>
+            <span data-testid="fixture-review">{reviewStatus ?? "none"}</span>
+            <span data-testid="fixture-skip-visual">{String(skipVisual)}</span>
+            <span data-testid="fixture-diff">{diffResult ?? "none"}</span>
+            <span data-testid="fixture-placement">{placement}</span>
+            <span data-testid="fixture-overlay-on">{String(overlayOn)}</span>
+            <span data-testid="fixture-live-visible">
+              {String(liveVisible)}
+            </span>
+            <span data-testid="fixture-gallery-index">{index}</span>
+            <span data-testid="fixture-expanded-id">
+              {expandedId ?? "none"}
+            </span>
+            <span data-testid="fixture-interaction">
+              {interactionStepLabel}
+            </span>
+            <span data-testid="fixture-log">{statusLog}</span>
+          </div>
 
-        <PanelToolbar>
-          <ToolbarRow>
-            <LiveVisibilityToggle
-              liveVisible={liveVisible}
-              onToggle={setLiveVisible}
-            />
-            {liveVisible ? (
-              <PlacementPad
-                value={placement}
-                active={overlayOn}
-                onToggle={(next) => {
-                  const action = placementToggleAction(
-                    {
-                      overlayOn,
-                      placement,
-                      index,
-                      imageCount: images.length,
-                      opacity: 1,
-                    },
-                    next,
-                  );
-                  if (action.type === "soft-hide") {
-                    setOverlayOn(false);
-                    return;
-                  }
-                  setOverlayOn(true);
-                  setPlacement(action.placement);
-                  setIndex(action.index);
-                }}
+          <PanelToolbar>
+            <ToolbarRow>
+              <LiveVisibilityToggle
+                liveVisible={liveVisible}
+                onToggle={setLiveVisible}
               />
-            ) : null}
-            <ImageGallery
-              images={images}
-              selectedIndex={index}
-              onSelect={setIndex}
-            />
-          </ToolbarRow>
-          {diffResult ? <ErrorText>{diffResult}</ErrorText> : null}
-        </PanelToolbar>
+              {liveVisible ? (
+                <PlacementPad
+                  value={placement}
+                  active={overlayOn}
+                  onToggle={(next) => {
+                    const action = placementToggleAction(
+                      {
+                        overlayOn,
+                        placement,
+                        index,
+                        imageCount: images.length,
+                        opacity: 1,
+                      },
+                      next,
+                    );
+                    if (action.type === "soft-hide") {
+                      setOverlayOn(false);
+                      return;
+                    }
+                    setOverlayOn(true);
+                    setPlacement(action.placement);
+                    setIndex(action.index);
+                  }}
+                />
+              ) : null}
+              <ImageGallery
+                images={images}
+                selectedIndex={index}
+                onSelect={setIndex}
+              />
+            </ToolbarRow>
+            {diffResult ? <ErrorText>{diffResult}</ErrorText> : null}
+          </PanelToolbar>
 
-        <BaselineAccordion
-          sections={sections}
-          expandedId={expandedId}
-          busy={busy}
-          showDistribution={showDistribution}
-          onExpand={(id) =>
-            setExpandedId((prev) => (prev === id ? null : id))
-          }
-          onCreate={(step) => void handleCreateInteraction(step)}
-          onUpdate={(step) => void handleCreateInteraction(step)}
-          onUpdateDefault={() => void handleUpdate()}
-          onToggleDistribution={() => setShowDistribution((v) => !v)}
-          renderBody={(section) => (
-            <FormPlaceholder
-              data-testid={`fixture-section-body-${section.id}`}
-            >
-              Body for {section.label}
-              {showDistribution && section.id === "default"
-                ? " · distribution on"
-                : ""}
-            </FormPlaceholder>
-          )}
-        />
-      </PanelBody>
-    </Shell>
+          <BaselineAccordion
+            sections={sections}
+            expandedId={expandedId}
+            busy={busy}
+            showDistribution={showDistribution}
+            onExpand={(id) =>
+              setExpandedId((prev) => (prev === id ? null : id))
+            }
+            onCreate={(step) => void handleCreateInteraction(step)}
+            onUpdate={(step) => void handleCreateInteraction(step)}
+            onUpdateDefault={() => void handleUpdate()}
+            onToggleDistribution={() => setShowDistribution((v) => !v)}
+            renderBody={(section) => (
+              <FormPlaceholder
+                data-testid={`fixture-section-body-${section.id}`}
+              >
+                Body for {section.label}
+                {showDistribution && section.id === "default"
+                  ? " · distribution on"
+                  : ""}
+              </FormPlaceholder>
+            )}
+          />
+        </>
+      }
+      status={{
+        running: busy || isDiffing || isRunning,
+        label: runProgressLabel ?? diffProgressLabel,
+        log: statusLog,
+        error: null,
+      }}
+    />
   );
 }

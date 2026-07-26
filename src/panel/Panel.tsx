@@ -7,12 +7,7 @@ import React, {
   useState,
 } from "react";
 import pixelmatch from "pixelmatch";
-import {
-  AddonPanel,
-  Button,
-  EmptyTabContent,
-  ToggleButton,
-} from "storybook/internal/components";
+import { Button, ToggleButton } from "storybook/internal/components";
 import {
   experimental_getTestProviderStore,
   useAddonState,
@@ -95,11 +90,10 @@ import {
   type BaselineSectionId,
 } from "./BaselineAccordion.js";
 import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
-import { PanelStatusBar } from "./PanelStatusBar.js";
+import { PanelView, type PanelViewEmptyState } from "./PanelView.js";
 import { PlacementPad } from "./PlacementPad.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
 import { ModeSelector } from "./ModeSelector.js";
-import { VisualDeltaHeader } from "./VisualDeltaHeader.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import {
@@ -119,13 +113,6 @@ import {
   CheckboxContainer,
   ErrorText,
   InlineControl,
-  VD_HEADER_STICKY_TOP_VAR,
-  VISUAL_DELTA_HEADER_HEIGHT,
-  PanelBody,
-  PanelScroll,
-  PanelShell,
-  SkeletonBone,
-  SkeletonRoot,
   Slider,
   ThreshMismatchNote,
   ThreshStack,
@@ -140,10 +127,6 @@ const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
   const { storyId: currentStoryId } = useStorybookState();
-  const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
-  const [headerStickyTop, setHeaderStickyTop] = useState(
-    VISUAL_DELTA_HEADER_HEIGHT,
-  );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
     images,
@@ -632,8 +615,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   // Soft-hide may clear the preview attach while keeping gallery selection.
   // Fall back to the first baseline so DiffResult / Diff still have a stem.
-  const selectedBaselineIndex =
-    index >= 0 ? index : images.length > 0 ? 0 : -1;
+  const selectedBaselineIndex = index >= 0 ? index : images.length > 0 ? 0 : -1;
   const baselineSrc = images[selectedBaselineIndex]?.src;
   const baselineStem = baselineSrc?.split("?")[0] ?? "";
   /** True for panel-initiated runs and sidebar / Testing Module runs. */
@@ -1504,141 +1486,115 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     ],
   );
 
-  return (
-    <AddonPanel active={props.active ?? false}>
-      <PanelShell ref={setShellEl}>
-        <PanelScroll
-          style={
-            {
-              [VD_HEADER_STICKY_TOP_VAR]: `${headerStickyTop}px`,
-            } as React.CSSProperties
-          }
-        >
-          <VisualDeltaHeader
-            badgeStatus={loading ? null : badgeStatus}
-            empty={loading ? false : isEmpty}
-            busy={busy || loading}
-            storyMissing={!storyId || loading}
-            isDiffing={!loading && isDiffing}
-            isRunning={!loading && runInFlight}
-            diffProgressLabel={loading ? null : diffProgressLabel}
-            runProgressLabel={loading ? null : runProgressLabel}
-            createLabel={
-              isCreating
-                ? (createProgress?.label ?? "Creating…")
-                : "Create visual"
-            }
-            reviewStatus={loading ? null : reviewStatus}
-            skipVisual={loading ? false : skipVisual}
-            onDiff={(engine) => void handleDiff(engine)}
-            onRun={handleRun}
-            diffEngine={diffEngine}
-            onDiffEngineChange={setDiffEngine}
-            onCreate={() => void handleCreateBaselines()}
-            onUpdateBaselines={() => void handleUpdateBaselines()}
-            onRebuildStatic={() => void handleRebuildStatic()}
-            onResetSettings={resetSettings}
-            onStopDiff={handleStopDiff}
-            onStopRun={() => void cancelVisualRun()}
-            onReviewStatus={(status) => void handleSetReviewStatus(status)}
-            onAccept={(scope) => void handleAcceptScope(scope)}
-            onUnaccept={(scope) => void handleUnacceptScope(scope)}
-            onToggleSkipVisual={() => void handleToggleSkipVisual()}
-            onOpenConfiguration={() => setShowConfiguration(true)}
-            isUpdating={isUpdating}
-            isRebuilding={isRebuilding}
-            onHeightChange={setHeaderStickyTop}
-          />
-          <PanelBody>
-            {showConfiguration ? (
-              <ConfigurationPanel onClose={() => setShowConfiguration(false)} />
-            ) : null}
-            {!showConfiguration && loading ? (
-              <SkeletonRoot
-                role="status"
-                aria-busy="true"
-                aria-label="Loading Visual Delta"
+  const emptyState: PanelViewEmptyState | null =
+    !showConfiguration && !loading && isEmpty && baselineSections.length === 0
+      ? {
+          description: skipVisual
+            ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
+            : needsScaffold
+              ? (onboardingHint ??
+                "Set up the Playwright suite and config, then create a baseline for this story.")
+              : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
+          footer:
+            needsScaffold && !skipVisual ? (
+              <Button
+                size="small"
+                ariaLabel="Set up Visual Delta Playwright suite"
+                disabled={busy}
+                onClick={() => void handleInitScaffold()}
               >
-                <SkeletonBone width="100%" height={180} radius={8} />
-                <SkeletonBone width="40%" height={12} radius={4} />
-              </SkeletonRoot>
-            ) : null}
-            {!showConfiguration &&
-            !loading &&
-            isEmpty &&
-            baselineSections.length === 0 ? (
-              <EmptyTabContent
-                title="Visual Delta"
-                description={
-                  skipVisual
-                    ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
-                    : needsScaffold
-                      ? (onboardingHint ??
-                        "Set up the Playwright suite and config, then create a baseline for this story.")
-                      : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite."
-                }
-                footer={
-                  needsScaffold && !skipVisual ? (
-                    <Button
-                      size="small"
-                      ariaLabel="Set up Visual Delta Playwright suite"
-                      disabled={busy}
-                      onClick={() => void handleInitScaffold()}
-                    >
-                      {isIniting ? "Setting up…" : "Set up Visual Delta"}
-                    </Button>
-                  ) : skipVisual ? (
-                    <Button
-                      size="small"
-                      ariaLabel="Include in visual tests"
-                      disabled={!storyId || busy}
-                      onClick={() => void handleToggleSkipVisual()}
-                    >
-                      Include in visual tests
-                    </Button>
-                  ) : (
-                    <Button
-                      size="small"
-                      ariaLabel="Create visual baseline"
-                      disabled={!storyId || busy}
-                      onClick={() => void handleCreateBaselines()}
-                    >
-                      {isCreating
-                        ? (createProgress?.label ?? "Creating…")
-                        : "Create visual"}
-                    </Button>
-                  )
-                }
-              />
-            ) : null}
-            {!showConfiguration &&
-            !loading &&
-            !(isEmpty && baselineSections.length === 0) ? (
-              <BaselineAccordion
-                sections={baselineSections}
-                expandedId={expandedId}
-                busy={busy}
-                showDistribution={showDistribution}
-                onExpand={selectSection}
-                onCreate={(step) => void handleCreateInteraction(step, false)}
-                onUpdate={(step) => void handleCreateInteraction(step, true)}
-                onUpdateDefault={() => void handleUpdateBaselines()}
-                onToggleDistribution={() =>
-                  setShowDistribution((value) => !value)
-                }
-                renderBody={renderSectionBody}
-              />
-            ) : null}
-          </PanelBody>
-        </PanelScroll>
-        <PanelStatusBar
-          container={shellEl}
-          running={statusRunning}
-          label={statusLabel}
-          log={updateLog}
-          error={captureError}
-        />
-      </PanelShell>
-    </AddonPanel>
+                {isIniting ? "Setting up…" : "Set up Visual Delta"}
+              </Button>
+            ) : skipVisual ? (
+              <Button
+                size="small"
+                ariaLabel="Include in visual tests"
+                disabled={!storyId || busy}
+                onClick={() => void handleToggleSkipVisual()}
+              >
+                Include in visual tests
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                ariaLabel="Create visual baseline"
+                disabled={!storyId || busy}
+                onClick={() => void handleCreateBaselines()}
+              >
+                {isCreating
+                  ? (createProgress?.label ?? "Creating…")
+                  : "Create visual"}
+              </Button>
+            ),
+        }
+      : null;
+
+  return (
+    <PanelView
+      active={props.active ?? false}
+      header={{
+        badgeStatus: loading ? null : badgeStatus,
+        empty: loading ? false : isEmpty,
+        busy: busy || loading,
+        storyMissing: !storyId || loading,
+        isDiffing: !loading && isDiffing,
+        isRunning: !loading && runInFlight,
+        diffProgressLabel: loading ? null : diffProgressLabel,
+        runProgressLabel: loading ? null : runProgressLabel,
+        createLabel: isCreating
+          ? (createProgress?.label ?? "Creating…")
+          : "Create visual",
+        reviewStatus: loading ? null : reviewStatus,
+        skipVisual: loading ? false : skipVisual,
+        onDiff: (engine) => void handleDiff(engine),
+        onRun: handleRun,
+        diffEngine,
+        onDiffEngineChange: setDiffEngine,
+        onCreate: () => void handleCreateBaselines(),
+        onUpdateBaselines: () => void handleUpdateBaselines(),
+        onRebuildStatic: () => void handleRebuildStatic(),
+        onResetSettings: resetSettings,
+        onStopDiff: handleStopDiff,
+        onStopRun: () => void cancelVisualRun(),
+        onReviewStatus: (status) => void handleSetReviewStatus(status),
+        onAccept: (scope) => void handleAcceptScope(scope),
+        onUnaccept: (scope) => void handleUnacceptScope(scope),
+        onToggleSkipVisual: () => void handleToggleSkipVisual(),
+        onOpenConfiguration: () => setShowConfiguration(true),
+        isUpdating,
+        isRebuilding,
+      }}
+      loading={loading}
+      configuration={
+        showConfiguration ? (
+          <ConfigurationPanel onClose={() => setShowConfiguration(false)} />
+        ) : null
+      }
+      emptyState={emptyState}
+      content={
+        !showConfiguration &&
+        !loading &&
+        !(isEmpty && baselineSections.length === 0) ? (
+          <BaselineAccordion
+            sections={baselineSections}
+            expandedId={expandedId}
+            busy={busy}
+            showDistribution={showDistribution}
+            onExpand={selectSection}
+            onCreate={(step) => void handleCreateInteraction(step, false)}
+            onUpdate={(step) => void handleCreateInteraction(step, true)}
+            onUpdateDefault={() => void handleUpdateBaselines()}
+            onToggleDistribution={() => setShowDistribution((value) => !value)}
+            renderBody={renderSectionBody}
+          />
+        ) : null
+      }
+      status={{
+        running: statusRunning,
+        label: statusLabel,
+        log: updateLog,
+        error: captureError,
+      }}
+    />
   );
 });
