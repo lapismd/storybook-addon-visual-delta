@@ -12,15 +12,12 @@ import { styled } from "storybook/theming";
 import type { ChangeBounds } from "../types.js";
 import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import {
-  COMPARE_ZOOM_MAX,
-  COMPARE_ZOOM_MIN,
   compareZoomFromDefault,
-  compareZoomPercent,
   resolvedCompareZoomScale,
   stepCompareZoom,
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
-import { ButtonGroup } from "./styled.js";
+import { CompareZoomControl } from "./CompareZoomControl.js";
 
 type CompareTab = "sidebyside" | "swipe" | "diff" | "focus" | "blink";
 
@@ -355,7 +352,6 @@ export function CompareView({
     [available, nativeHeight, nativeWidth, tab],
   );
   const viewZoom = resolvedCompareZoomScale(zoomState, fitInput);
-  const zoomPercent = compareZoomPercent(viewZoom);
   const scaledWidth = Math.max(1, nativeWidth * viewZoom);
   const scaledHeight = Math.max(1, nativeHeight * viewZoom);
   const stageSizeStyle = useMemo(
@@ -384,10 +380,6 @@ export function CompareView({
     },
     [viewZoom],
   );
-
-  const fitView = useCallback(() => {
-    setZoomState({ mode: "fit", scale: viewZoom });
-  }, [viewZoom]);
 
   const resetViewZoom = useCallback(() => {
     setZoomState({ mode: "custom", scale: 1 });
@@ -636,59 +628,12 @@ export function CompareView({
               Reset
             </ToggleButton>
           ) : null}
-          <ButtonGroup role="group" aria-label="View zoom">
-            <ToggleButton
-              size="small"
-              pressed={zoomState.mode === "fit"}
-              onClick={fitView}
-              ariaLabel={`Fit compare view. Current ${zoomPercent}%`}
-              title="Fit both width and height"
-            >
-              Fit
-            </ToggleButton>
-            <ToggleButton
-              size="small"
-              pressed={false}
-              disabled={viewZoom <= COMPARE_ZOOM_MIN}
-              onClick={() => nudgeViewZoom(-1)}
-              ariaLabel="Zoom out compare view"
-              title="Zoom out (−)"
-            >
-              −
-            </ToggleButton>
-            <ToggleButton
-              size="small"
-              pressed={false}
-              disabled
-              ariaLabel={`View zoom ${zoomPercent}%`}
-              title={`View zoom ${zoomPercent}%`}
-              style={{
-                minWidth: "3.25rem",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {zoomPercent}%
-            </ToggleButton>
-            <ToggleButton
-              size="small"
-              pressed={false}
-              disabled={viewZoom >= COMPARE_ZOOM_MAX}
-              onClick={() => nudgeViewZoom(1)}
-              ariaLabel="Zoom in compare view"
-              title="Zoom in (+)"
-            >
-              +
-            </ToggleButton>
-            <ToggleButton
-              size="small"
-              pressed={zoomState.mode === "custom" && viewZoom === 1}
-              onClick={resetViewZoom}
-              ariaLabel="Show compare view at 100%"
-              title="Native CSS size (100%)"
-            >
-              100%
-            </ToggleButton>
-          </ButtonGroup>
+          <CompareZoomControl
+            value={{ ...zoomState, scale: viewZoom }}
+            onChange={setZoomState}
+            label="View zoom"
+            subject="compare view"
+          />
         </TabTools>
       </Toolbar>
 
