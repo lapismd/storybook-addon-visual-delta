@@ -122,7 +122,12 @@ import {
   usePlaySteps,
   type PlayStepInfo,
 } from "./usePlaySteps.js";
-import { SyncIcon } from "@storybook/icons";
+import { CommitIcon, SyncIcon } from "@storybook/icons";
+import { baselinePathFromPublicUrl } from "../shared/baseline-history.js";
+import {
+  BaselineHistoryView,
+  type BaselineHistoryTarget,
+} from "./BaselineHistoryView.js";
 import {
   ButtonGroup,
   Checkbox,
@@ -137,6 +142,12 @@ import {
 } from "./styled.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
+const IS_DEVELOPMENT =
+  (
+    globalThis as typeof globalThis & {
+      CONFIG_TYPE?: string;
+    }
+  ).CONFIG_TYPE === "DEVELOPMENT";
 
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
@@ -357,6 +368,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [showDistribution, setShowDistribution] = useState(false);
   const [toolbarLightboxImage, setToolbarLightboxImage] =
     useState<LightboxImage | null>(null);
+  const [historyTarget, setHistoryTarget] =
+    useState<BaselineHistoryTarget | null>(null);
   /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
   const [diffEpoch, setDiffEpoch] = useState(0);
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
@@ -405,6 +418,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setSelectedInteractionId(null);
     setExpandedId("default");
     setShowDistribution(false);
+    setHistoryTarget(null);
   }, [storyId, storyTagsKey]);
 
   useEffect(() => {
@@ -1508,165 +1522,193 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   ]);
 
   const renderSectionBody = useCallback(
-    (section: BaselineSection) => (
-      <>
-        <PanelToolbar>
-          <ToolbarRow>
-            {section.thumbSrc ? (
-              <SectionThumbFrame
-                type="button"
-                title={`Open ${section.label} baseline full image`}
-                aria-label={`Open ${section.label} baseline full image`}
-                onClick={() => {
-                  const source =
-                    section.id === "default" ? primaryImages[0] : undefined;
-                  const viewport = viewportForImage(source);
-                  setToolbarLightboxImage({
-                    src: section.thumbSrc!,
-                    label: `${section.label} baseline`,
-                    width: viewport.width,
-                    height: viewport.height,
-                  });
-                }}
-              >
-                <SectionThumb src={section.thumbSrc} alt="" />
-              </SectionThumbFrame>
-            ) : null}
-            {section.id === "default" &&
-            liveVisible &&
-            primaryImages.length > 1 ? (
-              <ImageGallery
-                images={primaryImages}
-                selectedIndex={selectedInteractionId ? 0 : Math.max(0, index)}
-                onSelect={setIndex}
-              />
-            ) : null}
-            {section.id === "default" ? (
-              <ModeSelector
-                modeNames={modeNames}
-                value={selectedMode}
-                onChange={handleModeChange}
-                disabled={busy}
-                results={modeResultStatuses}
-              />
-            ) : null}
-            <LiveVisibilityToggle
-              liveVisible={liveVisible}
-              onToggle={setLiveVisible}
-              disabled={images.length === 0}
-            />
-            {liveVisible ? (
-              <PlacementPad
-                value={placement}
-                active={overlayOn}
-                onToggle={togglePlacement}
+    (section: BaselineSection) => {
+      const historySource =
+        section.id === "default"
+          ? (images[index]?.src ?? section.thumbSrc)
+          : section.thumbSrc;
+      const historyPath = baselinePathFromPublicUrl(historySource);
+      const historyLabel =
+        section.id === "default" && selectedMode
+          ? `${section.label} · ${selectedMode}`
+          : section.label;
+      return (
+        <>
+          <PanelToolbar>
+            <ToolbarRow>
+              {section.thumbSrc ? (
+                <SectionThumbFrame
+                  type="button"
+                  title={`Open ${section.label} baseline full image`}
+                  aria-label={`Open ${section.label} baseline full image`}
+                  onClick={() => {
+                    const source =
+                      section.id === "default" ? primaryImages[0] : undefined;
+                    const viewport = viewportForImage(source);
+                    setToolbarLightboxImage({
+                      src: section.thumbSrc!,
+                      label: `${section.label} baseline`,
+                      width: viewport.width,
+                      height: viewport.height,
+                    });
+                  }}
+                >
+                  <SectionThumb src={section.thumbSrc} alt="" />
+                </SectionThumbFrame>
+              ) : null}
+              {IS_DEVELOPMENT && historyPath ? (
+                <Button
+                  size="small"
+                  variant="ghost"
+                  ariaLabel={`Open ${historyLabel} baseline history`}
+                  title={`Open ${historyLabel} baseline history`}
+                  onClick={() =>
+                    setHistoryTarget({
+                      path: historyPath,
+                      label: historyLabel,
+                    })
+                  }
+                >
+                  <CommitIcon />
+                  History
+                </Button>
+              ) : null}
+              {section.id === "default" &&
+              liveVisible &&
+              primaryImages.length > 1 ? (
+                <ImageGallery
+                  images={primaryImages}
+                  selectedIndex={selectedInteractionId ? 0 : Math.max(0, index)}
+                  onSelect={setIndex}
+                />
+              ) : null}
+              {section.id === "default" ? (
+                <ModeSelector
+                  modeNames={modeNames}
+                  value={selectedMode}
+                  onChange={handleModeChange}
+                  disabled={busy}
+                  results={modeResultStatuses}
+                />
+              ) : null}
+              <LiveVisibilityToggle
+                liveVisible={liveVisible}
+                onToggle={setLiveVisible}
                 disabled={images.length === 0}
               />
-            ) : null}
-            {liveVisible && index >= 0 && isSplit ? (
-              <CompareZoomControl value={splitZoom} onChange={setSplitZoom} />
-            ) : null}
-            {index >= 0 && (!isSplit || !liveVisible) ? (
-              <ButtonGroup role="group" aria-label="Overlay controls">
-                <ToggleButton
-                  size="small"
-                  pressed={false}
-                  onClick={resetOverlay}
-                  ariaLabel={false}
-                  title="Reset overlay position after drag"
-                >
-                  Reset
-                </ToggleButton>
-              </ButtonGroup>
-            ) : null}
-            <ToolbarSpacer />
-            {liveVisible && index >= 0 && !isSplit ? (
-              <>
-                <InlineControl title="Overlay opacity">
-                  <span>Opacity</span>
+              {liveVisible ? (
+                <PlacementPad
+                  value={placement}
+                  active={overlayOn}
+                  onToggle={togglePlacement}
+                  disabled={images.length === 0}
+                />
+              ) : null}
+              {liveVisible && index >= 0 && isSplit ? (
+                <CompareZoomControl value={splitZoom} onChange={setSplitZoom} />
+              ) : null}
+              {index >= 0 && (!isSplit || !liveVisible) ? (
+                <ButtonGroup role="group" aria-label="Overlay controls">
+                  <ToggleButton
+                    size="small"
+                    pressed={false}
+                    onClick={resetOverlay}
+                    ariaLabel={false}
+                    title="Reset overlay position after drag"
+                  >
+                    Reset
+                  </ToggleButton>
+                </ButtonGroup>
+              ) : null}
+              <ToolbarSpacer />
+              {liveVisible && index >= 0 && !isSplit ? (
+                <>
+                  <InlineControl title="Overlay opacity">
+                    <span>Opacity</span>
+                    <RangeNumberInput
+                      label="Overlay opacity percentage"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Math.round(opacity * 100)}
+                      suffix="%"
+                      inputWidth="3.5rem"
+                      onChange={(value) => setOpacity(value / 100)}
+                    />
+                  </InlineControl>
+                  <CheckboxContainer>
+                    <Checkbox
+                      type="checkbox"
+                      checked={colorInversion}
+                      onChange={(e) => setColorInversion(e.target.checked)}
+                    />
+                    <span>Blend</span>
+                  </CheckboxContainer>
+                </>
+              ) : null}
+              <ThreshStack>
+                <InlineControl title="Pass if diff % is below this">
+                  <span>Thresh</span>
                   <RangeNumberInput
-                    label="Overlay opacity percentage"
+                    label={`${diffEngine === "html" ? "HTML" : "Chromium"} pass threshold percentage`}
                     min={0}
-                    max={100}
-                    step={1}
-                    value={Math.round(opacity * 100)}
+                    max={2}
+                    step={0.05}
+                    value={passThresholdPercent}
                     suffix="%"
-                    inputWidth="3.5rem"
-                    onChange={(value) => setOpacity(value / 100)}
+                    inputWidth="3.75rem"
+                    onChange={(value) =>
+                      setPassThresholdPercent(diffEngine, value)
+                    }
                   />
                 </InlineControl>
-                <CheckboxContainer>
-                  <Checkbox
-                    type="checkbox"
-                    checked={colorInversion}
-                    onChange={(e) => setColorInversion(e.target.checked)}
-                  />
-                  <span>Blend</span>
-                </CheckboxContainer>
-              </>
-            ) : null}
-            <ThreshStack>
-              <InlineControl title="Pass if diff % is below this">
-                <span>Thresh</span>
-                <RangeNumberInput
-                  label={`${diffEngine === "html" ? "HTML" : "Chromium"} pass threshold percentage`}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={passThresholdPercent}
-                  suffix="%"
-                  inputWidth="3.75rem"
-                  onChange={(value) =>
-                    setPassThresholdPercent(diffEngine, value)
-                  }
-                />
-              </InlineControl>
+                {playwrightThresholdMismatch ? (
+                  <ThreshMismatchNote title="Local Diff Chromium thresh differs from package Playwright default">
+                    Playwright {playwrightPassThresholdPercent}% ≠ local{" "}
+                    {passThresholdPercent}%
+                  </ThreshMismatchNote>
+                ) : null}
+              </ThreshStack>
               {playwrightThresholdMismatch ? (
-                <ThreshMismatchNote title="Local Diff Chromium thresh differs from package Playwright default">
-                  Playwright {playwrightPassThresholdPercent}% ≠ local{" "}
-                  {passThresholdPercent}%
-                </ThreshMismatchNote>
+                <ButtonGroup
+                  role="group"
+                  aria-label="Sync pass threshold with Playwright"
+                >
+                  <Button
+                    size="small"
+                    disabled={isUpdatingPlaywrightThreshold || busy}
+                    ariaLabel={false}
+                    title="Write local Thresh into package Playwright config"
+                    onClick={() => void handleUpdatePlaywrightThreshold()}
+                  >
+                    {isUpdatingPlaywrightThreshold
+                      ? "Updating…"
+                      : "Update Playwright"}
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={busy || playwrightPassThresholdPercent == null}
+                    ariaLabel="Reset local thresh to Playwright value"
+                    title="Reset local thresh to Playwright value"
+                    onClick={handleResetLocalThresholdToPlaywright}
+                  >
+                    <SyncIcon />
+                  </Button>
+                </ButtonGroup>
               ) : null}
-            </ThreshStack>
-            {playwrightThresholdMismatch ? (
-              <ButtonGroup
-                role="group"
-                aria-label="Sync pass threshold with Playwright"
-              >
-                <Button
-                  size="small"
-                  disabled={isUpdatingPlaywrightThreshold || busy}
-                  ariaLabel={false}
-                  title="Write local Thresh into package Playwright config"
-                  onClick={() => void handleUpdatePlaywrightThreshold()}
-                >
-                  {isUpdatingPlaywrightThreshold
-                    ? "Updating…"
-                    : "Update Playwright"}
-                </Button>
-                <Button
-                  size="small"
-                  disabled={busy || playwrightPassThresholdPercent == null}
-                  ariaLabel="Reset local thresh to Playwright value"
-                  title="Reset local thresh to Playwright value"
-                  onClick={handleResetLocalThresholdToPlaywright}
-                >
-                  <SyncIcon />
-                </Button>
-              </ButtonGroup>
-            ) : null}
-          </ToolbarRow>
-          {captureError ? <ErrorText>{captureError}</ErrorText> : null}
-        </PanelToolbar>
-        {diffResult && images.length > 0 ? (
-          <DiffResult
-            result={diffResult}
-            showHistogram={showDistribution}
-            defaultZoom={diffResultZoomDefault}
-          />
-        ) : null}
-      </>
-    ),
+            </ToolbarRow>
+            {captureError ? <ErrorText>{captureError}</ErrorText> : null}
+          </PanelToolbar>
+          {diffResult && images.length > 0 ? (
+            <DiffResult
+              result={diffResult}
+              showHistogram={showDistribution}
+              defaultZoom={diffResultZoomDefault}
+            />
+          ) : null}
+        </>
+      );
+    },
     [
       busy,
       captureError,
@@ -1677,6 +1719,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       handleResetLocalThresholdToPlaywright,
       handleUpdatePlaywrightThreshold,
       images.length,
+      images,
       index,
       isSplit,
       isUpdatingPlaywrightThreshold,
@@ -1815,9 +1858,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         }
         emptyState={emptyState}
         content={
-          !showConfiguration &&
-          !loading &&
-          !(isEmpty && baselineSections.length === 0) ? (
+          historyTarget ? (
+            <BaselineHistoryView
+              target={historyTarget}
+              onClose={() => setHistoryTarget(null)}
+            />
+          ) : !showConfiguration &&
+            !loading &&
+            !(isEmpty && baselineSections.length === 0) ? (
             <BaselineAccordion
               sections={baselineSections}
               expandedId={expandedId}
