@@ -17,6 +17,7 @@ import {
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_RUN_STATUS_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
+  VISUAL_DELTA_STORY_FACTS_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   isVisualReviewStatus,
   type VisualReviewStatus,
@@ -46,6 +47,12 @@ import {
   type VisualDeltaHostOptions,
 } from "./options.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
+import type {
+  VisualStoryDescriptor,
+  VisualStoryFactsRequest,
+  VisualStoryFactsResponse,
+} from "../shared/story-facts.js";
+import { resolveVisualStoryFacts } from "./story-facts.js";
 import {
   patchStorySkipVisual,
   patchStoryVisualReviewStatus,
@@ -124,12 +131,14 @@ export type {
 let activeRun: ChildProcess | null = null;
 let forceStaticRebuild = false;
 
-function readJsonBody<T>(req: IncomingMessage): Promise<T> {
+function readJsonBody<T>(req: IncomingMessage, maxBytes = 64_000): Promise<T> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let bytes = 0;
     req.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
-      if (chunks.reduce((n, c) => n + c.length, 0) > 64_000) {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
@@ -151,6 +160,63 @@ function writeJson(res: ServerResponse, status: number, body: unknown) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(body));
+}
+
+function validStoryDescriptors(value: unknown): VisualStoryDescriptor[] | null {
+  if (!Array.isArray(value) || value.length > 20_000) return null;
+  const stories: VisualStoryDescriptor[] = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (
+      !candidate ||
+      typeof candidate !== "object" ||
+      typeof (candidate as { id?: unknown }).id !== "string"
+    ) {
+      return null;
+    }
+    const story = candidate as VisualStoryDescriptor;
+    if (seen.has(story.id)) continue;
+    seen.add(story.id);
+    stories.push(story);
+  }
+  return stories;
+}
+
+async function handleStoryFacts(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+) {
+  let body: VisualStoryFactsRequest;
+  try {
+    body = await readJsonBody<VisualStoryFactsRequest>(req, 2_000_000);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  const stories = validStoryDescriptors(body.stories);
+  if (!stories) {
+    writeJson(res, 400, {
+      ok: false,
+      error: "Expected an array of Storybook story descriptors",
+    });
+    return;
+  }
+  const response: VisualStoryFactsResponse = {
+    ok: true,
+    version: 1,
+    generatedAt: Date.now(),
+    stories: resolveVisualStoryFacts(
+      stories,
+      resolveSnapshotDir(options, root),
+      resolveBaselinePathMode(options),
+    ),
+  };
+  writeJson(res, 200, response);
 }
 
 function escapeRegExp(value: string): string {
@@ -1231,6 +1297,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/config — resolved host options
  * - PUT  /__visual-delta/config — persist allow-listed project defaults
+ * - POST /__visual-delta/story-facts — resolve primary-baseline coverage
  * - POST /__visual-delta/playwright-threshold — write host Playwright pass %
  * - POST /__visual-delta/init — scaffold portable Playwright suite/config
  */
@@ -1253,6 +1320,17 @@ export function visualDeltaMiddlewarePlugin(
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
+
+        if (url === VISUAL_DELTA_STORY_FACTS_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleStoryFacts(req, res, root, options);
+          return;
+        }
 
         if (url === VISUAL_DELTA_CONFIG_PATH) {
           if (req.method === "GET") {

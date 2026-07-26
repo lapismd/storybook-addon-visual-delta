@@ -7,10 +7,15 @@ import {
 } from "./run-visual.js";
 
 describe("reviewUpdatesFromRunResults", () => {
-  it("maps passed → ready and failed → failed", () => {
+  it("maps completed comparisons to ready or failed review states", () => {
     const results: VisualRunResultItem[] = [
       { storyId: "a--one", status: "passed", title: "a--one" },
-      { storyId: "a--two", status: "failed", title: "a--two" },
+      {
+        storyId: "a--two",
+        status: "failed",
+        title: "a--two",
+        outcome: "mismatch",
+      },
     ];
     expect(reviewUpdatesFromRunResults(results)).toEqual([
       { storyId: "a--one", status: "ready" },
@@ -31,7 +36,7 @@ describe("reviewUpdatesFromRunResults", () => {
         storyId: "a--diff",
         status: "failed",
         title: "a--diff",
-        error: "Screenshot comparison failed",
+        outcome: "mismatch",
       },
       {
         storyId: "a--ok",
@@ -43,6 +48,19 @@ describe("reviewUpdatesFromRunResults", () => {
       { storyId: "a--diff", status: "failed" },
       { storyId: "a--ok", status: "ready" },
     ]);
+  });
+
+  it("does not change review tags for infrastructure errors", () => {
+    expect(
+      reviewUpdatesFromRunResults([
+        {
+          storyId: "a--crashed",
+          status: "failed",
+          title: "a--crashed",
+          error: "Browser crashed during capture",
+        },
+      ]),
+    ).toEqual([]);
   });
 
   it("detects Playwright missing-snapshot error text", () => {
@@ -73,7 +91,18 @@ describe("reviewableStoryIdsFromLastRun", () => {
             status: "failed",
             missingBaseline: true,
           },
-          { storyId: "c", title: "C", status: "failed" },
+          {
+            storyId: "c",
+            title: "C",
+            status: "failed",
+            outcome: "mismatch",
+          },
+          {
+            storyId: "d",
+            title: "D",
+            status: "failed",
+            error: "Browser crashed",
+          },
         ],
       }),
     ).toEqual(["a", "c"]);
