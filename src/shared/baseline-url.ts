@@ -5,22 +5,14 @@
 
 export const VISUAL_BASELINE_SUFFIX = "-chromium-darwin";
 
-const WIRED_SNAPSHOT_PREFIXES = [
-  "shadcn/",
-  "forms/",
-  "apps/",
-  "workspace/",
-  "tasks/",
-] as const;
+const WIRED_SNAPSHOT_PREFIXES = ["shadcn/", "forms/", "workspace/"] as const;
 
 export function snapshotDirFromImportPath(importPath: string): string {
   const normalized = importPath.replace(/\\/g, "/");
   const stripped = normalized
     .replace(/^\.\//, "")
     .replace(/^src\/shared\//, "")
-    .replace(/^src\/apps\//, "apps/")
-    .replace(/^packages\/workspace\/src\/lib\//, "workspace/")
-    .replace(/^packages\/tasks\/src\//, "tasks/");
+    .replace(/^packages\/workspace\/src\/lib\//, "workspace/");
   return stripped.replace(/\/[^/]+\.stories\.\w+$/, "");
 }
 

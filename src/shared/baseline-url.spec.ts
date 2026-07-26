@@ -6,20 +6,17 @@ import {
 } from "./baseline-url.js";
 
 describe("snapshotDirFromImportPath", () => {
-  it("maps shared / apps / tasks import paths to snapshot dirs", () => {
+  it("maps shared and workspace import paths to snapshot dirs", () => {
     expect(
       snapshotDirFromImportPath(
         "./src/shared/shadcn/button/Button.stories.svelte",
       ),
     ).toBe("shadcn/button");
     expect(
-      snapshotDirFromImportPath("./src/apps/cv/Header.stories.svelte"),
-    ).toBe("apps/cv");
-    expect(
       snapshotDirFromImportPath(
-        "./packages/tasks/src/components/TaskRow.stories.svelte",
+        "./packages/workspace/src/lib/tabs/WorkspaceTabs.stories.svelte",
       ),
-    ).toBe("tasks/components");
+    ).toBe("workspace/tabs");
   });
 });
 

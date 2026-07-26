@@ -234,22 +234,17 @@ export function visualBaselineVisualDeltaPlugin(
       const formsDir = normalized.match(
         /\/shared\/forms\/(.+)\/[^/]+\.stories\.\w+$/,
       )?.[1];
-      const appsDir = normalized.match(
-        /\/src\/apps\/(.+)\/[^/]+\.stories\.\w+$/,
+      const workspaceDir = normalized.match(
+        /\/packages\/workspace\/src\/lib\/(.+)\/[^/]+\.stories\.\w+$/,
       )?.[1];
       const directory =
         normalized.includes("/shared/shadcn/") && title.startsWith("Shadcn/")
           ? `shadcn/${familyFromTitle(title)}`
           : formsDir && title.startsWith("UI Forms/")
             ? `forms/${formsDir}`
-            : appsDir && title.startsWith("Apps/")
-              ? `apps/${appsDir}`
-              : normalized.includes("/packages/tasks/src/") &&
-                  title.startsWith("Tasks/")
-                ? normalized
-                    .replace(/^.*?\/packages\/tasks\/src\//, "tasks/")
-                    .replace(/\/[^/]+\.stories\.\w+$/, "")
-                : undefined;
+            : workspaceDir && title.startsWith("Workspace/")
+              ? `workspace/${workspaceDir}`
+              : undefined;
       if (!directory) return null;
 
       const next = injectVisualBaselineVisualDeltas(

@@ -14,7 +14,10 @@ const Root = styled.div(({ theme }) => ({
 }));
 
 const Title = styled.strong(({ theme }) => ({
-  color: theme.color.warning,
+  color:
+    theme.base === "light"
+      ? `color-mix(in srgb, ${theme.color.warning} 60%, black)`
+      : theme.color.warning,
   fontSize: theme.typography.size.s2,
 }));
 
