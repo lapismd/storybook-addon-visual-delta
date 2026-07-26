@@ -30,6 +30,7 @@ export interface BaselineHistoryVcs {
   kind: BaselineHistoryVcsKind;
   root: string;
   followsRenames: boolean;
+  historyWarnings?(): Promise<string[]>;
   listFileRevisions(
     relativePath: string,
     options: { offset: number; limit: number },
@@ -89,7 +90,10 @@ export class JjBaselineHistoryVcs implements BaselineHistoryVcs {
     private readonly run: CommandRunner = runText,
   ) {}
 
-  private async all(relativePath: string, limit: number): Promise<VcsFileRevision[]> {
+  private async all(
+    relativePath: string,
+    limit: number,
+  ): Promise<VcsFileRevision[]> {
     const revset = `ancestors(@-) & files(${escapeJjString(relativePath)})`;
     const stdout = await this.run(
       "jj",
@@ -207,6 +211,23 @@ export class GitBaselineHistoryVcs implements BaselineHistoryVcs {
     private readonly run: CommandRunner = runText,
   ) {}
 
+  async historyWarnings(): Promise<string[]> {
+    try {
+      const shallow = await this.run(
+        "git",
+        ["rev-parse", "--is-shallow-repository"],
+        this.root,
+      );
+      return shallow.trim() === "true"
+        ? [
+            "This is a shallow Git checkout, so older baseline revisions may be unavailable.",
+          ]
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
   private async renameBefore(
     revisionId: string,
     currentPath: string,
@@ -233,7 +254,10 @@ export class GitBaselineHistoryVcs implements BaselineHistoryVcs {
     return currentPath;
   }
 
-  private async all(relativePath: string, limit: number): Promise<VcsFileRevision[]> {
+  private async all(
+    relativePath: string,
+    limit: number,
+  ): Promise<VcsFileRevision[]> {
     const stdout = await this.run(
       "git",
       [

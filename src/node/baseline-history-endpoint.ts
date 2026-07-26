@@ -53,7 +53,10 @@ function normalizePath(
   };
 }
 
-function repoRelativePath(vcs: BaselineHistoryVcs, absolute: string): string | null {
+function repoRelativePath(
+  vcs: BaselineHistoryVcs,
+  absolute: string,
+): string | null {
   const relative = path.relative(vcs.root, absolute);
   if (
     !relative ||
@@ -99,10 +102,7 @@ function committedEntry(
     author: revision.author,
     authoredAt: revision.authoredAt,
     source: "commit",
-    imageUrl: baselineHistoryImageUrl(
-      snapshotRelative,
-      revision.revisionId,
-    ),
+    imageUrl: baselineHistoryImageUrl(snapshotRelative, revision.revisionId),
   };
 }
 
@@ -116,9 +116,7 @@ export function createBaselineHistoryEndpoint(options: {
     options.root,
   );
 
-  async function resolveRequest(
-    requestUrl: URL,
-  ): Promise<
+  async function resolveRequest(requestUrl: URL): Promise<
     | {
         vcs: BaselineHistoryVcs;
         absolute: string;
@@ -127,7 +125,10 @@ export function createBaselineHistoryEndpoint(options: {
       }
     | { error: string; unavailable?: boolean }
   > {
-    const target = normalizePath(requestUrl.searchParams.get("path"), snapshotDir);
+    const target = normalizePath(
+      requestUrl.searchParams.get("path"),
+      snapshotDir,
+    );
     if (!target) return { error: "Provide a valid baseline PNG path" };
     const vcs = await vcsPromise;
     if (!vcs) {
@@ -172,10 +173,11 @@ export function createBaselineHistoryEndpoint(options: {
         ? Math.min(MAX_PAGE_SIZE, requestedLimit)
         : PAGE_SIZE;
     try {
-      const page = await resolved.vcs.listFileRevisions(
-        resolved.repoRelative,
-        { offset, limit },
-      );
+      const page = await resolved.vcs.listFileRevisions(resolved.repoRelative, {
+        offset,
+        limit,
+      });
+      const warnings = await resolved.vcs.historyWarnings?.();
       const entries = page.entries.map((entry) =>
         committedEntry(entry, resolved.snapshotRelative),
       );
@@ -210,6 +212,7 @@ export function createBaselineHistoryEndpoint(options: {
         ok: true,
         vcs: resolved.vcs.kind,
         followsRenames: resolved.vcs.followsRenames,
+        ...(warnings?.length ? { warnings } : {}),
         entries,
         nextCursor:
           page.nextOffset == null ? null : encodeCursor(page.nextOffset),
@@ -260,9 +263,9 @@ export function createBaselineHistoryEndpoint(options: {
       const png = await resolved.vcs.readFileAtRevision(revision);
       if (
         png.length < 8 ||
-        !png.subarray(0, 8).equals(
-          Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-        )
+        !png
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       ) {
         writeJson(res, 415, {
           ok: false,
@@ -296,9 +299,7 @@ export function createBaselineHistoryEndpoint(options: {
         await history(req, res, requestUrl);
         return true;
       }
-      if (
-        requestUrl.pathname === VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH
-      ) {
+      if (requestUrl.pathname === VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH) {
         await image(req, res, requestUrl);
         return true;
       }

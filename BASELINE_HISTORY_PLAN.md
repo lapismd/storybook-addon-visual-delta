@@ -6,7 +6,7 @@ inspection.
 
 - [x] VCS detection, normalized history service, and guarded image endpoint
 - [x] Baseline History panel with working-copy and revision metadata
-- [ ] Image-to-image comparison, stories, browser acceptance, and docs
+- [x] Image-to-image comparison, stories, browser acceptance, and docs
 
 Decisions:
 

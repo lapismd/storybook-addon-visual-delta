@@ -47,73 +47,81 @@ async function writeVersion(
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, {
-    recursive: true,
-    force: true,
-  })));
+  await Promise.all(
+    tempDirs.splice(0).map((directory) =>
+      rm(directory, {
+        recursive: true,
+        force: true,
+      }),
+    ),
+  );
 });
 
 describe("Git baseline history adapter", () => {
-  it(
-    "lists current ancestry, follows a rename, and reads historical bytes",
-    async () => {
-      const root = await tempRepo("visual-delta-git-");
-      await command(root, "git", ["init"]);
-      await command(root, "git", ["config", "user.name", "Visual Tester"]);
-      await command(root, "git", [
-        "config",
-        "user.email",
-        "visual@example.test",
-      ]);
-      const original = "snapshots/original.png";
-      const renamed = "snapshots/renamed.png";
-      const first = await writeVersion(root, original, "first");
-      await command(root, "git", ["add", original]);
-      await command(root, "git", [
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-m",
-        "Add original baseline",
-      ]);
-      await rename(path.join(root, original), path.join(root, renamed));
-      await command(root, "git", ["add", "-A"]);
-      await command(root, "git", [
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-m",
-        "Rename baseline",
-      ]);
-      await writeVersion(root, renamed, "latest");
-      await command(root, "git", ["add", renamed]);
-      await command(root, "git", [
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-m",
-        "Update renamed baseline",
-      ]);
+  it("lists current ancestry, follows a rename, and reads historical bytes", async () => {
+    const root = await tempRepo("visual-delta-git-");
+    await command(root, "git", ["init"]);
+    await command(root, "git", ["config", "user.name", "Visual Tester"]);
+    await command(root, "git", ["config", "user.email", "visual@example.test"]);
+    const original = "snapshots/original.png";
+    const renamed = "snapshots/renamed.png";
+    const first = await writeVersion(root, original, "first");
+    await command(root, "git", ["add", original]);
+    await command(root, "git", [
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "Add original baseline",
+    ]);
+    await rename(path.join(root, original), path.join(root, renamed));
+    await command(root, "git", ["add", "-A"]);
+    await command(root, "git", [
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "Rename baseline",
+    ]);
+    await writeVersion(root, renamed, "latest");
+    await command(root, "git", ["add", renamed]);
+    await command(root, "git", [
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "Update renamed baseline",
+    ]);
 
-      const adapter = new GitBaselineHistoryVcs(root);
-      const page = await adapter.listFileRevisions(renamed, {
-        offset: 0,
-        limit: 10,
-      });
+    const adapter = new GitBaselineHistoryVcs(root);
+    const page = await adapter.listFileRevisions(renamed, {
+      offset: 0,
+      limit: 10,
+    });
 
-      expect(page.entries.map((entry) => entry.subject)).toEqual([
-        "Update renamed baseline",
-        "Rename baseline",
-        "Add original baseline",
-      ]);
-      expect(page.entries.at(-1)?.historicalPath).toBe(original);
-      expect(await adapter.readFileAtRevision(page.entries.at(-1)!)).toEqual(
-        first,
-      );
-      expect(page.nextOffset).toBeNull();
-    },
-    15_000,
-  );
+    expect(page.entries.map((entry) => entry.subject)).toEqual([
+      "Update renamed baseline",
+      "Rename baseline",
+      "Add original baseline",
+    ]);
+    expect(page.entries.at(-1)?.historicalPath).toBe(original);
+    expect(await adapter.readFileAtRevision(page.entries.at(-1)!)).toEqual(
+      first,
+    );
+    expect(page.nextOffset).toBeNull();
+  }, 15_000);
+
+  it("warns when Git reports a shallow checkout", async () => {
+    const adapter = new GitBaselineHistoryVcs(
+      "/repo",
+      async (_command, args) =>
+        args.includes("--is-shallow-repository") ? "true\n" : "",
+    );
+
+    await expect(adapter.historyWarnings()).resolves.toEqual([
+      "This is a shallow Git checkout, so older baseline revisions may be unavailable.",
+    ]);
+  });
 });
 
 describe("Jujutsu baseline history adapter", () => {

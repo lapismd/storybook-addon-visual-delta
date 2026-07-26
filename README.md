@@ -2,7 +2,8 @@
 
 Storybook addon for comparing stories to committed baseline PNGs: placement pad,
 overlay / heatmap Live Diff, Create / Update baselines, Run visual tests, and
-review tags.
+review tags. In development, each concrete baseline also has read-only VCS
+history with revision-to-revision comparison.
 
 See [`VENDOR.md`](./VENDOR.md) for implementation history and behavior notes.
 Storybook loads TypeScript/`tsx` from `src/` (no committed manager/preview
@@ -180,6 +181,8 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                  |
 | `POST` | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`) |
 | `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                  |
+| `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG           |
+| `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision         |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -198,6 +201,21 @@ or the client requests a rebuild). Progress is streamed with a **list-only**
 Playwright reporter so the Testing Module can show live `Testing N/M` counts.
 After HMR remounts the Testing Module (e.g. Update status), the client
 reconnects via `/run-status` + `/run-events` instead of losing progress.
+
+### Baseline history
+
+In Storybook development, expand a baseline and choose **History** beside its
+thumbnail. The history view is scoped to the concrete Default, named mode, or
+interaction PNG currently selected. Choose any **Before** and **After**
+revisions to use the same 2-up, Diff, Focus, Swipe, Blink, zoom, and lightbox
+tools as the live comparison.
+
+Visual Delta prefers Jujutsu when `jj root` succeeds, including colocated
+JJ/Git checkouts, and otherwise falls back to Git. JJ shows the stable change
+ID with its commit ID secondarily and reads committed data with
+`--ignore-working-copy`; Git shows commit SHAs and follows renames. A changed
+PNG in the filesystem appears as **Working copy**. History is read-only and
+does not change baselines or visual review status.
 
 ## Options (`VisualDeltaHostOptions`)
 
