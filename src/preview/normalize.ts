@@ -61,13 +61,17 @@ export function normalizeImagesWithModes(
         params.placement,
       )
     : [];
-  const fromModes = imagesFromModes(params?.modes as VisualDeltaModes | undefined, {
-    align: params?.align,
-    placement: params?.placement,
-    anchor: params?.anchor,
-    offsetX: params?.offsetX,
-    offsetY: params?.offsetY,
-  });
+  const fromModes = imagesFromModes(
+    params?.modes as VisualDeltaModes | undefined,
+    {
+      align: params?.align,
+      placement: params?.placement,
+      anchor: params?.anchor,
+      offsetX: params?.offsetX,
+      offsetY: params?.offsetY,
+      primarySrc: primary[0]?.src,
+    },
+  );
   const modeImages = normalizeImages(
     fromModes.map((m) => ({
       src: m.src,

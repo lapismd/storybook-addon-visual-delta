@@ -6,8 +6,10 @@ import path from "node:path";
 import {
   VISUAL_DELTA_CROP_ATTR,
   VISUAL_DELTA_IGNORE_ATTR_LIST,
+  VISUAL_DELTA_MODES_ATTR,
 } from "../shared/capture-params-attrs.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import type { VisualDeltaModeDef, VisualDeltaModes } from "../shared/modes.js";
 import {
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
@@ -35,6 +37,16 @@ const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
 function loadHostPlaywrightTest(): typeof PlaywrightTest {
   return requireFromHost("@playwright/test") as typeof PlaywrightTest;
+}
+
+function serializeGlobals(globals: Record<string, unknown>): string {
+  const router = requireFromHost("storybook/internal/router") as {
+    buildArgsParam: (
+      initial: Record<string, unknown>,
+      next: Record<string, unknown>,
+    ) => string;
+  };
+  return router.buildArgsParam({}, globals);
 }
 
 const PORTAL_SELECTORS = [
@@ -159,7 +171,10 @@ async function portalUnionClip(
 async function prepareStoryPage(
   page: Page,
   storyId: string,
-  options?: { visualCaptureUntil?: string },
+  options?: {
+    visualCaptureUntil?: string;
+    globals?: Record<string, unknown>;
+  },
 ): Promise<void> {
   const { expect } = loadHostPlaywrightTest();
   const params = new URLSearchParams({
@@ -169,6 +184,9 @@ async function prepareStoryPage(
   if (options?.visualCaptureUntil) {
     params.set(VISUAL_CAPTURE_UNTIL_PARAM, options.visualCaptureUntil);
   }
+  if (options?.globals && Object.keys(options.globals).length > 0) {
+    params.set("globals", serializeGlobals(options.globals));
+  }
   await page.goto(`/iframe.html?${params.toString()}`, {
     waitUntil: "networkidle",
   });
@@ -176,6 +194,27 @@ async function prepareStoryPage(
   if (!options?.visualCaptureUntil) {
     await waitForVisualStoryFinished(page, storyId);
     await settleVisualStoryPage(page);
+  }
+}
+
+async function readVisualModes(page: Page): Promise<VisualDeltaModes> {
+  const raw = await page.locator("html").getAttribute(VISUAL_DELTA_MODES_ATTR);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as VisualDeltaModes;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([, value]) =>
+          value &&
+          typeof value === "object" &&
+          !(value as VisualDeltaModeDef).disable,
+      ),
+    );
+  } catch {
+    return {};
   }
 }
 
@@ -343,39 +382,75 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   for (const story of stories) {
     test(story.id, async ({ page }) => {
       await prepareStoryPage(page, story.id);
-      const rel = screenshotRelativePath(story, mode);
-      let target: ShotTarget = {
-        subject: null,
-        clip: null,
-        fullViewport: false,
-      };
-      let status: "passed" | "failed" = "passed";
-      let error: string | undefined;
-      try {
-        target = await screenshotStorySubject(page, rel.split("/"));
-      } catch (err) {
-        status = "failed";
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const actualPng = await captureActualPng(page, target).catch(
-          () => null,
-        );
-        writeDiffArtifactsForBaseline({
-          entry: story,
-          packageRoot,
-          snapshotDir,
-          mode,
-          baselinePngAbsPath: baselinePngAbs(
-            story,
-            packageRoot,
-            snapshotDir,
-            mode,
-          ),
-          status,
-          error,
-          actualPng,
+      const visualModes = await readVisualModes(page);
+      const captures: Array<{
+        name: string;
+        modeName?: string;
+        globals?: Record<string, unknown>;
+      }> = [
+        { name: "Default" },
+        ...Object.entries(visualModes).map(([modeName, definition]) => ({
+          name: modeName,
+          modeName,
+          globals: definition.globals,
+        })),
+      ];
+      const failures: string[] = [];
+
+      for (const capture of captures) {
+        await test.step(`Visual mode: ${capture.name}`, async () => {
+          if (capture.modeName) {
+            await prepareStoryPage(page, story.id, {
+              globals: capture.globals,
+            });
+          }
+          const rel = screenshotRelativePath(story, mode, capture.modeName);
+          let target: ShotTarget = {
+            subject: null,
+            clip: null,
+            fullViewport: false,
+          };
+          let status: "passed" | "failed" = "passed";
+          let error: string | undefined;
+          try {
+            target = await screenshotStorySubject(page, rel.split("/"));
+          } catch (err) {
+            status = "failed";
+            error = err instanceof Error ? err.message : String(err);
+            failures.push(`${capture.name}: ${error}`);
+          } finally {
+            const actualPng = await captureActualPng(page, target).catch(
+              () => null,
+            );
+            writeDiffArtifactsForBaseline({
+              entry: story,
+              packageRoot,
+              snapshotDir,
+              mode,
+              baselinePngAbsPath: baselinePngAbs(
+                story,
+                packageRoot,
+                snapshotDir,
+                mode,
+                "chromium",
+                process.platform,
+                capture.modeName,
+              ),
+              status,
+              error,
+              actualPng,
+              visualModeName: capture.modeName,
+            });
+          }
         });
+      }
+
+      if (failures.length > 0) {
+        throw new Error(
+          `Visual comparison failed in ${failures.length} mode${
+            failures.length === 1 ? "" : "s"
+          }:\n${failures.join("\n")}`,
+        );
       }
     });
   }

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   SKIP_VISUAL_TAG,
@@ -114,9 +114,7 @@ export function syncStaticIndexReviewStatus(
     const prev = [...(entry.tags ?? [])];
     const next = normalizeVisualStoryTags(
       prev,
-      status == null
-        ? { kind: "clear-review" }
-        : { kind: "review", status },
+      status == null ? { kind: "clear-review" } : { kind: "review", status },
     );
     if (tagsEqual(prev, next)) continue;
     entry.tags = next;
@@ -187,4 +185,41 @@ export function loadSidecarForStoryId(
   );
   if (!png) return null;
   return readSidecar(png.replace(/\.png$/i, ".json"));
+}
+
+/** Named-mode sidecars beside the story's primary baseline. */
+export function loadModeSidecarsForStoryId(
+  storyId: string,
+  packageRoot: string,
+  snapshotDir: string,
+  mode: BaselinePathMode = "nested-import",
+  project = "chromium",
+  platform: NodeJS.Platform | string = process.platform,
+): VisualDiffSidecar[] {
+  const primary = baselinePngPathForStoryId(
+    storyId,
+    packageRoot,
+    snapshotDir,
+    mode,
+    project,
+    platform,
+  );
+  if (!primary) return [];
+  const directory = path.dirname(primary);
+  const primaryName = path.basename(primary);
+  const suffix = `-${project}-${platform}.png`;
+  if (!primaryName.endsWith(suffix) || !existsSync(directory)) return [];
+  const stem = primaryName.slice(0, -suffix.length);
+  const prefix = `${stem}--`;
+  return readdirSync(directory)
+    .filter(
+      (name) =>
+        name.startsWith(prefix) &&
+        name.endsWith(`-${project}-${platform}.json`),
+    )
+    .map((name) => readSidecar(path.join(directory, name)))
+    .filter((sidecar): sidecar is VisualDiffSidecar =>
+      Boolean(sidecar?.mode && sidecar.storyId === storyId),
+    )
+    .sort((a, b) => (a.mode ?? "").localeCompare(b.mode ?? ""));
 }

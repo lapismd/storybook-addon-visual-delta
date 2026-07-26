@@ -7,9 +7,11 @@ import {
   VISUAL_DELTA_DIFF_THRESHOLD_ATTR,
   VISUAL_DELTA_IGNORE_ATTR_LIST,
   VISUAL_DELTA_INCLUDE_AA_ATTR,
+  VISUAL_DELTA_MODES_ATTR,
   VISUAL_DELTA_PASS_THRESHOLD_ATTR,
 } from "../shared/capture-params-attrs.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import { stackModes } from "../shared/modes.js";
 
 export {
   VISUAL_DELTA_CROP_ATTR,
@@ -17,6 +19,7 @@ export {
   VISUAL_DELTA_DIFF_THRESHOLD_ATTR,
   VISUAL_DELTA_IGNORE_ATTR_LIST,
   VISUAL_DELTA_INCLUDE_AA_ATTR,
+  VISUAL_DELTA_MODES_ATTR,
   VISUAL_DELTA_PASS_THRESHOLD_ATTR,
 } from "../shared/capture-params-attrs.js";
 
@@ -28,6 +31,9 @@ export const withCaptureParams: DecoratorFunction = (storyFn, context) => {
   const params = context.parameters?.visualDelta as
     | VisualDeltaParams
     | undefined;
+  const modes = stackModes(params?.modes);
+  const serializedModes =
+    Object.keys(modes).length > 0 ? JSON.stringify(modes) : "";
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -67,6 +73,11 @@ export const withCaptureParams: DecoratorFunction = (storyFn, context) => {
     } else {
       root.removeAttribute(VISUAL_DELTA_PASS_THRESHOLD_ATTR);
     }
+    if (serializedModes) {
+      root.setAttribute(VISUAL_DELTA_MODES_ATTR, serializedModes);
+    } else {
+      root.removeAttribute(VISUAL_DELTA_MODES_ATTR);
+    }
     return () => {
       root.removeAttribute(VISUAL_DELTA_DELAY_ATTR);
       root.removeAttribute(VISUAL_DELTA_IGNORE_ATTR_LIST);
@@ -74,6 +85,7 @@ export const withCaptureParams: DecoratorFunction = (storyFn, context) => {
       root.removeAttribute(VISUAL_DELTA_DIFF_THRESHOLD_ATTR);
       root.removeAttribute(VISUAL_DELTA_INCLUDE_AA_ATTR);
       root.removeAttribute(VISUAL_DELTA_PASS_THRESHOLD_ATTR);
+      root.removeAttribute(VISUAL_DELTA_MODES_ATTR);
     };
   }, [
     params?.delay,
@@ -82,6 +94,7 @@ export const withCaptureParams: DecoratorFunction = (storyFn, context) => {
     params?.diffThreshold,
     params?.diffIncludeAntiAliasing,
     params?.passThresholdPercent,
+    serializedModes,
   ]);
 
   return storyFn();

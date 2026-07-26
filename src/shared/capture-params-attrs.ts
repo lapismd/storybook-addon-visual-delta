@@ -8,6 +8,8 @@ export const VISUAL_DELTA_DIFF_THRESHOLD_ATTR =
 export const VISUAL_DELTA_INCLUDE_AA_ATTR = "data-visual-delta-diff-include-aa";
 export const VISUAL_DELTA_PASS_THRESHOLD_ATTR =
   "data-visual-delta-pass-threshold-percent";
+/** JSON-serialized, resolved Visual Delta modes for packaged Playwright. */
+export const VISUAL_DELTA_MODES_ATTR = "data-visual-delta-modes";
 /** Story id whose render and play function have completed. */
 export const VISUAL_DELTA_STORY_FINISHED_ATTR =
   "data-visual-delta-story-finished";

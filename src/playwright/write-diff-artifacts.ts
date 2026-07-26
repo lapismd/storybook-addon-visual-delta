@@ -20,11 +20,12 @@ export function baselinePngAbs(
   mode: BaselinePathMode,
   project = "chromium",
   platform: NodeJS.Platform | string = process.platform,
+  visualModeName?: string,
 ): string {
   return path.join(
     packageRoot,
     snapshotDir,
-    snapshotFileName(entry, mode, project, platform),
+    snapshotFileName(entry, mode, project, platform, visualModeName),
   );
 }
 
@@ -64,6 +65,7 @@ function buildSidecarBase(
   mode: BaselinePathMode,
   status: VisualDiffSidecarStatus,
   error?: string,
+  visualModeName?: string,
 ): Omit<
   VisualDiffSidecar,
   | "imageWidth"
@@ -82,8 +84,9 @@ function buildSidecarBase(
     version: 1,
     storyId: entry.id,
     title: entry.title,
-    snapshotRel: screenshotRelativePath(entry, mode),
+    snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
     status,
+    ...(visualModeName ? { mode: visualModeName } : {}),
     ...(error ? { error } : {}),
     generatedAt: new Date().toISOString(),
     tool: "playwright",
@@ -103,6 +106,7 @@ export function writeDiffArtifactsForBaseline(input: {
   status: "passed" | "failed";
   error?: string;
   actualPng: Buffer | null;
+  visualModeName?: string;
 }): void {
   const {
     entry,
@@ -113,9 +117,10 @@ export function writeDiffArtifactsForBaseline(input: {
     status,
     error,
     actualPng,
+    visualModeName,
   } = input;
   const outPath = sidecarJsonPath(baselinePngAbsPath);
-  const base = buildSidecarBase(entry, mode, status, error);
+  const base = buildSidecarBase(entry, mode, status, error, visualModeName);
   if (!actualPng || !existsSync(baselinePngAbsPath)) {
     writeVisualDiffSidecar(outPath, base);
     return;

@@ -38,15 +38,19 @@ export function storySlugFromId(storyId: string): string {
 export function screenshotRelativePath(
   entry: StoryIndexEntry,
   mode: BaselinePathMode = "nested-import",
+  /** Optional Chromatic-style mode name → `--{slug}` before `.png`. */
+  visualModeName?: string,
 ): string {
+  const modeSlug = visualModeName ? modeBaselineSlug(visualModeName) : "";
+  const modeInfix = modeSlug ? `--${modeSlug}` : "";
   if (mode === "story-id") {
-    return `${entry.id}.png`;
+    return `${entry.id}${modeInfix}.png`;
   }
   if (!entry.importPath) {
     throw new Error(`Story ${entry.id} is missing importPath`);
   }
   const directory = snapshotDirFromImportPath(entry.importPath);
-  return `${directory}/${storySlugFromId(entry.id)}.png`;
+  return `${directory}/${storySlugFromId(entry.id)}${modeInfix}.png`;
 }
 
 export function snapshotFileName(
@@ -57,11 +61,9 @@ export function snapshotFileName(
   /** Optional Chromatic-style mode name → `--{slug}` before project/platform. */
   visualModeName?: string,
 ): string {
-  const modeSlug = visualModeName ? modeBaselineSlug(visualModeName) : "";
-  const modeInfix = modeSlug ? `--${modeSlug}` : "";
-  return screenshotRelativePath(entry, mode).replace(
+  return screenshotRelativePath(entry, mode, visualModeName).replace(
     /\.png$/,
-    `${modeInfix}-${project}-${platform}.png`,
+    `-${project}-${platform}.png`,
   );
 }
 
