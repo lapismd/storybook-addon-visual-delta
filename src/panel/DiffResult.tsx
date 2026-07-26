@@ -27,7 +27,7 @@ const CaptureDiagnostics = styled.details(({ theme }) => ({
 export function DiffResult({
   result,
   showHistogram = false,
-  defaultZoom = "fit",
+  defaultZoom = "100%",
 }: {
   result: DiffResultData;
   showHistogram?: boolean;

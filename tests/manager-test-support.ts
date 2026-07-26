@@ -34,7 +34,7 @@ const CONFIG = {
     opacity: 0.5,
     baselineLabelOffset: { x: 0, y: 0 },
     previewSplitZoomDefault: "fit",
-    diffResultZoomDefault: "fit",
+    diffResultZoomDefault: "100%",
   },
   projectDefaultSources: {
     passThresholdPercent: "built-in",

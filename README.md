@@ -351,6 +351,9 @@ Panel **More → Configuration** opens a scrolling, tabbed settings surface.
 capture delay/cropping, placement/opacity, Baseline-label offsets, and the
 opening zoom for preview splits and Diff results. **Resolved** keeps the
 read-only host paths, commands, diagnostics, setting sources, and raw JSON.
+Preview splits open with Fit by default; Diff results open at native 100% so
+component-clipped captures remain readable, with Fit still available as an
+explicit project setting or toolbar action.
 Stories/components may override capture and overlay values through
 `parameters.visualDelta`; resolution order is story/component parameters →
 project defaults → built-ins.

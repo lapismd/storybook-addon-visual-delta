@@ -87,10 +87,12 @@ use:
   expanded `SectionBody` completes the PanelBody → List → Section flex chain
   (`flex: 1`, `minHeight: 0`, `overflow: auto`) so placement toolbar stays above
   2-up tabs. Compare / DiffResult use `flex: 1 1 auto` with
-  `minHeight: min-content` so the stage fills leftover height without collapsing
-  to a nested 0-height scrollport; overflow scrolls inside `SectionBody` (no
-  scroll-past-toolbar / auto review layout). Swipe/Diff/Focus/Blink share one
-  aspect-locked stage so baseline and new stay pixel-aligned.
+  `minHeight: min-content` and a 300px tab viewport so the stage fills leftover
+  height without collapsing to a nested 0-height scrollport; overflow scrolls
+  inside `SectionBody` (no scroll-past-toolbar / auto review layout).
+  Swipe/Diff/Focus/Blink share one aspect-locked stage so baseline and new stay
+  pixel-aligned. 2-up keeps equal Baseline/New panes visible at every zoom and
+  mirrors pane or shared-rail scrolling on both axes.
 - **Playwright sidecar artifacts** — portable `defineVisualSuite` writes
   gitignored `*.json` / `*.actual.png` / `*.diff.png` beside baselines so the
   panel reloads DiffResult after a backend compare without re-running live Diff.
@@ -179,7 +181,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   Swipe, 2-up, Diff heatmap, Focus (spotlight + zoom to change), Blink
   strobe. Checkerboard stage, hover loupe in Diff/Focus, keyboard
   (`1`/`2`/`3` modes, `F` focus, `B` blink, `←`/`→` swipe nudge). Pass/fail
-  stats sit above the stage.
+  stats sit above the stage. Diff results open at native 100% by default;
+  project-configured Fit still responds to panel size. Image lightboxes also
+  open at native size, center on each non-overflowing axis, scroll on larger
+  axes, and retain an explicit measured Fit control.
 - **Compact toolbar** — Baseline thumbs + Beside/Over on the first row;
   opacity/threshold/blend on the second. **Reset** restores drag position;
   **Reset settings** clears localStorage prefs.

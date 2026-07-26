@@ -213,7 +213,7 @@ export function useStoryData() {
       ignoreSelectors: [],
       cropToViewport: false,
       previewSplitZoomDefault: "fit",
-      diffResultZoomDefault: "fit",
+      diffResultZoomDefault: "100%",
       splitZoom: compareZoomFromDefault("fit"),
       baselineGeometryMismatch: null,
     };
@@ -411,7 +411,7 @@ export function useStoryData() {
           ignoreSelectors: data.ignoreSelectors ?? [],
           cropToViewport: data.cropToViewport ?? false,
           previewSplitZoomDefault: data.previewSplitZoomDefault ?? "fit",
-          diffResultZoomDefault: data.diffResultZoomDefault ?? "fit",
+          diffResultZoomDefault: data.diffResultZoomDefault ?? "100%",
           splitZoom: resetDefaults
             ? compareZoomFromDefault(data.previewSplitZoomDefault ?? "fit")
             : prev.splitZoom,

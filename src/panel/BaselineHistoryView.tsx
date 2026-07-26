@@ -183,7 +183,7 @@ const RevisionLine = styled.span(({ theme }) => ({
 }));
 
 const Id = styled.code(({ theme }) => ({
-  color: theme.color.secondary,
+  color: theme.color.defaultText,
   fontFamily: theme.typography.fonts.mono,
   fontSize: 10,
 }));
@@ -796,7 +796,7 @@ export function BaselineHistoryView({
                       <State role="alert">{comparisonError}</State>
                     ) : null}
                     {comparison ? (
-                      <DiffResult result={comparison} defaultZoom="fit" />
+                      <DiffResult result={comparison} defaultZoom="100%" />
                     ) : null}
                   </ComparisonSurface>
                   <details>

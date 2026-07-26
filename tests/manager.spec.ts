@@ -250,31 +250,72 @@ test.describe("Visual Delta manager integration", () => {
       page.getByRole("dialog", { name: "Default baseline full image" }),
     ).toBeAttached();
     await expect(page.getByTestId("image-lightbox")).toBeVisible();
+    await expect(page.getByTestId("image-lightbox")).toHaveAttribute(
+      "data-zoom-scale",
+      "1.0000",
+    );
     await page.getByRole("button", { name: "Close modal" }).click();
 
-    await page
-      .getByRole("switch", { name: "Show compare view at 100%" })
-      .click();
-    const compareViewport = page.getByTestId("compare-scroll-viewport");
+    await expect(page.getByLabel(/Visual compare/)).toHaveAttribute(
+      "data-zoom-scale",
+      "1.0000",
+    );
+    const baselinePane = page.getByTestId("compare-baseline-scroll");
+    const newPane = page.getByTestId("compare-new-scroll");
+    await expect(baselinePane).toBeVisible();
+    await expect(newPane).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [baselineWidth, newWidth] = await Promise.all([
+          baselinePane.evaluate((element) => element.clientWidth),
+          newPane.evaluate((element) => element.clientWidth),
+        ]);
+        return Math.abs(baselineWidth - newWidth);
+      })
+      .toBeLessThanOrEqual(1);
     await expect
       .poll(() =>
-        compareViewport.evaluate(
-          (element) => element.scrollHeight > element.clientHeight,
+        baselinePane.evaluate(
+          (element) => element.scrollWidth > element.clientWidth,
         ),
       )
       .toBe(true);
-    await page.getByRole("tab", { name: "Diff" }).hover();
-    await page.mouse.wheel(0, 240);
+    const sharedLeft = await baselinePane.evaluate((element) => {
+      const next = Math.min(80, element.scrollWidth - element.clientWidth);
+      element.scrollLeft = next;
+      element.dispatchEvent(new Event("scroll"));
+      return next;
+    });
     await expect
-      .poll(() => compareViewport.evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(0);
+      .poll(() => newPane.evaluate((element) => element.scrollLeft))
+      .toBe(sharedLeft);
+    await expect
+      .poll(() =>
+        page
+          .getByTestId("compare-shared-scroll-x")
+          .evaluate((element) => element.scrollLeft),
+      )
+      .toBe(sharedLeft);
 
     await page.getByRole("tab", { name: "Diff" }).click();
+    const compareViewport = page.getByTestId("compare-scroll-viewport");
+    await expect
+      .poll(() =>
+        compareViewport.evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).minHeight),
+        ),
+      )
+      .toBeGreaterThanOrEqual(300);
+
     await page.getByRole("button", { name: "Open Diff full image" }).click();
     await expect(
       page.getByRole("dialog", { name: "Diff full image" }),
     ).toBeAttached();
     await expect(page.getByTestId("image-lightbox")).toBeVisible();
+    await expect(page.getByTestId("image-lightbox")).toHaveAttribute(
+      "data-zoom-scale",
+      "1.0000",
+    );
     await page.getByRole("switch", { name: "Show full image at 100%" }).click();
     await expect
       .poll(() =>

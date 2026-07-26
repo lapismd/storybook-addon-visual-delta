@@ -24,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderCompare() {
+function renderCompare(defaultZoom: "fit" | "100%" = "fit") {
   return renderWithTheme(
     <CompareView
       baselineSrc="baseline.png"
@@ -35,13 +35,39 @@ function renderCompare() {
       imageWidth={3840}
       imageHeight={2700}
       deviceScaleFactor={3}
-      defaultZoom="fit"
+      defaultZoom={defaultZoom}
       resultKey="fixture"
     />,
   );
 }
 
 describe("CompareView zoom and coordinates", () => {
+  it("opens at 100% by default and reserves a 300px compare viewport", () => {
+    renderWithTheme(
+      <CompareView
+        baselineSrc="baseline.png"
+        actualSrc="actual.png"
+        diffSrc="diff.png"
+        focusSrc="focus.png"
+        changeBounds={null}
+        imageWidth={3696}
+        imageHeight={60}
+        deviceScaleFactor={3}
+        resultKey="wide-component"
+      />,
+    );
+
+    expect(screen.getByLabelText(/Visual compare/)).toHaveAttribute(
+      "data-zoom-scale",
+      "1.0000",
+    );
+    expect(screen.getByTestId("compare-scroll-viewport")).toHaveStyle({
+      minHeight: "300px",
+    });
+    expect(screen.getByTestId("compare-baseline-scroll")).toBeInTheDocument();
+    expect(screen.getByTestId("compare-new-scroll")).toBeInTheDocument();
+  });
+
   it("derives native CSS dimensions from device scale and retains custom zoom across tabs", async () => {
     const user = userEvent.setup();
     renderCompare();
@@ -208,5 +234,77 @@ describe("CompareView zoom and coordinates", () => {
 
     fireEvent.wheel(toolbar, { deltaY: 80, deltaX: 0 });
     expect(viewport.scrollTop).toBe(80);
+  });
+
+  it("keeps 2-up panes visible and synchronizes both scroll axes", async () => {
+    renderCompare("100%");
+    const waitForScrollSync = () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    const baselinePane = screen.getByTestId("compare-baseline-scroll");
+    const actualPane = screen.getByTestId("compare-new-scroll");
+    const horizontalRail = screen.getByTestId("compare-shared-scroll-x");
+    const verticalRail = screen.getByTestId("compare-shared-scroll-y");
+
+    for (const pane of [baselinePane, actualPane]) {
+      Object.defineProperties(pane, {
+        clientWidth: { configurable: true, value: 320 },
+        clientHeight: { configurable: true, value: 240 },
+        scrollWidth: { configurable: true, value: 1280 },
+        scrollHeight: { configurable: true, value: 900 },
+      });
+    }
+    Object.defineProperties(horizontalRail, {
+      clientWidth: { configurable: true, value: 652 },
+      clientHeight: { configurable: true, value: 12 },
+    });
+    Object.defineProperties(verticalRail, {
+      clientWidth: { configurable: true, value: 12 },
+      clientHeight: { configurable: true, value: 264 },
+    });
+
+    fireEvent.load(screen.getByAltText("Baseline"));
+    await waitFor(() =>
+      expect(horizontalRail).toHaveStyle({ visibility: "visible" }),
+    );
+    expect(verticalRail).toHaveStyle({ visibility: "visible" });
+
+    baselinePane.scrollLeft = 180;
+    baselinePane.scrollTop = 90;
+    fireEvent.scroll(baselinePane);
+
+    expect(actualPane.scrollLeft).toBe(180);
+    expect(actualPane.scrollTop).toBe(90);
+    expect(horizontalRail.scrollLeft).toBe(180);
+    expect(verticalRail.scrollTop).toBe(90);
+
+    await waitForScrollSync();
+    actualPane.scrollLeft = 240;
+    actualPane.scrollTop = 120;
+    fireEvent.scroll(actualPane);
+
+    expect(baselinePane.scrollLeft).toBe(240);
+    expect(baselinePane.scrollTop).toBe(120);
+    expect(horizontalRail.scrollLeft).toBe(240);
+    expect(verticalRail.scrollTop).toBe(120);
+
+    await waitForScrollSync();
+    horizontalRail.scrollLeft = 300;
+    fireEvent.scroll(horizontalRail);
+
+    expect(baselinePane.scrollLeft).toBe(300);
+    expect(actualPane.scrollLeft).toBe(300);
+    expect(baselinePane.scrollTop).toBe(120);
+    expect(actualPane.scrollTop).toBe(120);
+
+    await waitForScrollSync();
+    verticalRail.scrollTop = 160;
+    fireEvent.scroll(verticalRail);
+
+    expect(baselinePane.scrollLeft).toBe(300);
+    expect(actualPane.scrollLeft).toBe(300);
+    expect(baselinePane.scrollTop).toBe(160);
+    expect(actualPane.scrollTop).toBe(160);
   });
 });
