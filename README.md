@@ -333,8 +333,10 @@ Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
 ### Review tags (Accept vs Ready / Failed)
 
-Review tags are mutually exclusive CSF tags on the story (sidebar + toolbar
-badges). Set them from the panel or by editing `tags={…}` / posting
+Review tags are mutually exclusive CSF tags on the story. Visual Delta owns the
+sidebar labels for `skip-visual`, failed, ready, pending, and approved, while
+Storybook's native status store continues to show transient run results. Set
+review tags from the panel or by editing `tags={…}` / posting
 `POST /__visual-delta/review-status` (single `{ storyId, status }` or batched
 `{ updates: [{ storyId, status }] }`). Patchers keep **exactly one** review tag:
 setting `ready` clears `failed` / `pending` / `approved` even when the desired

@@ -6,6 +6,20 @@ import {
 } from "./manager-test-support.js";
 
 const DEV_STORYBOOK = "http://127.0.0.1:9013";
+const SIDEBAR_STATUS_FIXTURE = "shadcn-actions-button--default";
+
+async function mockFixtureTags(page: Page, tags: string[]) {
+  await page.route("**/index.json", async (route) => {
+    const response = await route.fetch();
+    const index = (await response.json()) as {
+      entries?: Record<string, { tags?: string[]; title?: string }>;
+    };
+    for (const fixture of Object.values(index.entries ?? {})) {
+      if (fixture.title?.startsWith("Shadcn/Feedback/")) fixture.tags = tags;
+    }
+    await route.fulfill({ response, json: index });
+  });
+}
 
 async function openStoryContextMenu(page: Page) {
   const storyItem = page.locator(`[data-item-id="${MANAGER_FIXTURE}"]`);
@@ -68,4 +82,47 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     ).toBeVisible();
     expect(writes).toEqual([]);
   });
+
+  for (const status of [
+    {
+      tag: "skip-visual",
+      name: "Skip visual: Excluded from Visual Delta tests",
+    },
+    {
+      tag: "visual-failed",
+      name: "Failed: Visual baseline failed or was rejected",
+    },
+    {
+      tag: "visual-ready",
+      name: "Ready: Visual baseline is ready for review",
+    },
+    {
+      tag: "visual-pending",
+      name: "Pending review: Visual baseline is awaiting review",
+    },
+    {
+      tag: "visual-approved",
+      name: "Approved: Visual baseline has been reviewed and accepted",
+    },
+  ]) {
+    test(`renders the committed ${status.tag} label without the badge addon`, async ({
+      page,
+    }) => {
+      await mockFixtureTags(page, [status.tag]);
+      await mockVisualBackend(page);
+      await openManager(page, SIDEBAR_STATUS_FIXTURE, DEV_STORYBOOK);
+
+      const storyItem = page.getByRole("button", {
+        name: `Feedback ${status.name}`,
+        exact: true,
+      });
+      await expect(
+        storyItem.locator(`[data-tag="${status.tag}"]`),
+      ).toBeVisible();
+      await expect(storyItem).toHaveScreenshot([
+        "sidebar",
+        `${status.tag}.png`,
+      ]);
+    });
+  }
 });

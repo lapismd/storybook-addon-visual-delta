@@ -18,10 +18,13 @@ import {
 import { HighlightIgnoreTool } from "./manager/HighlightIgnoreTool.js";
 import { PanelTitle } from "./manager/PanelTitle.js";
 import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
+import { installVisualStatusSidebarLabels } from "./manager/VisualStatusLabel.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
 import { Panel } from "./panel/Panel.js";
 
 addons.register(ADDON_ID, (api) => {
+  installVisualStatusSidebarLabels();
+
   // Panel match drops Docs without unmount cleanup — clear the preview overlay
   // so baseline PNGs cannot linger on the Docs page.
   let lastViewMode: string | undefined = api.getUrlState?.().viewMode;
@@ -60,8 +63,9 @@ addons.register(ADDON_ID, (api) => {
 
   // Local Playwright visual suite — only available while the Storybook
   // Vite dev server can shell out via middleware.
-  const configType = (globalThis as typeof globalThis & { CONFIG_TYPE?: string })
-    .CONFIG_TYPE;
+  const configType = (
+    globalThis as typeof globalThis & { CONFIG_TYPE?: string }
+  ).CONFIG_TYPE;
   if (configType === "DEVELOPMENT") {
     const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
     addons.add(TEST_PROVIDER_ID, {
