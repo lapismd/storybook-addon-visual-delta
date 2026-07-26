@@ -12,7 +12,9 @@ import {
   deviceScaleFactorForImage,
   isSplitPlacement,
   normalizePlacement,
+  viewportForImage,
   type PlacementMode,
+  type BaselineGeometryMismatch,
   type VisualDeltaImage,
   type VisualDeltaParams,
 } from "../constants.js";
@@ -26,6 +28,11 @@ import {
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
 import { resolvePaintedBackground } from "../shared/preview-background.js";
+import {
+  resolvedCompareZoomScale,
+  type CompareZoomState,
+} from "../shared/compare-zoom.js";
+import { baselineGeometryMismatch } from "../shared/geometry-mismatch.js";
 import {
   BASELINE_CHIP_GUTTER_PX,
   ensureOverlayChip,
@@ -82,9 +89,9 @@ let dragCleanupRef: (() => void) | null = null;
 let layoutObserverRef: ResizeObserver | null = null;
 let sharedScrollCleanupRef: (() => void) | null = null;
 let sharedScrollRefreshRef: (() => void) | null = null;
-let liveContentWidthRestoreRef: (() => void) | null = null;
-/** Subject that received compare width locks (may detach on remount). */
-let liveContentWidthSubject: HTMLElement | null = null;
+let liveViewportWidthRestoreRef: (() => void) | null = null;
+/** Canvas laid out at the baseline capture viewport (may detach on remount). */
+let liveViewportWidthCanvas: HTMLElement | null = null;
 let liveCanvasSplitRestoreRef: (() => void) | null = null;
 /** Canvas that received split min-height/height locks. */
 let liveCanvasSplitSubject: HTMLElement | null = null;
@@ -104,6 +111,9 @@ let currentLiveVisible = true;
 let currentOpacity = 0.5;
 let currentColorInversion = false;
 let currentBaselineLabelOffset = { x: 0, y: 0 };
+let currentSplitZoom: CompareZoomState = { mode: "fit", scale: 1 };
+let currentCropToViewport = false;
+let lastGeometryStatusSignature = "";
 let centerLabelGutterRestoreRef: (() => void) | null = null;
 let centerLabelGutterSubject: HTMLElement | null = null;
 
@@ -176,6 +186,8 @@ type OverlayChannelApi = {
     placement?: PlacementMode;
     liveVisible?: boolean;
     baselineLabelOffset?: { x: number; y: number };
+    splitZoom?: CompareZoomState;
+    cropToViewport?: boolean;
   }): void;
   onHideOverlay(): void;
   onShowOverlay(): void;
@@ -320,6 +332,30 @@ function resolveSubjectRect(canvasElement: HTMLElement): DOMRect {
   return canvasElement.getBoundingClientRect();
 }
 
+function emitBaselineGeometryStatus(status: BaselineGeometryMismatch | null) {
+  const signature = status ? JSON.stringify(status) : "";
+  if (signature === lastGeometryStatusSignature) return;
+  lastGeometryStatusSignature = signature;
+  addons.getChannel().emit(EVENTS.BASELINE_GEOMETRY_STATUS, status);
+}
+
+function reportBaselineGeometry(
+  canvasElement: HTMLElement,
+  imageItem: VisualDeltaImage,
+  sizes: BaselineCompareSizes | null | undefined,
+) {
+  if (!sizes) return;
+  const subjectRect = resolveSubjectRect(canvasElement);
+  emitBaselineGeometryStatus(
+    baselineGeometryMismatch(
+      sizes.content,
+      { width: subjectRect.width, height: subjectRect.height },
+      viewportForImage(imageItem),
+      currentCropToViewport,
+    ),
+  );
+}
+
 function paneStyleBase(): string {
   return `
     flex: 0 0 auto;
@@ -360,52 +396,69 @@ function syncBaselinePaneInset(
 }
 
 /**
- * Lock the story subject to the baseline CSS width so split and center overlay
- * do not reflow/wrap differently from the Playwright clip.
+ * Lay the Storybook canvas out at the baseline capture viewport, then let the
+ * story subject keep its own natural width/max-width. Locking the subject to
+ * the PNG width stretches max-width components and turns stale baselines into
+ * live layout mutations.
  */
-function lockLiveContentWidth(
+function lockLiveViewportWidth(
   canvasElement: HTMLElement,
-  contentWidth: number,
+  viewportWidth: number,
 ) {
-  unlockLiveContentWidth();
+  unlockLiveViewportWidth();
   const subject = canvasElement.querySelector(":scope > *");
-  if (!(subject instanceof HTMLElement) || contentWidth < 1) return;
+  if (viewportWidth < 1) return;
   const prev = {
-    width: subject.style.width,
-    maxWidth: subject.style.maxWidth,
-    minWidth: subject.style.minWidth,
-    boxSizing: subject.style.boxSizing,
+    width: canvasElement.style.width,
+    maxWidth: canvasElement.style.maxWidth,
+    minWidth: canvasElement.style.minWidth,
+    boxSizing: canvasElement.style.boxSizing,
+    subjectZoom: subject instanceof HTMLElement ? subject.style.zoom : "",
+    subjectScale: subject instanceof HTMLElement ? subject.style.scale : "",
+    subjectTransformOrigin:
+      subject instanceof HTMLElement ? subject.style.transformOrigin : "",
   };
-  subject.style.boxSizing = "border-box";
-  subject.style.width = `${contentWidth}px`;
-  subject.style.maxWidth = `${contentWidth}px`;
-  subject.style.minWidth = `${contentWidth}px`;
-  liveContentWidthSubject = subject;
-  liveContentWidthRestoreRef = () => {
-    subject.style.width = prev.width;
-    subject.style.maxWidth = prev.maxWidth;
-    subject.style.minWidth = prev.minWidth;
-    subject.style.boxSizing = prev.boxSizing;
+  canvasElement.style.boxSizing = "border-box";
+  canvasElement.style.width = `${viewportWidth}px`;
+  canvasElement.style.maxWidth = `${viewportWidth}px`;
+  canvasElement.style.minWidth = `${viewportWidth}px`;
+  liveViewportWidthCanvas = canvasElement;
+  liveViewportWidthRestoreRef = () => {
+    canvasElement.style.width = prev.width;
+    canvasElement.style.maxWidth = prev.maxWidth;
+    canvasElement.style.minWidth = prev.minWidth;
+    canvasElement.style.boxSizing = prev.boxSizing;
+    if (subject instanceof HTMLElement) {
+      subject.style.zoom = prev.subjectZoom;
+      subject.style.scale = prev.subjectScale;
+      subject.style.transformOrigin = prev.subjectTransformOrigin;
+    }
   };
 }
 
-function unlockLiveContentWidth() {
-  const restore = liveContentWidthRestoreRef;
-  const locked = liveContentWidthSubject;
-  liveContentWidthRestoreRef = null;
-  liveContentWidthSubject = null;
+function unlockLiveViewportWidth() {
+  const restore = liveViewportWidthRestoreRef;
+  const locked = liveViewportWidthCanvas;
+  liveViewportWidthRestoreRef = null;
+  liveViewportWidthCanvas = null;
   if (!restore && !locked) return;
   if (restore && locked?.isConnected) {
     restore();
     return;
   }
   // Remount can detach the locked subject — clear compare locks on the
-  // current root child so soft-hide restores natural component width.
-  const current = resolveStoryCanvas()?.querySelector(":scope > *");
-  if (current instanceof HTMLElement) {
-    current.style.removeProperty("width");
-    current.style.removeProperty("max-width");
-    current.style.removeProperty("min-width");
+  // current root so soft-hide restores the natural manager viewport.
+  const currentCanvas = resolveStoryCanvas();
+  if (currentCanvas instanceof HTMLElement) {
+    currentCanvas.style.removeProperty("width");
+    currentCanvas.style.removeProperty("max-width");
+    currentCanvas.style.removeProperty("min-width");
+    const currentSubject = currentCanvas.querySelector(":scope > *");
+    if (currentSubject instanceof HTMLElement) {
+      currentSubject.style.removeProperty("zoom");
+      currentSubject.style.removeProperty("scale");
+      currentSubject.style.removeProperty("transform-origin");
+    }
   }
 }
 
@@ -602,6 +655,22 @@ function bindSharedScrollRails(
     baselinePane.clientHeight;
 
   const refreshSpacers = () => {
+    if (currentSplitZoom.mode === "fit") {
+      for (const pane of [livePane, baselinePane]) {
+        const extent = getOrCreateScrollExtent(pane);
+        extent.style.width = "0px";
+        extent.style.height = "0px";
+        pane.scrollTop = 0;
+        pane.scrollLeft = 0;
+      }
+      vRail.style.display = "none";
+      hRail.style.display = "none";
+      const corner = document.getElementById(SCROLL_CORNER_ID);
+      if (corner instanceof HTMLElement) corner.style.display = "none";
+      split.style.gridTemplateColumns = "1fr 0px";
+      split.style.gridTemplateRows = "1fr 0px";
+      return;
+    }
     const extent = equalizePaneScrollExtents(livePane, baselinePane);
     const maxScrollHeight = Math.max(
       extent.height,
@@ -732,7 +801,7 @@ function bindSharedScrollRails(
 
 function teardownSplit(canvasElement: HTMLElement) {
   unbindSharedScroll();
-  unlockLiveContentWidth();
+  unlockLiveViewportWidth();
   unlockLiveCanvasForSplit();
   lastCompareSizes = null;
   const split = document.getElementById(SPLIT_ID);
@@ -805,14 +874,40 @@ function applyEqualPaneViewports(
     pane.style.width = `${paneW}px`;
     pane.style.height = `${paneH}px`;
     pane.style.flex = "0 0 auto";
+    pane.style.overflow = currentSplitZoom.mode === "fit" ? "hidden" : "auto";
   }
 
   panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
   panesWrap.style.height = horizontal ? `${paneH}px` : `${paneH * 2 + 1}px`;
 
   lockLiveCanvasForSplit(canvasElement);
-  lockLiveContentWidth(canvasElement, sizes.content.width);
+  const selectedImage = lastSelection?.images[lastSelection.index] ?? undefined;
+  lockLiveViewportWidth(canvasElement, viewportForImage(selectedImage).width);
+  if (selectedImage) {
+    reportBaselineGeometry(canvasElement, selectedImage, sizes);
+  }
   syncBaselinePaneInset(canvasElement, baselinePane);
+  const subject = canvasElement.querySelector(":scope > *");
+  const baselineImage = baselinePane.querySelector(`#${OVERLAY_ID} > img`);
+  const zoomScale = resolvedCompareZoomScale(currentSplitZoom, {
+    availableWidth: Math.max(1, paneW - insets.x),
+    availableHeight: Math.max(1, paneH - insets.y - BASELINE_CHIP_GUTTER_PX),
+    contentWidth: sizes.content.width,
+    contentHeight: sizes.content.height,
+  });
+  if (subject instanceof HTMLElement) {
+    // CSS `zoom` re-resolves percentage widths, so a width:100% subject can
+    // remain visually full width. Individual transform `scale` preserves the
+    // 1280px capture layout and shrinks its painted box for Fit.
+    subject.style.zoom = "";
+    subject.style.scale = String(zoomScale);
+    subject.style.transformOrigin = "top left";
+  }
+  if (baselineImage instanceof HTMLImageElement) {
+    baselineImage.style.zoom = String(zoomScale);
+  }
+  currentSplitZoom = { ...currentSplitZoom, scale: zoomScale };
+  addons.getChannel().emit(EVENTS.SPLIT_ZOOM_STATUS, currentSplitZoom);
   sharedScrollRefreshRef?.();
 }
 
@@ -1068,6 +1163,7 @@ function updateOverlayStyle(overlay: HTMLElement | null) {
     img.style.mixBlendMode = "normal";
     img.style.opacity = "1";
   } else {
+    img.style.zoom = "";
     img.style.mixBlendMode = currentColorInversion ? "difference" : "normal";
     img.style.opacity = String(currentOpacity);
   }
@@ -1180,7 +1276,8 @@ function applyOverlayPosition(
     })();
   if (compareSizes) {
     lastCompareSizes = compareSizes;
-    lockLiveContentWidth(canvasElement, compareSizes.content.width);
+    lockLiveViewportWidth(canvasElement, viewportForImage(imageItem).width);
+    reportBaselineGeometry(canvasElement, imageItem, compareSizes);
   }
   canvasParent.style.position = "relative";
   if (overlay.parentElement !== canvasParent) {
@@ -1269,13 +1366,14 @@ function removeOverlayDom(retainSelection: boolean) {
     // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
     // still tear down split chrome by id so the baseline PNG cannot orphan.
     unbindSharedScroll();
-    unlockLiveContentWidth();
+    unlockLiveViewportWidth();
     unlockLiveCanvasForSplit();
     restoreCenterLabelGutter();
     lastCompareSizes = null;
     document.getElementById(SPLIT_ID)?.remove();
   }
   syncModeBadge(false);
+  emitBaselineGeometryStatus(null);
 }
 
 function clearOverlay() {
@@ -1388,6 +1486,12 @@ function syncOverlayChannelApi(): void {
     }
     if (data.baselineLabelOffset) {
       currentBaselineLabelOffset = { ...data.baselineLabelOffset };
+    }
+    if (data.splitZoom) {
+      currentSplitZoom = { ...data.splitZoom };
+    }
+    if (typeof data.cropToViewport === "boolean") {
+      currentCropToViewport = data.cropToViewport;
     }
     if (data.placement) {
       currentPlacement = normalizePlacement(data.placement);

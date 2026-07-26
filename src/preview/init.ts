@@ -86,6 +86,8 @@ export function buildInitPayload(
     ignoreSelectors: resolveIgnoreSelectors(visualDeltaParams?.ignoreSelectors),
     cropToViewport:
       visualDeltaParams?.cropToViewport ?? projectDefaults.cropToViewport,
+    previewSplitZoomDefault: projectDefaults.previewSplitZoomDefault,
+    diffResultZoomDefault: projectDefaults.diffResultZoomDefault,
     configUpdated,
   };
 }

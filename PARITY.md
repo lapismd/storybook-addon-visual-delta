@@ -74,24 +74,25 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 
 ## Manager / view gaps
 
-| View / control                                      | Chromatic                | Visual Delta                                                                              | Status               |
-| --------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- | -------------------- |
-| Visual tests panel                                  | Auth → run → neon review | Create / run / diff / overlay / review                                                    | Different onboarding |
-| Testing Module                                      | Run/stop + warnings      | Visual Tests + Create Baselines                                                           | Partial              |
-| Sidebar visual labels                               | Addon-owned              | Addon-owned skip/failed/ready/pending/approved labels + native transient run status       | Done                 |
-| Accept / Unaccept (story / component / current run) | Cloud baseline accept    | Review tags; current run batches distinct eligible results and excludes missing baselines | Done                 |
-| Deny                                                | CI only                  | N/A                                                                                       | Parity               |
-| Browser selector                                    | Project browsers         | None                                                                                      | Cloud-only           |
-| Mode selector                                       | From cloud results       | Accessible result-aware selector with pass/fail/new/error state and globals               | Done                 |
-| Baseline ↔ Latest / Focus / Diff                   | Yes                      | 2-up, Swipe, Diff, Focus, Blink                                                           | Advantage            |
-| Live canvas overlay                                 | No                       | Placement pad + split panes                                                               | Advantage            |
-| Highlight ignored                                   | Toolbar + matched count  | Toolbar hidden at zero; distinct live count otherwise                                     | Done                 |
-| Share Storybook                                     | Toolbar publish          | None                                                                                      | Cloud-only           |
-| Configuration screen                                | Structured settings      | Editable Defaults plus read-only Resolved sections, diagnostics, sources, and raw details | Done                 |
-| Guided tour                                         | Onboarding               | Empty-state Create CTA                                                                    | Optional later       |
-| Review layout                                       | No                       | Yes                                                                                       | Advantage            |
-| Interaction accordion                               | No                       | Yes                                                                                       | Advantage            |
-| Diff HTML vs Chromium                               | N/A                      | Yes                                                                                       | Advantage            |
+| View / control                                      | Chromatic                 | Visual Delta                                                                              | Status               |
+| --------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------- | -------------------- |
+| Visual tests panel                                  | Auth → run → neon review  | Create / run / diff / overlay / review                                                    | Different onboarding |
+| Testing Module                                      | Run/stop + warnings       | Visual Tests + Create Baselines                                                           | Partial              |
+| Sidebar visual labels                               | Addon-owned               | Addon-owned skip/failed/ready/pending/approved labels + native transient run status       | Done                 |
+| Accept / Unaccept (story / component / current run) | Cloud baseline accept     | Review tags; current run batches distinct eligible results and excludes missing baselines | Done                 |
+| Deny                                                | CI only                   | N/A                                                                                       | Parity               |
+| Browser selector                                    | Project browsers          | None                                                                                      | Cloud-only           |
+| Mode selector                                       | From cloud results        | Accessible result-aware selector with pass/fail/new/error state and globals               | Done                 |
+| Baseline ↔ Latest / Focus / Diff                   | Yes                       | 2-up, Swipe, Diff, Focus, Blink                                                           | Advantage            |
+| Live canvas overlay                                 | No                        | Placement pad + split panes                                                               | Advantage            |
+| Responsive compare zoom                             | Cloud review fit controls | Shared Fit/custom/100% controls in preview splits and every Diff result tab               | Done                 |
+| Highlight ignored                                   | Toolbar + matched count   | Toolbar hidden at zero; distinct live count otherwise                                     | Done                 |
+| Share Storybook                                     | Toolbar publish           | None                                                                                      | Cloud-only           |
+| Configuration screen                                | Structured settings       | Editable Defaults plus read-only Resolved sections, diagnostics, sources, and raw details | Done                 |
+| Guided tour                                         | Onboarding                | Empty-state Create CTA                                                                    | Optional later       |
+| Review layout                                       | No                        | Yes                                                                                       | Advantage            |
+| Interaction accordion                               | No                        | Yes                                                                                       | Advantage            |
+| Diff HTML vs Chromium                               | N/A                       | Yes                                                                                       | Advantage            |
 
 ## Intentional non-goals
 
@@ -137,6 +138,14 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
   Playwright sidecars retain viewport and device-scale metadata.
 - The Baseline chip is outside the image pixels, with symmetric pane clearance,
   viewport clamping, and project/story X/Y offsets.
+- Preview splits and all five Diff result tabs share Fit/custom/100% zoom.
+  Bitmap dimensions are converted back to native CSS dimensions with the
+  capture device scale; Fit responds to bottom/right docking and never
+  upscales.
+- Component overlays establish the baseline capture viewport on the Storybook
+  canvas without forcing the story subject to the PNG width. A geometry alert
+  exposes stale or incompatible component baselines with baseline, live, and
+  viewport CSS sizes.
 - Editable project defaults are allow-listed, validated, atomically persisted,
   and broadcast without exposing host paths or commands to mutation.
 - `test:visual-delta-panel:update` is separately gated with
@@ -153,4 +162,5 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 | 4        | Accept / Unaccept batch UX                                         | **Done** — Story, Component, and Current run                                                  |
 | 5        | Configuration panel                                                | **Done** — editable Defaults, structured Resolved sections, sources, and typed diagnostics    |
 | 6        | Visual sidebar status ownership                                    | **Done** — committed visual tags are rendered by Visual Delta; transient runs use Storybook   |
-| 7        | `forcedColors` / reduced-motion / guided tour                      | Not yet                                                                                       |
+| 7        | Responsive preview/result Fit and custom zoom                      | **Done** — device-scale-aware Fit, 25–200% custom zoom, and native 100% overflow              |
+| 8        | `forcedColors` / reduced-motion / guided tour                      | Not yet                                                                                       |

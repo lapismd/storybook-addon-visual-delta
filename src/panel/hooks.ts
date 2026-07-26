@@ -4,6 +4,7 @@ import {
   DEFAULT_DIFF_THRESHOLD,
   EVENTS,
   isSplitPlacement,
+  type BaselineGeometryMismatch,
   type PlacementMode,
   type VisualDeltaImage,
   type VisualDeltaInteraction,
@@ -16,6 +17,11 @@ import {
   revealCenteredOverlayPatch,
 } from "../shared/overlay-session.js";
 import type { OverlayInfo } from "../types.js";
+import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
+import {
+  compareZoomFromDefault,
+  type CompareZoomState,
+} from "../shared/compare-zoom.js";
 import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
 import {
   clearSettings,
@@ -87,6 +93,10 @@ type StoryData = {
   delay: number;
   ignoreSelectors: string[];
   cropToViewport: boolean;
+  previewSplitZoomDefault: VisualDeltaZoomDefault;
+  diffResultZoomDefault: VisualDeltaZoomDefault;
+  splitZoom: CompareZoomState;
+  baselineGeometryMismatch: BaselineGeometryMismatch | null;
 };
 
 function waitTwoFrames(): Promise<void> {
@@ -202,6 +212,10 @@ export function useStoryData() {
       delay: 0,
       ignoreSelectors: [],
       cropToViewport: false,
+      previewSplitZoomDefault: "fit",
+      diffResultZoomDefault: "fit",
+      splitZoom: compareZoomFromDefault("fit"),
+      baselineGeometryMismatch: null,
     };
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
@@ -270,6 +284,8 @@ export function useStoryData() {
       delay?: number;
       ignoreSelectors?: string[];
       cropToViewport?: boolean;
+      previewSplitZoomDefault?: VisualDeltaZoomDefault;
+      diffResultZoomDefault?: VisualDeltaZoomDefault;
       configUpdated?: boolean;
     }) => {
       const imagesArray = Array.isArray(data.images)
@@ -394,6 +410,15 @@ export function useStoryData() {
           delay: typeof data.delay === "number" ? data.delay : 0,
           ignoreSelectors: data.ignoreSelectors ?? [],
           cropToViewport: data.cropToViewport ?? false,
+          previewSplitZoomDefault: data.previewSplitZoomDefault ?? "fit",
+          diffResultZoomDefault: data.diffResultZoomDefault ?? "fit",
+          splitZoom: resetDefaults
+            ? compareZoomFromDefault(data.previewSplitZoomDefault ?? "fit")
+            : prev.splitZoom,
+          baselineGeometryMismatch:
+            prev.storyId === data.storyId
+              ? prev.baselineGeometryMismatch
+              : null,
         };
         emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
           opacity: next.opacity,
@@ -401,6 +426,8 @@ export function useStoryData() {
           placement: next.placement,
           liveVisible: next.liveVisible,
           baselineLabelOffset: next.baselineLabelOffset,
+          splitZoom: next.splitZoom,
+          cropToViewport: next.cropToViewport,
         });
         void selectImage(selection.previewIndex, images);
         return next;
@@ -443,10 +470,31 @@ export function useStoryData() {
           placement: prev.placement,
           liveVisible: prev.liveVisible,
           baselineLabelOffset: prev.baselineLabelOffset,
+          splitZoom: prev.splitZoom,
+          cropToViewport: prev.cropToViewport,
         });
         void selectImage(prev.index, prev.images);
         return prev;
       });
+    },
+    [EVENTS.SPLIT_ZOOM_STATUS]: (data: CompareZoomState) => {
+      setStoryData((prev) => {
+        if (
+          prev.splitZoom.mode === data.mode &&
+          Math.abs(prev.splitZoom.scale - data.scale) < 0.0001
+        ) {
+          return prev;
+        }
+        return { ...prev, splitZoom: data };
+      });
+    },
+    [EVENTS.BASELINE_GEOMETRY_STATUS]: (
+      data: BaselineGeometryMismatch | null,
+    ) => {
+      setStoryData((prev) => ({
+        ...prev,
+        baselineGeometryMismatch: data,
+      }));
     },
   });
   emitRef.current = emit;
@@ -490,6 +538,8 @@ export function useStoryData() {
         | "placement"
         | "liveVisible"
         | "baselineLabelOffset"
+        | "splitZoom"
+        | "cropToViewport"
       >,
     ) => {
       emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
@@ -498,6 +548,8 @@ export function useStoryData() {
         placement: next.placement,
         liveVisible: next.liveVisible,
         baselineLabelOffset: next.baselineLabelOffset,
+        splitZoom: next.splitZoom,
+        cropToViewport: next.cropToViewport,
       });
     },
     [],
@@ -527,6 +579,17 @@ export function useStoryData() {
     [emitStyle, persist],
   );
 
+  const setSplitZoom = useCallback(
+    (splitZoom: CompareZoomState) => {
+      setStoryData((prev) => {
+        const next = { ...prev, splitZoom };
+        emitStyle(next);
+        return next;
+      });
+    },
+    [emitStyle],
+  );
+
   const setPlacement = useCallback(
     (placement: PlacementMode) => {
       setStoryData((prev) => {
@@ -536,7 +599,13 @@ export function useStoryData() {
           placement,
           prev.opacity,
         );
-        const next = { ...prev, placement, images, opacity };
+        const next = {
+          ...prev,
+          placement,
+          images,
+          opacity,
+          splitZoom: compareZoomFromDefault("fit"),
+        };
         persist(next);
         emitStyle(next);
         void selectImage(prev.index, images);
@@ -583,6 +652,7 @@ export function useStoryData() {
           opacity: action.opacity,
           index: action.index,
           overlayOn: action.index >= 0,
+          splitZoom: compareZoomFromDefault("fit"),
         };
         persist(next);
         emitStyle(next);
@@ -700,6 +770,7 @@ export function useStoryData() {
         placement: defaults.placement,
         liveVisible: defaults.liveVisible,
         passThresholdByEngine: { ...defaults.passThresholdByEngine },
+        splitZoom: compareZoomFromDefault("fit"),
       };
       emitStyle(next);
       void selectImage(selection.previewIndex, images);
@@ -1008,6 +1079,7 @@ export function useStoryData() {
     setIndex,
     setOpacity,
     setColorInversion,
+    setSplitZoom,
     setPlacement,
     togglePlacement,
     setLiveVisible,

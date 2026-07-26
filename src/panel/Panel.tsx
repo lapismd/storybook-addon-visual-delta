@@ -100,6 +100,8 @@ import {
   type PanelResultState,
 } from "./PanelResultSummary.js";
 import { PlacementPad } from "./PlacementPad.js";
+import { CompareZoomControl } from "./CompareZoomControl.js";
+import { BaselineGeometryWarning } from "./BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
 import { ModeSelector } from "./ModeSelector.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
@@ -159,9 +161,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     delay,
     ignoreSelectors,
     cropToViewport,
+    splitZoom,
+    diffResultZoomDefault,
+    baselineGeometryMismatch,
     setIndex,
     setOpacity,
     setColorInversion,
+    setSplitZoom,
     togglePlacement,
     setLiveVisible,
     setPassThresholdPercent,
@@ -1540,6 +1546,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 disabled={images.length === 0}
               />
             ) : null}
+            {liveVisible && index >= 0 && isSplit ? (
+              <CompareZoomControl value={splitZoom} onChange={setSplitZoom} />
+            ) : null}
             {index >= 0 && (!isSplit || !liveVisible) ? (
               <ButtonGroup role="group" aria-label="Overlay controls">
                 <ToggleButton
@@ -1634,7 +1643,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           {captureError ? <ErrorText>{captureError}</ErrorText> : null}
         </PanelToolbar>
         {diffResult && images.length > 0 ? (
-          <DiffResult result={diffResult} showHistogram={showDistribution} />
+          <DiffResult
+            result={diffResult}
+            showHistogram={showDistribution}
+            defaultZoom={diffResultZoomDefault}
+          />
         ) : null}
       </>
     ),
@@ -1667,9 +1680,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setColorInversion,
       setIndex,
       setLiveVisible,
+      setSplitZoom,
       setOpacity,
       setPassThresholdPercent,
       showDistribution,
+      splitZoom,
+      diffResultZoomDefault,
       togglePlacement,
     ],
   );
@@ -1774,6 +1790,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           finishedAt={latestStoryResult ? lastRun?.finishedAt : null}
           modeSummary={modeSummary}
         />
+      }
+      notice={
+        baselineGeometryMismatch ? (
+          <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
+        ) : null
       }
       emptyState={emptyState}
       content={

@@ -1,6 +1,7 @@
 import React from "react";
 import { styled } from "storybook/theming";
 import type { DiffResultData } from "../types.js";
+import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import { CompareView } from "./CompareView.js";
 import { DiffHistogram } from "./DiffHistogram.js";
 import { DiffResultContainer, DiffSummary } from "./styled.js";
@@ -26,9 +27,11 @@ const CaptureDiagnostics = styled.details(({ theme }) => ({
 export function DiffResult({
   result,
   showHistogram = false,
+  defaultZoom = "fit",
 }: {
   result: DiffResultData;
   showHistogram?: boolean;
+  defaultZoom?: VisualDeltaZoomDefault;
 }) {
   return (
     <DiffResultContainer>
@@ -45,6 +48,11 @@ export function DiffResult({
         changeBounds={result.changeBounds}
         imageWidth={result.imageWidth}
         imageHeight={result.imageHeight}
+        cssWidth={result.cssWidth}
+        cssHeight={result.cssHeight}
+        deviceScaleFactor={result.deviceScaleFactor}
+        defaultZoom={defaultZoom}
+        resultKey={`${result.baselineImage}:${result.capturedBitmap?.width ?? result.imageWidth}x${result.capturedBitmap?.height ?? result.imageHeight}`}
       />
       {result.sizeNote ? (
         <CaptureDiagnostics data-testid="diff-capture-diagnostics">

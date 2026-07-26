@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import type {
+  BaselineGeometryMismatch,
   PlacementMode,
   VisualDeltaImage,
   VisualReviewStatus,
@@ -10,6 +11,7 @@ import {
 } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
+import { BaselineGeometryWarning } from "../panel/BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "../panel/ConfigurationPanel.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
 import { LiveVisibilityToggle } from "../panel/LiveVisibilityToggle.js";
@@ -127,6 +129,8 @@ export type PanelShellProps = {
   initialProgress?: { completed: number; total: number };
   /** Deterministic streamed output kept behind the progress-log control. */
   initialStatusLog?: string;
+  /** Component baseline/live bounds mismatch reported by the preview. */
+  baselineGeometryMismatch?: BaselineGeometryMismatch | null;
 };
 
 /**
@@ -146,6 +150,7 @@ export function PanelShell({
   modeResults = {},
   initialProgress,
   initialStatusLog = "",
+  baselineGeometryMismatch = null,
 }: PanelShellProps) {
   const backend = useMemo(
     () => backendProp ?? createMockVisualBackend(),
@@ -535,6 +540,11 @@ export function PanelShell({
           }
           modeSummary={modeSummary}
         />
+      }
+      notice={
+        baselineGeometryMismatch ? (
+          <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
+        ) : null
       }
       content={
         <>
