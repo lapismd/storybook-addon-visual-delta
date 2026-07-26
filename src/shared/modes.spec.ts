@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   imagesFromModes,
+  modeBaselineSrc,
   modeBaselineSlug,
   modeNames,
   stackModes,
@@ -16,7 +17,10 @@ describe("modeBaselineSlug", () => {
 describe("stackModes", () => {
   it("merges levels and honors disable", () => {
     const stacked = stackModes(
-      { light: { globals: { theme: "light" } }, dark: { globals: { theme: "dark" } } },
+      {
+        light: { globals: { theme: "light" } },
+        dark: { globals: { theme: "dark" } },
+      },
       { dark: { disable: true }, desktop: { globals: { viewport: "large" } } },
     );
     expect(modeNames(stacked).sort()).toEqual(["desktop", "light"]);
@@ -31,5 +35,38 @@ describe("imagesFromModes", () => {
       dark: { globals: { theme: "dark" } },
     });
     expect(images).toEqual([{ src: "/a.png", mode: "light" }]);
+  });
+
+  it("fills a missing src from the primary local baseline convention", () => {
+    const images = imagesFromModes(
+      {
+        dark: { globals: { theme: "dark" } },
+        explicit: { src: "/custom.png" },
+      },
+      {
+        primarySrc: "/visual-baselines/button-chromium-darwin.png",
+      },
+    );
+    expect(images).toEqual([
+      {
+        src: "/visual-baselines/button--dark-chromium-darwin.png",
+        mode: "dark",
+      },
+      { src: "/custom.png", mode: "explicit" },
+    ]);
+  });
+});
+
+describe("modeBaselineSrc", () => {
+  it("preserves query strings and leaves unsupported sources alone", () => {
+    expect(
+      modeBaselineSrc(
+        "/visual-baselines/button-chromium-darwin.png?v=4",
+        "Dark Desktop",
+      ),
+    ).toBe("/visual-baselines/button--dark-desktop-chromium-darwin.png?v=4");
+    expect(
+      modeBaselineSrc("data:image/png;base64,abc", "Dark"),
+    ).toBeUndefined();
   });
 });

@@ -32,6 +32,7 @@ export type PanelViewProps = {
   header: PanelViewHeaderProps;
   loading?: boolean;
   configuration?: ReactNode;
+  summary?: ReactNode;
   emptyState?: PanelViewEmptyState | null;
   content?: ReactNode;
   status: {
@@ -56,6 +57,7 @@ export function PanelView({
   header,
   loading = false,
   configuration,
+  summary,
   emptyState,
   content,
   status,
@@ -85,6 +87,7 @@ export function PanelView({
           <Header {...header} onHeightChange={setHeaderStickyTop} />
         )}
         <PanelBody>
+          {!configuration && !loading ? summary : null}
           {configuration}
           {!configuration && loading ? (
             <SkeletonRoot

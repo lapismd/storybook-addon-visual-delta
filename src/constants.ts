@@ -1,9 +1,6 @@
 import type { VisualDeltaModes } from "./shared/modes.js";
 
-export type {
-  VisualDeltaModeDef,
-  VisualDeltaModes,
-} from "./shared/modes.js";
+export type { VisualDeltaModeDef, VisualDeltaModes } from "./shared/modes.js";
 
 export const ADDON_ID = "visual-delta";
 export const PANEL_ID = `${ADDON_ID}/panel`;
@@ -40,6 +37,8 @@ export const EVENTS = {
   VISUAL_CAPTURE_PARKED: `${ADDON_ID}/visual-capture-parked`,
   /** Manager → preview: toggle highlight of ignore regions. */
   SET_HIGHLIGHT_IGNORE: `${ADDON_ID}/set-highlight-ignore`,
+  /** Preview → manager: distinct DOM nodes covered by ignore selectors. */
+  IGNORE_REGIONS_STATUS: `${ADDON_ID}/ignore-regions-status`,
 } as const;
 
 export type AlignMode = "viewport" | "canvas";
@@ -254,11 +253,7 @@ export const VISUAL_REVIEW_READY_TAG = "visual-ready";
 /** CSF tag: baseline review failed / rejected. */
 export const VISUAL_REVIEW_FAILED_TAG = "visual-failed";
 
-export type VisualReviewStatus =
-  | "pending"
-  | "approved"
-  | "ready"
-  | "failed";
+export type VisualReviewStatus = "pending" | "approved" | "ready" | "failed";
 
 export const VISUAL_REVIEW_TAGS = [
   VISUAL_REVIEW_PENDING_TAG,

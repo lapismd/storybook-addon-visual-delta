@@ -7,6 +7,7 @@ export type VisualRunResultItem = {
   title: string;
   error?: string;
   sidecar?: unknown;
+  modeResults?: unknown[];
   /** Set when the story failed because no committed baseline PNG exists. */
   missingBaseline?: boolean;
 };

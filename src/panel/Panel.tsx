@@ -43,22 +43,26 @@ import {
   componentStoryIdsFor,
   formatVisualProgressLabel,
   fetchVisualConfig,
+  loadPersistedVisualLastRun,
   postPlaywrightPassThreshold,
   postVisualCreateBaseline,
   postVisualInit,
   postVisualInteractionBaseline,
   postVisualRebuildStatic,
   postVisualReviewStatus,
+  postVisualReviewStatuses,
   postVisualRun,
   postVisualSkipVisual,
   postVisualUpdateBaseline,
   publishVisualLastRun,
+  reviewableStoryIdsFromLastRun,
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
   visualResultFromLiveDiff,
   visualRunnableStoryIds,
   type VisualCreateProgress,
+  type VisualLastRunSummary,
   type VisualRunProgress,
 } from "../manager/run-visual.js";
 import { loadRebuildStaticEnabled } from "../manager/visual-test-module-prefs.js";
@@ -91,11 +95,19 @@ import {
 } from "./BaselineAccordion.js";
 import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
 import { PanelView, type PanelViewEmptyState } from "./PanelView.js";
+import {
+  PanelResultSummary,
+  type PanelResultState,
+} from "./PanelResultSummary.js";
 import { PlacementPad } from "./PlacementPad.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
 import { ModeSelector } from "./ModeSelector.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import {
+  aggregateModeResultStatus,
+  type VisualModeResultStatus,
+} from "../shared/mode-results.js";
 import {
   endPlayDebug,
   gotoPlayStep,
@@ -341,6 +353,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [diffEpoch, setDiffEpoch] = useState(0);
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
     null,
+  );
+  const [lastRun, setLastRun] = useState<VisualLastRunSummary | null>(
+    loadPersistedVisualLastRun,
   );
   const [baselineJob, setBaselineJob] = useState<VisualCreateProgress | null>(
     null,
@@ -716,6 +731,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   // Finished-run summary + log tail (sidebar and panel share this channel).
   useEffect(() => {
     return subscribeVisualLastRun((last) => {
+      setLastRun(last);
       if (!last) return;
       const summaryLine = last.error
         ? `Visual: ${last.error}${last.scope ? ` (${last.scope})` : ""}`
@@ -729,6 +745,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
     });
   }, []);
+
+  const reviewableRunStoryIds = useMemo(
+    () => reviewableStoryIdsFromLastRun(lastRun),
+    [lastRun],
+  );
 
   // Create/update baseline progress — stream logs; on success show center overlay.
   useEffect(() => {
@@ -1126,15 +1147,23 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const ids =
           scope === "component"
             ? componentStoryIdsFor(api, storyId)
-            : [storyId];
-        for (const id of ids) {
-          await postVisualReviewStatus({ storyId: id, status: "approved" });
+            : scope === "run"
+              ? reviewableRunStoryIds
+              : [storyId];
+        if (!ids.length) {
+          throw new Error("The current visual run has no reviewable results");
         }
-        setOptimisticReview("approved");
+        const result = await postVisualReviewStatuses(
+          ids.map((id) => ({ storyId: id, status: "approved" })),
+        );
+        if (result.errors.length) throw new Error(result.errors[0]);
+        if (ids.includes(storyId)) setOptimisticReview("approved");
         setUpdateLog(
           scope === "component"
             ? `Accepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} (visual-approved).`
-            : "Accepted story baseline (visual-approved).",
+            : scope === "run"
+              ? `Accepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} from the current run.`
+              : "Accepted story baseline (visual-approved).",
         );
       } catch (error) {
         setCaptureError(
@@ -1144,7 +1173,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsReviewing(false);
       }
     },
-    [api, storyId],
+    [api, reviewableRunStoryIds, storyId],
   );
 
   const handleUnacceptScope = useCallback(
@@ -1159,15 +1188,23 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const ids =
           scope === "component"
             ? componentStoryIdsFor(api, storyId)
-            : [storyId];
-        for (const id of ids) {
-          await postVisualReviewStatus({ storyId: id, status: "pending" });
+            : scope === "run"
+              ? reviewableRunStoryIds
+              : [storyId];
+        if (!ids.length) {
+          throw new Error("The current visual run has no reviewable results");
         }
-        setOptimisticReview("pending");
+        const result = await postVisualReviewStatuses(
+          ids.map((id) => ({ storyId: id, status: "pending" })),
+        );
+        if (result.errors.length) throw new Error(result.errors[0]);
+        if (ids.includes(storyId)) setOptimisticReview("pending");
         setUpdateLog(
           scope === "component"
             ? `Unaccepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} (visual-pending).`
-            : "Unaccepted story baseline (visual-pending).",
+            : scope === "run"
+              ? `Unaccepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} from the current run.`
+              : "Unaccepted story baseline (visual-pending).",
         );
       } catch (error) {
         setCaptureError(
@@ -1177,7 +1214,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsReviewing(false);
       }
     },
-    [api, storyId],
+    [api, reviewableRunStoryIds, storyId],
   );
 
   const handleModeChange = useCallback(
@@ -1312,6 +1349,116 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       ? ("pass" as const)
       : ("fail" as const)
     : null;
+  const latestStoryResult = lastRun?.results?.find(
+    (result) => result.storyId === storyId,
+  );
+  const modeResultStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        (latestStoryResult?.modeResults ?? []).map((result) => [
+          result.mode ?? "Default",
+          result.status,
+        ]),
+      ) as Record<string, VisualModeResultStatus>,
+    [latestStoryResult],
+  );
+  const aggregateModeStatus = useMemo(
+    () => aggregateModeResultStatus(latestStoryResult?.modeResults ?? []),
+    [latestStoryResult],
+  );
+  const modeSummary = useMemo(() => {
+    const results = latestStoryResult?.modeResults ?? [];
+    if (results.length === 0) return null;
+    const counts = results.reduce<Record<VisualModeResultStatus, number>>(
+      (next, result) => {
+        next[result.status] += 1;
+        return next;
+      },
+      { passed: 0, failed: 0, new: 0, error: 0 },
+    );
+    return (["passed", "failed", "new", "error"] as const)
+      .filter((status) => counts[status] > 0)
+      .map((status) => `${counts[status]} ${status}`)
+      .join(" · ");
+  }, [latestStoryResult]);
+  const resultSummary = useMemo(() => {
+    let state: PanelResultState = "ready";
+    let title = "Baseline ready";
+    let detail: string | null =
+      "Run the visual test to refresh its comparison result.";
+
+    if (needsScaffold) {
+      state = "setup";
+      title = "Setup required";
+      detail = onboardingHint;
+    } else if (skipVisual) {
+      state = "skipped";
+      title = "Visual tests skipped";
+      detail = "This story is excluded with skip-visual.";
+    } else if (statusRunning) {
+      state = "running";
+      title = runInFlight ? "Visual test running" : "Baseline job running";
+      detail = statusLabel;
+    } else if (isEmpty) {
+      state = "missing";
+      title = "Baseline missing";
+      detail = "Create a visual baseline to enable comparison.";
+    } else if (aggregateModeStatus === "error") {
+      state = "error";
+      title = "Mode capture error";
+      detail =
+        latestStoryResult?.modeResults?.find(
+          (result) => result.status === "error",
+        )?.error ?? "One or more visual modes could not be captured.";
+    } else if (aggregateModeStatus === "new") {
+      state = "missing";
+      title = "Mode baseline missing";
+      detail = "Create or update baselines for every enabled visual mode.";
+    } else if (
+      aggregateModeStatus === "failed" ||
+      latestStoryResult?.status === "failed"
+    ) {
+      state = "failed";
+      title = "Visual test failed";
+      detail = latestStoryResult?.error ?? captureError;
+    } else if (
+      aggregateModeStatus === "passed" ||
+      latestStoryResult?.status === "passed"
+    ) {
+      state = "passed";
+      title = "Visual test passed";
+      detail =
+        latestStoryResult?.sidecar?.diffPercent != null
+          ? `${latestStoryResult.sidecar.diffPercent.toFixed(4)}% different`
+          : "The latest Playwright comparison passed.";
+    } else if (captureError) {
+      state = "error";
+      title = "Capture error";
+      detail = captureError;
+    } else if (badgeStatus === "fail") {
+      state = "failed";
+      title = "Live comparison failed";
+      detail = "The current baseline exceeds the local pass threshold.";
+    } else if (badgeStatus === "pass") {
+      state = "passed";
+      title = "Live comparison passed";
+      detail = "The current baseline is within the local pass threshold.";
+    }
+
+    return { state, title, detail };
+  }, [
+    badgeStatus,
+    aggregateModeStatus,
+    captureError,
+    isEmpty,
+    latestStoryResult,
+    needsScaffold,
+    onboardingHint,
+    runInFlight,
+    skipVisual,
+    statusLabel,
+    statusRunning,
+  ]);
 
   const renderSectionBody = useCallback(
     (section: BaselineSection) => (
@@ -1338,6 +1485,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 value={selectedMode}
                 onChange={handleModeChange}
                 disabled={busy}
+                results={modeResultStatuses}
               />
             ) : null}
             <LiveVisibilityToggle
@@ -1466,6 +1614,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       isUpdatingPlaywrightThreshold,
       liveVisible,
       modeNames,
+      modeResultStatuses,
       opacity,
       overlayOn,
       passThresholdPercent,
@@ -1559,6 +1708,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         onReviewStatus: (status) => void handleSetReviewStatus(status),
         onAccept: (scope) => void handleAcceptScope(scope),
         onUnaccept: (scope) => void handleUnacceptScope(scope),
+        acceptRunAvailable: reviewableRunStoryIds.length > 0,
         onToggleSkipVisual: () => void handleToggleSkipVisual(),
         onOpenConfiguration: () => setShowConfiguration(true),
         isUpdating,
@@ -1569,6 +1719,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         showConfiguration ? (
           <ConfigurationPanel onClose={() => setShowConfiguration(false)} />
         ) : null
+      }
+      summary={
+        <PanelResultSummary
+          state={resultSummary.state}
+          title={resultSummary.title}
+          detail={resultSummary.detail}
+          finishedAt={latestStoryResult ? lastRun?.finishedAt : null}
+          modeSummary={modeSummary}
+        />
       }
       emptyState={emptyState}
       content={

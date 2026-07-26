@@ -17,6 +17,7 @@ import {
   type VisualReviewStatus,
 } from "../constants.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import type { VisualModeRunResult } from "../shared/mode-results.js";
 import {
   PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
   type VisualDiffSidecar,
@@ -28,6 +29,7 @@ export type VisualRunResultItem = {
   title: string;
   error?: string;
   sidecar?: VisualDiffSidecar;
+  modeResults?: VisualModeRunResult[];
   /** Set when the story failed because no committed baseline PNG exists. */
   missingBaseline?: boolean;
 };
@@ -191,6 +193,21 @@ export type VisualLastRunSummary = {
   /** Per-story outcomes for Update status / follow-up actions. */
   results?: VisualRunResultItem[];
 };
+
+/** Distinct, reviewable story ids from the most recent completed visual run. */
+export function reviewableStoryIdsFromLastRun(
+  lastRun: VisualLastRunSummary | null,
+): string[] {
+  const ids = new Set<string>();
+  for (const result of lastRun?.results ?? []) {
+    if (result.status !== "passed" && result.status !== "failed") continue;
+    if (result.status === "failed" && isMissingBaselineFailure(result)) {
+      continue;
+    }
+    ids.add(result.storyId);
+  }
+  return [...ids];
+}
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
 
@@ -691,6 +708,33 @@ export async function postVisualReviewStatus(body: {
   return data;
 }
 
+/** Persist a deliberate batch of review tags in one middleware/HMR cycle. */
+export async function postVisualReviewStatuses(
+  updates: Array<{ storyId: string; status: VisualReviewStatus }>,
+): Promise<{ updated: number; errors: string[] }> {
+  if (!updates.length) return { updated: 0, errors: [] };
+  const response = await fetch(VISUAL_DELTA_REVIEW_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ updates }),
+  });
+  const data = (await response.json()) as {
+    ok?: boolean;
+    updated?: number;
+    errors?: string[];
+    error?: string;
+  };
+  if (!response.ok && data.updated == null) {
+    throw new Error(
+      data.error || `Review status update failed (${response.status})`,
+    );
+  }
+  return {
+    updated: data.updated ?? 0,
+    errors: data.errors ?? [],
+  };
+}
+
 /**
  * Stamp CSF review tags from visual run outcomes:
  * passed → ready, failed → failed. Skips skipped / timedOut and failures
@@ -714,24 +758,9 @@ export async function postVisualReviewStatusesFromResults(
 
   persistVisualStatusJob({ updates });
   try {
-    const response = await fetch(VISUAL_DELTA_REVIEW_PATH, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ updates }),
-    });
-    const data = (await response.json()) as {
-      ok?: boolean;
-      updated?: number;
-      errors?: string[];
-      error?: string;
-    };
-    if (!response.ok && data.updated == null) {
-      throw new Error(
-        data.error || `Review status update failed (${response.status})`,
-      );
-    }
+    const data = await postVisualReviewStatuses(updates);
     clearPersistedVisualStatusJob();
-    const rawErrors = data.errors ?? [];
+    const rawErrors = data.errors;
     const softSkipped = rawErrors.filter((error) =>
       isNoBaselineFailedReviewError(error),
     ).length;
@@ -739,7 +768,7 @@ export async function postVisualReviewStatusesFromResults(
       (error) => !isNoBaselineFailedReviewError(error),
     );
     return {
-      updated: data.updated ?? 0,
+      updated: data.updated,
       errors,
       skippedMissingBaseline: skippedMissingBaseline + softSkipped,
     };
@@ -987,8 +1016,9 @@ async function postVisualBaselineWrite(
       (/No tests found/i.test(log) ||
         /Create failed — no baseline PNG/i.test(log))
     ) {
-      const error = /Create failed — no baseline PNG[^\n]*/i.exec(log)?.[0]
-        ?? "No Playwright visual tests matched (stale skip-visual index or empty scope).";
+      const error =
+        /Create failed — no baseline PNG[^\n]*/i.exec(log)?.[0] ??
+        "No Playwright visual tests matched (stale skip-visual index or empty scope).";
       emitVisualCreateProgress({
         running: false,
         label: failedLabel,
@@ -1261,7 +1291,9 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
       throw error;
     }
     const message =
-      error instanceof Error ? error.message : "Rebuild storybook-static failed";
+      error instanceof Error
+        ? error.message
+        : "Rebuild storybook-static failed";
     emitVisualCreateProgress({
       running: false,
       label: failedLabel,
