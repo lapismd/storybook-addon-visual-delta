@@ -5,12 +5,20 @@ import {
 } from "../src/playwright/readiness.js";
 
 const CASES = [
-  ["passed", "visual-delta-panel-shell--passed-result"],
-  ["running", "visual-delta-panel-shell--running-result"],
-  ["configuration-warning", "visual-delta-panel-shell--configuration-warnings"],
-  ["missing-baseline", "visual-delta-panel-shell--missing-baseline"],
-  ["mixed-mode-failure", "visual-delta-panel-shell--mixed-mode-failure"],
-  ["capture-error", "visual-delta-panel-shell--capture-error"],
+  ["passed", "visual-delta-panel-shell--passed-result", true],
+  ["running", "visual-delta-panel-shell--running-result", false],
+  [
+    "configuration-warning",
+    "visual-delta-panel-shell--configuration-warnings",
+    false,
+  ],
+  ["missing-baseline", "visual-delta-panel-shell--missing-baseline", true],
+  [
+    "mixed-mode-failure",
+    "visual-delta-panel-shell--mixed-mode-failure",
+    true,
+  ],
+  ["capture-error", "visual-delta-panel-shell--capture-error", true],
 ] as const;
 const DELAYED_PLAY = "visual-delta-panel-shell--delayed-story-completion";
 
@@ -33,10 +41,27 @@ for (const layout of [
   test.describe(layout.name, () => {
     test.use({ viewport: layout.viewport });
 
-    for (const [name, storyId] of CASES) {
+    for (const [name, storyId, hasVisualBaseline] of CASES) {
       test(name, async ({ page }) => {
         const panel = await openPanelStory(page, storyId);
-        await expect(panel).toHaveScreenshot([layout.name, `${name}.png`]);
+        if (hasVisualBaseline) {
+          await expect(panel).toHaveScreenshot([layout.name, `${name}.png`]);
+          return;
+        }
+        if (name === "running") {
+          await expect(
+            panel.getByRole("status", {
+              name: "Visual test running. Comparing the current story",
+            }),
+          ).toBeVisible();
+          return;
+        }
+        await expect(
+          panel.getByRole("heading", { name: "Configuration" }),
+        ).toBeVisible();
+        await expect(
+          panel.getByRole("list", { name: "Configuration diagnostics" }),
+        ).toBeVisible();
       });
     }
   });

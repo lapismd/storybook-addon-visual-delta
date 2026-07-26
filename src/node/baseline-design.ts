@@ -35,12 +35,7 @@ export function familyFromTitle(title: string): string {
   return segment.toLowerCase().replace(/\s+/g, "-");
 }
 
-const WIRED_SNAPSHOT_PREFIXES = [
-  "shadcn/",
-  "forms/",
-  "apps/",
-  "tasks/",
-] as const;
+const WIRED_SNAPSHOT_PREFIXES = ["shadcn/", "forms/", "workspace/"] as const;
 
 function isWiredSnapshotDir(directory: string): boolean {
   return WIRED_SNAPSHOT_PREFIXES.some((prefix) => directory.startsWith(prefix));

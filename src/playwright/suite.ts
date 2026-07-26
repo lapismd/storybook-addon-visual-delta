@@ -383,6 +383,11 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
 
   for (const story of stories) {
     test(story.id, async ({ page }) => {
+      test.fail(
+        process.env.PLAYWRIGHT_UPDATE_SNAPSHOTS !== "1" &&
+          (story.tags ?? []).includes("visual-failed"),
+        "The committed visual review state records this comparison as failed.",
+      );
       await prepareStoryPage(page, story.id);
       const visualModes = await readVisualModes(page);
       const captures: Array<{

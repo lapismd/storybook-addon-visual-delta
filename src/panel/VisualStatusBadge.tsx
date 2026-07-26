@@ -40,7 +40,9 @@ export const badgeChipStyles = {
 const StyledBadge = styled.div<{ status: VisualBadgeStatus }>(
   ({ theme, status }) => ({
     ...badgeChipStyles,
-    backgroundColor: theme.color[StatusColorMapping[status]],
+    backgroundColor: `color-mix(in srgb, ${
+      theme.color[StatusColorMapping[status]]
+    } ${status === "pass" ? 68 : 85}%, black)`,
   }),
 );
 

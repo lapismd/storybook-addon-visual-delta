@@ -21,9 +21,7 @@ export function snapshotDirFromImportPath(importPath: string): string {
   const stripped = normalized
     .replace(/^\.\//, "")
     .replace(/^src\/shared\//, "")
-    .replace(/^src\/apps\//, "apps/")
-    .replace(/^packages\/workspace\/src\/lib\//, "workspace/")
-    .replace(/^packages\/tasks\/src\//, "tasks/");
+    .replace(/^packages\/workspace\/src\/lib\//, "workspace/");
   return stripped.replace(/\/[^/]+\.stories\.\w+$/, "");
 }
 

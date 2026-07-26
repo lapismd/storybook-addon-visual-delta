@@ -39,6 +39,8 @@ describe("resolveVisualServerPort", () => {
 
   it("prefers an explicit live Storybook listen port", () => {
     process.env.STORYBOOK_PORT = "9009";
+    delete process.env.VISUAL_SERVER_PORT;
+    delete process.env.VISUAL_DELTA_SERVER_PORT;
     expect(resolveVisualServerPort(undefined, 9109)).toBe(9110);
   });
 

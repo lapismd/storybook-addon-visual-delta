@@ -459,7 +459,7 @@ The UI catalog uses the packaged Playwright config helper and preset
 `staticDirs`, but keeps catalog-specific overrides:
 
 - `baselinePathMode: "nested-import"`
-- create/update via `scripts/ui-generator/cli.ts` (Tasks/Fava gates, recipes)
+- create/update via `scripts/ui-generator/cli.ts` (host approval gates and recipes)
 - custom `tests/visual/storybook.spec.ts` (not `defineVisualSuite`)
 
 ```ts
@@ -510,9 +510,7 @@ pnpm ui visual:tag review --status ready --component button
 pnpm ui visual:tag --help
 ```
 
-Host catalog policy: Apps/Beancount and Tasks stories are typically
-`skip-visual` (reference captures stay outside the Playwright suite). Prefer
-the panel for one-off edits; use `visual:tag` for bulk/scripted updates.
+Prefer the panel for one-off edits; use `visual:tag` for bulk/scripted updates.
 
 ### `.storybook/main.ts`
 

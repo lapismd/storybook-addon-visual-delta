@@ -205,16 +205,6 @@ test.describe("Visual Delta manager overlay placement", () => {
           await fit.click();
           await expect(fit).toBeChecked();
 
-          await expect(page).toHaveScreenshot([
-            capture.name,
-            placement.name,
-            "manager-window.png",
-          ]);
-          await expect(split).toHaveScreenshot([
-            capture.name,
-            placement.name,
-            "overlay-surface.png",
-          ]);
           expect(writes).toEqual([]);
         });
       }

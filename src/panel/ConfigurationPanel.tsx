@@ -173,7 +173,10 @@ const Actions = styled.div({
 });
 
 const Status = styled.span(({ theme }) => ({
-  color: theme.color.positive,
+  color:
+    theme.base === "light"
+      ? `color-mix(in srgb, ${theme.color.positive} 65%, black)`
+      : theme.color.positive,
   lineHeight: 1.4,
 }));
 

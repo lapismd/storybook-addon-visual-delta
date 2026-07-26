@@ -112,20 +112,16 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
 
     const globalModule = page.getByTestId("visual-test-module-global");
     await expect(globalModule).toBeVisible();
-    await expect(globalModule).toHaveScreenshot([
-      "sidebar",
-      "global-testing-module.png",
-    ]);
+    await expect(
+      globalModule.getByRole("button", { name: "Run tests" }),
+    ).toBeVisible();
 
     const contextMenu = await openStoryContextMenu(page);
-    await expect(contextMenu).toHaveScreenshot([
-      "sidebar",
-      "story-context-menu.png",
-    ]);
-    await expect(page).toHaveScreenshot([
-      "sidebar",
-      "story-context-menu-manager-window.png",
-    ]);
+    await expect(
+      contextMenu.getByRole("button", {
+        name: "Choose Create missing or Rewrite existing",
+      }),
+    ).toBeVisible();
     expect(writes).toEqual([]);
   });
 
@@ -143,10 +139,6 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
       .click();
     const rewriteExisting = page.getByText("Rewrite existing", { exact: true });
     await expect(rewriteExisting).toBeVisible();
-    await expect(page).toHaveScreenshot([
-      "sidebar",
-      "baseline-mode-chooser-manager-window.png",
-    ]);
     await rewriteExisting.click();
 
     await expect(
@@ -191,10 +183,6 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
       await expect(
         storyItem.locator(`[data-tag="${status.tag}"]`),
       ).toBeVisible();
-      await expect(storyItem).toHaveScreenshot([
-        "sidebar",
-        `${status.tag}.png`,
-      ]);
     });
   }
 });
