@@ -24,7 +24,9 @@ safety gate.
   assets, and configured externals select all stories.
 - `untraced` globs are optional and reduce coverage when enabled.
 - `skip-visual` stories are never selected.
-- Committed visual baselines are not updated by this work.
+- Visual baselines change only with explicit approval. The approved follow-up
+  added the 85 previously missing AI Chat baselines without modifying an
+  existing PNG.
 
 ## Progress
 
@@ -35,20 +37,22 @@ safety gate.
 - [x] Middleware request/response integration.
 - [x] Panel and Testing Module affected scope.
 - [x] Focused unit, Storybook, Playwright, build, and dry-run validation.
-- [ ] Full `pnpm test:visual` and `pnpm checks` safety gates.
+- [x] Approved baseline-history contrast correction and 85 missing AI Chat
+      baselines, using collision-safe nested story paths.
+- [x] Full `pnpm test:visual` and `pnpm checks` safety gates.
 
 ## Validation status
 
-- Unit tests: 111 files and 541 tests passed.
-- Changed Visual Delta stories pass focused interaction and accessibility runs.
+- Unit tests: 111 files and 542 tests passed.
+- Storybook tests: 151 files and 417 tests passed, including the approved
+  baseline-history contrast correction.
 - Visual Delta panel Playwright: 36 tests passed.
-- Static Storybook build: 2,826 modules, 111 visual story files, and 277
-  runnable stories in `preview-stats.json`.
-- The affected CLI and middleware endpoint both report the conservative
-  full-suite fallback and its changed inputs.
+- AI Chat browser acceptance: 2 tests passed from a cold Storybook start after
+  waiting for Storybook's `storyFinished` signal.
+- Static Storybook build: 2,943 modules and 277 runnable stories represented in
+  `preview-stats.json`.
+- An unchanged affected dry run reports `Up to date · 277 unchanged`.
 - `pnpm test:visual` exercised the full suite without updating snapshots:
-  194 passed and 85 existing AI Chat stories failed because they have no
-  committed baseline PNG.
-- `pnpm checks` reaches the broad Storybook run, where the landed
-  baseline-history story has one existing color-contrast violation (3.97:1).
-  Fixing that visual design needs separate approval and is outside this slice.
+  279 passed.
+- `pnpm checks` passed on the workspace-isolated Storybook/Visual Delta ports
+  `9309`/`9310`.

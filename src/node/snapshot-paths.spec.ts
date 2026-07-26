@@ -25,4 +25,25 @@ describe("mode snapshot paths", () => {
       ),
     ).toBe("shadcn/button/primary--dark-desktop-chromium-darwin.png");
   });
+
+  it("includes the story filename when components share a story directory", () => {
+    expect(
+      screenshotRelativePath(
+        {
+          id: "ai-chat-composer--astryx-showcase",
+          importPath: "./src/shared/ai/chat/Composer.stories.svelte",
+        },
+        "nested-import",
+      ),
+    ).toBe("ai/chat/composer/astryx-showcase.png");
+    expect(
+      screenshotRelativePath(
+        {
+          id: "ai-chat-layout--astryx-showcase",
+          importPath: "./src/shared/ai/chat/Layout.stories.svelte",
+        },
+        "nested-import",
+      ),
+    ).toBe("ai/chat/layout/astryx-showcase.png");
+  });
 });

@@ -33,6 +33,38 @@ export function storySlugFromId(storyId: string): string {
   return parts.slice(1).join("--");
 }
 
+function slugifyPathPart(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
+/**
+ * Keep the historical component-folder layout, but include the story filename
+ * when several component stories share one directory. Without that extra
+ * segment, `chat/Composer.stories.svelte` and `chat/Layout.stories.svelte`
+ * collide whenever they export the same story name.
+ */
+function collisionSafeSnapshotDir(entry: StoryIndexEntry): string {
+  const directory = snapshotDirFromImportPath(entry.importPath!);
+  const normalized = entry.importPath!.replace(/\\/g, "/");
+  const match = normalized.match(/\/([^/]+)\.stories\.\w+$/);
+  if (!match) return directory;
+
+  const parts = directory.split("/");
+  const storyFile = slugifyPathPart(match[1]!);
+  const directoryLeaf = slugifyPathPart(parts.at(-1) ?? "");
+  if (parts.length < 2 || storyFile === directoryLeaf) return directory;
+
+  const storyPrefix = entry.id.split("--")[0] ?? "";
+  const directoryPrefix = parts.map(slugifyPathPart).join("-");
+  return storyPrefix.startsWith(`${directoryPrefix}-`)
+    ? `${directory}/${storyFile}`
+    : directory;
+}
+
 export function screenshotRelativePath(
   entry: StoryIndexEntry,
   mode: BaselinePathMode = "nested-import",
@@ -47,7 +79,7 @@ export function screenshotRelativePath(
   if (!entry.importPath) {
     throw new Error(`Story ${entry.id} is missing importPath`);
   }
-  const directory = snapshotDirFromImportPath(entry.importPath);
+  const directory = collisionSafeSnapshotDir(entry);
   return `${directory}/${storySlugFromId(entry.id)}${modeInfix}.png`;
 }
 
