@@ -25,6 +25,7 @@ import {
   isSplitPlacement,
   viewportForImage,
   visualReviewStatusFromTags,
+  type VisualDeltaImage,
   type VisualDeltaInteraction,
   type VisualReviewStatus,
 } from "../constants.js";
@@ -145,6 +146,26 @@ const IS_DEVELOPMENT =
       CONFIG_TYPE?: string;
     }
   ).CONFIG_TYPE === "DEVELOPMENT";
+
+function baselineLightboxCssSize(
+  source: VisualDeltaImage | undefined,
+  thumbnail: HTMLImageElement | null,
+): { width: number; height: number } {
+  const scale = deviceScaleFactorForImage(source);
+  if (
+    thumbnail &&
+    Number.isFinite(thumbnail.naturalWidth) &&
+    thumbnail.naturalWidth > 0 &&
+    Number.isFinite(thumbnail.naturalHeight) &&
+    thumbnail.naturalHeight > 0
+  ) {
+    return {
+      width: thumbnail.naturalWidth / scale,
+      height: thumbnail.naturalHeight / scale,
+    };
+  }
+  return viewportForImage(source);
+}
 
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
@@ -1483,15 +1504,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   type="button"
                   title={`Open ${section.label} baseline full image`}
                   aria-label={`Open ${section.label} baseline full image`}
-                  onClick={() => {
+                  onClick={(event) => {
                     const source =
                       section.id === "default" ? primaryImages[0] : undefined;
-                    const viewport = viewportForImage(source);
+                    const size = baselineLightboxCssSize(
+                      source,
+                      event.currentTarget.querySelector("img"),
+                    );
                     setToolbarLightboxImage({
                       src: section.thumbSrc!,
                       label: `${section.label} baseline`,
-                      width: viewport.width,
-                      height: viewport.height,
+                      width: size.width,
+                      height: size.height,
                     });
                   }}
                 >
