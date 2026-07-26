@@ -26,6 +26,11 @@ const spin = keyframes({
   to: { transform: "rotate(360deg)" },
 });
 
+const progressSweep = keyframes({
+  from: { transform: "translateX(-120%)" },
+  to: { transform: "translateX(360%)" },
+});
+
 export const DiffResultContainer = styled.div(({ theme }) => ({
   // Grow into leftover SectionBody space; do not shrink below content or the
   // compare stage collapses to a 0-height nested scrollport.
@@ -503,24 +508,52 @@ export const PanelBody = styled.div(({ theme }) => ({
   boxSizing: "border-box",
 }));
 
-export const StatusBar = styled.div(({ theme }) => ({
-  // Position/size are set inline from the AddonPanel scrollport rect.
-  position: "fixed",
-  zIndex: 30,
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  height: PANEL_STATUS_BAR_HEIGHT,
-  minWidth: 0,
-  padding: "0 8px",
-  boxSizing: "border-box",
-  borderTop: `1px solid ${theme.appBorderColor}`,
-  borderLeft: `1px solid ${theme.appBorderColor}`,
-  borderTopLeftRadius: Math.max(theme.appBorderRadius ?? 4, 6),
-  backgroundColor: theme.background.app ?? theme.background.content,
-  color: theme.textMutedColor,
-  fontSize: theme.typography.size.s1 - 1,
-  pointerEvents: "auto",
+export const StatusBar = styled.div<{ $running?: boolean }>(
+  ({ theme, $running }) => ({
+    // Position/size are set inline from the AddonPanel scrollport rect.
+    position: "fixed",
+    zIndex: 30,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    height: PANEL_STATUS_BAR_HEIGHT,
+    minWidth: 0,
+    padding: $running ? "4px 8px 0" : "0 8px",
+    boxSizing: "border-box",
+    borderTop: `1px solid ${theme.appBorderColor}`,
+    borderLeft: $running ? "none" : `1px solid ${theme.appBorderColor}`,
+    borderTopLeftRadius: $running ? 0 : Math.max(theme.appBorderRadius ?? 4, 6),
+    backgroundColor: theme.background.app ?? theme.background.content,
+    color: theme.textMutedColor,
+    fontSize: theme.typography.size.s1 - 1,
+    pointerEvents: "auto",
+  }),
+);
+
+/** Full-width run indicator; determinate when totals exist, sweeping otherwise. */
+export const StatusProgressTrack = styled.div(({ theme }) => ({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  left: 0,
+  height: 4,
+  overflow: "hidden",
+  backgroundColor: theme.background.hoverable ?? theme.color.lightest,
+  pointerEvents: "none",
+}));
+
+export const StatusProgressFill = styled.div<{
+  $indeterminate?: boolean;
+  $percent: number;
+}>(({ theme, $indeterminate, $percent }) => ({
+  width: $indeterminate ? "28%" : `${$percent}%`,
+  height: "100%",
+  backgroundColor: theme.color.secondary,
+  transformOrigin: "left center",
+  transition: $indeterminate ? "none" : "width 180ms ease-out",
+  animation: $indeterminate
+    ? `${progressSweep} 1.25s ease-in-out infinite`
+    : "none",
 }));
 
 export const StatusProgressButton = styled.button<{
@@ -583,6 +616,15 @@ export const StatusProgressLabel = styled.span({
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
+
+export const StatusProgressValue = styled.span(({ theme }) => ({
+  flex: "0 0 auto",
+  marginLeft: "auto",
+  color: theme.textMutedColor,
+  fontFamily: theme.typography.fonts.mono,
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+}));
 
 /** Terminal-style shell for the progress log popover. */
 export const StatusLogShell = styled.div<{ $hasError?: boolean }>(
