@@ -18,7 +18,10 @@ import {
   StatusLogCopyButton,
   StatusLogShell,
   StatusProgressButton,
+  StatusProgressFill,
   StatusProgressLabel,
+  StatusProgressTrack,
+  StatusProgressValue,
   StatusSpinner,
 } from "./styled.js";
 
@@ -59,6 +62,11 @@ export type PanelStatusBarProps = {
   log?: string | null;
   /** When set, button + popover use error coloring. */
   error?: string | null;
+  /** Live completed/total counts. Missing or zero totals render indeterminate. */
+  progress?: {
+    completed: number;
+    total: number;
+  } | null;
 };
 
 type FixedPos = {
@@ -119,6 +127,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
   label,
   log,
   error,
+  progress,
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<FixedPos | null>(null);
@@ -129,6 +138,12 @@ export const PanelStatusBar = memo(function PanelStatusBar({
     label?.trim() ||
     (idle ? "Ready" : "Working…");
   const displayLog = log?.slice(-4000) ?? "";
+  const determinate = Boolean(progress && progress.total > 0);
+  const completed = Math.max(0, progress?.completed ?? 0);
+  const total = Math.max(0, progress?.total ?? 0);
+  const percent = determinate
+    ? Math.min(100, Math.max(0, (completed / total) * 100))
+    : 0;
 
   useLayoutEffect(() => {
     if (!container) {
@@ -144,7 +159,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       setPos({
         right: Math.max(0, window.innerWidth - rect.right),
         bottom: Math.max(0, window.innerHeight - rect.bottom),
-        width: rect.width * 0.5,
+        width: running ? rect.width : rect.width * 0.5,
       });
     };
 
@@ -162,12 +177,13 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       window.removeEventListener("scroll", update, true);
       scrollPort.removeEventListener("scroll", update);
     };
-  }, [container]);
+  }, [container, running]);
 
   if (!pos) return null;
 
   return (
     <StatusBar
+      $running={running}
       role="status"
       aria-live="polite"
       style={{
@@ -179,6 +195,25 @@ export const PanelStatusBar = memo(function PanelStatusBar({
         maxWidth: pos.width,
       }}
     >
+      {running ? (
+        <StatusProgressTrack
+          role="progressbar"
+          aria-label="Visual Delta check progress"
+          aria-valuemin={0}
+          aria-valuemax={determinate ? total : undefined}
+          aria-valuenow={determinate ? Math.min(completed, total) : undefined}
+          aria-valuetext={
+            determinate
+              ? `${Math.min(completed, total)} of ${total} checks complete`
+              : clipped
+          }
+        >
+          <StatusProgressFill
+            $indeterminate={!determinate}
+            $percent={percent}
+          />
+        </StatusProgressTrack>
+      ) : null}
       <PopoverProvider
         ariaLabel="Visual Delta progress log"
         placement="top-start"
@@ -220,6 +255,11 @@ export const PanelStatusBar = memo(function PanelStatusBar({
             </StatusSpinner>
           ) : null}
           <StatusProgressLabel>{clipped}</StatusProgressLabel>
+          {running && determinate ? (
+            <StatusProgressValue aria-hidden>
+              {Math.min(completed, total)}/{total}
+            </StatusProgressValue>
+          ) : null}
         </StatusProgressButton>
       </PopoverProvider>
     </StatusBar>

@@ -1753,6 +1753,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         label: statusLabel,
         log: updateLog,
         error: captureError,
+        progress:
+          runInFlight && runProgress
+            ? {
+                completed: runProgress.completed,
+                total: runProgress.total,
+              }
+            : baselineJob?.running
+              ? {
+                  completed: baselineJob.completed ?? 0,
+                  total: baselineJob.total ?? 0,
+                }
+              : null,
       }}
     />
   );

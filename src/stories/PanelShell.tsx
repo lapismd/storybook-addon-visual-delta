@@ -105,6 +105,10 @@ export type PanelShellProps = {
   runAvailable?: boolean;
   modeNames?: string[];
   modeResults?: Record<string, VisualModeResultStatus>;
+  /** Deterministic in-flight counts for progress-chrome stories. */
+  initialProgress?: { completed: number; total: number };
+  /** Deterministic streamed output kept behind the progress-log control. */
+  initialStatusLog?: string;
 };
 
 /**
@@ -121,6 +125,8 @@ export function PanelShell({
   runAvailable = true,
   modeNames = [],
   modeResults = {},
+  initialProgress,
+  initialStatusLog = "",
 }: PanelShellProps) {
   const backend = useMemo(
     () => backendProp ?? createMockVisualBackend(),
@@ -151,7 +157,8 @@ export function PanelShell({
     null,
   );
   const [runProgressLabel, setRunProgressLabel] = useState<string | null>(null);
-  const [statusLog, setStatusLog] = useState("");
+  const [runProgress, setRunProgress] = useState(initialProgress ?? null);
+  const [statusLog, setStatusLog] = useState(initialStatusLog);
   const [expandedId, setExpandedId] = useState<"default" | string | null>(
     "default",
   );
@@ -242,6 +249,7 @@ export function PanelShell({
   const handleRun = useCallback(
     async (mode: VisualRunMode) => {
       setIsRunning(true);
+      setRunProgress({ completed: 0, total: 0 });
       setRunProgressLabel(mode === "all" ? "Testing all…" : "Testing…");
       try {
         for await (const chunk of backend.runTests([DEMO_STORY_ID])) {
@@ -252,7 +260,14 @@ export function PanelShell({
               completed?: number;
               total?: number;
             };
+            if (event.type === "start" && event.total != null) {
+              setRunProgress({ completed: 0, total: event.total });
+            }
             if (event.type === "progress" && event.completed != null) {
+              setRunProgress({
+                completed: event.completed,
+                total: event.total ?? 0,
+              });
               setRunProgressLabel(
                 `Testing… ${event.completed}/${event.total ?? "?"}`,
               );
@@ -265,6 +280,7 @@ export function PanelShell({
         recordActions();
       } finally {
         setIsRunning(false);
+        setRunProgress(null);
         setRunProgressLabel(null);
       }
     },
@@ -274,6 +290,7 @@ export function PanelShell({
   const handleStopRun = useCallback(async () => {
     await backend.cancelTests();
     setIsRunning(false);
+    setRunProgress(null);
     setRunProgressLabel(null);
     recordActions();
   }, [backend, recordActions]);
@@ -348,9 +365,10 @@ export function PanelShell({
     [badgeStatus, diffResult, images, interactionSteps],
   );
 
+  const progressRunning = isRunning || runProgress != null;
   const summaryState: PanelResultState = captureError
     ? "error"
-    : isRunning
+    : progressRunning
       ? "running"
       : skipVisual
         ? "skipped"
@@ -425,10 +443,10 @@ export function PanelShell({
       header={{
         badgeStatus,
         empty: images.length === 0,
-        busy: busy || isDiffing || isRunning,
+        busy: busy || isDiffing || progressRunning,
         storyMissing: false,
         isDiffing,
-        isRunning,
+        isRunning: progressRunning,
         diffProgressLabel,
         runProgressLabel,
         createLabel: busy ? "Creating…" : "Create visual",
@@ -581,10 +599,15 @@ export function PanelShell({
         </>
       }
       status={{
-        running: busy || isDiffing || isRunning,
-        label: runProgressLabel ?? diffProgressLabel,
+        running: busy || isDiffing || progressRunning,
+        label:
+          runProgressLabel ??
+          (runProgress
+            ? `Testing… ${runProgress.completed}/${runProgress.total}`
+            : diffProgressLabel),
         log: statusLog,
         error: captureError || null,
+        progress: runProgress,
       }}
     />
   );

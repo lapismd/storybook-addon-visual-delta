@@ -40,6 +40,10 @@ export type PanelViewProps = {
     label: string | null;
     log: string | null;
     error: string | null;
+    progress?: {
+      completed: number;
+      total: number;
+    } | null;
   };
   /** Stable hook for Storybook stories and manager-level Playwright tests. */
   testId?: string;
@@ -115,6 +119,7 @@ export function PanelView({
         label={status.label}
         log={status.log}
         error={status.error}
+        progress={status.progress}
       />
     </PanelShell>
   );
