@@ -32,6 +32,17 @@ async function openStoryContextMenu(page: Page) {
 }
 
 test.describe("Visual Delta Storybook sidebar menus", () => {
+  test("renders the current story's named status in the toolbar", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, SIDEBAR_STATUS_FIXTURE, DEV_STORYBOOK);
+
+    await expect(
+      page.locator('[data-tag="visual-ready"]').filter({ hasText: "Ready" }),
+    ).toBeVisible();
+  });
+
   test("renders the global module and real story context menu", async ({
     page,
   }) => {

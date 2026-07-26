@@ -18,6 +18,7 @@ import {
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
 import { CompareZoomControl } from "./CompareZoomControl.js";
+import { ImageLightbox, type LightboxImage } from "./ImageLightbox.js";
 
 type CompareTab = "sidebyside" | "swipe" | "diff" | "focus" | "blink";
 
@@ -113,7 +114,6 @@ const ContentViewport = styled.div({
   minWidth: 0,
   minHeight: 120,
   overflow: "auto",
-  overscrollBehavior: "contain",
 });
 
 const Labels = styled.div(({ theme }) => ({
@@ -137,13 +137,17 @@ const checkerboard = {
   backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
 };
 
-const Stage = styled.div({
+const Stage = styled.div(({ theme }) => ({
   position: "relative",
   margin: "0 auto",
   overflow: "hidden",
   userSelect: "none",
   touchAction: "none",
-});
+  "&:focus-visible": {
+    outline: `2px solid ${theme.color.secondary}`,
+    outlineOffset: 2,
+  },
+}));
 
 const Stack = styled.div(({ theme }) => ({
   position: "relative",
@@ -219,12 +223,20 @@ const SideColumn = styled.div({
   minWidth: 0,
 });
 
-const SidePane = styled.div(({ theme }) => ({
+const SidePane = styled.button(({ theme }) => ({
   ...checkerboard,
+  display: "block",
+  margin: 0,
+  padding: 0,
   border: `1px solid ${theme.appBorderColor}`,
   overflow: "hidden",
   lineHeight: 0,
   boxSizing: "border-box",
+  cursor: "zoom-in",
+  "&:focus-visible": {
+    outline: `2px solid ${theme.color.secondary}`,
+    outlineOffset: 2,
+  },
 }));
 
 const SideImg = styled.img({
@@ -286,6 +298,9 @@ export function CompareView({
   const [zoomState, setZoomState] = useState<CompareZoomState>(() =>
     compareZoomFromDefault(defaultZoom),
   );
+  const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(
+    null,
+  );
   const [available, setAvailable] = useState({ width: 1, height: 1 });
   const [loupe, setLoupe] = useState<{
     x: number;
@@ -301,6 +316,12 @@ export function CompareView({
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const swipeClick = useRef<{
+    image: LightboxImage;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
 
   useEffect(() => {
     setZoomState(compareZoomFromDefault(defaultZoom));
@@ -347,7 +368,8 @@ export function CompareView({
       contentHeight: Math.max(1, nativeHeight),
       columns: tab === "sidebyside" ? (2 as const) : (1 as const),
       columnGap: tab === "sidebyside" ? 12 : 0,
-      labelHeight: tab === "sidebyside" || tab === "swipe" ? 24 : 0,
+      labelHeight:
+        tab === "sidebyside" || tab === "swipe" || tab === "blink" ? 24 : 0,
     }),
     [available, nativeHeight, nativeWidth, tab],
   );
@@ -385,6 +407,25 @@ export function CompareView({
     setZoomState({ mode: "custom", scale: 1 });
   }, []);
 
+  const lightbox = useCallback(
+    (src: string, label: string): LightboxImage => ({
+      src,
+      label,
+      width: nativeWidth,
+      height: nativeHeight,
+    }),
+    [nativeHeight, nativeWidth],
+  );
+
+  const openOnKeyboard = useCallback(
+    (image: LightboxImage) => (event: React.KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setLightboxImage(image);
+    },
+    [],
+  );
+
   const setFromClientX = useCallback((clientX: number) => {
     const el = stageRef.current;
     if (!el) return;
@@ -397,23 +438,72 @@ export function CompareView({
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (tab !== "swipe") return;
+      const el = stageRef.current;
+      const rect = el?.getBoundingClientRect();
+      if (rect && rect.width > 0) {
+        const clickPercent = ((e.clientX - rect.left) / rect.width) * 100;
+        swipeClick.current = {
+          image:
+            clickPercent <= position
+              ? lightbox(baselineSrc, "Baseline")
+              : lightbox(actualSrc, "New"),
+          x: e.clientX,
+          y: e.clientY,
+          moved: false,
+        };
+      }
       dragging.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
       setFromClientX(e.clientX);
     },
-    [tab, setFromClientX],
+    [actualSrc, baselineSrc, lightbox, position, tab, setFromClientX],
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!dragging.current) return;
+      const candidate = swipeClick.current;
+      if (
+        candidate &&
+        Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) > 4
+      ) {
+        candidate.moved = true;
+      }
       setFromClientX(e.clientX);
     },
     [setFromClientX],
   );
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((event: React.PointerEvent) => {
     dragging.current = false;
+    const candidate = swipeClick.current;
+    swipeClick.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (candidate && !candidate.moved) setLightboxImage(candidate.image);
+  }, []);
+
+  const onPointerCancel = useCallback(() => {
+    dragging.current = false;
+    swipeClick.current = null;
+  }, []);
+
+  const onToolbarWheel = useCallback((event: React.WheelEvent) => {
+    const viewport = contentRef.current;
+    if (
+      !viewport ||
+      event.deltaY === 0 ||
+      Math.abs(event.deltaX) >= Math.abs(event.deltaY)
+    ) {
+      return;
+    }
+    const before = viewport.scrollTop;
+    viewport.scrollTop += event.deltaY;
+    if (viewport.scrollTop !== before) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }, []);
 
   useEffect(() => {
@@ -544,8 +634,7 @@ export function CompareView({
     [tab, changeBounds, nudgeViewZoom, resetViewZoom],
   );
 
-  const stageCursor =
-    tab === "swipe" ? "ew-resize" : loupeSrc ? "none" : "default";
+  const stageCursor = tab === "swipe" ? "ew-resize" : "zoom-in";
 
   const onTabKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -582,7 +671,7 @@ export function CompareView({
       data-zoom-mode={zoomState.mode}
       data-zoom-scale={viewZoom.toFixed(4)}
     >
-      <Toolbar>
+      <Toolbar onWheel={onToolbarWheel} data-testid="compare-toolbar">
         <CompareTabList role="tablist" aria-label="Compare view">
           {TAB_DEFS.map((item) => (
             <CompareTabButton
@@ -648,7 +737,14 @@ export function CompareView({
           <SideBySide style={sideBySideSizeStyle}>
             <SideColumn>
               <SideLabel>Baseline</SideLabel>
-              <SidePane style={imageSizeStyle}>
+              <SidePane
+                type="button"
+                aria-label="Open Baseline full image"
+                style={imageSizeStyle}
+                onClick={() =>
+                  setLightboxImage(lightbox(baselineSrc, "Baseline"))
+                }
+              >
                 <SideImg
                   src={baselineSrc}
                   alt="Baseline"
@@ -659,7 +755,12 @@ export function CompareView({
             </SideColumn>
             <SideColumn>
               <SideLabel>New</SideLabel>
-              <SidePane style={imageSizeStyle}>
+              <SidePane
+                type="button"
+                aria-label="Open New full image"
+                style={imageSizeStyle}
+                onClick={() => setLightboxImage(lightbox(actualSrc, "New"))}
+              >
                 <SideImg
                   src={actualSrc}
                   alt="New"
@@ -683,9 +784,15 @@ export function CompareView({
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              role="img"
-              aria-label={`Swipe comparison, ${Math.round(position)}% baseline revealed`}
+              onPointerCancel={onPointerCancel}
+              onKeyDown={openOnKeyboard(
+                position >= 50
+                  ? lightbox(baselineSrc, "Baseline")
+                  : lightbox(actualSrc, "New"),
+              )}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open Swipe comparison full image, ${Math.round(position)}% baseline revealed`}
             >
               <Stack style={stackStyle} data-testid="compare-stack">
                 <LayerImg src={actualSrc} alt="" draggable={false} />
@@ -706,8 +813,11 @@ export function CompareView({
             style={{ ...stageSizeStyle, cursor: stageCursor }}
             onMouseMove={onStageMouseMove}
             onMouseLeave={onStageMouseLeave}
-            role="img"
-            aria-label="Diff heatmap"
+            onClick={() => setLightboxImage(lightbox(diffSrc, "Diff"))}
+            onKeyDown={openOnKeyboard(lightbox(diffSrc, "Diff"))}
+            role="button"
+            tabIndex={0}
+            aria-label="Open Diff full image"
           >
             <Stack style={stackStyle} data-testid="compare-stack">
               <LayerImg src={diffSrc} alt="Diff heatmap" draggable={false} />
@@ -732,8 +842,11 @@ export function CompareView({
             style={{ ...stageSizeStyle, cursor: stageCursor }}
             onMouseMove={onStageMouseMove}
             onMouseLeave={onStageMouseLeave}
-            role="img"
-            aria-label="Focus spotlight"
+            onClick={() => setLightboxImage(lightbox(focusSrc, "Focus"))}
+            onKeyDown={openOnKeyboard(lightbox(focusSrc, "Focus"))}
+            role="button"
+            tabIndex={0}
+            aria-label="Open Focus full image"
           >
             <Stack
               data-testid="compare-stack"
@@ -764,34 +877,55 @@ export function CompareView({
         ) : null}
 
         {tab === "blink" ? (
-          <Stage
-            ref={stageRef}
-            style={{ ...stageSizeStyle, cursor: "default" }}
-            role="img"
-            aria-label="Blink compare"
-          >
-            <Stack style={stackStyle} data-testid="compare-stack">
-              <LayerImg
-                src={blinkShowActual ? actualSrc : baselineSrc}
-                alt={blinkShowActual ? "New" : "Baseline"}
-                draggable={false}
-              />
-            </Stack>
+          <>
             <Labels
               style={{
-                position: "absolute",
-                top: 6,
-                left: 8,
-                right: 8,
-                pointerEvents: "none",
+                width: scaledWidth,
+                minHeight: 24,
+                margin: "0 auto",
+                alignItems: "center",
               }}
+              data-testid="blink-label-row"
             >
               <span>{blinkShowActual ? "New" : "Baseline"}</span>
               <span />
             </Labels>
-          </Stage>
+            <Stage
+              ref={stageRef}
+              style={{ ...stageSizeStyle, cursor: "zoom-in" }}
+              onClick={() =>
+                setLightboxImage(
+                  lightbox(
+                    blinkShowActual ? actualSrc : baselineSrc,
+                    blinkShowActual ? "New" : "Baseline",
+                  ),
+                )
+              }
+              onKeyDown={openOnKeyboard(
+                lightbox(
+                  blinkShowActual ? actualSrc : baselineSrc,
+                  blinkShowActual ? "New" : "Baseline",
+                ),
+              )}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${blinkShowActual ? "New" : "Baseline"} blink image full size`}
+            >
+              <Stack style={stackStyle} data-testid="compare-stack">
+                <LayerImg
+                  src={blinkShowActual ? actualSrc : baselineSrc}
+                  alt={blinkShowActual ? "New" : "Baseline"}
+                  draggable={false}
+                />
+              </Stack>
+            </Stage>
+          </>
         ) : null}
       </ContentViewport>
+      <ImageLightbox
+        image={lightboxImage}
+        onClose={() => setLightboxImage(null)}
+      />
     </Root>
   );
 }

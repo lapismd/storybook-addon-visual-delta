@@ -20,7 +20,10 @@ export function VisualStatusToolbarTool() {
   const { storyId } = useStorybookState();
   if (!storyId || !isVisualStatusToolbarEnabled()) return null;
 
-  const story = api.getCurrentStoryData() as
+  // Read the selected manager-index entry, matching the exact inherited tag
+  // source used by sidebar labels. Preview-prepared story data can lag or omit
+  // manager-only index tag updates.
+  const story = api.getData(storyId) as
     | { tags?: readonly string[] }
     | undefined;
   return <VisualStatusToolbarLabel tags={story?.tags} />;

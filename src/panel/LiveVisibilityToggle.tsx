@@ -18,14 +18,6 @@ const Toggle = styled(ToggleButton)({
   },
 });
 
-const ModeHint = styled.span(({ theme }) => ({
-  fontSize: 11,
-  fontWeight: 600,
-  color: theme.color.secondary,
-  whiteSpace: "nowrap",
-  userSelect: "none",
-}));
-
 type LiveVisibilityToggleProps = {
   /** True when the live story is shown (default). False = image-only. */
   liveVisible: boolean;
@@ -47,20 +39,17 @@ export function LiveVisibilityToggle({
     ? "Exit image only (show live story)"
     : "Image only (hide live story)";
   return (
-    <>
-      <ButtonGroup role="group" aria-label="Image only">
-        <Toggle
-          size="small"
-          pressed={imageOnly}
-          disabled={disabled}
-          ariaLabel={label}
-          title={label}
-          onClick={() => onToggle(!liveVisible)}
-        >
-          {imageOnly ? <EyeCloseIcon /> : <EyeIcon />}
-        </Toggle>
-      </ButtonGroup>
-      {imageOnly ? <ModeHint aria-live="polite">Image only</ModeHint> : null}
-    </>
+    <ButtonGroup role="group" aria-label="Image only">
+      <Toggle
+        size="small"
+        pressed={imageOnly}
+        disabled={disabled}
+        ariaLabel={label}
+        title={label}
+        onClick={() => onToggle(!liveVisible)}
+      >
+        {imageOnly ? <EyeCloseIcon /> : <EyeIcon />}
+      </Toggle>
+    </ButtonGroup>
   );
 }

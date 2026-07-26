@@ -101,6 +101,7 @@ import {
 } from "./PanelResultSummary.js";
 import { PlacementPad } from "./PlacementPad.js";
 import { CompareZoomControl } from "./CompareZoomControl.js";
+import { ImageLightbox, type LightboxImage } from "./ImageLightbox.js";
 import { RangeNumberInput } from "./RangeNumberInput.js";
 import { BaselineGeometryWarning } from "./BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
@@ -354,6 +355,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
   const [showDistribution, setShowDistribution] = useState(false);
+  const [toolbarLightboxImage, setToolbarLightboxImage] =
+    useState<LightboxImage | null>(null);
   /** Bumped after a Playwright visual run so we reload sidecar artifacts. */
   const [diffEpoch, setDiffEpoch] = useState(0);
   const [runProgress, setRunProgress] = useState<VisualRunProgress | null>(
@@ -1510,7 +1513,22 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         <PanelToolbar>
           <ToolbarRow>
             {section.thumbSrc ? (
-              <SectionThumbFrame title={section.label}>
+              <SectionThumbFrame
+                type="button"
+                title={`Open ${section.label} baseline full image`}
+                aria-label={`Open ${section.label} baseline full image`}
+                onClick={() => {
+                  const source =
+                    section.id === "default" ? primaryImages[0] : undefined;
+                  const viewport = viewportForImage(source);
+                  setToolbarLightboxImage({
+                    src: section.thumbSrc!,
+                    label: `${section.label} baseline`,
+                    width: viewport.width,
+                    height: viewport.height,
+                  });
+                }}
+              >
                 <SectionThumb src={section.thumbSrc} alt="" />
               </SectionThumbFrame>
             ) : null}
@@ -1732,105 +1750,113 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       : null;
 
   return (
-    <PanelView
-      active={props.active ?? false}
-      header={{
-        badgeStatus: loading ? null : badgeStatus,
-        empty: loading ? false : isEmpty,
-        busy: busy || loading,
-        storyMissing: !storyId || loading,
-        isDiffing: !loading && isDiffing,
-        isRunning: !loading && runInFlight,
-        diffProgressLabel: loading ? null : diffProgressLabel,
-        runProgressLabel: loading ? null : runProgressLabel,
-        createLabel: isCreating
-          ? (createProgress?.label ?? "Creating…")
-          : "Create visual",
-        reviewStatus: loading ? null : reviewStatus,
-        skipVisual: loading ? false : skipVisual,
-        onDiff: (engine) => void handleDiff(engine),
-        onRun: handleRun,
-        diffEngine,
-        onDiffEngineChange: setDiffEngine,
-        onCreate: () => void handleCreateBaselines(),
-        onUpdateBaselines: () => void handleUpdateBaselines(),
-        onRebuildStatic: () => void handleRebuildStatic(),
-        onResetSettings: resetSettings,
-        onStopDiff: handleStopDiff,
-        onStopRun: () => void cancelVisualRun(),
-        onReviewStatus: (status) => void handleSetReviewStatus(status),
-        onAccept: (scope) => void handleAcceptScope(scope),
-        onUnaccept: (scope) => void handleUnacceptScope(scope),
-        acceptRunAvailable: reviewableRunStoryIds.length > 0,
-        onToggleSkipVisual: () => void handleToggleSkipVisual(),
-        onOpenConfiguration: () => setShowConfiguration(true),
-        isUpdating,
-        isRebuilding,
-      }}
-      loading={loading}
-      configuration={
-        showConfiguration ? (
-          <ConfigurationPanel
-            onClose={() => setShowConfiguration(false)}
-            onUpdated={(config) => {
-              emit(EVENTS.CONFIG_UPDATED, {
-                projectDefaults: config.projectDefaults,
-              });
-            }}
+    <>
+      <PanelView
+        active={props.active ?? false}
+        header={{
+          badgeStatus: loading ? null : badgeStatus,
+          empty: loading ? false : isEmpty,
+          busy: busy || loading,
+          storyMissing: !storyId || loading,
+          isDiffing: !loading && isDiffing,
+          isRunning: !loading && runInFlight,
+          diffProgressLabel: loading ? null : diffProgressLabel,
+          runProgressLabel: loading ? null : runProgressLabel,
+          createLabel: isCreating
+            ? (createProgress?.label ?? "Creating…")
+            : "Create visual",
+          reviewStatus: loading ? null : reviewStatus,
+          skipVisual: loading ? false : skipVisual,
+          onDiff: (engine) => void handleDiff(engine),
+          onRun: handleRun,
+          diffEngine,
+          onDiffEngineChange: setDiffEngine,
+          onCreate: () => void handleCreateBaselines(),
+          onUpdateBaselines: () => void handleUpdateBaselines(),
+          onRebuildStatic: () => void handleRebuildStatic(),
+          onResetSettings: resetSettings,
+          onStopDiff: handleStopDiff,
+          onStopRun: () => void cancelVisualRun(),
+          onReviewStatus: (status) => void handleSetReviewStatus(status),
+          onAccept: (scope) => void handleAcceptScope(scope),
+          onUnaccept: (scope) => void handleUnacceptScope(scope),
+          acceptRunAvailable: reviewableRunStoryIds.length > 0,
+          onToggleSkipVisual: () => void handleToggleSkipVisual(),
+          onOpenConfiguration: () => setShowConfiguration(true),
+          isUpdating,
+          isRebuilding,
+        }}
+        loading={loading}
+        configuration={
+          showConfiguration ? (
+            <ConfigurationPanel
+              onClose={() => setShowConfiguration(false)}
+              onUpdated={(config) => {
+                emit(EVENTS.CONFIG_UPDATED, {
+                  projectDefaults: config.projectDefaults,
+                });
+              }}
+            />
+          ) : null
+        }
+        summary={
+          <PanelResultSummary
+            state={resultSummary.state}
+            title={resultSummary.title}
+            detail={resultSummary.detail}
+            finishedAt={latestStoryResult ? lastRun?.finishedAt : null}
+            modeSummary={modeSummary}
           />
-        ) : null
-      }
-      summary={
-        <PanelResultSummary
-          state={resultSummary.state}
-          title={resultSummary.title}
-          detail={resultSummary.detail}
-          finishedAt={latestStoryResult ? lastRun?.finishedAt : null}
-          modeSummary={modeSummary}
-        />
-      }
-      notice={
-        baselineGeometryMismatch ? (
-          <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
-        ) : null
-      }
-      emptyState={emptyState}
-      content={
-        !showConfiguration &&
-        !loading &&
-        !(isEmpty && baselineSections.length === 0) ? (
-          <BaselineAccordion
-            sections={baselineSections}
-            expandedId={expandedId}
-            busy={busy}
-            showDistribution={showDistribution}
-            onExpand={selectSection}
-            onCreate={(step) => void handleCreateInteraction(step, false)}
-            onUpdate={(step) => void handleCreateInteraction(step, true)}
-            onUpdateDefault={() => void handleUpdateBaselines()}
-            onToggleDistribution={() => setShowDistribution((value) => !value)}
-            renderBody={renderSectionBody}
-          />
-        ) : null
-      }
-      status={{
-        running: statusRunning,
-        label: statusLabel,
-        log: updateLog,
-        error: captureError,
-        progress:
-          runInFlight && runProgress
-            ? {
-                completed: runProgress.completed,
-                total: runProgress.total,
+        }
+        notice={
+          baselineGeometryMismatch ? (
+            <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
+          ) : null
+        }
+        emptyState={emptyState}
+        content={
+          !showConfiguration &&
+          !loading &&
+          !(isEmpty && baselineSections.length === 0) ? (
+            <BaselineAccordion
+              sections={baselineSections}
+              expandedId={expandedId}
+              busy={busy}
+              showDistribution={showDistribution}
+              onExpand={selectSection}
+              onCreate={(step) => void handleCreateInteraction(step, false)}
+              onUpdate={(step) => void handleCreateInteraction(step, true)}
+              onUpdateDefault={() => void handleUpdateBaselines()}
+              onToggleDistribution={() =>
+                setShowDistribution((value) => !value)
               }
-            : baselineJob?.running
+              renderBody={renderSectionBody}
+            />
+          ) : null
+        }
+        status={{
+          running: statusRunning,
+          label: statusLabel,
+          log: updateLog,
+          error: captureError,
+          progress:
+            runInFlight && runProgress
               ? {
-                  completed: baselineJob.completed ?? 0,
-                  total: baselineJob.total ?? 0,
+                  completed: runProgress.completed,
+                  total: runProgress.total,
                 }
-              : null,
-      }}
-    />
+              : baselineJob?.running
+                ? {
+                    completed: baselineJob.completed ?? 0,
+                    total: baselineJob.total ?? 0,
+                  }
+                : null,
+        }}
+      />
+      <ImageLightbox
+        image={toolbarLightboxImage}
+        onClose={() => setToolbarLightboxImage(null)}
+      />
+    </>
   );
 });

@@ -32,10 +32,10 @@ const progressSweep = keyframes({
 });
 
 export const DiffResultContainer = styled.div(({ theme }) => ({
-  // Grow into leftover SectionBody space; do not shrink below content or the
-  // compare stage collapses to a 0-height nested scrollport.
+  // Grow into leftover SectionBody space while allowing CompareView's
+  // minimum-height viewport to own overflow for full-size image inspection.
   flex: "1 1 auto",
-  minHeight: "min-content",
+  minHeight: 0,
   display: "flex",
   flexDirection: "column",
   padding: "0.75rem 1rem 1rem",
