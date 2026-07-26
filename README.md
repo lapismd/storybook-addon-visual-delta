@@ -66,11 +66,11 @@ export default defineVisualPlaywrightConfig();
 
 What bare package registration + the preset wire for you:
 
-| Hook / export                           | Effect                                                                   |
-| --------------------------------------- | ------------------------------------------------------------------------ |
-| Package `./manager` + `./preview`       | Panel, Testing Module, overlay (Storybook 10 auto-loads these)           |
-| Preset `staticDirs`                     | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
-| Preset `viteFinal`                      | `/__visual-delta/*` middleware + CSF baseline inject                     |
+| Hook / export                     | Effect                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| Package `./manager` + `./preview` | Panel, Testing Module, overlay (Storybook 10 auto-loads these)           |
+| Preset `staticDirs`               | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
+| Preset `viteFinal`                | `/__visual-delta/*` middleware + CSF baseline inject                     |
 
 The packaged preset does **not** re-append `managerEntries` /
 `previewAnnotations` — Storybook already resolves `storybook-addon-visual-delta/manager`
@@ -108,15 +108,15 @@ pnpm add -D storybook-addon-visual-delta
 
 ### Package exports
 
-| Import                                        | Purpose                                                           |
-| --------------------------------------------- | ----------------------------------------------------------------- |
-| `storybook-addon-visual-delta`                | Package root                                                      |
-| `storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports)   |
-| `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                        |
-| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                       |
-| `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                   |
-| `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                    |
-| `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                           |
+| Import                                        | Purpose                                                         |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| `storybook-addon-visual-delta`                | Package root                                                    |
+| `storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports) |
+| `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                      |
+| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                     |
+| `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                 |
+| `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                  |
+| `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                         |
 
 Bin: `visual-delta` → `init` / `update` / `interaction-update`.
 
@@ -204,17 +204,17 @@ reconnects via `/run-status` + `/run-events` instead of losing progress.
 Pass under addon `options.visualDelta`. Types from
 `storybook-addon-visual-delta/preset` or `…/node`.
 
-| Option                        | Default                                    | Purpose                                                     |
-| ----------------------------- | ------------------------------------------ | ----------------------------------------------------------- |
-| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                               |
-| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                     |
-| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts   |
-| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                       |
-| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes               |
-| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                     |
-| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                     |
+| Option                        | Default                                    | Purpose                                                           |
+| ----------------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                     |
+| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                           |
+| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts         |
+| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                             |
+| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                     |
+| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                           |
+| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                           |
 | `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`) |
-| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                    |
+| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                          |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
 Playwright-server readiness checks are package-owned. A packed or file-linked
@@ -343,12 +343,12 @@ tags. **Update status** / middleware refuse `visual-failed` when no committed
 baseline PNG exists for the story (missing-baseline Playwright failures are
 skipped, not stamped failed).
 
-| Tag               | Meaning                                                | How it is set                                     |
-| ----------------- | ------------------------------------------------------ | ------------------------------------------------- |
-| `visual-pending`  | Baseline exists; awaiting review after unaccept        | **Unaccept**                                      |
-| `visual-ready`    | Agent/dev finished visual work; ready for human review | Create / rewrite baselines; panel **Ready** pad   |
-| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)             |
-| `visual-failed`   | Review rejected / known bad                            | Panel **Failed** pad                              |
+| Tag               | Meaning                                                | How it is set                                   |
+| ----------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| `visual-pending`  | Baseline exists; awaiting review after unaccept        | **Unaccept**                                    |
+| `visual-ready`    | Agent/dev finished visual work; ready for human review | Create / rewrite baselines; panel **Ready** pad |
+| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)           |
+| `visual-failed`   | Review rejected / known bad                            | Panel **Failed** pad                            |
 
 **Panel controls**
 
@@ -460,13 +460,15 @@ export default defineVisualPlaywrightConfig();
 
 ### CLI entrypoints
 
-| Command                                                     | Role                                                                                |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `tsx scripts/ui-generator/cli.ts visual-update`             | Create missing or overwrite primary baselines; patches CSF `parameters.visualDelta` |
-| `tsx scripts/ui-generator/cli.ts visual-interaction-update` | Mid-play step PNG + CSF `interactions` entry                                        |
-| `pnpm ui visual:tag …`                                      | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)   |
-| `pnpm exec visual-delta skip` / `include`                   | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                  |
-| `pnpm test:visual` / `pnpm exec playwright test`            | Compare only (`PLAYWRIGHT_UPDATE_SNAPSHOTS=0` from middleware)                      |
+| Command                                                        | Role                                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `tsx scripts/ui-generator/cli.ts visual-update`                | Create missing or overwrite primary baselines; patches CSF `parameters.visualDelta`   |
+| `tsx scripts/ui-generator/cli.ts visual-interaction-update`    | Mid-play step PNG + CSF `interactions` entry                                          |
+| `pnpm ui visual:tag …`                                         | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)     |
+| `pnpm exec visual-delta skip` / `include`                      | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                    |
+| `pnpm test:visual-delta-panel`                                 | Real panel, overlay placements, and static/dev manager sidebar compare (never writes) |
+| `VISUAL_UPDATE_APPROVED=1 pnpm test:visual-delta-panel:update` | Gated update for the isolated panel self-test baseline directory                      |
+| `pnpm test:visual` / `pnpm exec playwright test`               | Compare only (`PLAYWRIGHT_UPDATE_SNAPSHOTS=0` from middleware)                        |
 
 Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
 `--skip-build`, `--rebuild`, `--component <name>`, `--story-id <id>`,
