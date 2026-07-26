@@ -33,6 +33,7 @@ export type PanelViewProps = {
   loading?: boolean;
   configuration?: ReactNode;
   summary?: ReactNode;
+  notice?: ReactNode;
   emptyState?: PanelViewEmptyState | null;
   content?: ReactNode;
   status: {
@@ -62,6 +63,7 @@ export function PanelView({
   loading = false,
   configuration,
   summary,
+  notice,
   emptyState,
   content,
   status,
@@ -92,6 +94,7 @@ export function PanelView({
         )}
         <PanelBody>
           {!configuration && !loading ? summary : null}
+          {!configuration && !loading ? notice : null}
           {configuration}
           {!configuration && loading ? (
             <SkeletonRoot

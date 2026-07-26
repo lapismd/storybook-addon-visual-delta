@@ -39,6 +39,10 @@ export const EVENTS = {
   SET_HIGHLIGHT_IGNORE: `${ADDON_ID}/set-highlight-ignore`,
   /** Preview → manager: distinct DOM nodes covered by ignore selectors. */
   IGNORE_REGIONS_STATUS: `${ADDON_ID}/ignore-regions-status`,
+  /** Preview → manager: resolved Fit/custom scale for split comparisons. */
+  SPLIT_ZOOM_STATUS: `${ADDON_ID}/split-zoom-status`,
+  /** Preview → manager: component baseline and live capture bounds disagree. */
+  BASELINE_GEOMETRY_STATUS: `${ADDON_ID}/baseline-geometry-status`,
   /** Manager → preview: persisted project defaults changed. */
   CONFIG_UPDATED: `${ADDON_ID}/config-updated`,
 } as const;
@@ -94,6 +98,12 @@ export type VisualDeltaImage = {
   viewport?: { width: number; height: number };
   /** Mode name when this image comes from `parameters.visualDelta.modes`. */
   mode?: string;
+};
+
+export type BaselineGeometryMismatch = {
+  baselineCss: { width: number; height: number };
+  liveCss: { width: number; height: number };
+  captureViewport: { width: number; height: number };
 };
 
 /** Opt-in mid-play capture (sibling PNG; primary `images` stay end-of-play). */

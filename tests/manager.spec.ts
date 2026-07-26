@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   CUSTOM_VIEWPORT_MANAGER_FIXTURE,
   MANAGER_FIXTURE,
+  NATURAL_WIDTH_COMPONENT_FIXTURE,
   OVERVIEW,
   mockVisualBackend,
   openManager,
@@ -114,6 +115,38 @@ test.describe("Visual Delta manager integration", () => {
       "viewport requested 1440×960, observed 1440×960 at 3×",
     );
     await expect(diagnostics).toContainText("bitmap 4320×2880");
+    expect(writes).toEqual([]);
+  });
+
+  test("keeps a max-width component natural inside the capture viewport", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await openManager(page, NATURAL_WIDTH_COMPONENT_FIXTURE, DEV_STORYBOOK);
+
+    const frame = previewFrame(page);
+    await expect(frame.locator("#visual-delta-split")).toBeVisible();
+    const dimensions = await frame
+      .locator("[data-ui-component='task-due-calendar']")
+      .evaluate((subject) => {
+        const canvas = subject.closest("#storybook-root") as HTMLElement | null;
+        return {
+          subjectInlineWidth: (subject as HTMLElement).style.width,
+          subjectComputedWidth: Number.parseFloat(
+            getComputedStyle(subject).width,
+          ),
+          canvasInlineWidth: canvas?.style.width,
+        };
+      });
+
+    expect(dimensions).toMatchObject({
+      subjectInlineWidth: "",
+      canvasInlineWidth: "1280px",
+    });
+    expect(dimensions.subjectComputedWidth).toBeCloseTo(264, 1);
+    await expect(page.getByTestId("baseline-geometry-warning")).toContainText(
+      "Baseline 1232×187 CSS px; live component 264×187 CSS px",
+    );
     expect(writes).toEqual([]);
   });
 });
