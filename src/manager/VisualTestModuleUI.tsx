@@ -6,6 +6,7 @@ import {
   baselineWriteRowLabel,
   type BaselineWriteMode,
 } from "./VisualBaselineSplitButton.js";
+import { VisualFiltersMenu } from "./VisualFiltersMenu.js";
 
 export type VisualModuleChipStatus =
   | "positive"
@@ -168,6 +169,13 @@ export type VisualTestModuleUIProps = {
   onOpenCompareResults: () => void;
   onOpenBaselineStatus: () => void;
   onOpenStatusResults: () => void;
+  /** Development-only custom Visual Delta sidebar filters. */
+  visualFilters?: {
+    activeIds: readonly string[];
+    resultFiltersEnabled: boolean;
+    alwaysVisibleErrorCount?: number;
+    onChange: (ids: string[]) => void;
+  };
 };
 
 /**
@@ -207,6 +215,7 @@ export function VisualTestModuleUI({
   onOpenCompareResults,
   onOpenBaselineStatus,
   onOpenStatusResults,
+  visualFilters,
 }: VisualTestModuleUIProps) {
   const Root = variant === "context" ? ContextMenuContainer : ModuleContainer;
   const baselineRowLabel = baselineWriteRowLabel(baselineMode);
@@ -221,7 +230,9 @@ export function VisualTestModuleUI({
   const baselineChipValue = isWritingBaselines ? baselineRowProgress : null;
   const statusChipValue = isUpdatingStatus ? statusRowProgress : null;
   const statusTitle =
-    typeof statusLine === "string" && statusLine.trim() ? statusLine : undefined;
+    typeof statusLine === "string" && statusLine.trim()
+      ? statusLine
+      : undefined;
 
   return (
     <Root data-testid={`visual-test-module-${variant}`}>
@@ -236,6 +247,9 @@ export function VisualTestModuleUI({
           </Description>
         </Info>
         <Actions>
+          {variant === "global" && visualFilters ? (
+            <VisualFiltersMenu {...visualFilters} />
+          ) : null}
           <VisualBaselineSplitButton
             status={runnerChipStatus}
             isRunning={runnerBusy}
@@ -402,9 +416,7 @@ export function VisualTestModuleUI({
             <ActionList.Text>
               <RowLabel>
                 <span>Rebuild static</span>
-                <RowProgress>
-                  build-storybook before capture
-                </RowProgress>
+                <RowProgress>build-storybook before capture</RowProgress>
               </RowLabel>
             </ActionList.Text>
           </ActionList.Action>

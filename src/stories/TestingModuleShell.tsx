@@ -13,6 +13,8 @@ export type TestingModuleShellProps = {
   seedRewriteMode?: boolean;
   /** Demo live progress under checkboxes + streamed title line. */
   seedRunningProgress?: boolean;
+  /** Demo the development-only sidebar filter menu. */
+  seedFilters?: boolean;
 };
 
 /**
@@ -22,6 +24,7 @@ export function TestingModuleShell({
   variant = "global",
   seedRewriteMode = false,
   seedRunningProgress = false,
+  seedFilters = false,
 }: TestingModuleShellProps) {
   const [runVisualEnabled, setRunVisualEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.runVisualEnabled,
@@ -40,9 +43,7 @@ export function TestingModuleShell({
     VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
   );
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
-    seedRewriteMode
-      ? "rewrite"
-      : VISUAL_TEST_MODULE_DEFAULTS.baselineWriteMode,
+    seedRewriteMode ? "rewrite" : VISUAL_TEST_MODULE_DEFAULTS.baselineWriteMode,
   );
   const [statusLine, setStatusLine] = useState<string>(
     seedRunningProgress
@@ -50,6 +51,7 @@ export function TestingModuleShell({
       : "Not run",
   );
   const [lastAction, setLastAction] = useState("none");
+  const [activeFilterIds, setActiveFilterIds] = useState<string[]>([]);
 
   const anyActionSelected = anyModuleActionSelected({
     runVisualEnabled,
@@ -61,7 +63,9 @@ export function TestingModuleShell({
     const parts: string[] = [];
     if (runVisualEnabled) parts.push("compare");
     if (createBaselinesEnabled) {
-      parts.push(baselineMode === "rewrite" ? "update-baselines" : "create-missing");
+      parts.push(
+        baselineMode === "rewrite" ? "update-baselines" : "create-missing",
+      );
     }
     if (updateStatusEnabled) parts.push("update-status");
     return parts.join("+") || "none";
@@ -76,7 +80,9 @@ export function TestingModuleShell({
     <div data-testid="testing-module-shell" style={{ maxWidth: 360 }}>
       <VisualTestModuleUI
         variant={variant}
-        statusLine={anyActionSelected ? statusLine : "Select at least one action"}
+        statusLine={
+          anyActionSelected ? statusLine : "Select at least one action"
+        }
         runVisualEnabled={runVisualEnabled}
         createBaselinesEnabled={createBaselinesEnabled}
         updateStatusEnabled={updateStatusEnabled}
@@ -120,11 +126,24 @@ export function TestingModuleShell({
         onOpenCompareResults={() => setLastAction("open-compare")}
         onOpenBaselineStatus={() => setLastAction("open-baselines")}
         onOpenStatusResults={() => setLastAction("open-status")}
+        visualFilters={
+          seedFilters
+            ? {
+                activeIds: activeFilterIds,
+                resultFiltersEnabled: true,
+                alwaysVisibleErrorCount: activeFilterIds.length ? 1 : 0,
+                onChange: setActiveFilterIds,
+              }
+            : undefined
+        }
       />
       <div data-testid="testing-module-meta" style={{ display: "none" }}>
         <span data-testid="fixture-selected">{selectedSummary}</span>
         <span data-testid="fixture-last-action">{lastAction}</span>
         <span data-testid="fixture-baseline-mode">{baselineMode}</span>
+        <span data-testid="fixture-visual-filters">
+          {activeFilterIds.join(",") || "none"}
+        </span>
       </div>
     </div>
   );
