@@ -252,6 +252,12 @@ export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
 export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";
 /** Storybook-dev middleware identity used to detect server restarts. */
 export const VISUAL_DELTA_RUNTIME_PATH = "/__visual-delta/runtime";
+/** Storybook-dev middleware that returns VCS history for one baseline PNG. */
+export const VISUAL_DELTA_BASELINE_HISTORY_PATH =
+  "/__visual-delta/baseline-history";
+/** Storybook-dev middleware that returns one historical baseline PNG. */
+export const VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH =
+  "/__visual-delta/baseline-history/image";
 /** Storybook-dev middleware that resolves primary-baseline coverage. */
 export const VISUAL_DELTA_STORY_FACTS_PATH = "/__visual-delta/story-facts";
 /** Storybook-dev middleware that writes host Playwright pass threshold. */
