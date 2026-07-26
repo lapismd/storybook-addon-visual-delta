@@ -1,11 +1,23 @@
 import React from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../test/render.js";
 import { VisualFiltersMenu } from "./VisualFiltersMenu.js";
 
-afterEach(cleanup);
+beforeEach(() => {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("VisualFiltersMenu", () => {
   it("applies quick views and clears active filters", async () => {
@@ -21,6 +33,11 @@ describe("VisualFiltersMenu", () => {
     await user.click(
       screen.getByRole("button", { name: "Filter visual stories" }),
     );
+    expect(
+      screen
+        .getByRole("dialog", { name: "Visual story filters" })
+        .closest("[data-radix-scroll-area-viewport]"),
+    ).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Needs attention" }));
     expect(onChange).toHaveBeenLastCalledWith(["quick.needs-attention"]);
 
@@ -31,6 +48,7 @@ describe("VisualFiltersMenu", () => {
         onChange={onChange}
       />,
     );
+    expect(screen.getByTestId("visual-filter-count")).toHaveTextContent("1");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });

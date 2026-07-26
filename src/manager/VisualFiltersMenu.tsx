@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { FilterIcon } from "@storybook/icons";
-import { Button, Form, PopoverProvider } from "storybook/internal/components";
+import {
+  Button,
+  Form,
+  PopoverProvider,
+  ScrollArea,
+} from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import {
   VISUAL_FILTER_GROUPS,
@@ -16,30 +21,36 @@ const FilterButton = styled(Button)({
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
+  overflow: "visible",
   "& svg": { width: 14, height: 14 },
 });
 
 const Count = styled.span(({ theme }) => ({
   position: "absolute",
-  top: -4,
-  right: -4,
-  minWidth: 14,
-  height: 14,
-  padding: "0 3px",
-  borderRadius: 7,
+  zIndex: 1,
+  top: -8,
+  right: -8,
+  width: 18,
+  height: 18,
+  border: `2px solid ${theme.background.content}`,
+  borderRadius: "50%",
   boxSizing: "border-box",
   background: theme.color.secondary,
   color: theme.color.lightest,
   fontSize: 9,
+  fontWeight: theme.typography.weight.bold,
   lineHeight: "14px",
   textAlign: "center",
   fontVariantNumeric: "tabular-nums",
+  pointerEvents: "none",
 }));
 
-const Menu = styled.div(({ theme }) => ({
+const MenuScrollArea = styled(ScrollArea)({
   width: 290,
-  maxHeight: "min(620px, calc(100vh - 80px))",
-  overflowY: "auto",
+  height: "min(620px, calc(100vh - 80px))",
+});
+
+const Menu = styled.div(({ theme }) => ({
   padding: 8,
   color: theme.color.defaultText,
   background: theme.background.content,
@@ -161,66 +172,72 @@ export function VisualFiltersMenu({
       visible={open}
       onVisibleChange={setOpen}
       popover={() => (
-        <Menu role="dialog" aria-label="Visual story filters">
-          <QuickViews aria-label="Quick views">
-            {VISUAL_QUICK_FILTER_IDS.map((id) => (
-              <QuickButton
-                key={id}
-                size="small"
-                variant={active.has(id) ? "solid" : "ghost"}
-                onClick={() => onChange(active.has(id) ? [] : [id])}
+        <MenuScrollArea vertical scrollPadding={8}>
+          <Menu role="dialog" aria-label="Visual story filters">
+            <QuickViews aria-label="Quick views">
+              {VISUAL_QUICK_FILTER_IDS.map((id) => (
+                <QuickButton
+                  key={id}
+                  size="small"
+                  variant={active.has(id) ? "solid" : "ghost"}
+                  ariaLabel={false}
+                  onClick={() => onChange(active.has(id) ? [] : [id])}
+                >
+                  {LABELS[id]}
+                </QuickButton>
+              ))}
+            </QuickViews>
+            {(
+              Object.entries(VISUAL_FILTER_GROUPS) as Array<
+                [keyof typeof VISUAL_FILTER_GROUPS, readonly string[]]
               >
-                {LABELS[id]}
-              </QuickButton>
-            ))}
-          </QuickViews>
-          {(
-            Object.entries(VISUAL_FILTER_GROUPS) as Array<
-              [keyof typeof VISUAL_FILTER_GROUPS, readonly string[]]
-            >
-          ).map(([group, ids]) => {
-            const disabled = group === "result" && !resultFiltersEnabled;
-            return (
-              <Section key={group}>
-                <Legend>{GROUP_LABELS[group]}</Legend>
-                {ids.map((id) => (
-                  <CheckRow key={id} disabled={disabled}>
-                    <Form.Checkbox
-                      name={LABELS[id]}
-                      checked={active.has(id)}
-                      disabled={disabled}
-                      onChange={() => toggleFacet(id)}
-                    />
-                    <span>{LABELS[id]}</span>
-                  </CheckRow>
-                ))}
-                {disabled ? (
-                  <Note>Run visual tests once to enable result filters.</Note>
-                ) : null}
-              </Section>
-            );
-          })}
-          {alwaysVisibleErrorCount > 0 && activeIds.length > 0 ? (
-            <Note role="status">
-              {alwaysVisibleErrorCount} Storybook error{" "}
-              {alwaysVisibleErrorCount === 1
-                ? "story remains"
-                : "stories remain"}{" "}
-              visible so failures cannot be hidden.
-            </Note>
-          ) : null}
-          <Footer>
-            <Note>Groups combine with AND; choices within a group use OR.</Note>
-            <Button
-              size="small"
-              variant="ghost"
-              disabled={!activeIds.length}
-              onClick={() => onChange([])}
-            >
-              Clear
-            </Button>
-          </Footer>
-        </Menu>
+            ).map(([group, ids]) => {
+              const disabled = group === "result" && !resultFiltersEnabled;
+              return (
+                <Section key={group}>
+                  <Legend>{GROUP_LABELS[group]}</Legend>
+                  {ids.map((id) => (
+                    <CheckRow key={id} disabled={disabled}>
+                      <Form.Checkbox
+                        name={LABELS[id]}
+                        checked={active.has(id)}
+                        disabled={disabled}
+                        onChange={() => toggleFacet(id)}
+                      />
+                      <span>{LABELS[id]}</span>
+                    </CheckRow>
+                  ))}
+                  {disabled ? (
+                    <Note>Run visual tests once to enable result filters.</Note>
+                  ) : null}
+                </Section>
+              );
+            })}
+            {alwaysVisibleErrorCount > 0 && activeIds.length > 0 ? (
+              <Note role="status">
+                {alwaysVisibleErrorCount} Storybook error{" "}
+                {alwaysVisibleErrorCount === 1
+                  ? "story remains"
+                  : "stories remain"}{" "}
+                visible so failures cannot be hidden.
+              </Note>
+            ) : null}
+            <Footer>
+              <Note>
+                Groups combine with AND; choices within a group use OR.
+              </Note>
+              <Button
+                size="small"
+                variant="ghost"
+                ariaLabel={false}
+                disabled={!activeIds.length}
+                onClick={() => onChange([])}
+              >
+                Clear
+              </Button>
+            </Footer>
+          </Menu>
+        </MenuScrollArea>
       )}
     >
       <FilterButton
@@ -234,7 +251,11 @@ export function VisualFiltersMenu({
         title="Filter visual stories"
       >
         <FilterIcon />
-        {activeIds.length ? <Count>{activeIds.length}</Count> : null}
+        {activeIds.length ? (
+          <Count aria-hidden="true" data-testid="visual-filter-count">
+            {activeIds.length}
+          </Count>
+        ) : null}
       </FilterButton>
     </PopoverProvider>
   );
