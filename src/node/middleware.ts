@@ -59,10 +59,11 @@ import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
 } from "./init-scaffold.js";
+import { writePlaywrightPassThresholdPercent } from "./playwright-threshold.js";
 import {
-  readPlaywrightPassThresholdPercent,
-  writePlaywrightPassThresholdPercent,
-} from "./playwright-threshold.js";
+  readVisualDeltaProjectConfig,
+  writeVisualDeltaProjectConfig,
+} from "./project-config.js";
 import {
   beginVisualRunHub,
   getVisualRunHubStatus,
@@ -77,6 +78,7 @@ import {
 import {
   ensurePlaywrightWebServerPort,
   ensureWarmStaticStorybookServer,
+  invalidateWarmStaticStorybookServer,
 } from "./visual-server.js";
 
 type UpdateBody = {
@@ -120,6 +122,7 @@ export type {
 } from "./run-hub.js";
 
 let activeRun: ChildProcess | null = null;
+let forceStaticRebuild = false;
 
 function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -692,7 +695,9 @@ async function handleRun(
   const staticIframe = path.join(root, "storybook-static", "iframe.html");
   const staticComplete = existsSync(staticIndex) && existsSync(staticIframe);
   const allowRebuild = options.allowRebuild !== false;
-  const rebuild = allowRebuild && (Boolean(body.rebuild) || !staticComplete);
+  const rebuild =
+    allowRebuild &&
+    (Boolean(body.rebuild) || forceStaticRebuild || !staticComplete);
   const grep = grepFromStoryIds(body.storyIds);
   let log = "";
 
@@ -703,9 +708,11 @@ async function handleRun(
     if (rebuild) {
       const rebuildLine = body.rebuild
         ? "Rebuilding storybook-static — explicit rebuild requested"
-        : !existsSync(staticIndex)
-          ? "Building storybook-static — index.json missing"
-          : "Rebuilding storybook-static — incomplete (missing iframe.html)";
+        : forceStaticRebuild
+          ? "Rebuilding storybook-static — project defaults changed"
+          : !existsSync(staticIndex)
+            ? "Building storybook-static — index.json missing"
+            : "Rebuilding storybook-static — incomplete (missing iframe.html)";
       emitRun({ type: "log", line: rebuildLine });
       log += `${rebuildLine}\n`;
       const built = await runCommand("pnpm", ["build-storybook"], root);
@@ -730,6 +737,7 @@ async function handleRun(
         });
         return;
       }
+      forceStaticRebuild = false;
     } else if (staticComplete) {
       emitRun({
         type: "log",
@@ -992,15 +1000,16 @@ async function handleSkipVisual(
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
-function handleConfig(
-  res: ServerResponse,
+function resolvedConfigPayload(
   root: string,
   options: VisualDeltaHostOptions,
   visualPort: number,
-) {
+): VisualDeltaResolvedConfig {
   const snapshotDir = resolveSnapshotDir(options, root);
   const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
   const diagnostics: VisualDeltaConfigDiagnostic[] = [];
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  diagnostics.push(...projectConfig.diagnostics);
   if (!existsSync(snapshotDir)) {
     diagnostics.push({
       code: "snapshot-dir-missing",
@@ -1048,7 +1057,11 @@ function handleConfig(
       ],
       addonSrcDir: options.addonSrcDir?.trim() || null,
     },
-    playwrightPassThresholdPercent: readPlaywrightPassThresholdPercent(root),
+    playwrightPassThresholdPercent: projectConfig.defaults.passThresholdPercent,
+    projectDefaults: projectConfig.defaults,
+    projectDefaultSources: projectConfig.sources,
+    projectConfigPath: projectConfig.path,
+    projectConfigExists: projectConfig.exists,
     onboarding: {
       suiteReady: onboardingStatus.suiteReady,
       playwrightConfigReady: onboardingStatus.playwrightConfigReady,
@@ -1059,7 +1072,44 @@ function handleConfig(
     diagnostics,
     warnings: diagnostics.map((diagnostic) => diagnostic.message),
   };
-  writeJson(res, 200, payload);
+  return payload;
+}
+
+function handleConfigGet(
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+  visualPort: number,
+) {
+  writeJson(res, 200, resolvedConfigPayload(root, options, visualPort));
+}
+
+async function handleConfigPut(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+  visualPort: number,
+): Promise<boolean> {
+  let body: unknown;
+  try {
+    body = await readJsonBody(req);
+    const defaults =
+      typeof body === "object" && body != null && "projectDefaults" in body
+        ? (body as { projectDefaults: unknown }).projectDefaults
+        : body;
+    writeVisualDeltaProjectConfig(root, defaults);
+    forceStaticRebuild = true;
+    invalidateWarmStaticStorybookServer();
+    writeJson(res, 200, resolvedConfigPayload(root, options, visualPort));
+    return true;
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 async function handlePlaywrightThreshold(
@@ -1179,7 +1229,8 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
- * - GET  /__visual-delta/config — resolved host options (read-only)
+ * - GET  /__visual-delta/config — resolved host options
+ * - PUT  /__visual-delta/config — persist allow-listed project defaults
  * - POST /__visual-delta/playwright-threshold — write host Playwright pass %
  * - POST /__visual-delta/init — scaffold portable Playwright suite/config
  */
@@ -1204,14 +1255,26 @@ export function visualDeltaMiddlewarePlugin(
         const url = req.url?.split("?")[0] ?? "";
 
         if (url === VISUAL_DELTA_CONFIG_PATH) {
-          if (req.method !== "GET") {
+          if (req.method === "GET") {
+            handleConfigGet(res, root, options, visualPort);
+            return;
+          }
+          if (req.method === "PUT") {
+            if (await handleConfigPut(req, res, root, options, visualPort)) {
+              server.ws.send({
+                type: "custom",
+                event: "visual-delta-config-updated",
+                data: resolvedConfigPayload(root, options, visualPort),
+              });
+            }
+            return;
+          }
+          {
             res.statusCode = 405;
-            res.setHeader("Allow", "GET");
+            res.setHeader("Allow", "GET, PUT");
             res.end("Method Not Allowed");
             return;
           }
-          handleConfig(res, root, options, visualPort);
-          return;
         }
 
         if (url === VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH) {

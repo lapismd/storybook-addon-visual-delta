@@ -15,6 +15,8 @@
   type Props = {
     /** Placements to render (defaults to all five pad cells). */
     placements?: PlacementMode[];
+    /** Fine tune the Baseline label after its default external anchor. */
+    baselineLabelOffset?: { x: number; y: number };
   };
 
   const ALL_PLACEMENTS: PlacementMode[] = [
@@ -25,7 +27,10 @@
     "below",
   ];
 
-  let { placements = ALL_PLACEMENTS }: Props = $props();
+  let {
+    placements = ALL_PLACEMENTS,
+    baselineLabelOffset = { x: 0, y: 0 },
+  }: Props = $props();
 
   let rootEl: HTMLDivElement | undefined = $state();
   let visibleCount = $state(0);
@@ -40,6 +45,7 @@
       if (!overlay) continue;
       const chip = ensureOverlayChip(overlay, {
         id: `visual-delta-demo-chip-${placement}`,
+        offset: baselineLabelOffset,
       });
       chip.setAttribute("data-placement", placement);
       if (isPreviewChipVisible(chip)) visible += 1;
@@ -56,6 +62,7 @@
 
   $effect(() => {
     void placements;
+    void baselineLabelOffset;
     queueMicrotask(mountChips);
   });
 </script>
@@ -90,29 +97,45 @@
             aria-label="{placement} split"
           >
             {#if baselineFirst}
-              <div class="pane baseline-pane" data-testid="demo-baseline-pane-{placement}">
+              <div
+                class="pane baseline-pane"
+                data-testid="demo-baseline-pane-{placement}"
+              >
                 <div
                   class="overlay"
                   data-testid="demo-overlay-{placement}"
                   data-overlay-role="baseline"
                 >
-                  <div class="baseline-img" aria-hidden="true">Baseline PNG</div>
+                  <div class="baseline-img" aria-hidden="true">
+                    Baseline PNG
+                  </div>
                 </div>
               </div>
-              <div class="pane live-pane" data-testid="demo-live-pane-{placement}">
+              <div
+                class="pane live-pane"
+                data-testid="demo-live-pane-{placement}"
+              >
                 <div class="live-subject">Live</div>
               </div>
             {:else}
-              <div class="pane live-pane" data-testid="demo-live-pane-{placement}">
+              <div
+                class="pane live-pane"
+                data-testid="demo-live-pane-{placement}"
+              >
                 <div class="live-subject">Live</div>
               </div>
-              <div class="pane baseline-pane" data-testid="demo-baseline-pane-{placement}">
+              <div
+                class="pane baseline-pane"
+                data-testid="demo-baseline-pane-{placement}"
+              >
                 <div
                   class="overlay"
                   data-testid="demo-overlay-{placement}"
                   data-overlay-role="baseline"
                 >
-                  <div class="baseline-img" aria-hidden="true">Baseline PNG</div>
+                  <div class="baseline-img" aria-hidden="true">
+                    Baseline PNG
+                  </div>
                 </div>
               </div>
             {/if}
@@ -189,7 +212,7 @@
     flex: 1 1 0;
     min-width: 0;
     min-height: 0;
-    padding: 8px;
+    padding: 32px 8px 8px;
     box-sizing: border-box;
     background: var(--background, #fff);
   }
@@ -197,7 +220,7 @@
   .center-stage {
     position: relative;
     min-height: 96px;
-    padding: 8px;
+    padding: 32px 8px 8px;
     box-sizing: border-box;
     background: var(--background, #fff);
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -229,7 +252,7 @@
 
   .center-overlay {
     position: absolute;
-    top: 8px;
+    top: 32px;
     left: 8px;
   }
 

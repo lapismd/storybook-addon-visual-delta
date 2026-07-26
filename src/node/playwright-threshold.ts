@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 /** Host file for package-wide Playwright pass threshold (% of pixels). */
 export const PLAYWRIGHT_THRESHOLD_REL = ".visual-delta/playwright.json";
@@ -64,5 +65,5 @@ export function resolvePlaywrightPassThresholdPercent(
     const n = Number(fromEnv);
     if (Number.isFinite(n)) return clampPercent(n);
   }
-  return readPlaywrightPassThresholdPercent(root);
+  return readVisualDeltaProjectConfig(root).defaults.passThresholdPercent;
 }

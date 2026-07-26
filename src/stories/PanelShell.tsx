@@ -27,6 +27,7 @@ import {
 } from "../panel/styled.js";
 import { placementToggleAction } from "../shared/overlay-session.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
 import type { VisualModeResultStatus } from "../shared/mode-results.js";
 import { FormPlaceholder } from "./FormPlaceholder.js";
 import {
@@ -75,6 +76,21 @@ const SAMPLE_CONFIG: VisualDeltaResolvedConfig = {
     addonSrcDir: "packages/storybook-addon-visual-delta/src",
   },
   playwrightPassThresholdPercent: 1,
+  projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
+  projectDefaultSources: {
+    passThresholdPercent: "project",
+    diffThreshold: "built-in",
+    diffIncludeAntiAliasing: "built-in",
+    delay: "built-in",
+    cropToViewport: "built-in",
+    placement: "built-in",
+    opacity: "built-in",
+    baselineLabelOffset: "built-in",
+    previewSplitZoomDefault: "built-in",
+    diffResultZoomDefault: "built-in",
+  },
+  projectConfigPath: "/workspace/ui/.visual-delta/config.json",
+  projectConfigExists: true,
   onboarding: {
     suiteReady: true,
     playwrightConfigReady: true,
@@ -101,6 +117,8 @@ export type PanelShellProps = {
   initialState?: PanelResultState;
   initialSkipVisual?: boolean;
   configurationOpen?: boolean;
+  /** Deterministic configuration persistence failure for regression stories. */
+  configurationSaveError?: string;
   captureError?: string;
   runAvailable?: boolean;
   modeNames?: string[];
@@ -121,6 +139,7 @@ export function PanelShell({
   initialState = "ready",
   initialSkipVisual = false,
   configurationOpen = false,
+  configurationSaveError,
   captureError = "",
   runAvailable = true,
   modeNames = [],
@@ -485,6 +504,21 @@ export function PanelShell({
         showConfiguration ? (
           <ConfigurationPanel
             initialConfig={SAMPLE_CONFIG}
+            onSaveProjectDefaults={async (projectDefaults) => {
+              if (configurationSaveError) {
+                throw new Error(configurationSaveError);
+              }
+              return {
+                ...SAMPLE_CONFIG,
+                playwrightPassThresholdPercent:
+                  projectDefaults.passThresholdPercent,
+                projectDefaults,
+                projectDefaultSources: Object.fromEntries(
+                  Object.keys(projectDefaults).map((key) => [key, "project"]),
+                ) as VisualDeltaResolvedConfig["projectDefaultSources"],
+                projectConfigExists: true,
+              };
+            }}
             onClose={() => setShowConfiguration(false)}
           />
         ) : null

@@ -1717,7 +1717,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       loading={loading}
       configuration={
         showConfiguration ? (
-          <ConfigurationPanel onClose={() => setShowConfiguration(false)} />
+          <ConfigurationPanel
+            onClose={() => setShowConfiguration(false)}
+            onUpdated={(config) => {
+              emit(EVENTS.CONFIG_UPDATED, {
+                projectDefaults: config.projectDefaults,
+              });
+            }}
+          />
         ) : null
       }
       summary={
