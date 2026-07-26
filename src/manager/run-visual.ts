@@ -181,6 +181,8 @@ export type VisualRunScope = "story" | "component" | "all";
 export type VisualLastRunSummary = {
   finishedAt: number;
   summary: VisualRunResponse["summary"];
+  /** False when the runner crashed before producing a completed run. */
+  completed?: boolean;
   error?: string;
   scope?: VisualRunScope;
   /** Trailing Playwright / middleware log for the panel status popover. */

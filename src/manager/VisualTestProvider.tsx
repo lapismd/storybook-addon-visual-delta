@@ -18,7 +18,13 @@ import {
   PANEL_ID,
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
+  VISUAL_DELTA_STORY_FACTS_PATH,
 } from "../constants.js";
+import type {
+  VisualStoryDescriptor,
+  VisualStoryFact,
+  VisualStoryFactsResponse,
+} from "../shared/story-facts.js";
 import {
   baselineWriteRowLabel,
   loadBaselineWriteMode,
@@ -72,6 +78,15 @@ import {
   loadUpdateStatusEnabled,
   writeBoolFlag,
 } from "./visual-test-module-prefs.js";
+import {
+  buildVisualStoryFilterFacts,
+  createVisualStoryFilter,
+  parseVisualFilterIds,
+  serializeVisualFilterIds,
+  visualStoryMatchesFilters,
+  VISUAL_FILTER_ADDON_ID,
+  VISUAL_FILTER_QUERY_PARAM,
+} from "./visual-filters.js";
 
 type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
 
@@ -281,8 +296,20 @@ function resultsFromStatusStore(
     if (!status) continue;
     if (status.value === "status-value:success") {
       results.push({ storyId, status: "passed", title: storyId });
+    } else if (status.value === "status-value:warning") {
+      results.push({
+        storyId,
+        status: "failed",
+        title: storyId,
+        outcome: "mismatch",
+      });
     } else if (status.value === "status-value:error") {
-      results.push({ storyId, status: "failed", title: storyId });
+      results.push({
+        storyId,
+        status: "failed",
+        title: storyId,
+        outcome: "error",
+      });
     }
   }
   return results;
@@ -291,8 +318,9 @@ function resultsFromStatusStore(
 export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const api = useStorybookApi();
   const storybookState = useStorybookState() as {
-    filteredIndex?: Record<string, { type?: string; id?: string }>;
-    index?: Record<string, { type?: string; id?: string }>;
+    filteredIndex?: Record<string, API_HashEntry>;
+    index?: Record<string, API_HashEntry>;
+    customQueryParams?: Record<string, unknown>;
   };
   const testProviderState = experimental_useTestProviderStore(
     (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
@@ -313,6 +341,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [statusUpdateLabel, setStatusUpdateLabel] = useState<string | null>(
     null,
   );
+  const [storyCoverage, setStoryCoverage] = useState<VisualStoryFact[]>([]);
+  const [visualFiltersAvailable, setVisualFiltersAvailable] = useState(false);
+  const [activeVisualFilterIds, setActiveVisualFilterIds] = useState<string[]>(
+    () => parseVisualFilterIds(api.getQueryParam(VISUAL_FILTER_QUERY_PARAM)),
+  );
   const [runVisualEnabled, setRunVisualEnabled] =
     useState(loadRunVisualEnabled);
   const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(
@@ -331,6 +364,39 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const sidebarStoryIds = useMemo(
     () => sidebarLeafStoryIds(storybookState),
     [storybookState.filteredIndex, storybookState.index],
+  );
+  const rawStoryDescriptors: VisualStoryDescriptor[] = (() => {
+    const index = storybookState.index;
+    if (!index) return [];
+    return Object.values(index)
+      .filter((item) => item.type === "story")
+      .map((item) => ({
+        id: item.id,
+        type: item.type,
+        title: "title" in item ? item.title : undefined,
+        name: item.name,
+        importPath: "importPath" in item ? item.importPath : undefined,
+        exportName: "exportName" in item ? item.exportName : undefined,
+        tags: item.tags,
+      }));
+  })();
+  const storyDescriptorSignature = JSON.stringify(rawStoryDescriptors);
+  const storyDescriptors = useMemo(
+    () => rawStoryDescriptors,
+    [storyDescriptorSignature],
+  );
+  const hasCompletedVisualRun = Boolean(
+    lastRun?.results && lastRun.completed !== false,
+  );
+  const visualFilterFacts = useMemo(
+    () =>
+      buildVisualStoryFilterFacts(
+        storyDescriptors,
+        storyCoverage,
+        lastRun?.results,
+        hasCompletedVisualRun,
+      ),
+    [hasCompletedVisualRun, lastRun?.results, storyCoverage, storyDescriptors],
   );
 
   const anyActionSelected = anyModuleActionSelected({
@@ -353,11 +419,43 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     for (const id of ids) {
       const status = allStatuses[id]?.[STATUS_TYPE_ID_VISUAL];
       if (!status) continue;
-      if (status.value === "status-value:error") failedIds.push(id);
+      if (
+        status.value === "status-value:error" ||
+        status.value === "status-value:warning"
+      )
+        failedIds.push(id);
       else if (status.value === "status-value:success") passedIds.push(id);
     }
     return { passedIds, failedIds };
   }, [allStatuses, entryStoryIds]);
+
+  const alwaysVisibleErrorCount = useMemo(() => {
+    if (!activeVisualFilterIds.length) return 0;
+    let count = 0;
+    for (const [storyId, byType] of Object.entries(
+      allStatuses as VisualStatusByStory,
+    )) {
+      const status = byType?.[STATUS_TYPE_ID_VISUAL];
+      if (status?.value !== "status-value:error") continue;
+      const fact = visualFilterFacts.get(storyId);
+      if (
+        fact &&
+        !visualStoryMatchesFilters(
+          fact,
+          activeVisualFilterIds,
+          hasCompletedVisualRun,
+        )
+      ) {
+        count++;
+      }
+    }
+    return count;
+  }, [
+    activeVisualFilterIds,
+    allStatuses,
+    hasCompletedVisualRun,
+    visualFilterFacts,
+  ]);
 
   const counts = {
     passed: statusIds.passedIds.length,
@@ -389,6 +487,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         const summary: VisualLastRunSummary = {
           finishedAt: Date.now(),
           summary: data.summary,
+          completed: false,
           error: data.error ?? "Visual test run crashed",
           scope,
           logTail: data.logTail,
@@ -401,6 +500,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       const summary: VisualLastRunSummary = {
         finishedAt: Date.now(),
         summary: data.summary,
+        completed: true,
         error:
           data.summary.failed > 0 ? `${data.summary.failed} failed` : undefined,
         scope,
@@ -548,6 +648,71 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   }, []);
 
   useEffect(() => {
+    if (entry) return;
+    const fromUrl = parseVisualFilterIds(
+      storybookState.customQueryParams?.[VISUAL_FILTER_QUERY_PARAM],
+    );
+    setActiveVisualFilterIds((current) =>
+      serializeVisualFilterIds(current) === serializeVisualFilterIds(fromUrl)
+        ? current
+        : fromUrl,
+    );
+  }, [entry, storybookState.customQueryParams]);
+
+  useEffect(() => {
+    if (entry) return;
+    const controller = new AbortController();
+    void fetch(VISUAL_DELTA_STORY_FACTS_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stories: storyDescriptors }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const data = (await response.json()) as
+          | VisualStoryFactsResponse
+          | { ok?: false };
+        if (!response.ok || !data.ok) {
+          throw new Error("Visual story facts are unavailable");
+        }
+        setStoryCoverage(data.stories);
+        setVisualFiltersAvailable(true);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setStoryCoverage([]);
+        setVisualFiltersAvailable(false);
+      });
+    return () => controller.abort();
+  }, [entry, storyDescriptors]);
+
+  useEffect(() => {
+    if (entry || !visualFiltersAvailable) return;
+    void api.experimental_setFilter(
+      VISUAL_FILTER_ADDON_ID,
+      createVisualStoryFilter(
+        visualFilterFacts,
+        activeVisualFilterIds,
+        hasCompletedVisualRun,
+      ),
+    );
+  }, [
+    activeVisualFilterIds,
+    api,
+    entry,
+    hasCompletedVisualRun,
+    visualFilterFacts,
+    visualFiltersAvailable,
+  ]);
+
+  useEffect(() => {
+    if (entry) return;
+    return () => {
+      void api.experimental_setFilter(VISUAL_FILTER_ADDON_ID, () => true);
+    };
+  }, [api, entry]);
+
+  useEffect(() => {
     return subscribeVisualRunLog((line) => {
       setStatusLog((prev) => (prev ? `${prev}\n${line}` : line));
     });
@@ -609,6 +774,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           publishVisualLastRun({
             finishedAt: Date.now(),
             summary: data.summary,
+            completed: !data.crashed,
             error: data.crashed
               ? (data.error ?? "Visual test run crashed")
               : data.summary.failed > 0
@@ -628,6 +794,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           publishVisualLastRun({
             finishedAt: Date.now(),
             summary: data.summary,
+            completed: !data.crashed,
             error: data.crashed
               ? (data.error ?? "Visual test run crashed")
               : data.summary.failed > 0
@@ -836,6 +1003,25 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       onOpenCompareResults={openResults}
       onOpenBaselineStatus={openResults}
       onOpenStatusResults={openResults}
+      visualFilters={
+        !entry && visualFiltersAvailable
+          ? {
+              activeIds: activeVisualFilterIds,
+              resultFiltersEnabled: hasCompletedVisualRun,
+              alwaysVisibleErrorCount,
+              onChange: (next) => {
+                setActiveVisualFilterIds(next);
+                api.applyQueryParams(
+                  {
+                    [VISUAL_FILTER_QUERY_PARAM]:
+                      serializeVisualFilterIds(next) || null,
+                  },
+                  { replace: true },
+                );
+              },
+            }
+          : undefined
+      }
     />
   );
 }

@@ -14,7 +14,9 @@ vi.mock("storybook/internal/components", async (importOriginal) => {
     await importOriginal<typeof import("storybook/internal/components")>();
   return {
     ...actual,
-    WithTooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    WithTooltip: ({ children }: { children: React.ReactNode }) => (
+      <>{children}</>
+    ),
     TooltipNote: () => null,
     PopoverProvider: ({
       children,
@@ -67,22 +69,16 @@ const baseProps = {
 
 describe("VisualTestModuleUI", () => {
   it("renders global heading, Not run, and default checkbox state", () => {
-    renderWithTheme(
-      <VisualTestModuleUI variant="global" {...baseProps} />,
-    );
+    renderWithTheme(<VisualTestModuleUI variant="global" {...baseProps} />);
     const root = screen.getByTestId("visual-test-module-global");
     expect(
       root.querySelector("#visual-testing-module-description-global"),
     ).toHaveTextContent("Not run");
-    expect(
-      root.querySelector('input[name="Run visual tests"]'),
-    ).toBeChecked();
+    expect(root.querySelector('input[name="Run visual tests"]')).toBeChecked();
     expect(
       root.querySelector('input[name="Create missing Baselines"]'),
     ).not.toBeChecked();
-    expect(
-      root.querySelector('input[name="Update status"]'),
-    ).not.toBeChecked();
+    expect(root.querySelector('input[name="Update status"]')).not.toBeChecked();
     expect(
       root.querySelector('input[name="Rebuild static"]'),
     ).not.toBeChecked();
@@ -142,9 +138,39 @@ describe("VisualTestModuleUI", () => {
     expect(onRun).toHaveBeenCalledOnce();
   });
 
+  it("shows custom filters only in the global module", () => {
+    const filters = {
+      activeIds: ["review.ready"],
+      resultFiltersEnabled: true,
+      onChange: vi.fn(),
+    };
+    const { rerender } = renderWithTheme(
+      <VisualTestModuleUI
+        variant="global"
+        {...baseProps}
+        visualFilters={filters}
+      />,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Filter visual stories, 1 active",
+      }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <VisualTestModuleUI
+        variant="context"
+        {...baseProps}
+        visualFilters={filters}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /filter visual stories/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows row progress under active checkboxes and streams the title", () => {
-    const statusLine =
-      "✓ shadcn-disclosure-accordion--opens-a-section (1/2)";
+    const statusLine = "✓ shadcn-disclosure-accordion--opens-a-section (1/2)";
     renderWithTheme(
       <VisualTestModuleUI
         variant="context"
