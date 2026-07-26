@@ -11,10 +11,7 @@ import { Button, ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { PlayStepInfo } from "./usePlaySteps.js";
-import {
-  VD_HEADER_STICKY_TOP_VAR,
-  panelCanvasBackground,
-} from "./styled.js";
+import { VD_HEADER_STICKY_TOP_VAR, panelCanvasBackground } from "./styled.js";
 
 const List = styled.div({
   display: "flex",
@@ -32,7 +29,7 @@ const Section = styled.div<{ $expanded?: boolean }>(({ $expanded }) => ({
   ...($expanded ? { flex: 1, minHeight: 0 } : null),
 }));
 
-const SummaryButton = styled.button<{ $expanded?: boolean }>(
+const SummaryRow = styled.div<{ $expanded?: boolean }>(
   ({ theme, $expanded }) => ({
     display: "flex",
     alignItems: "center",
@@ -46,9 +43,7 @@ const SummaryButton = styled.button<{ $expanded?: boolean }>(
       ? theme.background.hoverable
       : panelCanvasBackground(theme),
     color: theme.color.defaultText,
-    padding: "4px 12px",
-    cursor: "pointer",
-    font: "inherit",
+    padding: "4px 12px 4px 0",
     position: "sticky",
     // Only pins when the live panel publishes `--vd-header-sticky-top`.
     // No fallback: unset → `top: auto` → behaves like relative, so docs /
@@ -56,24 +51,42 @@ const SummaryButton = styled.button<{ $expanded?: boolean }>(
     top: `var(${VD_HEADER_STICKY_TOP_VAR})`,
     zIndex: 1,
     "&:hover": {
-      cursor: "pointer",
       background: theme.background.hoverable,
-    },
-    "& *": {
-      cursor: "inherit",
     },
   }),
 );
 
-const Chevron = styled.span<{ $expanded?: boolean }>(({ theme, $expanded }) => ({
-  display: "inline-flex",
-  flexShrink: 0,
-  width: 12,
-  color: theme.textMutedColor,
-  transform: $expanded ? "rotate(0deg)" : "rotate(-90deg)",
-  transition: "transform 120ms ease",
-  "& svg": { width: 12, height: 12 },
-}));
+const SummaryButton = styled.button({
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+  minHeight: 24,
+  flex: 1,
+  alignSelf: "stretch",
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  padding: "0 0 0 12px",
+  cursor: "pointer",
+  font: "inherit",
+  textAlign: "left",
+  "& *": {
+    cursor: "inherit",
+  },
+});
+
+const Chevron = styled.span<{ $expanded?: boolean }>(
+  ({ theme, $expanded }) => ({
+    display: "inline-flex",
+    flexShrink: 0,
+    width: 12,
+    color: theme.textMutedColor,
+    transform: $expanded ? "rotate(0deg)" : "rotate(-90deg)",
+    transition: "transform 120ms ease",
+    "& svg": { width: 12, height: 12 },
+  }),
+);
 
 const StatusSlot = styled.span({
   display: "inline-flex",
@@ -234,92 +247,87 @@ export const BaselineAccordion = memo(function BaselineAccordion({
               swapping sections animated both collapse + expand and felt like
               the whole Visual Delta panel flickering.
             */}
-            <SummaryButton
-              type="button"
-              $expanded={expanded}
-              aria-expanded={expanded}
-              onClick={() => onExpand(section.id)}
-            >
-              <Chevron $expanded={expanded} aria-hidden>
-                <ChevronSmallDownIcon />
-              </Chevron>
-              <StatusSlot>
-                {section.status ? (
-                  <StatusIcon
-                    $passed={section.status === "pass"}
-                    aria-label={
-                      section.status === "pass" ? "Passed" : "Failed"
-                    }
-                  >
-                    {section.status === "pass" ? (
-                      <CheckIcon />
-                    ) : (
-                      <CrossIcon />
-                    )}
-                  </StatusIcon>
-                ) : null}
-              </StatusSlot>
-              <Meta $labelWidth={labelWidth}>
-                <Label title={section.label}>{section.label}</Label>
-                <Hint title={section.hint}>{section.hint}</Hint>
-              </Meta>
-              <SummaryRight
-                onClick={(event) => {
-                  event.stopPropagation();
-                }}
+            <SummaryRow $expanded={expanded}>
+              <SummaryButton
+                type="button"
+                aria-expanded={expanded}
+                onClick={() => onExpand(section.id)}
               >
-                {section.stats ? <Stats>{section.stats}</Stats> : null}
-                <SummaryActions>
-                  {expanded && hasDiff ? (
-                    <ToggleButton
-                      size="small"
-                      padding="small"
-                      pressed={showDistribution}
-                      onClick={onToggleDistribution}
-                      ariaLabel="Difference distribution"
-                      title="Difference distribution"
-                      aria-expanded={showDistribution}
+                <Chevron $expanded={expanded} aria-hidden>
+                  <ChevronSmallDownIcon />
+                </Chevron>
+                <StatusSlot>
+                  {section.status ? (
+                    <StatusIcon
+                      $passed={section.status === "pass"}
+                      aria-label={
+                        section.status === "pass" ? "Passed" : "Failed"
+                      }
                     >
-                      <GraphBarIcon />
-                    </ToggleButton>
+                      {section.status === "pass" ? (
+                        <CheckIcon />
+                      ) : (
+                        <CrossIcon />
+                      )}
+                    </StatusIcon>
                   ) : null}
-                  {section.id === "default" || section.wired ? (
-                    <Button
-                      size="small"
-                      variant="ghost"
-                      padding="small"
-                      disabled={busy}
-                      ariaLabel="Update baseline"
-                      title="Update baseline"
-                      onClick={() => {
-                        if (section.id === "default") {
-                          onUpdateDefault();
-                          return;
-                        }
-                        if (section.step) onUpdate(section.step);
-                      }}
-                    >
-                      <SyncIcon />
-                    </Button>
-                  ) : section.step ? (
-                    <Button
-                      size="small"
-                      variant="ghost"
-                      padding="small"
-                      disabled={busy}
-                      ariaLabel="Create baseline"
-                      title="Create baseline"
-                      onClick={() => onCreate(section.step!)}
-                    >
-                      <AddIcon />
-                    </Button>
-                  ) : null}
-                </SummaryActions>
-              </SummaryRight>
-            </SummaryButton>
-            {expanded ? (
-              <SectionBody>{renderBody(section)}</SectionBody>
-            ) : null}
+                </StatusSlot>
+                <Meta $labelWidth={labelWidth}>
+                  <Label title={section.label}>{section.label}</Label>
+                  <Hint title={section.hint}>{section.hint}</Hint>
+                </Meta>
+                <SummaryRight>
+                  {section.stats ? <Stats>{section.stats}</Stats> : null}
+                </SummaryRight>
+              </SummaryButton>
+              <SummaryActions>
+                {expanded && hasDiff ? (
+                  <ToggleButton
+                    size="small"
+                    padding="small"
+                    pressed={showDistribution}
+                    onClick={onToggleDistribution}
+                    ariaLabel="Difference distribution"
+                    title="Difference distribution"
+                    aria-expanded={showDistribution}
+                  >
+                    <GraphBarIcon />
+                  </ToggleButton>
+                ) : null}
+                {section.id === "default" || section.wired ? (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    padding="small"
+                    disabled={busy}
+                    ariaLabel="Update baseline"
+                    title="Update baseline"
+                    onClick={() => {
+                      if (section.id === "default") {
+                        onUpdateDefault();
+                        return;
+                      }
+                      if (section.step) onUpdate(section.step);
+                    }}
+                  >
+                    <SyncIcon />
+                  </Button>
+                ) : section.step ? (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    padding="small"
+                    disabled={busy}
+                    ariaLabel="Create baseline"
+                    title="Create baseline"
+                    onClick={() => onCreate(section.step!)}
+                  >
+                    <AddIcon />
+                  </Button>
+                ) : null}
+              </SummaryActions>
+            </SummaryRow>
+            {expanded ? <SectionBody>{renderBody(section)}</SectionBody> : null}
           </Section>
         );
       })}

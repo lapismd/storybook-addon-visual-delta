@@ -65,37 +65,7 @@ const RightGroup = styled.div({
   marginLeft: "auto",
 });
 
-export const VisualDeltaHeader = memo(function VisualDeltaHeader({
-  badgeStatus,
-  empty,
-  busy,
-  storyMissing,
-  isDiffing,
-  isRunning,
-  diffProgressLabel,
-  runProgressLabel,
-  createLabel,
-  reviewStatus,
-  skipVisual,
-  onDiff,
-  onRun,
-  diffEngine,
-  onDiffEngineChange,
-  onCreate,
-  onUpdateBaselines,
-  onRebuildStatic,
-  onResetSettings,
-  onStopDiff,
-  onStopRun,
-  onReviewStatus,
-  onAccept,
-  onUnaccept,
-  onToggleSkipVisual,
-  onOpenConfiguration,
-  isUpdating,
-  isRebuilding,
-  onHeightChange,
-}: {
+export type VisualDeltaHeaderProps = {
   badgeStatus: VisualBadgeStatus | null;
   empty: boolean;
   busy: boolean;
@@ -129,13 +99,51 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
   isRebuilding: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
-}) {
+};
+
+export type VisualDeltaHeaderViewProps = VisualDeltaHeaderProps & {
+  reviewLayoutActive?: boolean;
+  onToggleReviewLayout?: () => void;
+};
+
+export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
+  badgeStatus,
+  empty,
+  busy,
+  storyMissing,
+  isDiffing,
+  isRunning,
+  diffProgressLabel,
+  runProgressLabel,
+  createLabel,
+  reviewStatus,
+  skipVisual,
+  onDiff,
+  onRun,
+  diffEngine,
+  onDiffEngineChange,
+  onCreate,
+  onUpdateBaselines,
+  onRebuildStatic,
+  onResetSettings,
+  onStopDiff,
+  onStopRun,
+  onReviewStatus,
+  onAccept,
+  onUnaccept,
+  onToggleSkipVisual,
+  onOpenConfiguration,
+  isUpdating,
+  isRebuilding,
+  onHeightChange,
+  reviewLayoutActive = false,
+  onToggleReviewLayout = () => undefined,
+}: VisualDeltaHeaderViewProps) {
   const theme = useTheme();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const pendingReviewToggle = useRef(false);
-  const { active: reviewLayoutActive, toggle: toggleReviewLayout } =
-    useReviewLayoutToggle();
+  const toggleReviewLayout = onToggleReviewLayout;
   const reviewLayoutLabel = reviewLayoutActive
     ? "Exit review layout"
     : "Review layout";
@@ -389,5 +397,19 @@ export const VisualDeltaHeader = memo(function VisualDeltaHeader({
         </RightGroup>
       </Toolbar>
     </HeaderWrap>
+  );
+});
+
+/** Manager-connected header; deterministic stories render VisualDeltaHeaderView. */
+export const VisualDeltaHeader = memo(function VisualDeltaHeader(
+  props: VisualDeltaHeaderProps,
+) {
+  const { active, toggle } = useReviewLayoutToggle();
+  return (
+    <VisualDeltaHeaderView
+      {...props}
+      reviewLayoutActive={active}
+      onToggleReviewLayout={toggle}
+    />
   );
 });

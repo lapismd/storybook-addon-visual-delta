@@ -5,7 +5,6 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   VISUAL_DELTA_CROP_ATTR,
-  VISUAL_DELTA_DELAY_ATTR,
   VISUAL_DELTA_IGNORE_ATTR_LIST,
 } from "../shared/capture-params-attrs.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
@@ -27,6 +26,10 @@ import {
   baselinePngAbs,
   writeDiffArtifactsForBaseline,
 } from "./write-diff-artifacts.js";
+import {
+  settleVisualStoryPage,
+  waitForVisualStoryFinished,
+} from "./readiness.js";
 
 const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
@@ -170,31 +173,10 @@ async function prepareStoryPage(
     waitUntil: "networkidle",
   });
   await expect(page.locator("#storybook-root")).toBeVisible();
-  await page.evaluate(async () => {
-    if (document.fonts?.ready) await document.fonts.ready;
-  });
-}
-
-async function settleAfterPlay(page: Page): Promise<void> {
-  await page
-    .waitForFunction(() => {
-      return !document.querySelector(
-        ".sb-show-preparing-story, .sb-show-preparing-docs",
-      );
-    }, undefined, { timeout: 5000 })
-    .catch(() => undefined);
-
-  const delayAttr = await page
-    .locator("html")
-    .getAttribute(VISUAL_DELTA_DELAY_ATTR);
-  const delay = Number(delayAttr);
-  if (Number.isFinite(delay) && delay > 0) {
-    await page.waitForTimeout(delay);
+  if (!options?.visualCaptureUntil) {
+    await waitForVisualStoryFinished(page, storyId);
+    await settleVisualStoryPage(page);
   }
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) active.blur();
-  });
 }
 
 async function screenshotStorySubject(
@@ -307,9 +289,11 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         visualCaptureUntil: interactionRequest.stepId,
       });
       await page
-        .locator(`html[${VISUAL_CAPTURE_READY_ATTR}="${interactionRequest.stepId}"]`)
+        .locator(
+          `html[${VISUAL_CAPTURE_READY_ATTR}="${interactionRequest.stepId}"]`,
+        )
         .waitFor({ timeout: 15_000 });
-      await settleAfterPlay(page);
+      await settleVisualStoryPage(page);
       const rel = interactionScreenshotRelativePath(
         screenshotRelativePath(entry, mode),
         interactionRequest.stepId,
@@ -328,7 +312,9 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         error = err instanceof Error ? err.message : String(err);
         throw err;
       } finally {
-        const actualPng = await captureActualPng(page, target).catch(() => null);
+        const actualPng = await captureActualPng(page, target).catch(
+          () => null,
+        );
         // `{slug}--{stepId}-chromium-darwin.png` beside the primary baseline.
         const baselinePngAbsPath = baselinePngAbs(
           entry,
@@ -357,7 +343,6 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   for (const story of stories) {
     test(story.id, async ({ page }) => {
       await prepareStoryPage(page, story.id);
-      await settleAfterPlay(page);
       const rel = screenshotRelativePath(story, mode);
       let target: ShotTarget = {
         subject: null,
@@ -373,7 +358,9 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         error = err instanceof Error ? err.message : String(err);
         throw err;
       } finally {
-        const actualPng = await captureActualPng(page, target).catch(() => null);
+        const actualPng = await captureActualPng(page, target).catch(
+          () => null,
+        );
         writeDiffArtifactsForBaseline({
           entry: story,
           packageRoot,

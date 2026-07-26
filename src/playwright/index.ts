@@ -30,6 +30,10 @@ export {
   defineVisualSuite,
   type VisualSuiteOptions,
 } from "./suite.js";
+export {
+  settleVisualStoryPage,
+  waitForVisualStoryFinished,
+} from "./readiness.js";
 export type { BaselinePathMode } from "../node/options.js";
 export {
   baselinePublicUrl,
