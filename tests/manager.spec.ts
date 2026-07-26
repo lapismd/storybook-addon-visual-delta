@@ -334,6 +334,12 @@ test.describe("Visual Delta manager integration", () => {
     const writes = await mockVisualBackend(page);
     await openManager(page, NATURAL_WIDTH_COMPONENT_FIXTURE, DEV_STORYBOOK);
 
+    const baselineRight = page.getByRole("switch", {
+      name: "Baseline right of live",
+    });
+    if ((await baselineRight.getAttribute("aria-checked")) !== "true") {
+      await baselineRight.click();
+    }
     const frame = previewFrame(page);
     await expect(frame.locator("#visual-delta-split")).toBeVisible();
     const dimensions = await frame
@@ -357,6 +363,63 @@ test.describe("Visual Delta manager integration", () => {
     await expect(page.getByTestId("baseline-geometry-warning")).toContainText(
       "Baseline 1232×187 CSS px; live component 264×187 CSS px",
     );
+
+    const toolbarBaseline = page.getByRole("button", {
+      name: "Open Default baseline full image",
+    });
+    const previewSizes = await Promise.all([
+      toolbarBaseline.locator("img").evaluate((image) => {
+        const rect = image.getBoundingClientRect();
+        return {
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+          renderedWidth: rect.width,
+          renderedHeight: rect.height,
+        };
+      }),
+      frame.locator("#visual-delta-overlay > img").evaluate((image) => {
+        const rect = image.getBoundingClientRect();
+        return {
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+          renderedWidth: rect.width,
+          renderedHeight: rect.height,
+        };
+      }),
+    ]);
+    for (const size of previewSizes) {
+      expect(size.renderedWidth / size.renderedHeight).toBeCloseTo(
+        size.naturalWidth / size.naturalHeight,
+        2,
+      );
+    }
+
+    await toolbarBaseline.click();
+    const fullImage = page.getByRole("img", {
+      name: "Default baseline full image",
+    });
+    await expect(fullImage).toBeVisible();
+    const lightboxSize = await fullImage.evaluate((image) => {
+      const rect = image.getBoundingClientRect();
+      const style = getComputedStyle(image);
+      return {
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        cssWidth: Number.parseFloat(style.width),
+        cssHeight: Number.parseFloat(style.height),
+        renderedWidth: rect.width,
+        renderedHeight: rect.height,
+      };
+    });
+    expect(lightboxSize.cssWidth).toBeCloseTo(lightboxSize.naturalWidth / 3, 1);
+    expect(lightboxSize.cssHeight).toBeCloseTo(
+      lightboxSize.naturalHeight / 3,
+      1,
+    );
+    expect(
+      lightboxSize.renderedWidth / lightboxSize.renderedHeight,
+    ).toBeCloseTo(lightboxSize.naturalWidth / lightboxSize.naturalHeight, 2);
+    await page.getByRole("button", { name: "Close modal" }).click();
     expect(writes).toEqual([]);
   });
 });
