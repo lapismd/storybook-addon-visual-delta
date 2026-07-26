@@ -89,6 +89,7 @@ import {
   ensureWarmStaticStorybookServer,
   invalidateWarmStaticStorybookServer,
 } from "./visual-server.js";
+import { createBaselineHistoryEndpoint } from "./baseline-history-endpoint.js";
 
 type UpdateBody = {
   storyId?: string;
@@ -1298,6 +1299,8 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/runtime — stable identity for this dev server instance
+ * - GET  /__visual-delta/baseline-history — committed PNG revisions
+ * - GET  /__visual-delta/baseline-history/image — one historical PNG
  * - GET  /__visual-delta/config — resolved host options
  * - PUT  /__visual-delta/config — persist allow-listed project defaults
  * - POST /__visual-delta/story-facts — resolve primary-baseline coverage
@@ -1313,6 +1316,10 @@ export function visualDeltaMiddlewarePlugin(
     name: "visual-delta-middleware",
     configureServer(server) {
       const root = resolveRoot(options, server.config.root);
+      const baselineHistory = createBaselineHistoryEndpoint({
+        root,
+        hostOptions: options,
+      });
       const storybookPort =
         typeof server.config.server?.port === "number"
           ? server.config.server.port
@@ -1328,6 +1335,16 @@ export function visualDeltaMiddlewarePlugin(
 
         if (url === VISUAL_DELTA_RUNTIME_PATH) {
           runtime.handle(req.method, res);
+          return;
+        }
+
+        if (
+          await baselineHistory.handle(
+            req,
+            res,
+            new URL(req.url ?? "/", "http://visual-delta.local"),
+          )
+        ) {
           return;
         }
 

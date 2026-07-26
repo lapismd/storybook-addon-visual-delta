@@ -87,6 +87,14 @@ export {
   type VisualRunHubStatus,
 } from "./run-hub.js";
 export {
+  detectBaselineHistoryVcs,
+  GitBaselineHistoryVcs,
+  JjBaselineHistoryVcs,
+  type BaselineHistoryVcs,
+  type VcsFileRevision,
+  type VcsRevisionPage,
+} from "./baseline-history-vcs.js";
+export {
   captureSubjectWithChromium,
   type CaptureSubjectError,
   type CaptureSubjectRequest,
