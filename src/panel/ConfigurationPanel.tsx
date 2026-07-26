@@ -11,6 +11,7 @@ import {
   BUILTIN_VISUAL_DELTA_DEFAULTS,
   validateVisualDeltaProjectDefaults,
 } from "../shared/project-defaults.js";
+import { RangeNumberInput } from "./RangeNumberInput.js";
 
 const Root = styled.div(({ theme }) => ({
   display: "flex",
@@ -159,8 +160,8 @@ const CheckboxRow = styled.span({
 });
 
 const OffsetRow = styled.span({
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  display: "flex",
+  flexDirection: "column",
   gap: 8,
 });
 
@@ -479,16 +480,26 @@ export function ConfigurationPanel({
   const dirty = JSON.stringify(draft) !== JSON.stringify(defaultsFor(config));
   const source = (key: keyof VisualDeltaProjectDefaults) =>
     config?.projectDefaultSources?.[key] ?? "built-in";
-  const number =
-    (key: "passThresholdPercent" | "diffThreshold" | "delay" | "opacity") =>
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.currentTarget.value;
-      setSaved(null);
-      setDraft((current) => ({
-        ...current,
-        [key]: value === "" ? Number.NaN : Number(value),
-      }));
-    };
+  const setNumber = (
+    key: "passThresholdPercent" | "diffThreshold" | "delay" | "opacity",
+    value: number,
+  ) => {
+    setSaved(null);
+    setDraft((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+  const setOffset = (key: "x" | "y", value: number) => {
+    setSaved(null);
+    setDraft((current) => ({
+      ...current,
+      baselineLabelOffset: {
+        ...current.baselineLabelOffset,
+        [key]: value,
+      },
+    }));
+  };
   const boolean =
     (key: "diffIncludeAntiAliasing" | "cropToViewport") =>
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -580,18 +591,14 @@ export function ConfigurationPanel({
                   Pass threshold (%){" "}
                   <Source>{source("passThresholdPercent")}</Source>
                 </FieldLabel>
-                <Input
-                  aria-label="Pass threshold percentage"
-                  type="number"
+                <RangeNumberInput
+                  label="Pass threshold percentage"
                   min={0}
                   max={100}
                   step={0.01}
-                  value={
-                    Number.isFinite(draft.passThresholdPercent)
-                      ? draft.passThresholdPercent
-                      : ""
-                  }
-                  onChange={number("passThresholdPercent")}
+                  value={draft.passThresholdPercent}
+                  suffix="%"
+                  onChange={(value) => setNumber("passThresholdPercent", value)}
                 />
                 <FieldHint>
                   Maximum changed-pixel percentage that passes.
@@ -602,18 +609,13 @@ export function ConfigurationPanel({
                   Pixel diff threshold{" "}
                   <Source>{source("diffThreshold")}</Source>
                 </FieldLabel>
-                <Input
-                  aria-label="Pixel diff threshold"
-                  type="number"
+                <RangeNumberInput
+                  label="Pixel diff threshold"
                   min={0}
                   max={1}
                   step={0.01}
-                  value={
-                    Number.isFinite(draft.diffThreshold)
-                      ? draft.diffThreshold
-                      : ""
-                  }
-                  onChange={number("diffThreshold")}
+                  value={draft.diffThreshold}
+                  onChange={(value) => setNumber("diffThreshold", value)}
                 />
                 <FieldHint>Pixelmatch color sensitivity from 0 to 1.</FieldHint>
               </Field>
@@ -621,14 +623,14 @@ export function ConfigurationPanel({
                 <FieldLabel>
                   Capture delay (ms) <Source>{source("delay")}</Source>
                 </FieldLabel>
-                <Input
-                  aria-label="Capture delay milliseconds"
-                  type="number"
+                <RangeNumberInput
+                  label="Capture delay milliseconds"
                   min={0}
                   max={60000}
                   step={1}
-                  value={Number.isFinite(draft.delay) ? draft.delay : ""}
-                  onChange={number("delay")}
+                  value={draft.delay}
+                  inputWidth="5.25rem"
+                  onChange={(value) => setNumber("delay", value)}
                 />
                 <FieldHint>
                   Applied once after Storybook reports storyFinished.
@@ -638,14 +640,13 @@ export function ConfigurationPanel({
                 <FieldLabel>
                   Overlay opacity <Source>{source("opacity")}</Source>
                 </FieldLabel>
-                <Input
-                  aria-label="Overlay opacity"
-                  type="number"
+                <RangeNumberInput
+                  label="Overlay opacity"
                   min={0}
                   max={1}
                   step={0.05}
-                  value={Number.isFinite(draft.opacity) ? draft.opacity : ""}
-                  onChange={number("opacity")}
+                  value={draft.opacity}
+                  onChange={(value) => setNumber("opacity", value)}
                 />
                 <FieldHint>Used by the centered baseline overlay.</FieldHint>
               </Field>
@@ -678,39 +679,23 @@ export function ConfigurationPanel({
                   <Source>{source("baselineLabelOffset")}</Source>
                 </FieldLabel>
                 <OffsetRow>
-                  <Input
-                    aria-label="Baseline label X offset"
-                    type="number"
+                  <RangeNumberInput
+                    label="Baseline label X offset"
                     min={-1000}
                     max={1000}
+                    step={1}
                     value={draft.baselineLabelOffset.x}
-                    onChange={(event) => {
-                      const x = Number(event.currentTarget.value);
-                      setDraft((current) => ({
-                        ...current,
-                        baselineLabelOffset: {
-                          ...current.baselineLabelOffset,
-                          x,
-                        },
-                      }));
-                    }}
+                    inputWidth="4rem"
+                    onChange={(value) => setOffset("x", value)}
                   />
-                  <Input
-                    aria-label="Baseline label Y offset"
-                    type="number"
+                  <RangeNumberInput
+                    label="Baseline label Y offset"
                     min={-1000}
                     max={1000}
+                    step={1}
                     value={draft.baselineLabelOffset.y}
-                    onChange={(event) => {
-                      const y = Number(event.currentTarget.value);
-                      setDraft((current) => ({
-                        ...current,
-                        baselineLabelOffset: {
-                          ...current.baselineLabelOffset,
-                          y,
-                        },
-                      }));
-                    }}
+                    inputWidth="4rem"
+                    onChange={(value) => setOffset("y", value)}
                   />
                 </OffsetRow>
                 <FieldHint>

@@ -101,6 +101,7 @@ import {
 } from "./PanelResultSummary.js";
 import { PlacementPad } from "./PlacementPad.js";
 import { CompareZoomControl } from "./CompareZoomControl.js";
+import { RangeNumberInput } from "./RangeNumberInput.js";
 import { BaselineGeometryWarning } from "./BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
 import { ModeSelector } from "./ModeSelector.js";
@@ -127,13 +128,11 @@ import {
   CheckboxContainer,
   ErrorText,
   InlineControl,
-  Slider,
   ThreshMismatchNote,
   ThreshStack,
   Toolbar as PanelToolbar,
   ToolbarRow,
   ToolbarSpacer,
-  ValueDisplay,
 } from "./styled.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
@@ -1567,15 +1566,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               <>
                 <InlineControl title="Overlay opacity">
                   <span>Opacity</span>
-                  <Slider
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={opacity}
-                    onChange={(e) => setOpacity(parseFloat(e.target.value))}
+                  <RangeNumberInput
+                    label="Overlay opacity percentage"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={Math.round(opacity * 100)}
+                    suffix="%"
+                    inputWidth="3.5rem"
+                    onChange={(value) => setOpacity(value / 100)}
                   />
-                  <ValueDisplay>{Math.round(opacity * 100)}%</ValueDisplay>
                 </InlineControl>
                 <CheckboxContainer>
                   <Checkbox
@@ -1590,20 +1590,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             <ThreshStack>
               <InlineControl title="Pass if diff % is below this">
                 <span>Thresh</span>
-                <Slider
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.05"
+                <RangeNumberInput
+                  label={`${diffEngine === "html" ? "HTML" : "Chromium"} pass threshold percentage`}
+                  min={0}
+                  max={2}
+                  step={0.05}
                   value={passThresholdPercent}
-                  onChange={(e) =>
-                    setPassThresholdPercent(
-                      diffEngine,
-                      parseFloat(e.target.value),
-                    )
+                  suffix="%"
+                  inputWidth="3.75rem"
+                  onChange={(value) =>
+                    setPassThresholdPercent(diffEngine, value)
                   }
                 />
-                <ValueDisplay>{passThresholdPercent}%</ValueDisplay>
               </InlineControl>
               {playwrightThresholdMismatch ? (
                 <ThreshMismatchNote title="Local Diff Chromium thresh differs from package Playwright default">

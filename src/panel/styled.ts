@@ -335,7 +335,8 @@ export const ThreshMismatchNote = styled.span(({ theme }) => ({
 
 export const Slider = styled.input({
   width: "72px",
-  flex: "0 0 auto",
+  minWidth: "48px",
+  flex: "1 1 72px",
   height: "3px",
   borderRadius: "2px",
   outline: "none",
@@ -376,15 +377,6 @@ export const Checkbox = styled.input({
   cursor: "pointer",
   margin: 0,
 });
-
-export const ValueDisplay = styled.span(({ theme }) => ({
-  fontSize: "11px",
-  fontWeight: 500,
-  color: theme.color.mediumdark,
-  minWidth: "2.25rem",
-  textAlign: "right",
-  fontVariantNumeric: "tabular-nums",
-}));
 
 export const Actions = styled.div({
   display: "inline-flex",

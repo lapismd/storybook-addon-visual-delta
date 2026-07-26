@@ -91,9 +91,11 @@ describe("ConfigurationPanel", () => {
     expect(
       screen.getByRole("tab", { name: "Defaults", selected: true }),
     ).toBeVisible();
+    expect(screen.getAllByRole("slider")).toHaveLength(6);
     const threshold = screen.getByLabelText("Pass threshold percentage");
     await user.clear(threshold);
     await user.type(threshold, "2.5");
+    await user.tab();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).toHaveBeenCalledWith(
@@ -116,6 +118,7 @@ describe("ConfigurationPanel", () => {
     const opacity = screen.getByLabelText("Overlay opacity");
     await user.clear(opacity);
     await user.type(opacity, "0.7");
+    await user.tab();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
