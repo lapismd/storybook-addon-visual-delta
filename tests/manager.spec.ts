@@ -12,6 +12,74 @@ import {
 const DEV_STORYBOOK = "http://127.0.0.1:9013";
 
 test.describe("Visual Delta manager integration", () => {
+  test("reloads once after the runtime identity changes and preserves manager URL state", async ({
+    page,
+  }) => {
+    let runtimeInstanceId = "runtime-a";
+    await page.addInitScript(() => {
+      const key = "visual-delta-manager-load-count";
+      const next = Number(sessionStorage.getItem(key) ?? "0") + 1;
+      sessionStorage.setItem(key, String(next));
+    });
+    await mockVisualBackend(page, {
+      runtimeInstanceId: () => runtimeInstanceId,
+    });
+    await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
+
+    const initialUrl = new URL(page.url());
+    expect(initialUrl.searchParams.get("path")).toBe(
+      `/story/${MANAGER_FIXTURE}`,
+    );
+    const initialManagerLocation = await page.evaluate(
+      () => location.pathname + location.search + location.hash,
+    );
+    await expect(
+      page.getByRole("tabpanel", { name: "Visual Delta" }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Number(
+            sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
+          ),
+        ),
+      )
+      .toBe(1);
+
+    runtimeInstanceId = "runtime-b";
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            Number(
+              sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
+            ),
+          ),
+        { timeout: 5_000 },
+      )
+      .toBe(2);
+
+    expect(
+      await page.evaluate(
+        () => location.pathname + location.search + location.hash,
+      ),
+    ).toBe(initialManagerLocation);
+    await expect(page).toHaveURL(new RegExp(`path=/story/${MANAGER_FIXTURE}`));
+    await expect(
+      page.getByRole("tabpanel", { name: "Visual Delta" }),
+    ).toBeVisible();
+
+    // The new page seeds runtime-b, so a subsequent poll must not reload again.
+    await page.waitForTimeout(1_250);
+    expect(
+      await page.evaluate(() =>
+        Number(
+          sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
+        ),
+      ),
+    ).toBe(2);
+  });
+
   test("registers the panel, clears stale story state, and reports ignore counts", async ({
     page,
   }) => {

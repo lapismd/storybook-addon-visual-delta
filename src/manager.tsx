@@ -22,6 +22,7 @@ import { ReviewLayoutTool } from "./manager/ReviewLayoutTool.js";
 import { installVisualStatusSidebarLabels } from "./manager/VisualStatusLabel.js";
 import { VisualStatusToolbarTool } from "./manager/VisualStatusToolbarTool.js";
 import { VisualTestProviderRender } from "./manager/VisualTestProvider.js";
+import { installVisualDeltaReloadWatcher } from "./manager/reload-on-restart.js";
 import { Panel } from "./panel/Panel.js";
 
 addons.register(ADDON_ID, (api) => {
@@ -76,6 +77,7 @@ addons.register(ADDON_ID, (api) => {
     globalThis as typeof globalThis & { CONFIG_TYPE?: string }
   ).CONFIG_TYPE;
   if (configType === "DEVELOPMENT") {
+    installVisualDeltaReloadWatcher();
     const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
     addons.add(TEST_PROVIDER_ID, {
       type: Addon_TypesEnum.experimental_TEST_PROVIDER,

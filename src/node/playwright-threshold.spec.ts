@@ -40,9 +40,9 @@ describe("playwright threshold host file", () => {
   it("clamps out-of-range values", () => {
     const root = mkdtempSync(join(tmpdir(), "vd-pw-"));
     dirs.push(root);
-    expect(writePlaywrightPassThresholdPercent(root, -1).passThresholdPercent).toBe(
-      0,
-    );
+    expect(
+      writePlaywrightPassThresholdPercent(root, -1).passThresholdPercent,
+    ).toBe(0);
     expect(
       writePlaywrightPassThresholdPercent(root, 150).passThresholdPercent,
     ).toBe(100);

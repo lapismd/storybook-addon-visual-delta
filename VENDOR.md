@@ -35,13 +35,13 @@ and object-style TypeScript/JavaScript CSF are supported.
 
 ## Addon vs host boundary
 
-| Owned by the addon package                                                                   | Stays in `@stevejuma/ui` (host)                          |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Panel / Testing Module UI, overlay, Live Diff                                                | Playwright suite `tests/visual/storybook.spec.ts`        |
+| Owned by the addon package                                                                                                                                                                  | Stays in `@stevejuma/ui` (host)                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Panel / Testing Module UI, overlay, Live Diff                                                                                                                                               | Playwright suite `tests/visual/storybook.spec.ts`              |
 | Preset: `staticDirs`, `viteFinal` (middleware + CSF inject + src watch); package `./manager` + `./preview` auto-loaded by Storybook 10; packaged `visual-delta` CLI + `/playwright` helpers | Committed PNGs + thin Playwright entry (or catalog suite/CLIs) |
-| Preview `runStep` + park / `PLAY_STEPS` channel                                              | CLI pipelines `scripts/ui-generator/pipeline/visual-*`   |
-| Path constants, source patchers, sidecar/index readers, server readiness, and `fetch` client | CLI orchestration under `scripts/ui-generator/pipeline/` |
-| Catalog fixtures + Panel Shell mocks                                                         | Approval gate `VISUAL_UPDATE_APPROVED`                   |
+| Preview `runStep` + park / `PLAY_STEPS` channel                                                                                                                                             | CLI pipelines `scripts/ui-generator/pipeline/visual-*`         |
+| Path constants, source patchers, sidecar/index readers, server readiness, and `fetch` client                                                                                                | CLI orchestration under `scripts/ui-generator/pipeline/`       |
+| Catalog fixtures + Panel Shell mocks                                                                                                                                                        | Approval gate `VISUAL_UPDATE_APPROVED`                         |
 
 Host `.storybook/main.ts` registers the local preset (absolute `src/` manager /
 preview for HMR) with catalog overrides (`nested-import` + ui-generator CLIs).

@@ -87,11 +87,10 @@ export const InteractionsPanel = memo(function InteractionsPanel({
   if (steps.length === 0) {
     return (
       <Hint style={{ padding: "12px 0" }}>
-        No interactions yet. Add named{" "}
-        <code>step(&quot;Label&quot;, …)</code> /{" "}
+        No interactions yet. Add named <code>step(&quot;Label&quot;, …)</code> /{" "}
         <code>visualCapture(step, …)</code> in play, reload the story, then
-        Create here — or wire{" "}
-        <code>parameters.visualDelta.interactions</code> after a capture.
+        Create here — or wire <code>parameters.visualDelta.interactions</code>{" "}
+        after a capture.
       </Hint>
     );
   }

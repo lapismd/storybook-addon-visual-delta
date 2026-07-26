@@ -45,9 +45,9 @@ describe("visual review tags", () => {
         "visual-approved",
       ]),
     ).toBe("approved");
-    expect(visualReviewStatusFromTags(["visual-pending", "visual-failed"])).toBe(
-      "failed",
-    );
+    expect(
+      visualReviewStatusFromTags(["visual-pending", "visual-failed"]),
+    ).toBe("failed");
     expect(visualReviewStatusFromTags(["visual-pending", "visual-ready"])).toBe(
       "ready",
     );

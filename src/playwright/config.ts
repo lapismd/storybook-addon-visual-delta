@@ -2,10 +2,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import type * as PlaywrightTest from "@playwright/test";
 import type { PlaywrightTestConfig } from "@playwright/test";
-import {
-  VISUAL_DEVICE_SCALE_FACTOR,
-  VISUAL_VIEWPORT,
-} from "../constants.js";
+import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import { resolveVisualServerPort } from "../node/options.js";
 import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";

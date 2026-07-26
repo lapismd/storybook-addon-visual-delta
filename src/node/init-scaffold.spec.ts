@@ -32,7 +32,11 @@ describe("visual-delta init scaffold", () => {
     expect(result.written).toContain("tests/visual/storybook.spec.ts");
     expect(result.written).toContain("playwright.config.ts");
     expect(result.scriptsUpdated).toEqual(
-      expect.arrayContaining(["test:visual", "visual-delta", "build-storybook"]),
+      expect.arrayContaining([
+        "test:visual",
+        "visual-delta",
+        "build-storybook",
+      ]),
     );
 
     const suite = readFileSync(
@@ -40,7 +44,10 @@ describe("visual-delta init scaffold", () => {
       "utf8",
     );
     expect(suite).toContain("defineVisualSuite");
-    const config = readFileSync(path.join(root, "playwright.config.ts"), "utf8");
+    const config = readFileSync(
+      path.join(root, "playwright.config.ts"),
+      "utf8",
+    );
     expect(config).toContain("defineVisualPlaywrightConfig");
     expect(config).toContain("port: 6007");
 

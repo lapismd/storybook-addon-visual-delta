@@ -13,6 +13,7 @@ import {
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REBUILD_STATIC_PATH,
   VISUAL_DELTA_REVIEW_PATH,
+  VISUAL_DELTA_RUNTIME_PATH,
   VISUAL_DELTA_RUN_EVENTS_PATH,
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_RUN_STATUS_PATH,
@@ -53,6 +54,7 @@ import type {
   VisualStoryFactsResponse,
 } from "../shared/story-facts.js";
 import { resolveVisualStoryFacts } from "./story-facts.js";
+import { createVisualDeltaRuntimeEndpoint } from "./runtime-instance.js";
 import {
   patchStorySkipVisual,
   patchStoryVisualReviewStatus,
@@ -1295,6 +1297,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
+ * - GET  /__visual-delta/runtime — stable identity for this dev server instance
  * - GET  /__visual-delta/config — resolved host options
  * - PUT  /__visual-delta/config — persist allow-listed project defaults
  * - POST /__visual-delta/story-facts — resolve primary-baseline coverage
@@ -1304,6 +1307,8 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
 export function visualDeltaMiddlewarePlugin(
   options: VisualDeltaHostOptions = {},
 ): Plugin {
+  const runtime = createVisualDeltaRuntimeEndpoint();
+
   return {
     name: "visual-delta-middleware",
     configureServer(server) {
@@ -1320,6 +1325,11 @@ export function visualDeltaMiddlewarePlugin(
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
+
+        if (url === VISUAL_DELTA_RUNTIME_PATH) {
+          runtime.handle(req.method, res);
+          return;
+        }
 
         if (url === VISUAL_DELTA_STORY_FACTS_PATH) {
           if (req.method !== "POST") {

@@ -61,7 +61,10 @@ const CONFIG = {
   warnings: [],
 };
 
-export async function mockVisualBackend(page: Page) {
+export async function mockVisualBackend(
+  page: Page,
+  options: { runtimeInstanceId?: () => string } = {},
+) {
   const writes: string[] = [];
   await page.route("**/__visual-delta/**", async (route) => {
     const request = route.request();
@@ -89,6 +92,17 @@ export async function mockVisualBackend(page: Page) {
     }
     if (url.pathname.endsWith("/config")) {
       await route.fulfill({ status: 200, json: CONFIG });
+      return;
+    }
+    if (url.pathname.endsWith("/runtime")) {
+      await route.fulfill({
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+        json: {
+          ok: true,
+          instanceId: options.runtimeInstanceId?.() ?? "manager-test-runtime",
+        },
+      });
       return;
     }
     if (url.pathname.endsWith("/run-events")) {

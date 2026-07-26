@@ -13,11 +13,7 @@ const CASES = [
     false,
   ],
   ["missing-baseline", "visual-delta-panel-shell--missing-baseline", true],
-  [
-    "mixed-mode-failure",
-    "visual-delta-panel-shell--mixed-mode-failure",
-    true,
-  ],
+  ["mixed-mode-failure", "visual-delta-panel-shell--mixed-mode-failure", true],
   ["capture-error", "visual-delta-panel-shell--capture-error", true],
 ] as const;
 const DELAYED_PLAY = "visual-delta-panel-shell--delayed-story-completion";
