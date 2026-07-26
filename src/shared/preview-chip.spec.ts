@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   MODE_BADGE_ID,
-  MODE_BADGE_LABEL,
   OVERLAY_CHIP_ID,
   OVERLAY_CHIP_LABEL,
   ensureOverlayChip,
@@ -117,12 +116,14 @@ describe("ensureOverlayChip", () => {
 });
 
 describe("syncModeBadge", () => {
-  it("shows Image only when live is hidden and removes it otherwise", () => {
-    syncModeBadge(true);
-    const badge = document.getElementById(MODE_BADGE_ID);
-    expect(badge?.textContent).toBe(MODE_BADGE_LABEL);
-    expect(badge?.style.position).toBe("fixed");
+  it("keeps image-only mode free of a duplicate fixed badge", () => {
+    const stale = document.createElement("div");
+    stale.id = MODE_BADGE_ID;
+    stale.textContent = "Image only";
+    document.documentElement.appendChild(stale);
 
+    syncModeBadge(true);
+    expect(document.getElementById(MODE_BADGE_ID)).toBeNull();
     syncModeBadge(false);
     expect(document.getElementById(MODE_BADGE_ID)).toBeNull();
   });

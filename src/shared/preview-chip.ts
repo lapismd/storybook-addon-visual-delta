@@ -1,16 +1,15 @@
 /**
- * Preview chrome chips: Image-only (fixed) and Baseline (on the overlay).
+ * Preview chrome: the Baseline chip attached to the overlay.
  * Shared so catalog demos / tests cannot drift from the live overlay paint.
  */
 
 export const MODE_BADGE_ID = "visual-delta-mode-badge";
 export const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
 export const OVERLAY_CHIP_LABEL = "Baseline";
-export const MODE_BADGE_LABEL = "Image only";
 export const BASELINE_CHIP_GAP_PX = 6;
 export const BASELINE_CHIP_GUTTER_PX = 24;
 
-/** Shared paint for Image-only (fixed) and Baseline (on-overlay). */
+/** Shared paint for the Baseline chip on the overlay. */
 export const PREVIEW_CHIP_PAINT = `
   z-index: 10000;
   padding: 3px 8px;
@@ -22,15 +21,6 @@ export const PREVIEW_CHIP_PAINT = `
   user-select: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 `.trim();
-
-export function paintFixedModeBadge(badge: HTMLElement) {
-  badge.style.cssText = `
-    position: fixed;
-    top: 8px;
-    left: 8px;
-    ${PREVIEW_CHIP_PAINT}
-  `;
-}
 
 export function paintOverlayChip(
   chip: HTMLElement,
@@ -78,21 +68,10 @@ export function positionOverlayChip(
   return chip;
 }
 
-export function syncModeBadge(imageOnly: boolean) {
-  let badge = document.getElementById(MODE_BADGE_ID);
-  if (!imageOnly) {
-    badge?.remove();
-    return;
-  }
-  if (!(badge instanceof HTMLElement)) {
-    badge = document.createElement("div");
-    badge.id = MODE_BADGE_ID;
-    badge.textContent = MODE_BADGE_LABEL;
-    document.documentElement.appendChild(badge);
-  } else if (badge.textContent !== MODE_BADGE_LABEL) {
-    badge.textContent = MODE_BADGE_LABEL;
-  }
-  paintFixedModeBadge(badge);
+export function syncModeBadge(_imageOnly: boolean) {
+  // Image-only mode retains the Baseline overlay chip. Remove a leftover fixed
+  // mode badge from older addon builds instead of duplicating visible state.
+  document.getElementById(MODE_BADGE_ID)?.remove();
 }
 
 /**

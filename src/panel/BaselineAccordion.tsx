@@ -180,7 +180,7 @@ export type BaselineSection = {
 };
 
 /** Baseline preview shown in the expanded section toolbar. */
-export const SectionThumbFrame = styled.div(({ theme }) => ({
+export const SectionThumbFrame = styled.button(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -191,6 +191,12 @@ export const SectionThumbFrame = styled.div(({ theme }) => ({
   border: `1px solid ${theme.appBorderColor}`,
   background: theme.background.app,
   overflow: "hidden",
+  padding: 0,
+  cursor: "zoom-in",
+  "&:focus-visible": {
+    outline: `2px solid ${theme.color.secondary}`,
+    outlineOffset: 2,
+  },
 }));
 
 export const SectionThumb = styled.img({

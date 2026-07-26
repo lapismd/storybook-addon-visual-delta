@@ -115,6 +115,48 @@ test.describe("Visual Delta manager integration", () => {
       "viewport requested 1440×960, observed 1440×960 at 3×",
     );
     await expect(diagnostics).toContainText("bitmap 4320×2880");
+
+    await page
+      .getByRole("button", { name: "Open Default baseline full image" })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Default baseline full image" }),
+    ).toBeAttached();
+    await expect(page.getByTestId("image-lightbox")).toBeVisible();
+    await page.getByRole("button", { name: "Close modal" }).click();
+
+    await page
+      .getByRole("switch", { name: "Show compare view at 100%" })
+      .click();
+    const compareViewport = page.getByTestId("compare-scroll-viewport");
+    await expect
+      .poll(() =>
+        compareViewport.evaluate(
+          (element) => element.scrollHeight > element.clientHeight,
+        ),
+      )
+      .toBe(true);
+    await page.getByRole("tab", { name: "Diff" }).hover();
+    await page.mouse.wheel(0, 240);
+    await expect
+      .poll(() => compareViewport.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(0);
+
+    await page.getByRole("tab", { name: "Diff" }).click();
+    await page.getByRole("button", { name: "Open Diff full image" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Diff full image" }),
+    ).toBeAttached();
+    await expect(page.getByTestId("image-lightbox")).toBeVisible();
+    await page.getByRole("switch", { name: "Show full image at 100%" }).click();
+    await expect
+      .poll(() =>
+        page
+          .getByTestId("image-lightbox-viewport")
+          .evaluate((element) => element.scrollWidth > element.clientWidth),
+      )
+      .toBe(true);
+    await page.getByRole("button", { name: "Close modal" }).click();
     expect(writes).toEqual([]);
   });
 
