@@ -7,6 +7,7 @@ inspection.
 - [x] VCS detection, normalized history service, and guarded image endpoint
 - [x] Baseline History panel with working-copy and revision metadata
 - [x] Image-to-image comparison, stories, browser acceptance, and docs
+- [x] Accordion-header history action and component-folder source diff
 
 Decisions:
 
@@ -16,3 +17,5 @@ Decisions:
 - Show JJ change IDs as the stable primary identifier and commit IDs secondarily.
 - Git follows renames; JJ v1 reports history for the resolved path.
 - Keep history read-only and never mutate visual review status.
+- Keep revision and image panes equal-height; render the source diff full-width
+  below them because baseline PNGs cannot reconstruct historical DOM.

@@ -66,7 +66,13 @@ describe("Git baseline history adapter", () => {
     const original = "snapshots/original.png";
     const renamed = "snapshots/renamed.png";
     const first = await writeVersion(root, original, "first");
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "src/Card.tsx"),
+      "export const card = 1;\n",
+    );
     await command(root, "git", ["add", original]);
+    await command(root, "git", ["add", "src/Card.tsx"]);
     await command(root, "git", [
       "-c",
       "commit.gpgsign=false",
@@ -84,7 +90,12 @@ describe("Git baseline history adapter", () => {
       "Rename baseline",
     ]);
     await writeVersion(root, renamed, "latest");
+    await writeFile(
+      path.join(root, "src/Card.tsx"),
+      "export const card = 2;\n",
+    );
     await command(root, "git", ["add", renamed]);
+    await command(root, "git", ["add", "src/Card.tsx"]);
     await command(root, "git", [
       "-c",
       "commit.gpgsign=false",
@@ -108,6 +119,12 @@ describe("Git baseline history adapter", () => {
     expect(await adapter.readFileAtRevision(page.entries.at(-1)!)).toEqual(
       first,
     );
+    await expect(
+      adapter.diffRevisions(
+        page.entries.at(-1)!.revisionId,
+        page.entries[0]!.revisionId,
+      ),
+    ).resolves.toContain("+export const card = 2;");
     expect(page.nextOffset).toBeNull();
   }, 15_000);
 
@@ -130,8 +147,17 @@ describe("Jujutsu baseline history adapter", () => {
     await command(root, "jj", ["git", "init", "--colocate", "."]);
     const relative = "snapshots/example.png";
     const first = await writeVersion(root, relative, "first");
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "src/Card.tsx"),
+      "export const card = 1;\n",
+    );
     await command(root, "jj", ["commit", "-m", "Add baseline"]);
     await writeVersion(root, relative, "second");
+    await writeFile(
+      path.join(root, "src/Card.tsx"),
+      "export const card = 2;\n",
+    );
     await command(root, "jj", ["commit", "-m", "Update baseline"]);
 
     const adapter = new JjBaselineHistoryVcs(root);
@@ -149,6 +175,12 @@ describe("Jujutsu baseline history adapter", () => {
     expect(await adapter.readFileAtRevision(page.entries.at(-1)!)).toEqual(
       first,
     );
+    await expect(
+      adapter.diffRevisions(
+        page.entries.at(-1)!.revisionId,
+        page.entries[0]!.revisionId,
+      ),
+    ).resolves.toContain("+export const card = 2;");
   });
 
   it("prefers JJ when a checkout also has Git metadata", async () => {

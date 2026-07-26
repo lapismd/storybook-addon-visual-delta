@@ -119,7 +119,7 @@ import {
   usePlaySteps,
   type PlayStepInfo,
 } from "./usePlaySteps.js";
-import { CommitIcon, SyncIcon } from "@storybook/icons";
+import { SyncIcon } from "@storybook/icons";
 import { baselinePathFromPublicUrl } from "../shared/baseline-history.js";
 import {
   BaselineHistoryView,
@@ -483,6 +483,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     const sections: BaselineSection[] = [];
     if (primaryImages.length > 0) {
       const isActive = activeSectionId === "default";
+      const historyPath = baselinePathFromPublicUrl(
+        images[index]?.src ?? primaryImages[0]?.src,
+      );
+      const historyLabel = selectedMode
+        ? `Default · ${selectedMode}`
+        : "Default";
       sections.push({
         id: "default",
         label: "Default",
@@ -490,11 +496,21 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         thumbSrc: primaryImages[0]?.src,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
+        ...(IS_DEVELOPMENT && historyPath
+          ? {
+              history: {
+                path: historyPath,
+                label: historyLabel,
+                componentPath: storyEntry?.importPath,
+              },
+            }
+          : {}),
       });
     }
     for (const step of interactionSteps) {
       const wired = interactions.find((item) => item.id === step.stepId);
       const isActive = activeSectionId === step.stepId;
+      const historyPath = baselinePathFromPublicUrl(wired?.src);
       sections.push({
         id: step.stepId,
         label: step.label,
@@ -506,15 +522,28 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         wired,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
+        ...(IS_DEVELOPMENT && historyPath
+          ? {
+              history: {
+                path: historyPath,
+                label: step.label,
+                componentPath: storyEntry?.importPath,
+              },
+            }
+          : {}),
       });
     }
     return sections;
   }, [
     activeDiffMeta,
     activeSectionId,
+    images,
+    index,
     interactionSteps,
     interactions,
     primaryImages,
+    selectedMode,
+    storyEntry?.importPath,
   ]);
 
   const selectSection = useCallback(
@@ -1445,15 +1474,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const renderSectionBody = useCallback(
     (section: BaselineSection) => {
-      const historySource =
-        section.id === "default"
-          ? (images[index]?.src ?? section.thumbSrc)
-          : section.thumbSrc;
-      const historyPath = baselinePathFromPublicUrl(historySource);
-      const historyLabel =
-        section.id === "default" && selectedMode
-          ? `${section.label} · ${selectedMode}`
-          : section.label;
       return (
         <>
           <PanelToolbar>
@@ -1477,23 +1497,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 >
                   <SectionThumb src={section.thumbSrc} alt="" />
                 </SectionThumbFrame>
-              ) : null}
-              {IS_DEVELOPMENT && historyPath ? (
-                <Button
-                  size="small"
-                  variant="ghost"
-                  ariaLabel={`Open ${historyLabel} baseline history`}
-                  title={`Open ${historyLabel} baseline history`}
-                  onClick={() =>
-                    setHistoryTarget({
-                      path: historyPath,
-                      label: historyLabel,
-                    })
-                  }
-                >
-                  <CommitIcon />
-                  History
-                </Button>
               ) : null}
               {section.id === "default" &&
               liveVisible &&
@@ -1800,6 +1803,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }
+              onOpenHistory={setHistoryTarget}
               renderBody={renderSectionBody}
             />
           ) : null

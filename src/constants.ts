@@ -258,6 +258,9 @@ export const VISUAL_DELTA_BASELINE_HISTORY_PATH =
 /** Storybook-dev middleware that returns one historical baseline PNG. */
 export const VISUAL_DELTA_BASELINE_HISTORY_IMAGE_PATH =
   "/__visual-delta/baseline-history/image";
+/** Storybook-dev middleware that returns source changes between baseline revisions. */
+export const VISUAL_DELTA_BASELINE_HISTORY_DIFF_PATH =
+  "/__visual-delta/baseline-history/diff";
 /** Storybook-dev middleware that resolves primary-baseline coverage. */
 export const VISUAL_DELTA_STORY_FACTS_PATH = "/__visual-delta/story-facts";
 /** Storybook-dev middleware that writes host Playwright pass threshold. */

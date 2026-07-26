@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../test/render.js";
 import {
   BaselineHistoryView,
+  type BaselineHistoryDiffLoader,
   type BaselineHistoryLoader,
 } from "./BaselineHistoryView.js";
 import type { BaselineHistoryEntry } from "../shared/baseline-history.js";
@@ -76,6 +77,32 @@ const comparison: DiffResultData = {
 };
 
 const compareImages = vi.fn(async () => comparison);
+const loadComponentDiff = vi.fn<BaselineHistoryDiffLoader>(async (args) => ({
+  ok: true,
+  beforeRevisionId: args.beforeRevisionId,
+  afterRevisionId: args.afterRevisionId,
+  truncated: false,
+  files: [
+    {
+      beforePath: "src/forms/Example.svelte",
+      afterPath: "src/forms/Example.svelte",
+      hunks: [
+        {
+          header: "@@ -1 +1 @@",
+          lines: [
+            {
+              beforeNumber: 1,
+              afterNumber: 1,
+              before: "<div>Before</div>",
+              after: "<div>After</div>",
+              kind: "changed",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}));
 
 describe("BaselineHistoryView", () => {
   it("defaults to the newest commit versus a changed working copy", async () => {
@@ -88,9 +115,14 @@ describe("BaselineHistoryView", () => {
     }));
     renderWithTheme(
       <BaselineHistoryView
-        target={{ path: "forms/example.png", label: "Default" }}
+        target={{
+          path: "forms/example.png",
+          label: "Default",
+          componentPath: "src/forms/Example.stories.svelte",
+        }}
         onClose={vi.fn()}
         loadHistory={loader}
+        loadComponentDiff={loadComponentDiff}
         compareImages={compareImages}
       />,
     );
@@ -107,6 +139,16 @@ describe("BaselineHistoryView", () => {
       }),
     ).toBeChecked();
     expect(screen.getByTitle("History provided by jj")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Component diff", { selector: "h3" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("− <div>Before</div>")).toBeInTheDocument();
+    expect(screen.getByText("+ <div>After</div>")).toBeInTheDocument();
+    expect(loadComponentDiff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentPath: "src/forms/Example.stories.svelte",
+      }),
+    );
   });
 
   it("changes revision selections, loads another page, and closes", async () => {
@@ -134,6 +176,7 @@ describe("BaselineHistoryView", () => {
         target={{ path: "forms/example.png", label: "Default" }}
         onClose={onClose}
         loadHistory={loader}
+        loadComponentDiff={loadComponentDiff}
         compareImages={compareImages}
       />,
     );

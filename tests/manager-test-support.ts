@@ -119,6 +119,38 @@ export async function mockVisualBackend(
       });
       return;
     }
+    if (url.pathname.endsWith("/baseline-history/diff")) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          ok: true,
+          beforeRevisionId: url.searchParams.get("before") ?? "b".repeat(40),
+          afterRevisionId: url.searchParams.get("after") ?? "a".repeat(40),
+          truncated: false,
+          files: [
+            {
+              beforePath: "src/shared/shadcn/button/Button.svelte",
+              afterPath: "src/shared/shadcn/button/Button.svelte",
+              hunks: [
+                {
+                  header: "@@ -12 +12 @@",
+                  lines: [
+                    {
+                      beforeNumber: 12,
+                      afterNumber: 12,
+                      before: '<button class="compact">',
+                      after: '<button class="comfortable">',
+                      kind: "changed",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
+      return;
+    }
     if (url.pathname.endsWith("/baseline-history")) {
       const baselinePath = url.searchParams.get("path") ?? "baseline.png";
       const imageUrl = (revision: string) =>

@@ -1301,6 +1301,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - GET  /__visual-delta/runtime — stable identity for this dev server instance
  * - GET  /__visual-delta/baseline-history — committed PNG revisions
  * - GET  /__visual-delta/baseline-history/image — one historical PNG
+ * - GET  /__visual-delta/baseline-history/diff — component-folder source diff
  * - GET  /__visual-delta/config — resolved host options
  * - PUT  /__visual-delta/config — persist allow-listed project defaults
  * - POST /__visual-delta/story-facts — resolve primary-baseline coverage

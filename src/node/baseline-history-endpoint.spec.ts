@@ -72,6 +72,15 @@ async function fixture() {
       id === revision.revisionId ? revision : null,
     ),
     readFileAtRevision: vi.fn(async () => PNG),
+    diffRevisions: vi.fn(
+      async () => `diff --git a/src/component/Example.svelte b/src/component/Example.svelte
+--- a/src/component/Example.svelte
++++ b/src/component/Example.svelte
+@@ -1 +1 @@
+-<div>Before</div>
++<div>After</div>
+`,
+    ),
   };
   const endpoint = createBaselineHistoryEndpoint({
     root,
@@ -179,5 +188,47 @@ describe("baseline history endpoint", () => {
     );
     expect(method.status()).toBe(405);
     expect(method.headers.get("allow")).toBe("GET");
+  });
+
+  it("returns an aligned component-source diff for reachable revisions", async () => {
+    const { endpoint, relative, revision, vcs } = await fixture();
+    const recorder = responseRecorder();
+    const req = request(
+      "GET",
+      `/__visual-delta/baseline-history/diff?path=${encodeURIComponent(relative)}&before=${revision.revisionId}&after=working-copy&componentPath=${encodeURIComponent("src/component/Example.stories.svelte")}`,
+    );
+
+    await endpoint.handle(
+      req,
+      recorder.response,
+      new URL(req.url!, "http://localhost"),
+    );
+
+    expect(recorder.status()).toBe(200);
+    expect(recorder.json()).toMatchObject({
+      ok: true,
+      beforeRevisionId: revision.revisionId,
+      afterRevisionId: "working-copy",
+      files: [
+        {
+          afterPath: "src/component/Example.svelte",
+          hunks: [
+            {
+              lines: [
+                {
+                  before: "<div>Before</div>",
+                  after: "<div>After</div>",
+                  kind: "changed",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(vcs.diffRevisions).toHaveBeenCalledWith(
+      revision.revisionId,
+      "working-copy",
+    );
   });
 });

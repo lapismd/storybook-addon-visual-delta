@@ -169,6 +169,14 @@ test.describe("Visual Delta manager integration", () => {
       panel.getByRole("heading", { name: "Default history" }),
     ).toBeVisible();
     await expect(panel.getByTitle("History provided by jj")).toBeVisible();
+    await expect(
+      panel.getByRole("heading", {
+        name: "Component diff About component diff",
+      }),
+    ).toBeVisible();
+    await expect(
+      panel.getByText('+ <button class="comfortable">'),
+    ).toBeVisible();
     await expect(panel.getByRole("tab", { name: "2-up" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -193,7 +201,12 @@ test.describe("Visual Delta manager integration", () => {
     ).toBeVisible();
     await panel.getByRole("button", { name: "Back to baseline" }).click();
 
-    await panel.getByRole("button", { name: /Opened state/i }).click();
+    await panel
+      .getByRole("button", {
+        name: "Opened state Baseline wired · opened-state",
+        exact: true,
+      })
+      .click();
     await panel
       .getByRole("button", {
         name: "Open Opened state baseline history",
