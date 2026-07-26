@@ -17,6 +17,8 @@ export type VisualDiffSidecar = {
   version: 1;
   storyId: string;
   title?: string;
+  /** Named Storybook globals mode; omitted for the Default capture. */
+  mode?: string;
   /** Relative path passed to `toHaveScreenshot` (no project/platform suffix). */
   snapshotRel: string;
   status: VisualDiffSidecarStatus;
