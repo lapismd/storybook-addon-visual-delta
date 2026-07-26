@@ -7,6 +7,7 @@ import {
 
 const DEV_STORYBOOK = "http://127.0.0.1:9013";
 const SIDEBAR_STATUS_FIXTURE = "shadcn-actions-button--default";
+const SIDEBAR_LABEL_FIXTURE = "shadcn-feedback-empty--preview";
 
 async function mockFixtureTags(page: Page, tags: string[]) {
   await page.route("**/index.json", async (route) => {
@@ -35,12 +36,72 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
   test("renders the current story's named status in the toolbar", async ({
     page,
   }) => {
+    await mockFixtureTags(page, ["visual-ready"]);
     await mockVisualBackend(page);
-    await openManager(page, SIDEBAR_STATUS_FIXTURE, DEV_STORYBOOK);
+    await openManager(page, SIDEBAR_LABEL_FIXTURE, DEV_STORYBOOK);
 
     await expect(
-      page.locator('[data-tag="visual-ready"]').filter({ hasText: "Ready" }),
+      page
+        .getByRole("region", { name: "Toolbar" })
+        .locator('[data-tag="visual-ready"]')
+        .filter({ hasText: "Ready" }),
     ).toBeVisible();
+    const feedback = page.getByRole("button", {
+      name: "Feedback Ready: Visual baseline is ready for review",
+      exact: true,
+    });
+    await expect(feedback.locator('[data-tag="visual-ready"]')).toBeVisible();
+  });
+
+  test("filters the real sidebar and persists canonical URL state", async ({
+    page,
+  }) => {
+    await mockFixtureTags(page, ["visual-ready"]);
+    const writes = await mockVisualBackend(page);
+    await openManager(page, SIDEBAR_LABEL_FIXTURE, DEV_STORYBOOK);
+
+    await page.getByRole("button", { name: "Expand testing module" }).click();
+    const module = page.getByTestId("visual-test-module-global");
+    await module.getByRole("button", { name: "Filter visual stories" }).click();
+    await page.getByRole("checkbox", { name: "Ready for review" }).check();
+
+    await expect(page).toHaveURL(/visualFilter=review\.ready/);
+    await expect(
+      page.getByRole("button", {
+        name: "Disclosure Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "AI Chat Dock Skip visual: Excluded from Visual Delta tests",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      module.getByRole("button", {
+        name: "Filter visual stories, 1 active",
+      }),
+    ).toBeVisible();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page).toHaveURL(/visualFilter=review\.ready/);
+    await page.getByRole("button", { name: "Expand testing module" }).click();
+    await expect(
+      page.getByTestId("visual-test-module-global").getByRole("button", {
+        name: "Filter visual stories, 1 active",
+      }),
+    ).toBeVisible();
+
+    await page
+      .getByTestId("visual-test-module-global")
+      .getByRole("button", {
+        name: "Filter visual stories, 1 active",
+      })
+      .click();
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect(page).not.toHaveURL(/visualFilter=/);
+    expect(writes).toEqual([]);
   });
 
   test("renders the global module and real story context menu", async ({
