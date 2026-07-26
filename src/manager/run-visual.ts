@@ -19,9 +19,10 @@ import {
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import type { VisualModeRunResult } from "../shared/mode-results.js";
 import {
-  PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
-  type VisualDiffSidecar,
-} from "../visual-diff-sidecar.js";
+  classifyVisualRunResult,
+  type VisualComparisonOutcome,
+} from "../shared/visual-result-classification.js";
+import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 
 export type VisualRunResultItem = {
   storyId: string;
@@ -32,6 +33,8 @@ export type VisualRunResultItem = {
   modeResults?: VisualModeRunResult[];
   /** Set when the story failed because no committed baseline PNG exists. */
   missingBaseline?: boolean;
+  /** Normalized outcome when restored from Storybook's status store. */
+  outcome?: VisualComparisonOutcome;
 };
 
 /** Middleware / patcher message when refusing visual-failed without a PNG. */
@@ -39,35 +42,27 @@ export const NO_BASELINE_FAILED_ERROR =
   "Cannot mark failed — no baseline screenshot";
 
 export function isMissingBaselineFailure(item: VisualRunResultItem): boolean {
-  if (item.missingBaseline) return true;
-  const error = item.error?.toLowerCase() ?? "";
-  if (!error) return false;
-  return (
-    error.includes("snapshot doesn't exist") ||
-    error.includes("snapshot does not exist") ||
-    error.includes("no baseline screenshot") ||
-    error.includes(NO_BASELINE_FAILED_ERROR.toLowerCase())
-  );
+  return classifyVisualRunResult(item) === "missing-baseline";
 }
 
 /**
- * Map run outcomes to review tags: passed → ready, failed → failed.
- * Skips skipped / timedOut, and failed stories with no baseline PNG.
+ * Map completed comparisons to review tags.
+ * Runner errors, missing baselines, and skips never change review state.
  */
 export function reviewUpdatesFromRunResults(
   results: VisualRunResultItem[],
 ): Array<{ storyId: string; status: VisualReviewStatus }> {
-  return results
-    .filter((item) => item.status === "passed" || item.status === "failed")
-    .filter(
-      (item) => !(item.status === "failed" && isMissingBaselineFailure(item)),
-    )
-    .map((item) => ({
-      storyId: item.storyId,
-      status: (item.status === "passed"
-        ? "ready"
-        : "failed") as VisualReviewStatus,
-    }));
+  const updates: Array<{ storyId: string; status: VisualReviewStatus }> = [];
+  for (const item of results) {
+    const outcome = classifyVisualRunResult(item);
+    if (outcome === "passed" || outcome === "changed-within-tolerance") {
+      updates.push({ storyId: item.storyId, status: "ready" });
+    }
+    if (outcome === "mismatch") {
+      updates.push({ storyId: item.storyId, status: "failed" });
+    }
+  }
+  return updates;
 }
 
 export function isNoBaselineFailedReviewError(error: string): boolean {
@@ -200,10 +195,13 @@ export function reviewableStoryIdsFromLastRun(
 ): string[] {
   const ids = new Set<string>();
   for (const result of lastRun?.results ?? []) {
-    if (result.status !== "passed" && result.status !== "failed") continue;
-    if (result.status === "failed" && isMissingBaselineFailure(result)) {
+    const outcome = classifyVisualRunResult(result);
+    if (
+      outcome !== "passed" &&
+      outcome !== "changed-within-tolerance" &&
+      outcome !== "mismatch"
+    )
       continue;
-    }
     ids.add(result.storyId);
   }
   return [...ids];
@@ -257,23 +255,8 @@ export function formatVisualProgressLabel(
   return `Testing... ${progress.completed}/${progress.total}`;
 }
 
-function isVisualFailed(item: VisualRunResultItem): boolean {
-  if (item.status === "skipped") return false;
-  if (item.status === "timedOut") return true;
-  const sc = item.sidecar;
-  if (sc) {
-    if (typeof sc.passed === "boolean") return !sc.passed;
-    if (typeof sc.diffPercent === "number") {
-      const threshold =
-        sc.passThresholdPercent ?? PLAYWRIGHT_PASS_THRESHOLD_PERCENT;
-      return sc.diffPercent >= threshold;
-    }
-  }
-  return item.status === "failed";
-}
-
 function statusDescription(item: VisualRunResultItem): string {
-  const failed = isVisualFailed(item);
+  const outcome = classifyVisualRunResult(item);
   const sc = item.sidecar;
   if (
     sc &&
@@ -289,20 +272,37 @@ function statusDescription(item: VisualRunResultItem): string {
   }
   return (
     item.error?.split("\n")[0] ??
-    (failed ? "Screenshot differs from baseline" : "Matches baseline")
+    (outcome === "missing-baseline"
+      ? "No committed baseline screenshot"
+      : outcome === "mismatch"
+        ? "Screenshot differs from baseline"
+        : outcome === "error"
+          ? "Visual capture failed"
+          : outcome === "skipped"
+            ? "Excluded from visual tests"
+            : outcome === "changed-within-tolerance"
+              ? "Screenshot changed within tolerance"
+              : "Matches baseline")
   );
 }
 
 function statusTitle(item: VisualRunResultItem): string {
-  if (item.status === "skipped") return "Visual test skipped";
-  const failed = isVisualFailed(item);
-  if (failed) {
+  const outcome = classifyVisualRunResult(item);
+  if (outcome === "skipped") return "Visual test skipped";
+  if (outcome === "missing-baseline") return "Visual baseline missing";
+  if (outcome === "error") return "Visual test error";
+  if (outcome === "mismatch") {
     const pct = item.sidecar?.diffPercent;
     return pct != null
-      ? `Visual test failed (${pct.toFixed(2)}%)`
-      : "Visual test failed";
+      ? `Visual baseline mismatch (${pct.toFixed(2)}%)`
+      : "Visual baseline mismatch";
   }
   const pct = item.sidecar?.diffPercent;
+  if (outcome === "changed-within-tolerance") {
+    return pct != null
+      ? `Visual change within tolerance (${pct.toFixed(2)}%)`
+      : "Visual change within tolerance";
+  }
   return pct != null
     ? `Visual test passed (${pct.toFixed(2)}%)`
     : "Visual test passed";
@@ -317,18 +317,21 @@ export function applyVisualStatuses(results: VisualRunResultItem[]) {
   }
   statusStore.set(
     results.map((item) => {
-      const failed = isVisualFailed(item);
+      const outcome = classifyVisualRunResult(item);
       return {
         storyId: item.storyId,
         typeId: STATUS_TYPE_ID_VISUAL,
-        value: failed
-          ? ("status-value:error" as const)
-          : item.status === "skipped"
-            ? ("status-value:unknown" as const)
-            : ("status-value:success" as const),
+        value:
+          outcome === "mismatch"
+            ? ("status-value:warning" as const)
+            : outcome === "error"
+              ? ("status-value:error" as const)
+              : outcome === "skipped" || outcome === "missing-baseline"
+                ? ("status-value:unknown" as const)
+                : ("status-value:success" as const),
         title: statusTitle(item),
         description: statusDescription(item),
-        sidebarContextMenu: failed,
+        sidebarContextMenu: outcome === "mismatch" || outcome === "error",
       };
     }),
   );
