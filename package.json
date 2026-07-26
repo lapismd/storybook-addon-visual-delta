@@ -33,6 +33,7 @@
     },
     "./src/stories/*": "./src/stories/*",
     "./src/stories/panel-fixtures": "./src/stories/panel-fixtures.tsx",
+    "./src/stories/DiffResultFixture": "./src/stories/DiffResultFixture.tsx",
     "./src/stories/PanelShell": "./src/stories/PanelShell.tsx",
     "./src/stories/TestingModuleShell": "./src/stories/TestingModuleShell.tsx",
     "./src/stories/mock-visual-backend": "./src/stories/mock-visual-backend.ts",

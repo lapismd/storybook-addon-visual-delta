@@ -131,6 +131,10 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
 - The host and packaged visual suites share capture readiness: wait for
   Storybook `storyFinished`, clear preparation overlays, await fonts, then
   apply only the story's explicit delay.
+- Diff HTML proves per-image viewport geometry before rasterization, captures
+  exact viewport pixels when requested, and restores iframe size, scroll, and
+  focus after success, cancellation, or error. Result diagnostics and
+  Playwright sidecars retain viewport and device-scale metadata.
 - The Baseline chip is outside the image pixels, with symmetric pane clearance,
   viewport clamping, and project/story X/Y offsets.
 - Editable project defaults are allow-listed, validated, atomically persisted,

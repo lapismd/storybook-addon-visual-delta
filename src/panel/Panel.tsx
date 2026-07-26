@@ -78,7 +78,7 @@ import {
   fitImageData,
   loadImage,
   maskTransparentRegions,
-  withPlaywrightPreviewViewport,
+  withVerifiedPreviewViewport,
 } from "./capture.js";
 import { postChromiumSubjectCapture } from "./chromium-capture.js";
 import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
@@ -828,14 +828,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const baseline = await loadImage(baselineSrcForDiff);
         let actual: Awaited<ReturnType<typeof loadImage>>;
         let captureTag: string;
+        const captureViewport = viewportForImage(selectedImage);
+        const captureDeviceScale = deviceScaleFactorForImage(selectedImage);
+        let observedCaptureViewport = captureViewport;
 
         if (engine === "chromium") {
           const capture = await postChromiumSubjectCapture(
             {
               storyId: storyId!,
               visualCaptureUntil: selectedInteractionId ?? undefined,
-              viewport: viewportForImage(selectedImage),
-              deviceScaleFactor: deviceScaleFactorForImage(selectedImage),
+              viewport: captureViewport,
+              deviceScaleFactor: captureDeviceScale,
               delay,
               ignoreSelectors: resolveIgnoreSelectors(ignoreSelectors),
               cropToViewport,
@@ -857,16 +860,24 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           await overlayHidden;
           let capture: Awaited<ReturnType<typeof capturePreviewSubject>>;
           try {
-            capture = await withPlaywrightPreviewViewport(
+            const transaction = await withVerifiedPreviewViewport(
               () =>
                 capturePreviewSubject({
-                  pixelRatio: deviceScaleFactorForImage(selectedImage),
-                  delay,
+                  pixelRatio: captureDeviceScale,
                   ignoreSelectors: resolveIgnoreSelectors(ignoreSelectors),
                   cropToViewport,
+                  viewport: captureViewport,
                 }),
-              viewportForImage(selectedImage),
+              {
+                storyId: storyId ?? "",
+                viewport: captureViewport,
+                deviceScaleFactor: captureDeviceScale,
+                delay,
+                signal: abort.signal,
+              },
             );
+            capture = transaction.result;
+            observedCaptureViewport = transaction.diagnostics.observedViewport;
           } finally {
             showOverlay();
           }
@@ -874,6 +885,25 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           setDiffProgressLabel("Comparing…");
           actual = await loadImage(capture.dataUrl);
           captureTag = "html-to-image";
+        }
+
+        if (cropToViewport) {
+          const expectedWidth = Math.round(
+            captureViewport.width * captureDeviceScale,
+          );
+          const expectedHeight = Math.round(
+            captureViewport.height * captureDeviceScale,
+          );
+          if (
+            actual.width !== expectedWidth ||
+            actual.height !== expectedHeight
+          ) {
+            throw new Error(
+              `Diff HTML viewport capture produced ${actual.width}×${actual.height}; ` +
+                `expected ${expectedWidth}×${expectedHeight} for ` +
+                `${captureViewport.width}×${captureViewport.height} at ${captureDeviceScale}×.`,
+            );
+          }
         }
 
         const width = baseline.width;
@@ -884,7 +914,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           actual.width === width && actual.height === height
             ? `${width}×${height}`
             : `baseline ${width}×${height}, actual ${actual.width}×${actual.height} (padded/cropped)`;
-        const sizeNote = `${captureTag} · ${sizeCore}`;
+        const sizeNote =
+          `${captureTag} · viewport requested ${captureViewport.width}×${captureViewport.height}, ` +
+          `observed ${observedCaptureViewport.width}×${observedCaptureViewport.height} at ` +
+          `${captureDeviceScale}× · bitmap ${actual.width}×${actual.height} · ${sizeCore}`;
         const { baselineForDiff, actualForDiff, ignore } =
           maskTransparentRegions(baselineData, actualData, width, height);
         const actualMaskedCanvas = document.createElement("canvas");
@@ -956,6 +989,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           changeBounds,
           imageWidth: width,
           imageHeight: height,
+          cssWidth: width / captureDeviceScale,
+          cssHeight: height / captureDeviceScale,
+          deviceScaleFactor: captureDeviceScale,
+          captureViewport,
+          observedCaptureViewport,
+          capturedBitmap: { width: actual.width, height: actual.height },
           diffPixels,
           totalPixels,
           diffPercent,

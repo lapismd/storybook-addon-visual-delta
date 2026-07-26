@@ -429,6 +429,15 @@ the fetch mid-capture.
 native screenshots. Prefer **Diff Chromium** when diagnosing baseline parity.
 Requires `playwright` installed in the host (optional peer of this package).
 
+Before Diff HTML rasterizes, Visual Delta hides its overlay and establishes the
+selected image’s CSS `viewport` (default 1280×900) in the preview iframe. The
+transaction verifies the iframe layout is stable for two frames, the current
+story has finished, preparation chrome is gone, fonts are ready, and the
+explicit story delay has elapsed exactly once. It fails instead of silently
+padding a viewport mismatch, then restores iframe geometry, scroll, and focus
+before revealing the overlay. Capture diagnostics record requested/observed
+viewport, device scale, and bitmap dimensions in the Diff result.
+
 Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 
 ## Addon vs host
@@ -437,7 +446,7 @@ Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 | ------------------------------------------------- | ------------------------------------------------ |
 | Panel, Testing Module, overlay, Live Diff         | Committed PNGs under the snapshot dir            |
 | Preset `staticDirs` → `/visual-baselines`         | Thin Playwright entry (`defineVisualSuite`)      |
-| `viteFinal` middleware + CSF inject               | Optional tag-badge manager chrome                |
+| `viteFinal` middleware + CSF inject               | Project capture/compare defaults                 |
 | Packaged `visual-delta` CLI (create / update / …) | Custom suites (reference captures, extra masks)  |
 | `storybook-addon-visual-delta/playwright` helpers | Approval policy is `--approved` / env (built-in) |
 

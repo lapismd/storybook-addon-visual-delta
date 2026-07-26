@@ -1,5 +1,6 @@
 import { toPng } from "html-to-image";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
+import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs.js";
 import {
   resolvePaintedBackground,
   toOpaqueRgb,
@@ -20,6 +21,25 @@ type IframeSizeStyles = {
   minHeight: string;
 };
 
+export type CaptureViewportDiagnostics = {
+  requestedViewport: { width: number; height: number };
+  observedViewport: { width: number; height: number };
+  deviceScaleFactor: number;
+};
+
+export class PreviewViewportEstablishmentError extends Error {
+  constructor(
+    requested: { width: number; height: number },
+    observed: { width: number; height: number },
+  ) {
+    super(
+      `Unable to establish Diff HTML viewport ${requested.width}×${requested.height}; ` +
+        `observed ${observed.width}×${observed.height}.`,
+    );
+    this.name = "PreviewViewportEstablishmentError";
+  }
+}
+
 export function waitTwoFrames(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
@@ -31,6 +51,115 @@ export function waitTwoFrames(): Promise<void> {
 function getPreviewIframe(): HTMLIFrameElement | null {
   const iframe = document.getElementById("storybook-preview-iframe");
   return iframe instanceof HTMLIFrameElement ? iframe : null;
+}
+
+function nextFrame(view: Window): Promise<void> {
+  return new Promise((resolve) => view.requestAnimationFrame(() => resolve()));
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw new DOMException("Diff HTML capture aborted", "AbortError");
+}
+
+function readObservedViewport(iframe: HTMLIFrameElement): {
+  width: number;
+  height: number;
+} {
+  return {
+    width: iframe.contentWindow?.innerWidth ?? 0,
+    height: iframe.contentWindow?.innerHeight ?? 0,
+  };
+}
+
+type StableLayout = {
+  viewportWidth: number;
+  viewportHeight: number;
+  documentWidth: number;
+  documentHeight: number;
+  rootLeft: number;
+  rootTop: number;
+  rootWidth: number;
+  rootHeight: number;
+};
+
+function readStableLayout(
+  iframe: HTMLIFrameElement,
+  doc: Document,
+): StableLayout {
+  const observed = readObservedViewport(iframe);
+  const root = doc.querySelector("#storybook-root");
+  const rect = root?.getBoundingClientRect();
+  return {
+    viewportWidth: observed.width,
+    viewportHeight: observed.height,
+    documentWidth: doc.documentElement.scrollWidth,
+    documentHeight: doc.documentElement.scrollHeight,
+    rootLeft: rect?.left ?? 0,
+    rootTop: rect?.top ?? 0,
+    rootWidth: rect?.width ?? 0,
+    rootHeight: rect?.height ?? 0,
+  };
+}
+
+function sameLayout(a: StableLayout | null, b: StableLayout): boolean {
+  if (!a) return false;
+  return (Object.keys(b) as Array<keyof StableLayout>).every(
+    (key) => a[key] === b[key],
+  );
+}
+
+function hasPreparationOverlay(doc: Document): boolean {
+  return Boolean(
+    doc.querySelector(".sb-show-preparing-story, .sb-show-preparing-docs"),
+  );
+}
+
+async function waitForStableRequestedViewport(options: {
+  iframe: HTMLIFrameElement;
+  doc: Document;
+  viewport: { width: number; height: number };
+  storyId: string;
+  signal?: AbortSignal;
+  timeout: number;
+}): Promise<{ width: number; height: number }> {
+  const { iframe, doc, viewport, storyId, signal, timeout } = options;
+  const view = iframe.contentWindow;
+  if (!view) {
+    throw new Error("Cannot access preview window (cross-origin or not ready)");
+  }
+  const deadline = performance.now() + timeout;
+  let previous: StableLayout | null = null;
+  while (performance.now() <= deadline) {
+    throwIfAborted(signal);
+    await nextFrame(view);
+    const current = readStableLayout(iframe, doc);
+    const exactViewport =
+      current.viewportWidth === viewport.width &&
+      current.viewportHeight === viewport.height;
+    const storyFinished =
+      doc.documentElement.getAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR) ===
+      storyId;
+    if (
+      exactViewport &&
+      storyFinished &&
+      !hasPreparationOverlay(doc) &&
+      sameLayout(previous, current)
+    ) {
+      return {
+        width: current.viewportWidth,
+        height: current.viewportHeight,
+      };
+    }
+    previous =
+      exactViewport && storyFinished && !hasPreparationOverlay(doc)
+        ? current
+        : null;
+  }
+  throw new PreviewViewportEstablishmentError(
+    viewport,
+    readObservedViewport(iframe),
+  );
 }
 
 function readIframeSizeStyles(iframe: HTMLIFrameElement): IframeSizeStyles {
@@ -79,20 +208,129 @@ export function applyPreviewViewport(
 }
 
 /**
- * Run `fn` with the preview iframe forced to the Playwright visual viewport
- * (`1280×900`) so subject capture matches baseline layout/wrapping.
+ * Establish and prove a baseline viewport without resizing manager chrome.
+ * Geometry, scroll positions, and focus are restored even when capture aborts
+ * or rasterization fails.
  */
-export async function withPlaywrightPreviewViewport<T>(
+export async function withVerifiedPreviewViewport<T>(
   fn: () => Promise<T>,
-  viewport: { width: number; height: number } = VISUAL_VIEWPORT,
-): Promise<T> {
-  const restore = applyPreviewViewport(viewport.width, viewport.height);
+  options: {
+    storyId: string;
+    viewport?: { width: number; height: number };
+    deviceScaleFactor?: number;
+    delay?: number;
+    signal?: AbortSignal;
+    timeout?: number;
+  },
+): Promise<{ result: T; diagnostics: CaptureViewportDiagnostics }> {
+  const iframe = getPreviewIframe();
+  if (!iframe) {
+    throw new Error("Storybook preview iframe not found");
+  }
+  const doc = iframe.contentDocument;
+  const view = iframe.contentWindow;
+  if (!doc?.documentElement || !view) {
+    throw new Error(
+      "Cannot access preview document (cross-origin or not ready)",
+    );
+  }
+  const viewport = options.viewport ?? VISUAL_VIEWPORT;
+  const deviceScaleFactor =
+    options.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
+  const iframeStyles = readIframeSizeStyles(iframe);
+  const originalViewport = readObservedViewport(iframe);
+  const managerActive =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  const previewActive = asHtmlElement(
+    doc.activeElement instanceof Element ? doc.activeElement : null,
+    view,
+  );
+  const previewScroll = { x: view.scrollX, y: view.scrollY };
+  const wrapperScroll = Array.from(iframe.parentElement?.children ?? [])
+    .concat(
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          "#storybook-preview-wrapper, #storybook-preview-wrapper *",
+        ),
+      ),
+    )
+    .filter((node): node is HTMLElement => node instanceof HTMLElement)
+    .map((node) => ({
+      node,
+      left: node.scrollLeft,
+      top: node.scrollTop,
+    }));
+
+  writeIframeSizeStyles(iframe, {
+    width: `${viewport.width}px`,
+    height: `${viewport.height}px`,
+    maxWidth: "none",
+    maxHeight: "none",
+    minWidth: `${viewport.width}px`,
+    minHeight: `${viewport.height}px`,
+  });
+  view.scrollTo(0, 0);
   try {
-    await waitTwoFrames();
-    await new Promise((r) => setTimeout(r, 50));
-    return await fn();
+    throwIfAborted(options.signal);
+    if (doc.fonts?.ready) await doc.fonts.ready;
+    const observedViewport = await waitForStableRequestedViewport({
+      iframe,
+      doc,
+      viewport,
+      storyId: options.storyId,
+      signal: options.signal,
+      timeout: options.timeout ?? 5_000,
+    });
+    const delay = options.delay ?? 0;
+    if (delay > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, delay);
+        options.signal?.addEventListener(
+          "abort",
+          () => {
+            window.clearTimeout(timer);
+            reject(new DOMException("Diff HTML capture aborted", "AbortError"));
+          },
+          { once: true },
+        );
+      });
+    }
+    throwIfAborted(options.signal);
+    const result = await fn();
+    throwIfAborted(options.signal);
+    return {
+      result,
+      diagnostics: {
+        requestedViewport: viewport,
+        observedViewport,
+        deviceScaleFactor,
+      },
+    };
   } finally {
-    restore?.();
+    writeIframeSizeStyles(iframe, iframeStyles);
+    view.scrollTo(previewScroll.x, previewScroll.y);
+    for (const scroll of wrapperScroll) {
+      scroll.node.scrollLeft = scroll.left;
+      scroll.node.scrollTop = scroll.top;
+    }
+    if (originalViewport.width > 0 && originalViewport.height > 0) {
+      await waitForStableRequestedViewport({
+        iframe,
+        doc,
+        viewport: originalViewport,
+        storyId: options.storyId,
+        timeout: 1_000,
+      });
+    } else {
+      await waitTwoFrames();
+    }
+    if (previewActive?.isConnected) {
+      previewActive.focus({ preventScroll: true });
+    } else if (managerActive?.isConnected) {
+      managerActive.focus({ preventScroll: true });
+    }
   }
 }
 
@@ -183,6 +421,7 @@ function preparePreviewForVisualCapture(
     for (const { el, visibility } of hidden) {
       el.style.visibility = visibility;
     }
+    if (active?.isConnected) active.focus({ preventScroll: true });
   };
 }
 
@@ -275,14 +514,8 @@ async function cropDataUrlToCssRect(
     el.onerror = () => reject(new Error("Failed to decode capture for crop"));
     el.src = dataUrl;
   });
-  const sx = Math.max(
-    0,
-    Math.floor((cropCss.x - originCss.x) * pixelRatio),
-  );
-  const sy = Math.max(
-    0,
-    Math.floor((cropCss.y - originCss.y) * pixelRatio),
-  );
+  const sx = Math.max(0, Math.floor((cropCss.x - originCss.x) * pixelRatio));
+  const sy = Math.max(0, Math.floor((cropCss.y - originCss.y) * pixelRatio));
   const sw = Math.max(1, Math.ceil(cropCss.width * pixelRatio));
   const sh = Math.max(1, Math.ceil(cropCss.height * pixelRatio));
   const width = Math.min(sw, Math.max(1, img.naturalWidth - sx));
@@ -303,8 +536,6 @@ async function cropDataUrlToCssRect(
  */
 export async function capturePreviewSubject(options?: {
   pixelRatio?: number;
-  /** Extra settle delay (ms) after animation prep (CSF `delay`). */
-  delay?: number;
   /** CSS selectors to hide for the capture (CSF `ignoreSelectors` + builtins). */
   ignoreSelectors?: readonly string[];
   /**
@@ -312,6 +543,8 @@ export async function capturePreviewSubject(options?: {
    * story subject (CSF `cropToViewport`).
    */
   cropToViewport?: boolean;
+  /** Proven CSS viewport used for an exact full-viewport capture. */
+  viewport?: { width: number; height: number };
 }): Promise<CaptureResult> {
   const iframe = getPreviewIframe();
   if (!iframe) {
@@ -330,11 +563,6 @@ export async function capturePreviewSubject(options?: {
   );
   try {
     await waitTwoFrames();
-    await new Promise((r) => setTimeout(r, 50));
-    const delay = options?.delay ?? 0;
-    if (delay > 0) {
-      await new Promise((r) => setTimeout(r, delay));
-    }
 
     const pixelRatio = options?.pixelRatio ?? VISUAL_DEVICE_SCALE_FACTOR;
     const target: CaptureTarget = options?.cropToViewport
@@ -345,8 +573,22 @@ export async function capturePreviewSubject(options?: {
         }
       : resolveCaptureTarget(doc);
     const rect = target.element.getBoundingClientRect();
-    const width = Math.max(1, Math.ceil(rect.width));
-    const height = Math.max(1, Math.ceil(rect.height));
+    const width = Math.max(
+      1,
+      Math.ceil(
+        options?.cropToViewport
+          ? (options.viewport?.width ?? doc.defaultView?.innerWidth ?? 0)
+          : rect.width,
+      ),
+    );
+    const height = Math.max(
+      1,
+      Math.ceil(
+        options?.cropToViewport
+          ? (options.viewport?.height ?? doc.defaultView?.innerHeight ?? 0)
+          : rect.height,
+      ),
+    );
 
     try {
       const dataUrl = await toPng(target.element, {

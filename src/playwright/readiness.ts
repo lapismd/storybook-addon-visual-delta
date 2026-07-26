@@ -22,7 +22,10 @@ export async function waitForVisualStoryFinished(
  * Settle only deterministic capture inputs after Storybook has finished:
  * preparation chrome, fonts, an explicit story delay, and focus/caret state.
  */
-export async function settleVisualStoryPage(page: Page): Promise<void> {
+export async function settleVisualStoryPage(
+  page: Page,
+  options?: { delay?: number },
+): Promise<void> {
   await page
     .waitForFunction(
       () =>
@@ -38,10 +41,12 @@ export async function settleVisualStoryPage(page: Page): Promise<void> {
     if (document.fonts?.ready) await document.fonts.ready;
   });
 
-  const delayAttr = await page
-    .locator("html")
-    .getAttribute(VISUAL_DELTA_DELAY_ATTR);
-  const delay = Number(delayAttr);
+  const delayAttr =
+    options?.delay == null
+      ? await page.locator("html").getAttribute(VISUAL_DELTA_DELAY_ATTR)
+      : null;
+  const delay =
+    options?.delay == null ? Number(delayAttr) : Math.max(0, options.delay);
   if (Number.isFinite(delay) && delay > 0) {
     await page.waitForTimeout(delay);
   }
