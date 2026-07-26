@@ -1,6 +1,7 @@
 import { experimental_getStatusStore, type API } from "storybook/manager-api";
 import {
   STATUS_TYPE_ID_VISUAL,
+  VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
@@ -16,6 +17,10 @@ import {
   VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
 } from "../constants.js";
+import type {
+  AffectedVisualSummary,
+  VisualRunSelectionMode,
+} from "../shared/affected-types.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import type { VisualModeRunResult } from "../shared/mode-results.js";
 import {
@@ -84,6 +89,7 @@ export type VisualRunResponse = {
   };
   results: VisualRunResultItem[];
   logTail: string;
+  affected?: AffectedVisualSummary;
   /** Set when `/run-events` reports no active or recent run. */
   idle?: boolean;
 };
@@ -95,11 +101,12 @@ export type VisualRunProgress = {
   failed: number;
   storyId?: string;
   status?: "passed" | "failed";
+  affected?: AffectedVisualSummary;
 };
 
 export type VisualRunStreamEvent =
   | { type: "idle" }
-  | { type: "start"; total: number }
+  | { type: "start"; total: number; affected?: AffectedVisualSummary }
   | ({ type: "progress" } & VisualRunProgress)
   | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)
@@ -176,7 +183,7 @@ function emitVisualRunLog(line: string) {
   }
 }
 
-export type VisualRunScope = "story" | "component" | "all";
+export type VisualRunScope = "story" | "component" | "affected" | "all";
 
 export type VisualLastRunSummary = {
   finishedAt: number;
@@ -189,6 +196,8 @@ export type VisualLastRunSummary = {
   logTail?: string;
   /** Per-story outcomes for Update status / follow-up actions. */
   results?: VisualRunResultItem[];
+  /** Affected selection details for zero-run and scoped summaries. */
+  affected?: AffectedVisualSummary;
 };
 
 /** Distinct, reviewable story ids from the most recent completed visual run. */
@@ -433,7 +442,7 @@ export function storyIdsForScope(
   scope: VisualRunScope,
   storyId?: string,
 ): string[] | undefined {
-  if (scope === "all" || !storyId) return undefined;
+  if (scope === "all" || scope === "affected" || !storyId) return undefined;
   if (scope === "story") return [storyId];
   return componentStoryIdsFor(api, storyId);
 }
@@ -496,6 +505,7 @@ async function readNdjsonRun(
               total: event.total,
               passed: 0,
               failed: 0,
+              affected: event.affected,
             },
             onProgress,
           );
@@ -628,6 +638,7 @@ export async function postVisualRun(
   body: {
     storyIds?: string[];
     rebuild?: boolean;
+    selection?: VisualRunSelectionMode;
   },
   options?: {
     onProgress?: (progress: VisualRunProgress) => void;
@@ -649,6 +660,18 @@ export async function postVisualRun(
     throw new Error(`Visual run failed (${response.status})`);
   }
   return data;
+}
+
+export async function fetchAffectedVisualPlan(): Promise<
+  AffectedVisualSummary & { enabled: boolean }
+> {
+  const response = await fetch(VISUAL_DELTA_AFFECTED_PLAN_PATH);
+  if (!response.ok) {
+    throw new Error(`Affected plan request failed (${response.status})`);
+  }
+  return (await response.json()) as AffectedVisualSummary & {
+    enabled: boolean;
+  };
 }
 
 export async function cancelVisualRun() {

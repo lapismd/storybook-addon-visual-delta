@@ -1,4 +1,8 @@
-export type { BaselinePathMode, VisualDeltaHostOptions } from "./options.js";
+export type {
+  AffectedVisualTestsOptions,
+  BaselinePathMode,
+  VisualDeltaHostOptions,
+} from "./options.js";
 export {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_SNAPSHOT_DIR,
@@ -13,6 +17,26 @@ export {
   resolveStorybookPort,
   resolveVisualServerPort,
 } from "./options.js";
+export {
+  AFFECTED_VISUAL_CACHE_FILE,
+  AFFECTED_VISUAL_STATS_FILE,
+  matchesAffectedGlob,
+  normalizeStatsModuleId,
+  planAffectedVisualTests,
+  planAllVisualTests,
+  recordAffectedVisualResults,
+  type AffectedVisualPlan,
+  type RecordAffectedVisualResultsOptions,
+} from "./affected-visual-tests.js";
+export {
+  formatAffectedVisualSummary,
+  runVisualTestCli,
+  type VisualTestCliOptions,
+} from "./visual-test-cli.js";
+export type {
+  AffectedVisualSummary,
+  VisualRunSelectionMode,
+} from "../shared/affected-types.js";
 export {
   runBaselineUpdate,
   runInteractionUpdate,
@@ -73,14 +97,18 @@ export {
   attachSidecars,
   countVisualStories,
   grepFromStoryIds,
-  parseListReporterProgress,
-  stripAnsi,
   visualTestCommandArgs,
   visualDeltaMiddlewarePlugin,
   type VisualRunResponse,
   type VisualRunResultItem,
   type VisualRunStreamEvent,
 } from "./middleware.js";
+export {
+  parseListReporterProgress,
+  stripAnsi,
+  successfulStoryIdsFromPlaywrightResults,
+  type PlaywrightListResult,
+} from "./playwright-results.js";
 export {
   getVisualRunHubStatus,
   isVisualRunActive,

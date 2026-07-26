@@ -10,15 +10,17 @@ import {
 } from "./VisualBaselineSplitButton.js";
 
 describe("VisualRunSplitButton", () => {
-  it("labels Story / Component / All", () => {
+  it("labels Story / Component / Affected / All", () => {
     expect(modeActionLabel("story")).toBe("Story");
     expect(modeActionLabel("component")).toBe("Component");
+    expect(modeActionLabel("affected")).toBe("Affected");
     expect(modeActionLabel("all")).toBe("All");
   });
 
   it("tooltips describe Playwright visual runs", () => {
     expect(modeActionTooltip("story")).toMatch(/this story/i);
     expect(modeActionTooltip("component")).toMatch(/component/i);
+    expect(modeActionTooltip("affected")).toMatch(/affected/i);
     expect(modeActionTooltip("all")).toMatch(/all/i);
   });
 });

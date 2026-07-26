@@ -1289,8 +1289,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [skipVisual, storyId]);
 
   const handleRunVisual = useCallback(
-    async (scope: "story" | "component" | "all") => {
-      if (scope !== "all" && !storyId) {
+    async (scope: VisualRunMode) => {
+      if (scope !== "all" && scope !== "affected" && !storyId) {
         setCaptureError("No story selected");
         return;
       }
@@ -1298,7 +1298,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError(null);
       try {
         const storyIds =
-          scope === "all"
+          scope === "all" || scope === "affected"
             ? undefined
             : visualRunnableStoryIds(
                 api,
@@ -1306,7 +1306,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   ? [storyId!]
                   : componentStoryIdsFor(api, storyId!),
               );
-        if (scope !== "all" && !storyIds?.length) {
+        if (scope !== "all" && scope !== "affected" && !storyIds?.length) {
           throw new Error(
             "No runnable visual stories in this scope (all skip-visual)",
           );
@@ -1319,6 +1319,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           }
           const data = await postVisualRun({
             storyIds,
+            selection:
+              scope === "affected"
+                ? "affected"
+                : scope === "all"
+                  ? "all"
+                  : "selected",
             rebuild: loadRebuildStaticEnabled(),
           });
           if (data.crashed) {
@@ -1329,6 +1335,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               scope,
               logTail: data.logTail,
               results: data.results,
+              affected: data.affected,
             });
             throw new Error(data.error ?? "Visual test run crashed");
           }
@@ -1343,6 +1350,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             scope,
             logTail: data.logTail,
             results: data.results,
+            affected: data.affected,
           });
           setDiffEpoch(Date.now());
           if (data.summary.failed > 0) {

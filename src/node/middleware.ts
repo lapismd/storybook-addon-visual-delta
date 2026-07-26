@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import type { Plugin } from "vite";
 import {
+  VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CAPTURE_PATH,
   VISUAL_DELTA_CONFIG_PATH,
@@ -23,6 +24,10 @@ import {
   isVisualReviewStatus,
   type VisualReviewStatus,
 } from "../constants.js";
+import type {
+  AffectedVisualSummary,
+  VisualRunSelectionMode,
+} from "../shared/affected-types.js";
 import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaResolvedConfig,
@@ -68,6 +73,11 @@ import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
 } from "./init-scaffold.js";
+import {
+  parseListReporterProgress,
+  successfulStoryIdsFromPlaywrightResults,
+} from "./playwright-results.js";
+export { parseListReporterProgress, stripAnsi } from "./playwright-results.js";
 import { writePlaywrightPassThresholdPercent } from "./playwright-threshold.js";
 import {
   readVisualDeltaProjectConfig,
@@ -90,6 +100,11 @@ import {
   invalidateWarmStaticStorybookServer,
 } from "./visual-server.js";
 import { createBaselineHistoryEndpoint } from "./baseline-history-endpoint.js";
+import {
+  planAffectedVisualTests,
+  planAllVisualTests,
+  recordAffectedVisualResults,
+} from "./affected-visual-tests.js";
 
 type UpdateBody = {
   storyId?: string;
@@ -121,6 +136,8 @@ type SpawnedVisualCommand = ChildProcess & {
 type RunBody = {
   /** Limit Playwright `-g` to these story ids (or their shared prefix). */
   storyIds?: string[];
+  /** Affected, complete, or explicitly selected visual story scope. */
+  selection?: VisualRunSelectionMode;
   /** Rebuild storybook-static before running (slow but picks up live edits). */
   rebuild?: boolean;
 };
@@ -448,40 +465,45 @@ export function countVisualStories(root: string, storyIds?: string[]): number {
   }
 }
 
-/** Strip ANSI color codes so list-reporter lines parse reliably. */
-export function stripAnsi(value: string): string {
-  return value.replace(/\u001B\[[0-9;]*[mK]/g, "");
+function disabledAffectedPlan(root: string, options: VisualDeltaHostOptions) {
+  const plan = planAllVisualTests(root, options);
+  return {
+    ...plan,
+    summary: {
+      ...plan.summary,
+      selection: "affected" as const,
+      fallbackReason: "Affected visual tests are not enabled for this host",
+      noChange: false,
+    },
+    needsRebuild: true,
+  };
 }
 
-/**
- * Playwright list-reporter line, e.g.
- * `  ✓   1 [chromium] › … › shadcn-button--default (823ms)`
- */
-export function parseListReporterProgress(
-  chunk: string,
-): Array<{ index: number; storyId: string; status: "passed" | "failed" }> {
-  const out: Array<{
-    index: number;
-    storyId: string;
-    status: "passed" | "failed";
-  }> = [];
-  const text = stripAnsi(chunk);
-  const re =
-    /([✓✔✘×xX])\s+(\d+)\s+.*?›\s+(\S+--\S+?)(?:\s+\([\d.]+\s*[mun]?s\))?\s*$/gm;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
-    const mark = match[1] ?? "";
-    const index = Number(match[2]);
-    const storyId = match[3]?.trim();
-    if (!storyId || !Number.isFinite(index)) continue;
-    const failed = mark === "✘" || mark === "×" || mark === "x" || mark === "X";
-    out.push({
-      index,
-      storyId,
-      status: failed ? "failed" : "passed",
-    });
-  }
-  return out;
+function affectedPlan(root: string, options: VisualDeltaHostOptions) {
+  return options.affectedTests
+    ? planAffectedVisualTests(root, options)
+    : disabledAffectedPlan(root, options);
+}
+
+function selectedRunSummary(
+  root: string,
+  options: VisualDeltaHostOptions,
+  storyIds: string[] | undefined,
+  selection: VisualRunSelectionMode,
+): AffectedVisualSummary {
+  const all = planAllVisualTests(root, options).runnableStoryIds;
+  const selected =
+    selection === "all" || !storyIds
+      ? all
+      : all.filter((storyId) => new Set(storyIds).has(storyId));
+  return {
+    selection,
+    selected: selected.length,
+    unchanged: Math.max(0, all.length - selected.length),
+    total: all.length,
+    noChange: selected.length === 0,
+    storyIds: selected,
+  };
 }
 
 function writeNdjson(res: ServerResponse, event: VisualRunStreamEvent) {
@@ -744,8 +766,33 @@ async function handleRun(
     return;
   }
 
+  const selection: VisualRunSelectionMode =
+    body.selection ?? (Array.isArray(body.storyIds) ? "selected" : "all");
+
+  if (
+    selection === "affected" &&
+    Array.isArray(body.storyIds) &&
+    body.storyIds.length > 0
+  ) {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error: "Affected selection cannot be combined with explicit story ids",
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+    } satisfies VisualRunResponse);
+    return;
+  }
+
   // Scoped runs must never broaden to the full suite when the selection is empty.
-  if (Array.isArray(body.storyIds) && body.storyIds.length === 0) {
+  if (
+    selection === "selected" &&
+    Array.isArray(body.storyIds) &&
+    body.storyIds.length === 0
+  ) {
     writeJson(res, 400, {
       ok: false,
       crashed: true,
@@ -760,14 +807,62 @@ async function handleRun(
     return;
   }
 
+  let plan =
+    selection === "affected"
+      ? affectedPlan(root, options)
+      : planAllVisualTests(root, options);
+  let selectedStoryIds =
+    selection === "selected"
+      ? body.storyIds
+      : selection === "affected"
+        ? plan.selectedStoryIds
+        : plan.runnableStoryIds;
+  let affected =
+    selection === "affected"
+      ? plan.summary
+      : selectedRunSummary(root, options, selectedStoryIds, selection);
+
+  if (selection === "affected" && affected.noChange) {
+    beginVisualRunHub();
+    subscribeVisualRunHub(res);
+    emitRun({ type: "start", total: 0, affected });
+    emitRun({
+      type: "done",
+      ok: true,
+      exitCode: 0,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "Affected visual tests are up to date",
+      affected,
+    });
+    return;
+  }
+
   const staticIndex = path.join(root, "storybook-static", "index.json");
   const staticIframe = path.join(root, "storybook-static", "iframe.html");
   const staticComplete = existsSync(staticIndex) && existsSync(staticIframe);
   const allowRebuild = options.allowRebuild !== false;
+  if (selection === "affected" && !allowRebuild) {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error: "Affected visual tests require static Storybook rebuilds",
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+      affected,
+    } satisfies VisualRunResponse);
+    return;
+  }
   const rebuild =
-    allowRebuild &&
-    (Boolean(body.rebuild) || forceStaticRebuild || !staticComplete);
-  const grep = grepFromStoryIds(body.storyIds);
+    selection === "affected" ||
+    (allowRebuild &&
+      (Boolean(body.rebuild) || forceStaticRebuild || !staticComplete));
+  let grep =
+    selection === "all" ? undefined : grepFromStoryIds(selectedStoryIds);
   let log = "";
 
   beginVisualRunHub();
@@ -775,13 +870,16 @@ async function handleRun(
 
   try {
     if (rebuild) {
-      const rebuildLine = body.rebuild
-        ? "Rebuilding storybook-static — explicit rebuild requested"
-        : forceStaticRebuild
-          ? "Rebuilding storybook-static — project defaults changed"
-          : !existsSync(staticIndex)
-            ? "Building storybook-static — index.json missing"
-            : "Rebuilding storybook-static — incomplete (missing iframe.html)";
+      const rebuildLine =
+        selection === "affected"
+          ? "Rebuilding storybook-static — refreshing affected dependency graph"
+          : body.rebuild
+            ? "Rebuilding storybook-static — explicit rebuild requested"
+            : forceStaticRebuild
+              ? "Rebuilding storybook-static — project defaults changed"
+              : !existsSync(staticIndex)
+                ? "Building storybook-static — index.json missing"
+                : "Rebuilding storybook-static — incomplete (missing iframe.html)";
       emitRun({ type: "log", line: rebuildLine });
       log += `${rebuildLine}\n`;
       const built = await runCommand("pnpm", ["build-storybook"], root);
@@ -803,10 +901,46 @@ async function handleRun(
           summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
           results: [],
           logTail: log.slice(-4000),
+          affected,
         });
         return;
       }
       forceStaticRebuild = false;
+
+      if (selection === "affected") {
+        plan = affectedPlan(root, options);
+        selectedStoryIds = plan.selectedStoryIds;
+        affected = plan.summary;
+        grep = affected.fallbackReason
+          ? undefined
+          : grepFromStoryIds(selectedStoryIds);
+        if (affected.noChange) {
+          recordAffectedVisualResults({
+            root,
+            hostOptions: options,
+            passedStoryIds: [],
+          });
+          emitRun({ type: "start", total: 0, affected });
+          emitRun({
+            type: "done",
+            ok: true,
+            exitCode: 0,
+            rebuild,
+            summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+            results: [],
+            logTail: `${log}Affected visual tests are up to date`.slice(-6000),
+            affected,
+          });
+          return;
+        }
+      } else {
+        affected = selectedRunSummary(
+          root,
+          options,
+          selectedStoryIds,
+          selection,
+        );
+      }
     } else if (staticComplete) {
       emitRun({
         type: "log",
@@ -815,8 +949,8 @@ async function handleRun(
       log += "Using existing storybook-static\n";
     }
 
-    const total = countVisualStories(root, body.storyIds);
-    emitRun({ type: "start", total });
+    const total = countVisualStories(root, selectedStoryIds);
+    emitRun({ type: "start", total, affected });
 
     const seenIndexes = new Set<number>();
     const progressResults: VisualRunResultItem[] = [];
@@ -899,6 +1033,19 @@ async function handleRun(
       summary.passed = passed;
       summary.failed = failed;
     }
+    const passedStoryIds =
+      code === 0
+        ? (selectedStoryIds ?? [])
+        : successfulStoryIdsFromPlaywrightResults({
+            root,
+            hostOptions: options,
+            results,
+          });
+    recordAffectedVisualResults({
+      root,
+      hostOptions: options,
+      passedStoryIds,
+    });
     emitRun({
       type: "done",
       ok: code === 0 && summary.failed === 0,
@@ -908,6 +1055,7 @@ async function handleRun(
       summary,
       results,
       logTail: log.slice(-6000),
+      affected,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -923,6 +1071,7 @@ async function handleRun(
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
       results: [],
       logTail: log.slice(-4000),
+      affected,
     });
   }
 }
@@ -937,6 +1086,18 @@ function handleCancel(res: ServerResponse) {
   activeRun = null;
   resetVisualRunHub();
   writeJson(res, 200, { ok: true, cancelled: true });
+}
+
+function handleAffectedPlan(
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+): void {
+  const plan = affectedPlan(root, options);
+  writeJson(res, 200, {
+    enabled: Boolean(options.affectedTests),
+    ...plan.summary,
+  });
 }
 
 function handleRunEvents(res: ServerResponse) {
@@ -1293,6 +1454,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/create-interaction-baseline — mid-play step capture
  * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
+ * - GET  /__visual-delta/affected-plan — plan affected stories without capture
  * - GET  /__visual-delta/run-events — replay / continue an in-flight or recent run
  * - GET  /__visual-delta/run-status — lightweight phase/progress JSON
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
@@ -1490,6 +1652,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           await handleRun(req, res, root, options, visualPort);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_AFFECTED_PLAN_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          handleAffectedPlan(res, root, options);
           return;
         }
 

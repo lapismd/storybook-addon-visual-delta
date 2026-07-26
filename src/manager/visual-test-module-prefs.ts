@@ -11,6 +11,8 @@ export const UPDATE_STATUS_KEY =
   "storybook-addon-visual-delta/update-status-enabled-v1";
 export const REBUILD_STATIC_KEY =
   "storybook-addon-visual-delta/rebuild-static-enabled-v1";
+export const AFFECTED_ONLY_KEY =
+  "storybook-addon-visual-delta/affected-only-enabled-v1";
 
 /** Defaults for Testing Module checkboxes / baseline write mode. */
 export const VISUAL_TEST_MODULE_DEFAULTS = {
@@ -23,6 +25,8 @@ export const VISUAL_TEST_MODULE_DEFAULTS = {
    * Off by default — turn on after component CSS/markup changes.
    */
   rebuildStaticEnabled: false,
+  /** Global compare runs use the disposable affected cache by default. */
+  affectedOnlyEnabled: true,
   /** Baseline write mode when the baselines row is enabled. */
   baselineWriteMode: "create" as BaselineWriteMode,
 } as const;
@@ -71,6 +75,13 @@ export function loadRebuildStaticEnabled(): boolean {
   return readBoolFlag(
     REBUILD_STATIC_KEY,
     VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
+  );
+}
+
+export function loadAffectedOnlyEnabled(): boolean {
+  return readBoolFlag(
+    AFFECTED_ONLY_KEY,
+    VISUAL_TEST_MODULE_DEFAULTS.affectedOnlyEnabled,
   );
 }
 

@@ -12,9 +12,9 @@ import {
 } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 
-/** Sidebar scopes. Panel allows Story / Component / All (Diff is a separate control). */
+/** Sidebar scopes. Panel also allows Affected / All (Diff is separate). */
 export type ScopedRunMode = "component" | "story";
-export type PanelRunMode = ScopedRunMode | "all";
+export type PanelRunMode = ScopedRunMode | "affected" | "all";
 export type VisualRunMode = PanelRunMode;
 
 const SIDEBAR_SCOPE_KEY = "storybook-addon-visual-delta/run-scope-v2";
@@ -23,6 +23,7 @@ const PANEL_SCOPE_KEY = "storybook-addon-visual-delta/panel-run-scope-v2";
 const PANEL_MODES = [
   "story",
   "component",
+  "affected",
   "all",
 ] as const satisfies readonly VisualRunMode[];
 
@@ -118,6 +119,7 @@ function saveMode(key: string, mode: VisualRunMode) {
 
 export function modeActionLabel(mode: VisualRunMode): string {
   if (mode === "story") return "Story";
+  if (mode === "affected") return "Affected";
   if (mode === "all") return "All";
   return "Component";
 }
@@ -125,6 +127,7 @@ export function modeActionLabel(mode: VisualRunMode): string {
 /** Tooltip / aria copy for the action the play button will execute. */
 export function modeActionTooltip(mode: VisualRunMode): string {
   if (mode === "story") return "Run visual test for this story";
+  if (mode === "affected") return "Run only affected visual tests";
   if (mode === "all") return "Run all visual tests";
   return "Run visual tests for this component";
 }
@@ -283,7 +286,7 @@ export function VisualRunSplitButton({
           $compact={compact}
           ariaLabel={
             panel
-              ? "Choose Story, Component, or All"
+              ? "Choose Story, Component, Affected, or All"
               : "Choose Story or Component"
           }
           title="Choose action"

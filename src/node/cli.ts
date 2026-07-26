@@ -6,6 +6,7 @@ import {
   type BaselineCliOptions,
 } from "./baseline-cli.js";
 import { runVisualDeltaInit } from "./init-scaffold.js";
+import { runVisualTestCli } from "./visual-test-cli.js";
 
 function readFlag(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(name);
@@ -15,6 +16,12 @@ function readFlag(argv: string[], name: string): string | undefined {
 
 function hasFlag(argv: string[], name: string): boolean {
   return argv.includes(name);
+}
+
+function readFlags(argv: string[], name: string): string[] {
+  return argv.flatMap((value, index) =>
+    value === name && argv[index + 1] ? [argv[index + 1]!] : [],
+  );
 }
 
 function parseShared(argv: string[]): BaselineCliOptions {
@@ -44,6 +51,7 @@ function printHelp(): void {
 
 Usage:
   visual-delta init [--force] [--port <n>]
+  visual-delta test --affected|--all [--dry-run] [--explain]
   visual-delta update --story-id <id> [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta skip --story-id <id>|--component <name>
@@ -51,6 +59,7 @@ Usage:
 
 Commands:
   init                      Scaffold suite, Playwright config, snapshot dir, scripts
+  test                      Compare affected or all visual stories
   update                    Create/overwrite primary baselines + CSF wiring
   interaction-update        Mid-play interaction baseline
   skip                      Add skip-visual (exclude from Playwright visual runs)
@@ -58,6 +67,13 @@ Commands:
 
 Flags:
   --force                   Overwrite existing scaffold files (init)
+  --affected                Trace from the last passing local run
+  --all                     Run every visual story and seed affected state
+  --dry-run                 Plan selection without building or capturing
+  --explain                 Print changed inputs, selected stories, and fallback
+  --cache-dir <path>        Override affected cache directory
+  --external <glob>         Full-run bailout input (repeatable)
+  --untraced <glob>         Ignore a known non-rendering input (repeatable; reduces coverage)
   --story-id <id>           Storybook story id
   --component <name>        Grep / title substring (update / skip / include)
   --step-label <label>      Play step label (interaction-update)
@@ -107,6 +123,30 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const options = parseShared(rest);
+
+  if (command === "test") {
+    const affected = hasFlag(rest, "--affected");
+    const all = hasFlag(rest, "--all");
+    if (affected && all) {
+      throw new Error("Choose either --affected or --all, not both");
+    }
+    const exitCode = await runVisualTestCli({
+      selection: affected ? "affected" : "all",
+      dryRun: hasFlag(rest, "--dry-run"),
+      explain: hasFlag(rest, "--explain"),
+      hostOptions: {
+        snapshotDir: options.snapshotDir,
+        baselinePathMode: options.baselinePathMode,
+        affectedTests: {
+          cacheDir: readFlag(rest, "--cache-dir"),
+          externals: readFlags(rest, "--external"),
+          untraced: readFlags(rest, "--untraced"),
+        },
+      },
+    });
+    process.exitCode = exitCode;
+    return;
+  }
 
   if (command === "update" || command === "visual-update") {
     await runBaselineUpdate(options);

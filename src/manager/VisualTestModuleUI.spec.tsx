@@ -40,6 +40,8 @@ const baseProps = {
   runVisualEnabled: true,
   createBaselinesEnabled: false,
   updateStatusEnabled: false,
+  affectedOnlyEnabled: true,
+  affectedSummaryLabel: "2 affected · 275 unchanged",
   rebuildStaticEnabled: false,
   baselineMode: "create" as const,
   runnerBusy: false,
@@ -58,6 +60,7 @@ const baseProps = {
   onRunVisualChange: vi.fn(),
   onCreateBaselinesChange: vi.fn(),
   onUpdateStatusChange: vi.fn(),
+  onAffectedOnlyChange: vi.fn(),
   onRebuildStaticChange: vi.fn(),
   onBaselineModeChange: vi.fn(),
   onRun: vi.fn(),
@@ -79,6 +82,10 @@ describe("VisualTestModuleUI", () => {
       root.querySelector('input[name="Create missing Baselines"]'),
     ).not.toBeChecked();
     expect(root.querySelector('input[name="Update status"]')).not.toBeChecked();
+    expect(root.querySelector('input[name="Affected only"]')).toBeChecked();
+    expect(screen.getByTestId("affected-run-summary")).toHaveTextContent(
+      "2 affected · 275 unchanged",
+    );
     expect(
       root.querySelector('input[name="Rebuild static"]'),
     ).not.toBeChecked();

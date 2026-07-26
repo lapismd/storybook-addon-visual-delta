@@ -58,8 +58,9 @@ export default defineVisualPlaywrightConfig();
 ```json
 {
   "scripts": {
-    "build-storybook": "storybook build",
-    "test:visual": "playwright test",
+    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta",
+    "test:visual": "visual-delta test --all",
+    "test:visual:affected": "visual-delta test --affected",
     "visual-delta": "visual-delta"
   }
 }
@@ -119,7 +120,8 @@ pnpm add -D storybook-addon-visual-delta
 | `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                  |
 | `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                         |
 
-Bin: `visual-delta` → `init` / `update` / `interaction-update`.
+Bin: `visual-delta` → `init` / `test` / `update` /
+`interaction-update`.
 
 ## Storybook configuration
 
@@ -143,6 +145,10 @@ addons: [
         // optional — see Options
         snapshotDir: "tests/visual/storybook.spec.ts-snapshots",
         baselinePathMode: "story-id",
+        affectedTests: {
+          // optional: files that Storybook does not import but can change rendering
+          externals: ["public/**"],
+        },
       },
     },
   },
@@ -176,6 +182,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                   |
 | `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)             |
 | `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)             |
+| `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason    |
 | `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run            |
 | `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run          |
 | `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                  |
@@ -200,6 +207,11 @@ and may call `pnpm build-storybook` first when `allowRebuild` is enabled and
 `storybook-static` is incomplete/stale (missing `index.json` or `iframe.html`,
 or the client requests a rebuild). Progress is streamed with a **list-only**
 Playwright reporter so the Testing Module can show live `Testing N/M` counts.
+An affected request first reads the cached graph, returns immediately when
+every fingerprint is current, or rebuilds static Storybook and recomputes the
+selection before launching Playwright. Responses and run events include the
+selection, selected and unchanged counts, no-change status, and any full-run
+fallback reason.
 After HMR remounts the Testing Module (e.g. Update status), the client
 reconnects via `/run-status` + `/run-events` instead of losing progress.
 
@@ -229,18 +241,19 @@ does not change baselines or visual review status.
 Pass under addon `options.visualDelta`. Types from
 `storybook-addon-visual-delta/preset` or `…/node`.
 
-| Option                        | Default                                    | Purpose                                                            |
-| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| `showToolbarStatusLabels`     | `true`                                     | Show the current story's named visual-review status in the toolbar |
-| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                      |
-| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                            |
-| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts          |
-| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                              |
-| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                      |
-| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                            |
-| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                            |
-| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`)  |
-| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                           |
+| Option                        | Default                                    | Purpose                                                                |
+| ----------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
+| `showToolbarStatusLabels`     | `true`                                     | Show the current story's named visual-review status in the toolbar     |
+| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                          |
+| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                                |
+| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts              |
+| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                                  |
+| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                          |
+| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                                |
+| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                                |
+| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`)      |
+| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                               |
+| `affectedTests`               | `false`                                    | Enable affected selection; accepts `cacheDir`, `externals`, `untraced` |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
 Playwright-server readiness checks are package-owned. A packed or file-linked
@@ -249,6 +262,65 @@ consumer does not need the UI repository's `scripts/` tree.
 The source patcher supports both Svelte CSF (`.stories.svelte`) and object-style
 TypeScript/JavaScript CSF (`.stories.ts`, `.tsx`, `.js`, `.jsx`). Review and
 skip actions preserve the rest of the exported story object.
+
+## Affected visual tests
+
+Affected mode compares the current project to the last locally passing visual
+run. It uses `preview-stats.json` plus `storybook-static/index.json` to build
+each story's transitive dependency closure, fingerprints the closure and owned
+baseline PNGs, and stores passing fingerprints under
+`.cache/visual-delta/affected-state-v1.json`.
+
+```bash
+# Always capture the complete suite and seed the local cache.
+pnpm exec visual-delta test --all
+
+# No-op, capture only affected stories, or conservatively fall back to all.
+pnpm exec visual-delta test --affected
+
+# Inspect the decision without rebuilding or launching Playwright.
+pnpm exec visual-delta test --affected --dry-run --explain
+```
+
+Static builds must emit Storybook's Vite stats:
+
+```json
+{
+  "scripts": {
+    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta"
+  }
+}
+```
+
+The cache is disposable and machine-local. Missing or invalid cache/graph data,
+unsupported builders, unresolved new stories, Storybook configuration or
+preview dependencies, capture infrastructure, Playwright configuration,
+package metadata, lockfiles, configured static assets, and `externals` all
+select the full suite. A changed baseline PNG selects its owning story.
+`skip-visual` stories are always excluded. Only stories Playwright successfully
+exercises receive updated fingerprints, so failures and timeouts remain
+affected.
+
+`externals` are root-relative globs for rendering inputs outside Storybook's
+module graph and deliberately force a full run when changed. `untraced` globs
+are optional root-relative globs for known non-rendering files:
+
+```ts
+affectedTests: {
+  cacheDir: ".cache/visual-delta",
+  externals: ["public/**"],
+  untraced: ["docs/**"],
+}
+```
+
+`untraced` is disabled by default because every configured glob reduces visual
+coverage. Prefer leaving a file traced unless it is demonstrably unrelated to
+rendering.
+
+The Visual Delta panel retains Story, Component, and All scopes and adds
+Affected. The global Testing Module defaults to Affected when the feature is
+enabled and shows either **Up to date** or
+**N affected · M unchanged** before and during a run.
 
 An image entry can override the capture metadata used by overlay sizing and
 live diff:
@@ -503,8 +575,9 @@ export default defineVisualPlaywrightConfig();
 {
   "scripts": {
     "storybook": "storybook dev -p 9009",
-    "build-storybook": "storybook build",
-    "test:visual": "playwright test",
+    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta",
+    "test:visual": "visual-delta test --all",
+    "test:visual:affected": "visual-delta test --affected",
     "test:visual:update": "tsx scripts/ui-generator/cli.ts visual-update",
     "visual-delta": "node packages/storybook-addon-visual-delta/dist/node/cli.js"
   }
@@ -521,7 +594,9 @@ export default defineVisualPlaywrightConfig();
 | `pnpm exec visual-delta skip` / `include`                      | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                    |
 | `pnpm test:visual-delta-panel`                                 | Real panel, overlay placements, and static/dev manager sidebar compare (never writes) |
 | `VISUAL_UPDATE_APPROVED=1 pnpm test:visual-delta-panel:update` | Gated update for the isolated panel self-test baseline directory                      |
-| `pnpm test:visual` / `pnpm exec playwright test`               | Compare only (`PLAYWRIGHT_UPDATE_SNAPSHOTS=0` from middleware)                        |
+| `pnpm test:visual`                                             | Full compare and affected-cache seed; never writes baselines                          |
+| `pnpm test:visual:affected`                                    | No-op, affected-only compare, or conservative full fallback                           |
+| `pnpm visual-delta test --affected --dry-run --explain`        | Explain the selection without rebuilding or capturing                                 |
 
 Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
 `--skip-build`, `--rebuild`, `--component <name>`, `--story-id <id>`,

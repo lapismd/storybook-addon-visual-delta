@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  AFFECTED_ONLY_KEY,
   CREATE_BASELINES_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
   VISUAL_TEST_MODULE_DEFAULTS,
   anyModuleActionSelected,
+  loadAffectedOnlyEnabled,
   loadCreateBaselinesEnabled,
   loadModuleBaselineWriteMode,
   loadRunVisualEnabled,
@@ -18,6 +20,7 @@ afterEach(() => {
   localStorage.removeItem(RUN_VISUAL_KEY);
   localStorage.removeItem(CREATE_BASELINES_KEY);
   localStorage.removeItem(UPDATE_STATUS_KEY);
+  localStorage.removeItem(AFFECTED_ONLY_KEY);
   localStorage.removeItem(MODE_KEY);
 });
 
@@ -27,21 +30,25 @@ describe("visual test module prefs", () => {
       runVisualEnabled: true,
       createBaselinesEnabled: false,
       rebuildStaticEnabled: false,
+      affectedOnlyEnabled: true,
       updateStatusEnabled: false,
       baselineWriteMode: "create",
     });
     expect(loadRunVisualEnabled()).toBe(true);
     expect(loadCreateBaselinesEnabled()).toBe(false);
     expect(loadUpdateStatusEnabled()).toBe(false);
+    expect(loadAffectedOnlyEnabled()).toBe(true);
     expect(loadModuleBaselineWriteMode()).toBe("create");
   });
 
   it("persists checkbox flags", () => {
     writeBoolFlag(CREATE_BASELINES_KEY, true);
     writeBoolFlag(UPDATE_STATUS_KEY, true);
+    writeBoolFlag(AFFECTED_ONLY_KEY, false);
     writeBoolFlag(RUN_VISUAL_KEY, false);
     expect(loadCreateBaselinesEnabled()).toBe(true);
     expect(loadUpdateStatusEnabled()).toBe(true);
+    expect(loadAffectedOnlyEnabled()).toBe(false);
     expect(loadRunVisualEnabled()).toBe(false);
   });
 
