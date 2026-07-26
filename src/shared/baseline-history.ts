@@ -24,6 +24,7 @@ export type BaselineHistoryResponse = {
   ok: true;
   vcs: BaselineHistoryVcsKind;
   followsRenames: boolean;
+  warnings?: string[];
   entries: BaselineHistoryEntry[];
   nextCursor: string | null;
 };
@@ -56,10 +57,13 @@ export async function fetchBaselineHistory(args: {
 }): Promise<BaselineHistoryResponse> {
   const query = new URLSearchParams({ path: args.path });
   if (args.cursor) query.set("cursor", args.cursor);
-  const response = await fetch(`${VISUAL_DELTA_BASELINE_HISTORY_PATH}?${query}`, {
-    cache: "no-store",
-    signal: args.signal,
-  });
+  const response = await fetch(
+    `${VISUAL_DELTA_BASELINE_HISTORY_PATH}?${query}`,
+    {
+      cache: "no-store",
+      signal: args.signal,
+    },
+  );
   const payload = (await response.json().catch(() => null)) as
     | BaselineHistoryResponse
     | BaselineHistoryErrorResponse

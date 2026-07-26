@@ -6,7 +6,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import pixelmatch from "pixelmatch";
 import { Button, ToggleButton } from "storybook/internal/components";
 import {
   experimental_getTestProviderStore,
@@ -75,13 +74,11 @@ import { appendVisualRunLogLine } from "../shared/status-log.js";
 import type { DiffResultData } from "../types.js";
 import {
   capturePreviewSubject,
-  fitImageData,
   loadImage,
-  maskTransparentRegions,
   withVerifiedPreviewViewport,
 } from "./capture.js";
 import { postChromiumSubjectCapture } from "./chromium-capture.js";
-import { buildDiffHistogram, buildFocusAssets } from "./diff-assets.js";
+import { compareLoadedImages } from "./image-comparison.js";
 import { DiffResult } from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
@@ -930,8 +927,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
         const width = baseline.width;
         const height = baseline.height;
-        const baselineData = baseline.imageData.data;
-        const actualData = fitImageData(actual.imageData, width, height);
         const sizeCore =
           actual.width === width && actual.height === height
             ? `${width}×${height}`
@@ -940,91 +935,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           `${captureTag} · viewport requested ${captureViewport.width}×${captureViewport.height}, ` +
           `observed ${observedCaptureViewport.width}×${observedCaptureViewport.height} at ` +
           `${captureDeviceScale}× · bitmap ${actual.width}×${actual.height} · ${sizeCore}`;
-        const { baselineForDiff, actualForDiff, ignore } =
-          maskTransparentRegions(baselineData, actualData, width, height);
-        const actualMaskedCanvas = document.createElement("canvas");
-        actualMaskedCanvas.width = width;
-        actualMaskedCanvas.height = height;
-        const actualMaskedCtx = actualMaskedCanvas.getContext("2d");
-        if (!actualMaskedCtx) throw new Error("Unable to get canvas context");
-        const actualMaskedImageData = actualMaskedCtx.createImageData(
-          width,
-          height,
-        );
-        actualMaskedImageData.data.set(actualData);
-        for (let p = 0; p < width * height; p++) {
-          if (!ignore[p]) continue;
-          const i = p * 4;
-          actualMaskedImageData.data[i] = 0;
-          actualMaskedImageData.data[i + 1] = 0;
-          actualMaskedImageData.data[i + 2] = 0;
-          actualMaskedImageData.data[i + 3] = 0;
-        }
-        actualMaskedCtx.putImageData(actualMaskedImageData, 0, 0);
-        const actualMaskedDataUrl = actualMaskedCanvas.toDataURL("image/png");
-        const diffData = new Uint8ClampedArray(width * height * 4);
-        const diffPixels = pixelmatch(
-          actualForDiff,
-          baselineForDiff,
-          diffData,
-          width,
-          height,
-          {
-            threshold: diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
-            includeAA: diffIncludeAntiAliasing,
-            alpha: 0.1,
-            diffColor: [255, 0, 0],
-            diffColorAlt: [0, 255, 0],
-          },
-        );
-        const diffCanvas = document.createElement("canvas");
-        diffCanvas.width = width;
-        diffCanvas.height = height;
-        const ctx = diffCanvas.getContext("2d");
-        if (!ctx) throw new Error("Unable to get canvas context");
-        const diffImageData = ctx.createImageData(width, height);
-        diffImageData.data.set(diffData);
-        ctx.putImageData(diffImageData, 0, 0);
-        const { focusDataUrl, changeBounds } = buildFocusAssets(
-          actualMaskedImageData.data,
-          diffData,
-          width,
-          height,
-        );
-        const diffHistogram = buildDiffHistogram(
-          baselineForDiff,
-          actualForDiff,
-          diffData,
-          width,
-          height,
-        );
-        const totalPixels = width * height;
-        const diffPercent = (diffPixels / totalPixels) * 100;
         const threshold =
           passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
-        const passed = diffPercent < threshold;
-        const nextResult = {
-          actualImage: actualMaskedDataUrl,
-          diffImage: diffCanvas.toDataURL("image/png"),
-          baselineImage: baseline.dataUrl,
-          focusImage: focusDataUrl,
-          changeBounds,
-          imageWidth: width,
-          imageHeight: height,
-          cssWidth: width / captureDeviceScale,
-          cssHeight: height / captureDeviceScale,
+        const nextResult = compareLoadedImages(baseline, actual, {
+          pixelThreshold: diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
+          includeAntiAliasing: diffIncludeAntiAliasing,
+          passThresholdPercent: threshold,
           deviceScaleFactor: captureDeviceScale,
           captureViewport,
           observedCaptureViewport,
-          capturedBitmap: { width: actual.width, height: actual.height },
-          diffPixels,
-          totalPixels,
-          diffPercent,
-          passThresholdPercent: threshold,
-          passed,
           sizeNote,
-          diffHistogram,
-        };
+        });
+        const { diffPercent, diffPixels, totalPixels } = nextResult;
         // Cache under the gallery stem so soft-hide / reload effects keep DiffResult.
         const stemKey =
           (baselineSrcForDiff.split("?")[0] ||
@@ -1042,7 +964,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               diffPixels,
               totalPixels,
               passThresholdPercent: threshold,
-              passed,
+              passed: nextResult.passed,
             }),
           ]);
         }

@@ -61,6 +61,11 @@ const CONFIG = {
   warnings: [],
 };
 
+const HISTORY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
 export async function mockVisualBackend(
   page: Page,
   options: { runtimeInstanceId?: () => string } = {},
@@ -101,6 +106,54 @@ export async function mockVisualBackend(
         json: {
           ok: true,
           instanceId: options.runtimeInstanceId?.() ?? "manager-test-runtime",
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/baseline-history/image")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: HISTORY_PNG,
+        headers: { "Cache-Control": "no-store" },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/baseline-history")) {
+      const baselinePath = url.searchParams.get("path") ?? "baseline.png";
+      const imageUrl = (revision: string) =>
+        `/__visual-delta/baseline-history/image?path=${encodeURIComponent(baselinePath)}&revision=${revision}`;
+      await route.fulfill({
+        status: 200,
+        json: {
+          ok: true,
+          vcs: "jj",
+          followsRenames: false,
+          entries: [
+            {
+              revisionId: "a".repeat(40),
+              displayId: "kmrusxzponml",
+              secondaryId: "aaaaaaaaaaaa",
+              subject: "Update visual baseline",
+              message: "Update visual baseline",
+              author: "Visual Tester",
+              authoredAt: "2026-07-25T12:00:00Z",
+              source: "commit",
+              imageUrl: imageUrl("a".repeat(40)),
+            },
+            {
+              revisionId: "b".repeat(40),
+              displayId: "qpvuntsmznwk",
+              secondaryId: "bbbbbbbbbbbb",
+              subject: "Create visual baseline",
+              message: "Create visual baseline",
+              author: "Visual Tester",
+              authoredAt: "2026-07-24T12:00:00Z",
+              source: "commit",
+              imageUrl: imageUrl("b".repeat(40)),
+            },
+          ],
+          nextCursor: null,
         },
       });
       return;

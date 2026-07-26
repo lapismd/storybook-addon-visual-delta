@@ -155,6 +155,56 @@ test.describe("Visual Delta manager integration", () => {
     expect(writes).toEqual([]);
   });
 
+  test("opens VCS history for primary, mode, and interaction baselines", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
+    const panel = page.getByTestId("visual-delta-panel");
+
+    await panel
+      .getByRole("button", { name: "Open Default baseline history" })
+      .click();
+    await expect(
+      panel.getByRole("heading", { name: "Default history" }),
+    ).toBeVisible();
+    await expect(panel.getByTitle("History provided by jj")).toBeVisible();
+    await expect(panel.getByRole("tab", { name: "2-up" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await panel.getByRole("button", { name: "Back to baseline" }).click();
+
+    await page
+      .getByRole("button", {
+        name: "Visual mode: Default, not run",
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Dark desktop mode, not run" })
+      .click();
+    await panel
+      .getByRole("button", {
+        name: "Open Default · Dark desktop baseline history",
+      })
+      .click();
+    await expect(
+      panel.getByRole("heading", { name: "Default · Dark desktop history" }),
+    ).toBeVisible();
+    await panel.getByRole("button", { name: "Back to baseline" }).click();
+
+    await panel.getByRole("button", { name: /Opened state/i }).click();
+    await panel
+      .getByRole("button", {
+        name: "Open Opened state baseline history",
+      })
+      .click();
+    await expect(
+      panel.getByRole("heading", { name: "Opened state history" }),
+    ).toBeVisible();
+    expect(writes).toEqual([]);
+  });
+
   test("Diff HTML proves a per-image viewport from narrow right docking", async ({
     page,
   }) => {

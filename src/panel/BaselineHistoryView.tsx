@@ -14,6 +14,12 @@ import {
   type BaselineHistoryEntry,
   type BaselineHistoryResponse,
 } from "../shared/baseline-history.js";
+import type { DiffResultData } from "../types.js";
+import { DiffResult } from "./DiffResult.js";
+import {
+  compareImageSources,
+  type ImageComparisonRunner,
+} from "./image-comparison.js";
 import { panelCanvasBackground } from "./styled.js";
 
 export type BaselineHistoryTarget = {
@@ -178,7 +184,7 @@ const RadioCell = styled.label({
 const CompareWorkspace = styled.div(({ theme }) => ({
   minWidth: 0,
   minHeight: 0,
-  overflow: "auto",
+  overflow: "hidden",
   display: "flex",
   flexDirection: "column",
   gap: 12,
@@ -211,43 +217,13 @@ const SelectionLabel = styled.span(({ theme }) => ({
   textTransform: "uppercase",
 }));
 
-const PreviewGrid = styled.div({
+const ComparisonSurface = styled.div({
   flex: "1 1 auto",
-  minHeight: 180,
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 12,
-});
-
-const PreviewCard = styled.figure(({ theme }) => ({
-  minWidth: 0,
   minHeight: 0,
-  margin: 0,
   display: "flex",
   flexDirection: "column",
-  border: `1px solid ${theme.appBorderColor}`,
-  borderRadius: 4,
   overflow: "hidden",
-  background: theme.background.app,
-}));
-
-const PreviewImage = styled.img({
-  flex: "1 1 auto",
-  minHeight: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "contain",
 });
-
-const PreviewCaption = styled.figcaption(({ theme }) => ({
-  flex: "0 0 auto",
-  padding: "5px 8px",
-  borderTop: `1px solid ${theme.appBorderColor}`,
-  background: theme.background.content,
-  color: theme.color.defaultText,
-  fontSize: 11,
-  fontWeight: 700,
-}));
 
 const Message = styled.pre(({ theme }) => ({
   margin: 0,
@@ -303,10 +279,12 @@ export function BaselineHistoryView({
   target,
   onClose,
   loadHistory = fetchBaselineHistory,
+  compareImages = compareImageSources,
 }: {
   target: BaselineHistoryTarget;
   onClose: () => void;
   loadHistory?: BaselineHistoryLoader;
+  compareImages?: ImageComparisonRunner;
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(false);
@@ -320,6 +298,9 @@ export function BaselineHistoryView({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<DiffResultData | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const element = rootRef.current;
@@ -398,6 +379,42 @@ export function BaselineHistoryView({
     () => entries.find((entry) => entry.revisionId === afterId) ?? null,
     [afterId, entries],
   );
+
+  useEffect(() => {
+    if (!before || !after) {
+      setComparison(null);
+      setComparisonError(null);
+      return;
+    }
+    let cancelled = false;
+    setComparisonLoading(true);
+    setComparisonError(null);
+    setComparison(null);
+    void compareImages(before.imageUrl, after.imageUrl, {
+      pixelThreshold: 0.2,
+      includeAntiAliasing: false,
+      passThresholdPercent: 1,
+      deviceScaleFactor: 3,
+    })
+      .then((result) => {
+        if (!cancelled) setComparison(result);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          setComparisonError(
+            reason instanceof Error
+              ? reason.message
+              : "Unable to compare baseline revisions",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setComparisonLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [after, before, compareImages]);
 
   return (
     <Root
@@ -504,6 +521,11 @@ export function BaselineHistoryView({
                 rename may not appear.
               </State>
             ) : null}
+            {response?.warnings?.map((warning) => (
+              <State key={warning} role="note">
+                {warning}
+              </State>
+            ))}
           </Timeline>
           <CompareWorkspace aria-label="Selected baseline revisions">
             {before && after ? (
@@ -520,23 +542,21 @@ export function BaselineHistoryView({
                     <RevisionLine>{after.displayId}</RevisionLine>
                   </SelectionCard>
                 </SelectionHeader>
-                <PreviewGrid>
-                  <PreviewCard>
-                    <PreviewImage
-                      src={before.imageUrl}
-                      alt={`Before: ${before.subject}`}
-                    />
-                    <PreviewCaption>Before</PreviewCaption>
-                  </PreviewCard>
-                  <PreviewCard>
-                    <PreviewImage
-                      src={after.imageUrl}
-                      alt={`After: ${after.subject}`}
-                    />
-                    <PreviewCaption>After</PreviewCaption>
-                  </PreviewCard>
-                </PreviewGrid>
-                <Message>{after.message || after.subject}</Message>
+                <ComparisonSurface>
+                  {comparisonLoading ? (
+                    <State role="status">Comparing revisions…</State>
+                  ) : null}
+                  {comparisonError ? (
+                    <State role="alert">{comparisonError}</State>
+                  ) : null}
+                  {comparison ? (
+                    <DiffResult result={comparison} defaultZoom="fit" />
+                  ) : null}
+                </ComparisonSurface>
+                <details>
+                  <summary>After revision message</summary>
+                  <Message>{after.message || after.subject}</Message>
+                </details>
               </>
             ) : (
               <State>Select Before and After revisions to compare.</State>

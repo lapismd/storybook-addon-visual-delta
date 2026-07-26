@@ -8,6 +8,7 @@ import {
   type BaselineHistoryLoader,
 } from "./BaselineHistoryView.js";
 import type { BaselineHistoryEntry } from "../shared/baseline-history.js";
+import type { DiffResultData } from "../types.js";
 
 beforeAll(() => {
   class ResizeObserverStub {
@@ -55,6 +56,27 @@ const entries: BaselineHistoryEntry[] = [
   },
 ];
 
+const comparison: DiffResultData = {
+  actualImage: "data:image/png;base64,actual",
+  diffImage: "data:image/png;base64,diff",
+  baselineImage: "data:image/png;base64,baseline",
+  focusImage: "data:image/png;base64,focus",
+  changeBounds: null,
+  imageWidth: 300,
+  imageHeight: 150,
+  cssWidth: 100,
+  cssHeight: 50,
+  deviceScaleFactor: 3,
+  diffPixels: 2,
+  totalPixels: 45_000,
+  diffPercent: 0.0044,
+  passThresholdPercent: 1,
+  passed: true,
+  diffHistogram: new Array(32).fill(0),
+};
+
+const compareImages = vi.fn(async () => comparison);
+
 describe("BaselineHistoryView", () => {
   it("defaults to the newest commit versus a changed working copy", async () => {
     const loader = vi.fn<BaselineHistoryLoader>(async () => ({
@@ -69,6 +91,7 @@ describe("BaselineHistoryView", () => {
         target={{ path: "forms/example.png", label: "Default" }}
         onClose={vi.fn()}
         loadHistory={loader}
+        compareImages={compareImages}
       />,
     );
 
@@ -111,6 +134,7 @@ describe("BaselineHistoryView", () => {
         target={{ path: "forms/example.png", label: "Default" }}
         onClose={onClose}
         loadHistory={loader}
+        compareImages={compareImages}
       />,
     );
 
