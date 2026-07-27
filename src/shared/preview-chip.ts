@@ -7,7 +7,6 @@ export const MODE_BADGE_ID = "visual-delta-mode-badge";
 export const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
 export const OVERLAY_CHIP_LABEL = "Baseline";
 export const BASELINE_CHIP_GAP_PX = 6;
-export const BASELINE_CHIP_GUTTER_PX = 24;
 
 /** Shared paint for the Baseline chip on the overlay. */
 export const PREVIEW_CHIP_PAINT = `
@@ -28,8 +27,8 @@ export function paintOverlayChip(
 ) {
   chip.style.cssText = `
     position: absolute;
-    top: ${-BASELINE_CHIP_GUTTER_PX + offset.y}px;
-    left: ${offset.x}px;
+    top: ${BASELINE_CHIP_GAP_PX + offset.y}px;
+    left: ${BASELINE_CHIP_GAP_PX + offset.x}px;
     ${PREVIEW_CHIP_PAINT}
   `;
 }
@@ -40,7 +39,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Keep the chip above the bitmap while clamping it into the visible pane.
+ * Keep the chip over the bitmap while clamping it into the visible pane.
  * Only the chip moves; the image and live/baseline alignment remain untouched.
  */
 export function positionOverlayChip(
@@ -56,8 +55,8 @@ export function positionOverlayChip(
   }
   const parentRect = parent.getBoundingClientRect();
   const overlayRect = overlay.getBoundingClientRect();
-  const desiredX = offset.x;
-  const desiredY = -chipRect.height - BASELINE_CHIP_GAP_PX + offset.y;
+  const desiredX = BASELINE_CHIP_GAP_PX + offset.x;
+  const desiredY = BASELINE_CHIP_GAP_PX + offset.y;
   const minX = parentRect.left - overlayRect.left;
   const maxX = parentRect.right - overlayRect.left - chipRect.width;
   const minY = parentRect.top - overlayRect.top;

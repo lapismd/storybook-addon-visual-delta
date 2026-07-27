@@ -397,7 +397,7 @@ parameters: {
     diffIncludeAntiAliasing: false,
     /** Extra settle ms before capture (Live Diff + Playwright). */
     delay: 0,
-    /** Fine-tune the external Baseline chip after its 6px top-start anchor. */
+    /** Fine-tune the absolute Baseline chip inside its 6px top-start anchor. */
     baselineLabelOffset: { x: 0, y: 0 },
     /** Hide these CSS regions during capture (plus data-visual-delta-ignore). */
     ignoreSelectors: [".toast"],

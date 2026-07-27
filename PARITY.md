@@ -136,8 +136,11 @@ fills only missing sources. Multi-browser cloud matrix remains out of scope.
   exact viewport pixels when requested, and restores iframe size, scroll, and
   focus after success, cancellation, or error. Result diagnostics and
   Playwright sidecars retain viewport and device-scale metadata.
-- The Baseline chip is outside the image pixels, with symmetric pane clearance,
-  viewport clamping, and project/story X/Y offsets.
+- The Baseline chip is absolute, non-layout chrome inside the image frame, with
+  viewport clamping and project/story X/Y offsets.
+- Overlay selection waits for a settled Storybook layout snapshot measured at
+  the baseline viewport. Component clips reconstruct measured body/root/subject
+  insets; viewport captures do not add an inset.
 - Preview splits and all five Diff result tabs share Fit/custom/100% zoom.
   Bitmap dimensions are converted back to native CSS dimensions with the
   capture device scale; Fit responds to bottom/right docking and never

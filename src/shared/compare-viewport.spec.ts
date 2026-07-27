@@ -14,4 +14,11 @@ describe("baselineCompareSizesFromNatural", () => {
       },
     );
   });
+
+  it("does not add an addon-owned pane allowance by default", () => {
+    expect(baselineCompareSizesFromNatural(600, 300, undefined, 3)).toEqual({
+      content: { width: 200, height: 100 },
+      viewport: { width: 200, height: 100 },
+    });
+  });
 });

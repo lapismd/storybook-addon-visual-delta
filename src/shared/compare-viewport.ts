@@ -1,7 +1,4 @@
-import {
-  VISUAL_COMPARE_PANE_PAD_PX,
-  VISUAL_DEVICE_SCALE_FACTOR,
-} from "../constants.js";
+import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
 
 export type CompareSize = {
   width: number;
@@ -21,7 +18,7 @@ export type BaselineCompareSizes = {
 export function baselineCompareSizesFromNatural(
   naturalWidth: number,
   naturalHeight: number,
-  padPx: number = VISUAL_COMPARE_PANE_PAD_PX,
+  padPx: number = 0,
   deviceScaleFactor: number = VISUAL_DEVICE_SCALE_FACTOR,
 ): BaselineCompareSizes | null {
   if (naturalWidth < 1 || naturalHeight < 1) return null;

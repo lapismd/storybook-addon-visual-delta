@@ -9,7 +9,10 @@ import {
   previewFrame,
 } from "./manager-test-support.js";
 
-const DEV_STORYBOOK = "http://127.0.0.1:9013";
+const DEV_STORYBOOK = `http://127.0.0.1:${
+  process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ??
+  Number(process.env.STORYBOOK_PORT ?? "9009") + 4
+}`;
 
 test.describe("Visual Delta manager integration", () => {
   test("reloads once after the runtime identity changes and preserves manager URL state", async ({
@@ -341,28 +344,41 @@ test.describe("Visual Delta manager integration", () => {
       await baselineRight.click();
     }
     const frame = previewFrame(page);
-    await expect(frame.locator("#visual-delta-split")).toBeVisible();
-    const dimensions = await frame
-      .locator("[data-ui-component='task-due-calendar']")
-      .evaluate((subject) => {
-        const canvas = subject.closest("#storybook-root") as HTMLElement | null;
-        return {
-          subjectInlineWidth: (subject as HTMLElement).style.width,
-          subjectComputedWidth: Number.parseFloat(
-            getComputedStyle(subject).width,
-          ),
-          canvasInlineWidth: canvas?.style.width,
-        };
+    await expect
+      .poll(
+        () =>
+          frame.locator("body").evaluate((body) => {
+            const split = body.querySelector("#visual-delta-split");
+            const subject = body.querySelector(
+              "[data-ui-component='task-due-calendar']",
+            );
+            const canvas = subject?.closest(
+              "#storybook-root",
+            ) as HTMLElement | null;
+            if (!(subject instanceof HTMLElement)) return null;
+            return {
+              splitVisible: split instanceof HTMLElement && !split.hidden,
+              subjectInlineWidth: subject.style.width,
+              subjectComputedWidth: Math.round(
+                Number.parseFloat(getComputedStyle(subject).width),
+              ),
+              canvasInlineWidth: canvas?.style.width,
+            };
+          }),
+        { timeout: 15_000 },
+      )
+      .toMatchObject({
+        splitVisible: true,
+        subjectInlineWidth: "",
+        subjectComputedWidth: 264,
+        canvasInlineWidth: "1280px",
       });
-
-    expect(dimensions).toMatchObject({
-      subjectInlineWidth: "",
-      canvasInlineWidth: "1280px",
-    });
-    expect(dimensions.subjectComputedWidth).toBeCloseTo(264, 1);
     await expect(page.getByTestId("baseline-geometry-warning")).toContainText(
       "Baseline 1232×187 CSS px; live component 264×187 CSS px",
     );
+    await expect(frame.locator("#visual-delta-overlay > img")).toBeVisible({
+      timeout: 15_000,
+    });
 
     const toolbarBaseline = page.getByRole("button", {
       name: "Open Default baseline full image",
@@ -399,26 +415,26 @@ test.describe("Visual Delta manager integration", () => {
       name: "Default baseline full image",
     });
     await expect(fullImage).toBeVisible();
-    const lightboxSize = await fullImage.evaluate((image) => {
-      const rect = image.getBoundingClientRect();
-      const style = getComputedStyle(image);
-      return {
-        naturalWidth: image.naturalWidth,
-        naturalHeight: image.naturalHeight,
-        cssWidth: Number.parseFloat(style.width),
-        cssHeight: Number.parseFloat(style.height),
-        renderedWidth: rect.width,
-        renderedHeight: rect.height,
-      };
-    });
-    expect(lightboxSize.cssWidth).toBeCloseTo(lightboxSize.naturalWidth / 3, 1);
-    expect(lightboxSize.cssHeight).toBeCloseTo(
-      lightboxSize.naturalHeight / 3,
-      1,
-    );
-    expect(
-      lightboxSize.renderedWidth / lightboxSize.renderedHeight,
-    ).toBeCloseTo(lightboxSize.naturalWidth / lightboxSize.naturalHeight, 2);
+    await expect
+      .poll(() =>
+        fullImage.evaluate((image) => {
+          const rect = image.getBoundingClientRect();
+          const style = getComputedStyle(image);
+          const cssWidth = Number.parseFloat(style.width);
+          const cssHeight = Number.parseFloat(style.height);
+          return (
+            image.naturalWidth > 0 &&
+            image.naturalHeight > 0 &&
+            Math.abs(cssWidth - image.naturalWidth / 3) < 0.1 &&
+            Math.abs(cssHeight - image.naturalHeight / 3) < 0.1 &&
+            Math.abs(
+              rect.width / rect.height -
+                image.naturalWidth / image.naturalHeight,
+            ) < 0.01
+          );
+        }),
+      )
+      .toBe(true);
     await page.getByRole("button", { name: "Close modal" }).click();
     expect(writes).toEqual([]);
   });

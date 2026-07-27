@@ -17,9 +17,11 @@ import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import { modeNames, stackModes } from "../shared/modes.js";
 import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
 import { normalizeImagesWithModes } from "./normalize.js";
+import type { StorybookLayoutMode } from "../shared/preview-layout.js";
 
 let lastProjectDefaults: VisualDeltaProjectDefaults =
   BUILTIN_VISUAL_DELTA_DEFAULTS;
+let previewRenderGeneration = 0;
 
 async function loadProjectDefaults(): Promise<VisualDeltaProjectDefaults> {
   try {
@@ -40,6 +42,8 @@ export function buildInitPayload(
   context: {
     id: string;
     name: string;
+    layout?: StorybookLayoutMode | null;
+    renderGeneration?: number;
   },
   visualDeltaParams: VisualDeltaParams | undefined,
   projectDefaults: VisualDeltaProjectDefaults = BUILTIN_VISUAL_DELTA_DEFAULTS,
@@ -64,6 +68,8 @@ export function buildInitPayload(
     modeNames: modeNames(modes),
     storyId: context.id,
     storyName: context.name,
+    layout: context.layout ?? null,
+    renderGeneration: context.renderGeneration ?? 0,
     opacity:
       visualDeltaParams?.opacity ??
       (isSplitPlacement(placement) ? 1 : projectDefaults.opacity),
@@ -96,6 +102,17 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
   const visualDeltaParams = context.parameters?.visualDelta as
     | VisualDeltaParams
     | undefined;
+  const layout =
+    typeof context.parameters?.layout === "string"
+      ? (context.parameters.layout as StorybookLayoutMode)
+      : null;
+  const renderGeneration = ++previewRenderGeneration;
+  const initContext = {
+    id: context.id,
+    name: context.name,
+    layout,
+    renderGeneration,
+  };
   const emit = useChannel({
     [EVENTS.REQUEST_INIT_IMAGE]: (payload?: { storyId?: string }) => {
       if (payload?.storyId && payload.storyId !== context.id) return;
@@ -103,7 +120,7 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
         emit(
           EVENTS.INIT_IMAGE,
           buildInitPayload(
-            { id: context.id, name: context.name },
+            initContext,
             context.parameters?.visualDelta as VisualDeltaParams | undefined,
             projectDefaults,
           ),
@@ -118,12 +135,7 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
       lastProjectDefaults = projectDefaults;
       emit(
         EVENTS.INIT_IMAGE,
-        buildInitPayload(
-          { id: context.id, name: context.name },
-          visualDeltaParams,
-          projectDefaults,
-          true,
-        ),
+        buildInitPayload(initContext, visualDeltaParams, projectDefaults, true),
       );
     },
   });
@@ -131,20 +143,12 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
   useEffect(() => {
     emit(
       EVENTS.INIT_IMAGE,
-      buildInitPayload(
-        { id: context.id, name: context.name },
-        visualDeltaParams,
-        lastProjectDefaults,
-      ),
+      buildInitPayload(initContext, visualDeltaParams, lastProjectDefaults),
     );
     void loadProjectDefaults().then((projectDefaults) => {
       emit(
         EVENTS.INIT_IMAGE,
-        buildInitPayload(
-          { id: context.id, name: context.name },
-          visualDeltaParams,
-          projectDefaults,
-        ),
+        buildInitPayload(initContext, visualDeltaParams, projectDefaults),
       );
     });
   }, [
@@ -162,6 +166,8 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
     visualDeltaParams?.cropToViewport,
     context.id,
     context.name,
+    layout,
+    renderGeneration,
     emit,
   ]);
 

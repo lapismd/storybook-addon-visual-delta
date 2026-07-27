@@ -13,7 +13,12 @@ describe("buildInitPayload", () => {
       baselineLabelOffset: { x: 5, y: -3 },
     };
     const project = buildInitPayload(
-      { id: "story", name: "Story" },
+      {
+        id: "story",
+        name: "Story",
+        layout: "centered",
+        renderGeneration: 7,
+      },
       { images: "/baseline.png" },
       projectDefaults,
     );
@@ -23,6 +28,8 @@ describe("buildInitPayload", () => {
       passThresholdPercent: 2,
       diffThreshold: 0.4,
       baselineLabelOffset: { x: 5, y: -3 },
+      layout: "centered",
+      renderGeneration: 7,
     });
 
     const story = buildInitPayload(
