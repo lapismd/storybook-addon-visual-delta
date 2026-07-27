@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  COMPONENT_OVERLAY_FIXTURE,
   CUSTOM_VIEWPORT_MANAGER_FIXTURE,
   MANAGER_FIXTURE,
   NATURAL_WIDTH_COMPONENT_FIXTURE,
@@ -15,6 +16,81 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
 }`;
 
 test.describe("Visual Delta manager integration", () => {
+  test("panel review actions ignore Testing Module preferences and baseline updates stay story-scoped", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      for (const key of [
+        "storybook-addon-visual-delta/run-visual-enabled-v1",
+        "storybook-addon-visual-delta/create-baselines-enabled-v1",
+        "storybook-addon-visual-delta/update-status-enabled-v1",
+        "storybook-addon-visual-delta/affected-only-enabled-v1",
+      ]) {
+        localStorage.setItem(key, "0");
+      }
+      localStorage.setItem(
+        "storybook-addon-visual-delta/accept-scope-v1",
+        "story",
+      );
+    });
+    const reviewBodies: unknown[] = [];
+    const baselineBodies: unknown[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.endsWith("/review-status")) {
+        reviewBodies.push(request.postDataJSON());
+      }
+      if (pathname.endsWith("/update-baseline")) {
+        baselineBodies.push(request.postDataJSON());
+      }
+    });
+    await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await panel
+      .getByRole("button", { name: "Accept story", exact: true })
+      .click();
+    await expect.poll(() => reviewBodies.length).toBe(1);
+    expect(reviewBodies[0]).toEqual({
+      updates: [{ storyId: COMPONENT_OVERLAY_FIXTURE, status: "approved" }],
+    });
+
+    await panel
+      .getByRole("button", { name: "Unaccept story", exact: true })
+      .click();
+    await expect.poll(() => reviewBodies.length).toBe(2);
+    expect(reviewBodies[1]).toEqual({
+      updates: [{ storyId: COMPONENT_OVERLAY_FIXTURE, status: "pending" }],
+    });
+
+    await panel
+      .getByRole("switch", {
+        name: "Mark visual baseline ready for review",
+      })
+      .click();
+    await panel
+      .getByRole("switch", { name: "Mark visual baseline failed" })
+      .click();
+    await expect.poll(() => reviewBodies.length).toBe(4);
+    expect(reviewBodies.slice(2)).toEqual([
+      { storyId: COMPONENT_OVERLAY_FIXTURE, status: "ready" },
+      { storyId: COMPONENT_OVERLAY_FIXTURE, status: "failed" },
+    ]);
+
+    await panel
+      .getByRole("button", { name: "More Visual Delta actions" })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Rebuild storybook static" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Update baselines" }).click();
+    await expect.poll(() => baselineBodies.length).toBe(1);
+    expect(baselineBodies[0]).toEqual({
+      storyId: COMPONENT_OVERLAY_FIXTURE,
+    });
+  });
+
   test("reloads once after the runtime identity changes and preserves manager URL state", async ({
     page,
   }) => {

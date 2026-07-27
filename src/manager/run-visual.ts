@@ -1,6 +1,7 @@
 import { experimental_getStatusStore, type API } from "storybook/manager-api";
 import {
   STATUS_TYPE_ID_VISUAL,
+  VISUAL_DELTA_ACTION_SCOPE_PATH,
   VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CONFIG_PATH,
@@ -19,6 +20,7 @@ import {
 } from "../constants.js";
 import type {
   AffectedVisualSummary,
+  VisualActionScopeResponse,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
@@ -674,6 +676,29 @@ export async function fetchAffectedVisualPlan(): Promise<
   };
 }
 
+/** Resolve and freeze global visible ids after any affected safety rebuild. */
+export async function postVisualActionScope(body: {
+  visibleStoryIds: string[];
+  affectedOnly: boolean;
+}): Promise<VisualActionScopeResponse> {
+  const response = await fetch(VISUAL_DELTA_ACTION_SCOPE_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json()) as
+    | VisualActionScopeResponse
+    | { ok?: false; error?: string };
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      "error" in data && data.error
+        ? data.error
+        : `Visual action scope request failed (${response.status})`,
+    );
+  }
+  return data;
+}
+
 export async function cancelVisualRun() {
   await fetch(VISUAL_DELTA_CANCEL_PATH, { method: "POST" });
 }
@@ -945,7 +970,7 @@ export type VisualCreateResponse = {
 
 async function postVisualBaselineWrite(
   kind: Extract<VisualBaselineJobKind, "create" | "update">,
-  body: { storyId: string; rebuild?: boolean },
+  body: { storyId?: string; storyIds?: string[]; rebuild?: boolean },
   options?: {
     /** Override the in-flight status label (e.g. `Creating… 1/3`). */
     runningLabel?: string;
@@ -1070,8 +1095,8 @@ async function postVisualBaselineWrite(
       label =
         wiredCount > 0
           ? `Created (${wiredCount} stor${wiredCount === 1 ? "y" : "ies"} wired)`
-          : /skip-visual/i.test(body.storyId) ||
-              body.storyId.endsWith("--closed")
+          : /skip-visual/i.test(body.storyId ?? "") ||
+              body.storyId?.endsWith("--closed")
             ? "Created — open a visual story (not skip-visual) to review"
             : "Created";
     } else {
@@ -1107,28 +1132,7 @@ async function postVisualBaselineWrite(
 }
 
 /**
- * One representative story id per component family (prefix before `--`).
- * Prefers a non-skip-visual leaf when available.
- */
-export function componentCreateTargets(api: API, storyIds: string[]): string[] {
-  const byPrefix = new Map<string, string[]>();
-  for (const id of storyIds) {
-    const key = id.split("--")[0] ?? id;
-    const list = byPrefix.get(key) ?? [];
-    list.push(id);
-    byPrefix.set(key, list);
-  }
-  const targets: string[] = [];
-  for (const ids of byPrefix.values()) {
-    const runnable = visualRunnableStoryIds(api, ids);
-    targets.push(runnable[0] ?? ids[0]!);
-  }
-  return targets;
-}
-
-/**
- * Create missing Playwright baselines for a story's component family
- * (`visual-update --create-only`). Shares progress across panel + sidebar.
+ * Create a missing Playwright baseline for exactly one story.
  */
 export async function postVisualCreateBaseline(body: {
   storyId: string;
@@ -1138,15 +1142,14 @@ export async function postVisualCreateBaseline(body: {
 }
 
 /**
- * Create missing baselines for each unique component represented by `storyIds`
- * (typically the leaf stories currently listed in the sidebar filter).
+ * Create missing baselines for exactly the supplied stories in one invocation.
  */
 export async function postVisualCreateBaselinesForStoryIds(
-  api: API,
+  _api: API,
   storyIds: string[],
   options?: { rebuild?: boolean },
 ): Promise<void> {
-  const targets = componentCreateTargets(api, storyIds);
+  const targets = [...new Set(storyIds.map((id) => id.trim()).filter(Boolean))];
   if (!targets.length) {
     emitVisualCreateProgress({
       running: false,
@@ -1157,41 +1160,28 @@ export async function postVisualCreateBaselinesForStoryIds(
     throw new Error("No stories visible in the sidebar");
   }
   const total = targets.length;
-  const rebuild = options?.rebuild;
-  for (let i = 0; i < total; i++) {
-    const storyId = targets[i]!;
-    const completed = i + 1;
-    const runningLabel =
-      total > 1 ? `Creating… ${completed}/${total}` : "Creating…";
-    const isLast = i === total - 1;
-    await postVisualBaselineWrite(
-      "create",
-      // Rebuild only on the first target — later components share the fresh static tree.
-      { storyId, rebuild: rebuild && i === 0 ? true : undefined },
-      {
-        runningLabel,
-        completed,
-        total,
-        successLabel: isLast
-          ? total > 1
-            ? `Created (${total} components)`
-            : undefined
-          : runningLabel,
-      },
-    );
-  }
+  await postVisualBaselineWrite(
+    "create",
+    { storyIds: targets, rebuild: options?.rebuild },
+    {
+      runningLabel: total > 1 ? `Creating… 0/${total}` : "Creating…",
+      completed: total,
+      total,
+      successLabel:
+        total > 1 ? `Created (${total} stories selected)` : undefined,
+    },
+  );
 }
 
 /**
- * Overwrite baselines for each unique component represented by `storyIds`
- * (sidebar rewrite / "Rewrite existing").
+ * Overwrite baselines for exactly the supplied stories in one invocation.
  */
 export async function postVisualUpdateBaselinesForStoryIds(
-  api: API,
+  _api: API,
   storyIds: string[],
   options?: { rebuild?: boolean },
 ): Promise<void> {
-  const targets = componentCreateTargets(api, storyIds);
+  const targets = [...new Set(storyIds.map((id) => id.trim()).filter(Boolean))];
   if (!targets.length) {
     emitVisualCreateProgress({
       running: false,
@@ -1202,33 +1192,21 @@ export async function postVisualUpdateBaselinesForStoryIds(
     throw new Error("No stories visible in the sidebar");
   }
   const total = targets.length;
-  const rebuild = options?.rebuild;
-  for (let i = 0; i < total; i++) {
-    const storyId = targets[i]!;
-    const completed = i + 1;
-    const runningLabel =
-      total > 1 ? `Updating… ${completed}/${total}` : "Updating…";
-    const isLast = i === total - 1;
-    await postVisualBaselineWrite(
-      "update",
-      { storyId, rebuild: rebuild && i === 0 ? true : undefined },
-      {
-        runningLabel,
-        completed,
-        total,
-        successLabel: isLast
-          ? total > 1
-            ? `Updated (${total} components)`
-            : undefined
-          : runningLabel,
-      },
-    );
-  }
+  await postVisualBaselineWrite(
+    "update",
+    { storyIds: targets, rebuild: options?.rebuild },
+    {
+      runningLabel: total > 1 ? `Updating… 0/${total}` : "Updating…",
+      completed: total,
+      total,
+      successLabel:
+        total > 1 ? `Updated (${total} stories selected)` : undefined,
+    },
+  );
 }
 
 /**
- * Overwrite Playwright baselines for a story's component family
- * (`visual-update` with approval). Streams logs like create.
+ * Overwrite the Playwright baseline for exactly one story.
  */
 export async function postVisualUpdateBaseline(body: {
   storyId: string;

@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import type { Plugin } from "vite";
 import {
+  VISUAL_DELTA_ACTION_SCOPE_PATH,
   VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CAPTURE_PATH,
@@ -26,8 +27,11 @@ import {
 } from "../constants.js";
 import type {
   AffectedVisualSummary,
+  VisualActionScopeRequest,
+  VisualActionScopeResponse,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
+import { resolveVisualActionStoryIds } from "../shared/action-scope.js";
 import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaResolvedConfig,
@@ -107,6 +111,9 @@ import {
 } from "./affected-visual-tests.js";
 
 type UpdateBody = {
+  /** Exact story ids to write in one Playwright invocation. */
+  storyIds?: string[];
+  /** Legacy single-story input. */
   storyId?: string;
   component?: string;
   /** Force build-storybook before capture (strips host --skip-build). */
@@ -134,7 +141,7 @@ type SpawnedVisualCommand = ChildProcess & {
 };
 
 type RunBody = {
-  /** Limit Playwright `-g` to these story ids (or their shared prefix). */
+  /** Limit Playwright `-g` to these exact story ids. */
   storyIds?: string[];
   /** Affected, complete, or explicitly selected visual story scope. */
   selection?: VisualRunSelectionMode;
@@ -245,22 +252,14 @@ function escapeRegExp(value: string): string {
 
 /** Build a Playwright `-g` filter from selected story ids.
  *
- * Playwright matches against the *full* title
- * (`… › ${storyId}`), so patterns must not use a leading `^` — only a
- * trailing `$` for exact leaf ids.
+ * Playwright matches against the *full* title (`… › ${storyId}`), so use
+ * either the title start or its suite separator as the exact leaf boundary.
  */
 export function grepFromStoryIds(storyIds?: string[]): string | undefined {
   if (!storyIds?.length) return undefined;
-  if (storyIds.length === 1) {
-    return `${escapeRegExp(storyIds[0]!)}$`;
-  }
-
-  const heads = storyIds.map((id) => id.split("--")[0] ?? id);
-  if (new Set(heads).size === 1) {
-    return `${escapeRegExp(heads[0]!)}--`;
-  }
-
-  return `(${storyIds.map(escapeRegExp).join("|")})$`;
+  const exact = [...new Set(storyIds)].map(escapeRegExp);
+  const leaf = exact.length === 1 ? exact[0] : `(?:${exact.join("|")})`;
+  return `(?:^| › )${leaf}$`;
 }
 
 type PlaywrightJsonSpec = {
@@ -608,11 +607,26 @@ async function handleBaselineWrite(
     return;
   }
 
-  const storyId = body.storyId?.trim();
+  const storyIds = [
+    ...new Set(
+      [
+        ...(Array.isArray(body.storyIds) ? body.storyIds : []),
+        body.storyId ?? "",
+      ]
+        .filter((storyId): storyId is string => typeof storyId === "string")
+        .map((storyId) => storyId.trim())
+        .filter(Boolean),
+    ),
+  ];
   const component = body.component?.trim();
-  if (!storyId && !component) {
+  if (!storyIds.length && !component) {
     res.statusCode = 400;
-    res.end("Provide storyId or component");
+    res.end("Provide storyIds, storyId, or component");
+    return;
+  }
+  if (storyIds.length && component) {
+    res.statusCode = 400;
+    res.end("Choose exact storyIds or an explicit component, not both");
     return;
   }
 
@@ -623,7 +637,9 @@ async function handleBaselineWrite(
     ...(rebuild ? baseArgs.filter((arg) => arg !== "--skip-build") : baseArgs),
     ...(rebuild ? ["--rebuild"] : []),
     ...(createOnly ? ["--create-only"] : []),
-    ...(component ? ["--component", component] : ["--story-id", storyId!]),
+    ...(component
+      ? ["--component", component]
+      : storyIds.flatMap((storyId) => ["--story-id", storyId])),
   ];
 
   res.statusCode = 200;
@@ -633,7 +649,13 @@ async function handleBaselineWrite(
   // Hint proxies / browsers not to buffer the streamed body.
   res.setHeader("X-Accel-Buffering", "no");
   const verb = createOnly ? "Creating missing baselines" : "Updating baselines";
-  res.write(`${verb}${component ? ` for ${component}` : ` for ${storyId}`}…\n`);
+  res.write(
+    `${verb}${
+      component
+        ? ` for ${component}`
+        : ` for ${storyIds.length} ${storyIds.length === 1 ? "story" : "stories"}`
+    }…\n`,
+  );
   if (rebuild) {
     res.write("Rebuilding storybook-static before capture…\n");
   }
@@ -1100,6 +1122,119 @@ function handleAffectedPlan(
   });
 }
 
+async function handleActionScope(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+): Promise<void> {
+  if (activeRun || isVisualRunActive()) {
+    writeJson(res, 409, {
+      ok: false,
+      error:
+        "Wait for the active visual operation before resolving a new scope",
+    });
+    return;
+  }
+
+  let body: VisualActionScopeRequest;
+  try {
+    body = await readJsonBody<VisualActionScopeRequest>(req, 2_000_000);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    });
+    return;
+  }
+  if (
+    !Array.isArray(body.visibleStoryIds) ||
+    body.visibleStoryIds.length > 20_000 ||
+    body.visibleStoryIds.some((storyId) => typeof storyId !== "string") ||
+    typeof body.affectedOnly !== "boolean"
+  ) {
+    writeJson(res, 400, {
+      ok: false,
+      error: "Provide visibleStoryIds (string[]) and affectedOnly (boolean)",
+    });
+    return;
+  }
+
+  const visibleStoryIds = [
+    ...new Set(body.visibleStoryIds.map((storyId) => storyId.trim())),
+  ].filter(Boolean);
+  let plan = body.affectedOnly
+    ? affectedPlan(root, options)
+    : planAllVisualTests(root, options);
+  let rebuilt = false;
+  const staticComplete =
+    existsSync(path.join(root, "storybook-static", "index.json")) &&
+    existsSync(path.join(root, "storybook-static", "iframe.html"));
+
+  if (
+    body.affectedOnly &&
+    (plan.needsRebuild || forceStaticRebuild || !staticComplete)
+  ) {
+    if (options.allowRebuild === false) {
+      writeJson(res, 400, {
+        ok: false,
+        error: "Affected visual tests require static Storybook rebuilds",
+      });
+      return;
+    }
+    const built = await runCommand("pnpm", ["build-storybook"], root);
+    if (built.code !== 0) {
+      writeJson(res, 500, {
+        ok: false,
+        error: "build-storybook failed while refreshing the affected scope",
+        logTail: built.log.slice(-4000),
+      });
+      return;
+    }
+    rebuilt = true;
+    forceStaticRebuild = false;
+    invalidateWarmStaticStorybookServer();
+    plan = affectedPlan(root, options);
+  }
+
+  const eligibleVisible = resolveVisualActionStoryIds({
+    context: "global",
+    visibleStoryIds,
+    ...(body.affectedOnly ? { runnableStoryIds: plan.runnableStoryIds } : {}),
+  });
+  const storyIds = resolveVisualActionStoryIds({
+    context: "global",
+    visibleStoryIds,
+    ...(body.affectedOnly
+      ? {
+          runnableStoryIds: plan.runnableStoryIds,
+          affectedStoryIds: plan.selectedStoryIds,
+        }
+      : {}),
+    affectedOnly: body.affectedOnly,
+  });
+  const summary: AffectedVisualSummary = {
+    selection: body.affectedOnly ? "affected" : "selected",
+    selected: storyIds.length,
+    unchanged: Math.max(0, eligibleVisible.length - storyIds.length),
+    total: eligibleVisible.length,
+    noChange: storyIds.length === 0,
+    ...(plan.summary.fallbackReason
+      ? { fallbackReason: plan.summary.fallbackReason }
+      : {}),
+    ...(plan.summary.changedInputs?.length
+      ? { changedInputs: plan.summary.changedInputs }
+      : {}),
+    storyIds,
+  };
+  writeJson(res, 200, {
+    ok: true,
+    storyIds,
+    summary,
+    rebuilt,
+  } satisfies VisualActionScopeResponse);
+}
+
 function handleRunEvents(res: ServerResponse) {
   subscribeVisualRunHub(res);
 }
@@ -1458,6 +1593,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - GET  /__visual-delta/run-events — replay / continue an in-flight or recent run
  * - GET  /__visual-delta/run-status — lightweight phase/progress JSON
  * - POST /__visual-delta/cancel-tests — stop an in-flight run
+ * - POST /__visual-delta/action-scope — freeze visible / affected story ids
  * - POST /__visual-delta/review-status — set visual review tag (pending/approved/ready/failed)
  * - POST /__visual-delta/skip-visual — add or remove skip-visual on a story
  * - GET  /__visual-delta/runtime — stable identity for this dev server instance
@@ -1663,6 +1799,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           handleAffectedPlan(res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_ACTION_SCOPE_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleActionScope(req, res, root, options);
           return;
         }
 

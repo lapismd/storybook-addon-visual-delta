@@ -183,6 +183,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)             |
 | `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)             |
 | `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason    |
+| `POST` | `/__visual-delta/action-scope`                | Freeze visible / refreshed-affected Testing Module IDs  |
 | `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run            |
 | `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run          |
 | `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                  |
@@ -195,7 +196,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
 - `--create-only` on create
-- `--component <name>` or `--story-id <id>`
+- `--component <name>` or repeated exact `--story-id <id>` values
 
 Interaction writes spawn `pnpm <visualInteractionUpdateArgs…>` with:
 
@@ -207,11 +208,12 @@ and may call `pnpm build-storybook` first when `allowRebuild` is enabled and
 `storybook-static` is incomplete/stale (missing `index.json` or `iframe.html`,
 or the client requests a rebuild). Progress is streamed with a **list-only**
 Playwright reporter so the Testing Module can show live `Testing N/M` counts.
-An affected request first reads the cached graph, returns immediately when
-every fingerprint is current, or rebuilds static Storybook and recomputes the
-selection before launching Playwright. Responses and run events include the
-selection, selected and unchanged counts, no-change status, and any full-run
-fallback reason.
+The global Testing Module resolves its visible story IDs before the first
+enabled action. An affected preflight first reads the cached graph, returns
+immediately when every fingerprint is current, or rebuilds static Storybook
+and recomputes the plan before freezing `visible ∩ affected`. Responses and
+run events include the selection, selected and unchanged counts, no-change
+status, and any conservative fallback reason.
 After HMR remounts the Testing Module (e.g. Update status), the client
 reconnects via `/run-status` + `/run-events` instead of losing progress.
 
@@ -365,13 +367,13 @@ visualInteractionUpdateArgs: [
 ```
 
 Playwright captures `storybook-static`, not live Storybook. Hosts default to
-`--skip-build` for speed; enable **Rebuild static** in the Testing Module, use
-the panel kebab **Rebuild storybook static**, or pass `--rebuild` after
-component CSS/markup changes so create/update/compare
-run `build-storybook` first. Override these argv lists to point at host
-scripts when needed (see Advanced host below). The middleware appends
-`--create-only`, `--component` / `--story-id`, `--step-label`, `--step-id`,
-and sets `VISUAL_UPDATE_APPROVED=1` in the child environment.
+`--skip-build` for speed. Use the panel kebab **Rebuild storybook static** or
+pass `--rebuild` for an explicit force rebuild. Affected-plan refreshes and
+missing/incomplete static output still rebuild automatically for correctness.
+Override these argv lists to point at host scripts when needed (see Advanced
+host below). The middleware appends `--create-only`, `--component` or repeated
+exact `--story-id` values, `--step-label`, `--step-id`, and sets
+`VISUAL_UPDATE_APPROVED=1` in the child environment.
 
 ## Story CSF
 
@@ -437,11 +439,14 @@ manager and preview, and invalidate the next static build. The legacy
 config exists.
 
 Testing Module **Run tests** (global runner and sidebar story/component
-context menu) runs the checked actions: compare (on by default),
-create/update baselines (**Create missing** mode default; baselines row off
-by default), and/or **Update status** (off by default; pass → `visual-ready`,
-fail → `visual-failed`). Context menu scope is the selected entry; the global
-runner uses sidebar leaf stories.
+context menu) freezes one scope and runs checked actions in order:
+create/update baselines (**Create missing** mode default; baselines row off by
+default), compare (on by default), then **Update status** (off by default;
+pass → `visual-ready`, fail → `visual-failed`). A story context is exactly that
+story, a component context is every descendant story, and the global runner is
+the leaf stories currently visible in the filtered sidebar. **Affected only**
+uses the intersection of those visible IDs and the refreshed affected plan.
+Empty scopes report **No visible stories** or **Up to date** and never broaden.
 
 Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
 
@@ -469,7 +474,8 @@ skipped, not stamped failed).
 **Panel controls**
 
 - **Accept / Unaccept** — human sign-off. Accept → `visual-approved`; Unaccept →
-  `visual-pending`. Scope menu: story vs entire component.
+  `visual-pending`. Scope menu: story, entire component, or current run. These
+  actions and the Ready / Failed pad do not read Testing Module preferences.
 - **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
   on this pad; use Accept/Unaccept for those).
 

@@ -39,9 +39,6 @@ export function TestingModuleShell({
       ? true
       : VISUAL_TEST_MODULE_DEFAULTS.updateStatusEnabled,
   );
-  const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState<boolean>(
-    VISUAL_TEST_MODULE_DEFAULTS.rebuildStaticEnabled,
-  );
   const [affectedOnlyEnabled, setAffectedOnlyEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.affectedOnlyEnabled,
   );
@@ -93,7 +90,6 @@ export function TestingModuleShell({
         affectedSummaryLabel={
           seedRunningProgress ? "2 affected · 275 unchanged" : "Up to date"
         }
-        rebuildStaticEnabled={rebuildStaticEnabled}
         baselineMode={baselineMode}
         runnerBusy={seedRunningProgress}
         anyActionSelected={anyActionSelected}
@@ -121,7 +117,6 @@ export function TestingModuleShell({
         onCreateBaselinesChange={setCreateBaselinesEnabled}
         onUpdateStatusChange={setUpdateStatusEnabled}
         onAffectedOnlyChange={setAffectedOnlyEnabled}
-        onRebuildStaticChange={setRebuildStaticEnabled}
         onBaselineModeChange={setBaselineMode}
         onRun={() => {
           setLastAction(selectedSummary);

@@ -168,12 +168,11 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   popovers do not explode to a full-viewport PNG.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
-  still sees the story under `--skip-build`. Testing Module **Rebuild
-  static**, panel kebab **Rebuild storybook static**, or CLI `--rebuild`
-  forces `build-storybook` (kebab runs build only via
-  `/__visual-delta/rebuild-static`; the checkbox/CLI flag rebuilds before
-  capture). Create fails if the expected PNG was not written (no more silent
-  `No tests found` + exit 0).
+  still sees the story under `--skip-build`. The panel kebab **Rebuild
+  storybook static** or CLI `--rebuild` forces `build-storybook`; affected
+  preflights and incomplete static output rebuild automatically. Create fails
+  if the expected PNG was not written (no more silent `No tests found` +
+  exit 0).
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).
@@ -199,13 +198,16 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   Playwright starts, a stale listener on the visual static port
   (`STORYBOOK_PORT + 1` by default) is cleared if `/index.json` is unhealthy
   (avoids `EADDRINUSE` create failures). Create for a
-  component (or any leaf under it) removes `skip-visual` from every story under
-  that Playwright id prefix, rebuilds the static index when needed, captures
-  missing PNGs, then wires `visualDelta.images`. When CSF was already wired (no
-  HMR), the panel hydrates the baseline URL so the gallery is not left empty.
+  explicit component removes `skip-visual` from stories under that component;
+  an exact story-ID batch only changes the supplied stories. The flow rebuilds
+  the static index when needed, captures missing PNGs, then wires
+  `visualDelta.images`. When CSF was already wired (no HMR), the panel hydrates
+  the baseline URL so the gallery is not left empty.
 - **Update baselines** — Dev-only kebab action posts to
   `/__visual-delta/update-baseline`, which runs the guarded visual-update
-  pipeline for the current component (rebuilds Storybook, overwrites PNGs).
+  pipeline for exactly the open story. Repeated exact `--story-id` values
+  support Testing Module batches; only explicit `--component` operations may
+  use component-prefix selection.
   Logs stream into the panel status bar like create (progress button +
   popover); on success the panel enables a center overlay with the refreshed
   baseline. Log popovers use monospace.
@@ -244,17 +246,20 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   idle shows `Not run` / summary) and a **play** split (Create missing /
   Rewrite existing; **Create missing** default). Checklist: compare (on by
   default), **Create missing Baselines** / **Update baselines** (off by
-  default), **Update status** (off by default; pass → `visual-ready`,
-  fail → `visual-failed`), and **Rebuild static** (off — forces
-  `build-storybook` before capture). While running, each checked row shows
+  default), and **Update status** (off by default; pass → `visual-ready`,
+  fail → `visual-failed`). Rows are ordered baseline write → compare →
+  global-only Affected → status. While running, each checked row shows
   `completed/total` under the checkbox (compare = stories in scope; baselines
-  = component targets; status = result count). The same checklist is used for
-  the sidebar story/component context menu (scoped to that entry). Heading
-  play / Storybook **Run tests** execute checked rows (baselines → compare →
-  status). With nothing checked, play is disabled. Rewrite clears
-  `visual-approved` / `visual-ready`. Global writes use sidebar leaf stories;
-  context menu uses the selected story/component leaves. Results map to
-  sidebar status dots. Ephemeral artifacts: gitignored `*.json` /
+  = exact story IDs; status = result count). The same checklist is used for
+  the sidebar story/component context menu. Heading play / Storybook **Run
+  tests** freeze one exact scope and execute checked rows (baselines → compare
+  → status). A story context contains one story, a component context contains
+  all descendants, global contains the filtered sidebar leaves, and global
+  Affected is `visible ∩ refreshed affected`. Empty scopes never broaden.
+  Rewrite clears review tags only for the exact rewritten IDs. Panel Accept,
+  Unaccept, Ready, and Failed call review endpoints directly and ignore these
+  preferences. Results map to sidebar status dots. Ephemeral artifacts:
+  gitignored `*.json` /
   `*.actual.png` / `*.diff.png` under
   `tests/visual/storybook.spec.ts-snapshots/`.
 - **Playwright pass threshold** — Package-wide default lives in host

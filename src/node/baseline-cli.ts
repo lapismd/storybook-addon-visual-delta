@@ -36,8 +36,11 @@ export type BaselineCliOptions = {
   snapshotDir?: string;
   baselinePathMode?: BaselinePathMode;
   visualServerPort?: number;
+  /** Exact story ids to update in one Playwright invocation. */
+  storyIds?: string[];
+  /** Legacy single-story input. */
   storyId?: string;
-  /** Used as Playwright `-g` when storyId is absent. */
+  /** Explicit component input; the only operation allowed to use broad matching. */
   component?: string;
   approved?: boolean;
   allowDirty?: boolean;
@@ -106,16 +109,15 @@ function ensureStorybookStatic(
 
 function matchingEntries(
   root: string,
-  storyId: string | undefined,
+  storyIds: string[],
   component: string | undefined,
 ): StoryIndexEntry[] {
   const entries = Object.values(loadStoryIndex(root)).filter(
     (entry) => entry.type === "story" || !entry.type,
   );
-  if (storyId) {
-    const exact = entries.filter((entry) => entry.id === storyId);
-    if (exact.length) return exact;
-    return entries.filter((entry) => entry.id.startsWith(storyId));
+  if (storyIds.length) {
+    const wanted = new Set(storyIds);
+    return entries.filter((entry) => wanted.has(entry.id));
   }
   if (component) {
     const needle = component.toLowerCase();
@@ -129,11 +131,15 @@ function matchingEntries(
 }
 
 function playwrightGrep(
-  storyId: string | undefined,
+  storyIds: string[],
   component: string | undefined,
 ): string {
-  if (storyId) {
-    return `${storyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
+  if (storyIds.length) {
+    const exact = storyIds.map((storyId) =>
+      storyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    );
+    const leaf = exact.length === 1 ? exact[0] : `(?:${exact.join("|")})`;
+    return `(?:^| › )${leaf}$`;
   }
   return component?.trim() || "";
 }
@@ -157,9 +163,15 @@ function interactionSnapshotFileName(
 export async function runBaselineUpdate(
   options: BaselineCliOptions,
 ): Promise<void> {
-  const storyId = options.storyId?.trim();
+  const storyIds = [
+    ...new Set(
+      [...(options.storyIds ?? []), options.storyId ?? ""]
+        .map((storyId) => storyId.trim())
+        .filter(Boolean),
+    ),
+  ];
   const component = options.component?.trim();
-  if (!storyId && !component) {
+  if (!storyIds.length && !component) {
     throw new Error("visual-delta update requires --story-id or --component");
   }
   assertApproved(
@@ -173,7 +185,7 @@ export async function runBaselineUpdate(
   const port = resolveVisualServerPort(options);
 
   if (options.createOnly) {
-    const matched = matchingEntries(root, storyId, component);
+    const matched = matchingEntries(root, storyIds, component);
     for (const entry of matched) {
       if ((entry.tags ?? []).includes("skip-visual")) {
         patchStorySkipVisual({
@@ -199,12 +211,12 @@ export async function runBaselineUpdate(
   const warm = await ensureWarmStaticStorybookServer(root, port);
   if (!warm.ok) await ensurePlaywrightWebServerPort(port);
 
-  const targets = matchingEntries(root, storyId, component).filter(
+  const targets = matchingEntries(root, storyIds, component).filter(
     (entry) => !(entry.tags ?? []).includes("skip-visual"),
   );
   if (!targets.length) {
     throw new Error(
-      `No runnable visual stories for ${storyId ?? component} (all skip-visual or missing from index)`,
+      `No runnable visual stories for ${storyIds.join(", ") || component} (all skip-visual or missing from index)`,
     );
   }
 
@@ -215,7 +227,7 @@ export async function runBaselineUpdate(
       )
     : [];
 
-  const grep = playwrightGrep(storyId, component);
+  const grep = playwrightGrep(storyIds, component);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
@@ -376,7 +388,13 @@ export function runSkipVisualTag(
 ): { updated: string[]; errors: string[] } {
   const root = packageRootOf(options);
   ensureStorybookStatic(root, { skipBuild: true });
-  const targets = matchingEntries(root, options.storyId, options.component);
+  const targets = matchingEntries(
+    root,
+    [...(options.storyIds ?? []), options.storyId ?? ""]
+      .map((storyId) => storyId.trim())
+      .filter(Boolean),
+    options.component,
+  );
   if (!targets.length) {
     throw new Error(
       "Provide --story-id <id> or --component <name> matching at least one story in storybook-static/index.json",

@@ -42,7 +42,6 @@ const baseProps = {
   updateStatusEnabled: false,
   affectedOnlyEnabled: true,
   affectedSummaryLabel: "2 affected · 275 unchanged",
-  rebuildStaticEnabled: false,
   baselineMode: "create" as const,
   runnerBusy: false,
   anyActionSelected: true,
@@ -61,7 +60,6 @@ const baseProps = {
   onCreateBaselinesChange: vi.fn(),
   onUpdateStatusChange: vi.fn(),
   onAffectedOnlyChange: vi.fn(),
-  onRebuildStaticChange: vi.fn(),
   onBaselineModeChange: vi.fn(),
   onRun: vi.fn(),
   onStop: vi.fn(),
@@ -86,9 +84,17 @@ describe("VisualTestModuleUI", () => {
     expect(screen.getByTestId("affected-run-summary")).toHaveTextContent(
       "2 affected · 275 unchanged",
     );
+    expect(root.querySelector('input[name="Rebuild static"]')).toBeNull();
     expect(
-      root.querySelector('input[name="Rebuild static"]'),
-    ).not.toBeChecked();
+      Array.from(root.querySelectorAll('input[type="checkbox"]')).map((input) =>
+        input.getAttribute("name"),
+      ),
+    ).toEqual([
+      "Create missing Baselines",
+      "Run visual tests",
+      "Affected only",
+      "Update status",
+    ]);
   });
 
   it("shows Update baselines label when rewrite mode is selected", () => {
@@ -104,6 +110,12 @@ describe("VisualTestModuleUI", () => {
     expect(
       root.querySelector('input[name="Update baselines"]'),
     ).toBeInTheDocument();
+    expect(
+      Array.from(root.querySelectorAll('input[type="checkbox"]')).map((input) =>
+        input.getAttribute("name"),
+      ),
+    ).toEqual(["Update baselines", "Run visual tests", "Update status"]);
+    expect(root.querySelector('input[name="Rebuild static"]')).toBeNull();
   });
 
   it("disables play when no action is selected", async () => {

@@ -26,6 +26,7 @@ function readFlags(argv: string[], name: string): string[] {
 
 function parseShared(argv: string[]): BaselineCliOptions {
   return {
+    storyIds: readFlags(argv, "--story-id"),
     storyId: readFlag(argv, "--story-id"),
     component: readFlag(argv, "--component"),
     stepLabel: readFlag(argv, "--step-label"),
@@ -52,7 +53,7 @@ function printHelp(): void {
 Usage:
   visual-delta init [--force] [--port <n>]
   visual-delta test --affected|--all [--dry-run] [--explain]
-  visual-delta update --story-id <id> [--create-only] [--approved] …
+  visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta skip --story-id <id>|--component <name>
   visual-delta include --story-id <id>|--component <name>
@@ -74,7 +75,7 @@ Flags:
   --cache-dir <path>        Override affected cache directory
   --external <glob>         Full-run bailout input (repeatable)
   --untraced <glob>         Ignore a known non-rendering input (repeatable; reduces coverage)
-  --story-id <id>           Storybook story id
+  --story-id <id>           Exact Storybook story id (repeatable for update)
   --component <name>        Grep / title substring (update / skip / include)
   --step-label <label>      Play step label (interaction-update)
   --step-id <id>            Override slugified step id

@@ -45,6 +45,7 @@ import {
   loadPersistedVisualLastRun,
   loadPersistedVisualStatusJob,
   postVisualCreateBaselinesForStoryIds,
+  postVisualActionScope,
   postVisualReviewStatusesFromResults,
   postVisualRun,
   postVisualUpdateBaselinesForStoryIds,
@@ -63,6 +64,10 @@ import {
   type VisualRunScope,
 } from "./run-visual.js";
 import {
+  executeVisualActionSequence,
+  resolveVisualActionStoryIds,
+} from "../shared/action-scope.js";
+import {
   appendVisualRunLogLine,
   formatProgressFraction,
   lastMeaningfulLogLine,
@@ -70,14 +75,12 @@ import {
 import {
   AFFECTED_ONLY_KEY,
   CREATE_BASELINES_KEY,
-  REBUILD_STATIC_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
   anyModuleActionSelected,
   loadCreateBaselinesEnabled,
   loadAffectedOnlyEnabled,
   loadModuleBaselineWriteMode,
-  loadRebuildStaticEnabled,
   loadRunVisualEnabled,
   loadUpdateStatusEnabled,
   writeBoolFlag,
@@ -360,6 +363,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [statusUpdateLabel, setStatusUpdateLabel] = useState<string | null>(
     null,
   );
+  const [scopeMessage, setScopeMessage] = useState<string | null>(null);
   const [storyCoverage, setStoryCoverage] = useState<VisualStoryFact[]>([]);
   const [visualFiltersAvailable, setVisualFiltersAvailable] = useState(false);
   const [activeVisualFilterIds, setActiveVisualFilterIds] = useState<string[]>(
@@ -373,9 +377,6 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [updateStatusEnabled, setUpdateStatusEnabled] = useState(
     loadUpdateStatusEnabled,
   );
-  const [rebuildStaticEnabled, setRebuildStaticEnabled] = useState(
-    loadRebuildStaticEnabled,
-  );
   const [affectedOnlyEnabled, setAffectedOnlyEnabled] = useState(
     entry ? false : loadAffectedOnlyEnabled,
   );
@@ -384,7 +385,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const [baselineMode, setBaselineMode] = useState<BaselineWriteMode>(() =>
     loadModuleBaselineWriteMode(),
   );
-  const isWritingBaselines = Boolean(createProgress?.running);
+  const isWritingBaselines = Boolean(
+    createProgress?.running && createProgress.kind !== "rebuild",
+  );
   const sidebarStoryIds = useMemo(
     () => sidebarLeafStoryIds(storybookState),
     [storybookState.filteredIndex, storybookState.index],
@@ -503,28 +506,21 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const crashed = testProviderState === "test-provider-state:crashed";
 
   const runCompare = useCallback(
-    async (scope: VisualRunScope, ids?: string[]) => {
-      const scoped = Array.isArray(ids);
-      const runnable = scoped ? visualRunnableStoryIds(api, ids) : undefined;
-      if (scoped && !runnable?.length) {
+    async (
+      scope: VisualRunScope,
+      ids: string[],
+      resolvedSummary?: AffectedVisualSummary,
+    ) => {
+      const runnable = visualRunnableStoryIds(api, ids);
+      if (!runnable.length) {
         throw new Error(
           "No runnable visual stories in this scope (all skip-visual)",
         );
       }
-      if (runnable?.length) {
-        applyPendingVisualStatuses(runnable);
-      } else if (!scoped) {
-        clearVisualStatuses();
-      }
+      applyPendingVisualStatuses(runnable);
       const data = await postVisualRun({
         storyIds: runnable,
-        selection:
-          scope === "affected"
-            ? "affected"
-            : scope === "all"
-              ? "all"
-              : "selected",
-        rebuild: loadRebuildStaticEnabled(),
+        selection: "selected",
       });
       if (data.crashed) {
         const summary: VisualLastRunSummary = {
@@ -535,12 +531,13 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           scope,
           logTail: data.logTail,
           results: data.results,
-          affected: data.affected,
+          affected: resolvedSummary ?? data.affected,
         };
         publishVisualLastRun(summary);
         throw new Error(data.error ?? "Visual test run crashed");
       }
       applyVisualRunResults(runnable, data.results);
+      const effectiveSummary = resolvedSummary ?? data.affected;
       const summary: VisualLastRunSummary = {
         finishedAt: Date.now(),
         summary: data.summary,
@@ -550,10 +547,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         scope,
         logTail: data.logTail,
         results: data.results,
-        affected: data.affected,
+        affected: effectiveSummary,
       };
       publishVisualLastRun(summary);
-      if (data.affected) setAffectedSummary(data.affected);
+      if (effectiveSummary) setAffectedSummary(effectiveSummary);
       return data.results;
     },
     [api],
@@ -579,96 +576,111 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         return;
       }
 
-      const scope =
-        scopedIds ??
-        (entryStoryIdsRef.current?.length
-          ? entryStoryIdsRef.current
-          : undefined);
-      const writeTargets = scope?.length ? scope : sidebarStoryIdsRef.current;
-      const compareScope: VisualRunScope = scope?.length
-        ? scope.length === 1
-          ? "story"
-          : "component"
-        : affectedOnlyEnabled
-          ? "affected"
-          : "all";
-
       await testProviderStore.runWithState(async () => {
+        setScopeMessage(null);
         setStatusLog(null);
         setStatusProgress(null);
-        if (writeBaselines) {
-          if (!writeTargets.length) {
-            throw new Error(
-              scope?.length
-                ? "No stories in this scope to write baselines for"
-                : "No stories in the sidebar to write baselines for",
+        const contextIds =
+          scopedIds ??
+          (entryStoryIdsRef.current?.length
+            ? entryStoryIdsRef.current
+            : undefined);
+        let frozenIds: string[];
+        let compareScope: VisualRunScope;
+        let resolvedSummary: AffectedVisualSummary | undefined;
+
+        if (contextIds) {
+          frozenIds = resolveVisualActionStoryIds({
+            context: contextIds.length === 1 ? "story" : "component",
+            contextStoryIds: contextIds,
+          });
+          compareScope = frozenIds.length === 1 ? "story" : "component";
+        } else {
+          const visibleStoryIds = resolveVisualActionStoryIds({
+            context: "global",
+            visibleStoryIds: sidebarStoryIdsRef.current,
+          });
+          if (!visibleStoryIds.length) {
+            setScopeMessage("No visible stories");
+            return;
+          }
+          const resolved = await postVisualActionScope({
+            visibleStoryIds,
+            affectedOnly: affectedOnlyEnabled,
+          });
+          frozenIds = [...resolved.storyIds];
+          compareScope = affectedOnlyEnabled ? "affected" : "all";
+          resolvedSummary = resolved.summary;
+          setAffectedSummary(resolved.summary);
+          if (!frozenIds.length) {
+            setScopeMessage(
+              affectedOnlyEnabled ? "Up to date" : "No visible stories",
             );
-          }
-          const mode = loadBaselineWriteMode();
-          const rebuild = loadRebuildStaticEnabled();
-          if (mode === "rewrite") {
-            await postVisualUpdateBaselinesForStoryIds(api, writeTargets, {
-              rebuild,
-            });
-          } else {
-            await postVisualCreateBaselinesForStoryIds(api, writeTargets, {
-              rebuild,
-            });
+            return;
           }
         }
 
-        let results: VisualRunResultItem[] | undefined;
-        if (runVisual) {
-          results = await runCompareRef.current(
-            compareScope,
-            scope?.length ? scope : undefined,
-          );
-        }
-
-        if (updateStatus) {
-          setIsUpdatingStatus(true);
-          try {
-            const source =
-              results ??
-              (latestResultsRef.current
-                ? scope?.length
-                  ? latestResultsRef.current.filter((item) =>
-                      scope.includes(item.storyId),
-                    )
-                  : latestResultsRef.current
-                : undefined) ??
-              resultsFromStatusStore(allStatusesRef.current, scope);
-            if (!source.length) {
-              throw new Error(
-                "No visual results to update status from — run visual tests first",
-              );
-            }
-            setStatusProgress({ completed: 0, total: source.length });
-            setStatusLog(`Updating review status… 0/${source.length}`);
-            const { updated, errors, skippedMissingBaseline } =
-              await postVisualReviewStatusesFromResults(source);
-            setStatusProgress({
-              completed: source.length,
-              total: source.length,
-            });
-            const parts = [`Updated ${updated} review tags`];
-            if (skippedMissingBaseline) {
-              parts.push(`${skippedMissingBaseline} skipped (no baseline)`);
-            }
-            if (errors.length) {
-              parts.push(`${errors.length} failed`);
-            }
-            const doneLabel = parts.join(" · ");
-            setStatusUpdateLabel(doneLabel);
-            setStatusLog(doneLabel);
-            if (errors.length && updated === 0) {
-              throw new Error(errors[0] ?? "Update status failed");
-            }
-          } finally {
-            setIsUpdatingStatus(false);
-            setStatusProgress(null);
-          }
-        }
+        await executeVisualActionSequence<VisualRunResultItem[]>({
+          writeBaselines: writeBaselines
+            ? async () => {
+                const mode = loadBaselineWriteMode();
+                if (mode === "rewrite") {
+                  await postVisualUpdateBaselinesForStoryIds(api, frozenIds);
+                } else {
+                  await postVisualCreateBaselinesForStoryIds(api, frozenIds);
+                }
+              }
+            : undefined,
+          runVisualTests: runVisual
+            ? () =>
+                runCompareRef.current(compareScope, frozenIds, resolvedSummary)
+            : undefined,
+          updateStatus: updateStatus
+            ? async (results) => {
+                setIsUpdatingStatus(true);
+                try {
+                  const priorResults = latestResultsRef.current?.filter(
+                    (item) => frozenIds.includes(item.storyId),
+                  );
+                  const source =
+                    results ??
+                    (priorResults?.length ? priorResults : undefined) ??
+                    resultsFromStatusStore(allStatusesRef.current, frozenIds);
+                  if (!source.length) {
+                    throw new Error(
+                      "No visual results to update status from — run visual tests first",
+                    );
+                  }
+                  setStatusProgress({ completed: 0, total: source.length });
+                  setStatusLog(`Updating review status… 0/${source.length}`);
+                  const { updated, errors, skippedMissingBaseline } =
+                    await postVisualReviewStatusesFromResults(source);
+                  setStatusProgress({
+                    completed: source.length,
+                    total: source.length,
+                  });
+                  const parts = [`Updated ${updated} review tags`];
+                  if (skippedMissingBaseline) {
+                    parts.push(
+                      `${skippedMissingBaseline} skipped (no baseline)`,
+                    );
+                  }
+                  if (errors.length) {
+                    parts.push(`${errors.length} failed`);
+                  }
+                  const doneLabel = parts.join(" · ");
+                  setStatusUpdateLabel(doneLabel);
+                  setStatusLog(doneLabel);
+                  if (errors.length && updated === 0) {
+                    throw new Error(errors[0] ?? "Update status failed");
+                  }
+                } finally {
+                  setIsUpdatingStatus(false);
+                  setStatusProgress(null);
+                }
+              }
+            : undefined,
+        });
       });
     },
     [affectedOnlyEnabled, api],
@@ -906,6 +918,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       publishVisualLastRun(null);
       setProgress(null);
       setStatusUpdateLabel(null);
+      setScopeMessage(null);
       setStatusLog(null);
       setStatusProgress(null);
     });
@@ -938,16 +951,18 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       : (lastRun?.summary.failed ?? 0);
   const chipCount = failedCount > 0 ? failedCount : null;
   const hasResults = counts.passed > 0 || counts.failed > 0 || Boolean(lastRun);
-  const statusLine = moduleDescription(
-    isRunning,
-    isWritingBaselines,
-    isUpdatingStatus,
-    progress,
-    createProgress,
-    lastRun,
-    anyActionSelected,
-    statusLog,
-  );
+  const statusLine =
+    scopeMessage ??
+    moduleDescription(
+      isRunning,
+      isWritingBaselines,
+      isUpdatingStatus,
+      progress,
+      createProgress,
+      lastRun,
+      anyActionSelected,
+      statusLog,
+    );
   const compareRowProgress = isRunning
     ? (formatProgressFraction(progress?.completed, progress?.total) ?? "…")
     : null;
@@ -1007,7 +1022,6 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       updateStatusEnabled={updateStatusEnabled}
       affectedOnlyEnabled={!entry && affectedOnlyEnabled}
       affectedSummaryLabel={affectedSummaryLabel(affectedSummary)}
-      rebuildStaticEnabled={rebuildStaticEnabled}
       baselineMode={baselineMode}
       runnerBusy={runnerBusy}
       anyActionSelected={anyActionSelected}
@@ -1040,10 +1054,6 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       onAffectedOnlyChange={(next) => {
         setAffectedOnlyEnabled(next);
         writeBoolFlag(AFFECTED_ONLY_KEY, next);
-      }}
-      onRebuildStaticChange={(next) => {
-        setRebuildStaticEnabled(next);
-        writeBoolFlag(REBUILD_STATIC_KEY, next);
       }}
       onBaselineModeChange={(next) => {
         setBaselineMode(next);
