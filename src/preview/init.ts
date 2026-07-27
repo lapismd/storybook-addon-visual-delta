@@ -77,6 +77,7 @@ export function buildInitPayload(
       visualDeltaParams?.baselineLabelOffset ??
       projectDefaults.baselineLabelOffset,
     colorInversion: visualDeltaParams?.colorInversion ?? false,
+    align: visualDeltaParams?.align ?? "viewport",
     placement,
     passThresholdPercent:
       visualDeltaParams?.passThresholdPercent ??

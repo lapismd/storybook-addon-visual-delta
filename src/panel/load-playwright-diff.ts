@@ -1,4 +1,7 @@
-import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import {
+  isVisualDiffSidecar,
+  type VisualDiffSidecar,
+} from "../visual-diff-sidecar.js";
 import type { DiffResultData } from "../types.js";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import { loadImage } from "./capture.js";
@@ -21,9 +24,8 @@ async function fetchSidecar(url: string): Promise<VisualDiffSidecar | null> {
   try {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) return null;
-    const data = (await response.json()) as VisualDiffSidecar;
-    if (data?.version !== 1 || !data.storyId) return null;
-    return data;
+    const data = (await response.json()) as unknown;
+    return isVisualDiffSidecar(data) ? data : null;
   } catch {
     return null;
   }
@@ -44,6 +46,23 @@ async function urlExists(url: string): Promise<boolean> {
   }
 }
 
+async function sha256Url(url: string): Promise<string | null> {
+  try {
+    if (!globalThis.crypto?.subtle) return null;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok || typeof response.arrayBuffer !== "function") return null;
+    const digest = await globalThis.crypto.subtle.digest(
+      "SHA-256",
+      await response.arrayBuffer(),
+    );
+    return [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Load a Playwright visual-run compare into panel `DiffResultData` when
  * ephemeral `.json` / `.actual.png` / `.diff.png` artifacts exist beside the
@@ -58,6 +77,10 @@ export async function loadPlaywrightDiffResult(
 
   const sidecar = await fetchSidecar(`${stem}.json?t=${cacheBust}`);
   if (!sidecar) return null;
+  if (sidecar.baselineHash) {
+    const currentHash = await sha256Url(`${stem}.png?t=${cacheBust}`);
+    if (currentHash && currentHash !== sidecar.baselineHash) return null;
+  }
 
   const actualSrc = sidecar.actualRel
     ? publicUrl(sidecar.actualRel, cacheBust)
@@ -95,13 +118,20 @@ export async function loadPlaywrightDiffResult(
     (totalPixels > 0 ? (diffPixels / totalPixels) * 100 : 0);
   const passThresholdPercent = sidecar.passThresholdPercent ?? 1;
   const passed =
-    sidecar.passed ??
-    (sidecar.status === "passed" || diffPercent < passThresholdPercent);
+    sidecar.outcome === "passed" ||
+    sidecar.outcome === "changed-within-tolerance" ||
+    (sidecar.outcome == null &&
+      (sidecar.passed ??
+        (sidecar.status === "passed" && diffPercent < passThresholdPercent)));
   const deviceScaleFactor =
     sidecar.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
   const captureViewport = sidecar.viewport ?? VISUAL_VIEWPORT;
 
   return {
+    source: "playwright",
+    baselineHash: sidecar.baselineHash,
+    captureConfigHash: sidecar.captureConfigHash,
+    operationId: sidecar.operationId,
     actualImage: actual.dataUrl,
     diffImage: diff.dataUrl,
     baselineImage: baseline.dataUrl,
@@ -114,7 +144,10 @@ export async function loadPlaywrightDiffResult(
     deviceScaleFactor,
     captureViewport,
     observedCaptureViewport: captureViewport,
-    capturedBitmap: { width: actual.width, height: actual.height },
+    capturedBitmap: {
+      width: sidecar.capturedWidth ?? actual.width,
+      height: sidecar.capturedHeight ?? actual.height,
+    },
     sizeNote:
       `playwright · viewport requested ${captureViewport.width}×${captureViewport.height}, ` +
       `observed ${captureViewport.width}×${captureViewport.height} at ${deviceScaleFactor}× · ` +

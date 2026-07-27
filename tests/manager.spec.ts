@@ -116,6 +116,48 @@ test.describe("Visual Delta manager integration", () => {
     });
   });
 
+  test("Story and Diff Chromium use the same live exact-story contract without static work", async ({
+    page,
+  }) => {
+    const compareBodies: unknown[] = [];
+    const staticRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.endsWith("/compare-story")) {
+        compareBodies.push(request.postDataJSON());
+      }
+      if (
+        pathname.endsWith("/run-tests") ||
+        pathname.endsWith("/rebuild-static")
+      ) {
+        staticRequests.push(pathname);
+      }
+    });
+    await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+
+    await page
+      .getByRole("button", { name: "Choose Diff HTML or Diff Chromium" })
+      .click();
+    await page
+      .getByRole("button", { name: "Diff Chromium", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: /Compare via Playwright Chromium screenshot/,
+      })
+      .click();
+    await expect.poll(() => compareBodies.length).toBe(1);
+
+    await page
+      .getByRole("button", { name: "Run visual test for this story" })
+      .click();
+    await expect.poll(() => compareBodies.length).toBe(2);
+
+    expect(compareBodies[1]).toEqual(compareBodies[0]);
+    expect(staticRequests).toEqual([]);
+  });
+
   test("reloads once after the runtime identity changes and preserves manager URL state", async ({
     page,
   }) => {

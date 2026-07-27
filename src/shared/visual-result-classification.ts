@@ -1,13 +1,10 @@
 import type { VisualModeRunResult } from "./mode-results.js";
-import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import type {
+  VisualComparisonOutcome,
+  VisualDiffSidecar,
+} from "../visual-diff-sidecar.js";
 
-export type VisualComparisonOutcome =
-  | "passed"
-  | "changed-within-tolerance"
-  | "mismatch"
-  | "missing-baseline"
-  | "error"
-  | "skipped";
+export type { VisualComparisonOutcome } from "../visual-diff-sidecar.js";
 
 export type VisualRunResultLike = {
   status: "passed" | "failed" | "skipped" | "timedOut";
@@ -46,11 +43,21 @@ function sidecarOutcome(
   sidecar: Partial<VisualDiffSidecar> | undefined,
 ): VisualComparisonOutcome | undefined {
   if (!sidecar) return undefined;
+  if (sidecar.dimensionMismatch) return "mismatch";
+  if (
+    sidecar.runnerStatus === "failed" ||
+    sidecar.runnerStatus === "timedOut"
+  ) {
+    if (changedPixels(sidecar)) return "mismatch";
+    return "error";
+  }
+  if (sidecar.runnerStatus === "skipped") return "skipped";
+  if (sidecar.outcome) return sidecar.outcome;
   if (sidecar.error && !changedPixels(sidecar)) return "error";
   if (sidecar.passed === false) return "mismatch";
   if (typeof sidecar.diffPercent === "number") {
     const threshold = sidecar.passThresholdPercent;
-    if (typeof threshold === "number" && sidecar.diffPercent >= threshold) {
+    if (typeof threshold === "number" && sidecar.diffPercent > threshold) {
       return "mismatch";
     }
   }
@@ -68,9 +75,16 @@ function sidecarOutcome(
 export function classifyVisualRunResult(
   result: VisualRunResultLike,
 ): VisualComparisonOutcome {
-  if (result.outcome) return result.outcome;
   if (result.status === "skipped") return "skipped";
   if (result.status === "timedOut") return "error";
+  if (
+    result.outcome === "mismatch" ||
+    result.outcome === "missing-baseline" ||
+    result.outcome === "error" ||
+    result.outcome === "skipped"
+  ) {
+    return result.outcome;
+  }
 
   const modeResults = result.modeResults ?? [];
   if (modeResults.some((mode) => mode.status === "error")) return "error";
@@ -100,6 +114,14 @@ export function classifyVisualRunResult(
     return "changed-within-tolerance";
   }
 
-  if (result.status === "failed") return "error";
+  if (result.status === "failed") {
+    // Playwright screenshot assertions fail before their post-run sidecar is
+    // attached. If comparison evidence exists, preserve it as a mismatch.
+    if (changedPixels(result.sidecar) || result.sidecar?.dimensionMismatch) {
+      return "mismatch";
+    }
+    return "error";
+  }
+  if (result.outcome) return result.outcome;
   return "passed";
 }

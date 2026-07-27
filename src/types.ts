@@ -40,6 +40,11 @@ export type ChangeBounds = {
 };
 
 export type DiffResultData = {
+  /** Result provenance; HTML results are diagnostic-only. */
+  source?: "html" | "playwright";
+  baselineHash?: string;
+  captureConfigHash?: string;
+  operationId?: string;
   actualImage: string;
   diffImage: string;
   baselineImage: string;

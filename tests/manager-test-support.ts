@@ -101,6 +101,50 @@ export async function mockVisualBackend(
       await route.fulfill({ status: 200, json: CONFIG });
       return;
     }
+    if (url.pathname.endsWith("/compare-story")) {
+      const body = request.postDataJSON() as {
+        storyId: string;
+        baselineUrl?: string;
+      };
+      const sidecar = {
+        version: 2,
+        storyId: body.storyId,
+        snapshotRel: body.baselineUrl ?? "baseline.png",
+        status: "passed",
+        runnerStatus: "passed",
+        outcome: "passed",
+        generatedAt: new Date().toISOString(),
+        tool: "playwright",
+        operationId: `mock-${Date.now()}`,
+        baselineHash: "mock-baseline-hash",
+        captureConfigHash: "mock-config-hash",
+        diffPixels: 0,
+        totalPixels: 1,
+        diffPercent: 0,
+        passThresholdPercent: 1,
+        passed: true,
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/x-ndjson",
+        body: [
+          JSON.stringify({ type: "start", storyId: body.storyId }),
+          JSON.stringify({
+            type: "progress",
+            phase: "capturing",
+            label: "Capturing…",
+          }),
+          JSON.stringify({
+            type: "done",
+            ok: true,
+            storyId: body.storyId,
+            sidecar,
+          }),
+          "",
+        ].join("\n"),
+      });
+      return;
+    }
     if (url.pathname.endsWith("/runtime")) {
       await route.fulfill({
         status: 200,

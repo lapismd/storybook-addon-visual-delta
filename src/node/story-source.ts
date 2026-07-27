@@ -827,8 +827,8 @@ export function patchStorySkipVisual(options: {
     kind: "skip",
     skip: options.skip,
   });
-  // CSF may already match; always normalize the static index (and clear review
-  // tags when skipping) so --skip-build create/include paths stay consistent.
+  // CSF may already match; always synchronize eligibility in the static index.
+  // Review metadata remains independent.
   syncStaticIndexSkipVisual(
     options.packageRoot,
     [options.storyId],
@@ -1018,9 +1018,9 @@ export function patchStoryInteraction(options: {
 }
 
 /**
- * Remove one exact primary/interaction reference and invalidate the story's
- * review tag. The PNG is deleted separately only after the middleware has
- * validated that its path belongs to this story.
+ * Remove one exact primary/interaction reference. Review metadata is an
+ * independent state and is changed only by explicit review/baseline-write
+ * actions. The PNG is deleted separately after path validation.
  */
 export function patchStoryRemoveBaseline(options: {
   packageRoot: string;
@@ -1046,16 +1046,10 @@ export function patchStoryRemoveBaseline(options: {
     url: options.url,
     interactionId: options.interactionId,
   });
-  const clearedReview = patchStoryFile(options.packageRoot, entry, {
-    kind: "clear-review",
-  });
-  syncStaticIndexReviewStatus(options.packageRoot, [
-    { storyId: options.storyId, status: null },
-  ]);
   return {
     ok: true,
     storyId: options.storyId,
-    sourceUpdated: removedReference || clearedReview,
+    sourceUpdated: removedReference,
   };
 }
 

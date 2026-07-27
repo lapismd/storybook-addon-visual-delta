@@ -96,9 +96,25 @@ export {
 } from "./story-source.js";
 export {
   deleteVisualBaseline,
+  resolveVisualBaselinePath,
   type DeleteVisualBaselineRequest,
   type DeleteVisualBaselineResult,
 } from "./delete-baseline.js";
+export {
+  decideStorybookStaticBuild,
+  isStorybookStaticComplete,
+  runStaticBuildSingleFlight,
+  staticConfigNewerThanIndex,
+  storySourcesNewerThanIndex,
+  type StaticBuildDecision,
+  type StaticBuildReason,
+} from "./static-build.js";
+export { compareLiveStoryWithChromium } from "./compare-story.js";
+export type {
+  CompareStoryRequest,
+  CompareStoryResult,
+  CompareStoryStreamEvent,
+} from "../shared/compare-story-types.js";
 export {
   attachSidecars,
   countVisualStories,

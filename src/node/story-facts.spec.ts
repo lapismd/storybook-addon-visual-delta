@@ -29,7 +29,12 @@ describe("resolveVisualStoryFacts", () => {
         "nested-import",
       ),
     ).toEqual([
-      { storyId: "forms-entry--default", baseline: "present" },
+      {
+        storyId: "forms-entry--default",
+        baseline: "present",
+        baselineHash:
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      },
       { storyId: "forms-entry--missing", baseline: "missing" },
     ]);
   });
@@ -46,7 +51,49 @@ describe("resolveVisualStoryFacts", () => {
         snapshotDir,
         "story-id",
       ),
-    ).toEqual([{ storyId: "forms-entry--default", baseline: "present" }]);
+    ).toEqual([
+      {
+        storyId: "forms-entry--default",
+        baseline: "present",
+        baselineHash:
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      },
+    ]);
+  });
+
+  it("reports only result evidence matching the current baseline revision", () => {
+    const snapshotDir = mkdtempSync(path.join(tmpdir(), "visual-delta-facts-"));
+    const png = path.join(
+      snapshotDir,
+      "forms-entry--default-chromium-darwin.png",
+    );
+    writeFileSync(png, "current");
+    writeFileSync(
+      png.replace(/\.png$/, ".json"),
+      JSON.stringify({
+        version: 2,
+        storyId: "forms-entry--default",
+        snapshotRel: "forms-entry--default.png",
+        status: "passed",
+        generatedAt: new Date(0).toISOString(),
+        tool: "playwright",
+        baselineHash:
+          "97b0560280ed60a5a1eaa1bc45492543c8a986ad5a25b468c427eb83c3e88191",
+        captureConfigHash: "config-hash",
+      }),
+    );
+
+    expect(
+      resolveVisualStoryFacts(
+        [{ id: "forms-entry--default" }],
+        snapshotDir,
+        "story-id",
+      )[0],
+    ).toMatchObject({
+      resultBaselineHash:
+        "97b0560280ed60a5a1eaa1bc45492543c8a986ad5a25b468c427eb83c3e88191",
+      resultCaptureConfigHash: "config-hash",
+    });
   });
 
   it("marks missing metadata and escaping paths unresolved", () => {

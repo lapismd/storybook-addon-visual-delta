@@ -6,6 +6,7 @@ import {
   type VisualDeltaHostOptions,
 } from "./options.js";
 import { snapshotFileName } from "./snapshot-paths.js";
+import type { StoryIndexEntry } from "./snapshot-paths.js";
 import { patchStoryRemoveBaseline } from "./story-source.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 
@@ -23,7 +24,7 @@ export type DeleteVisualBaselineResult = {
   deletedFiles: string[];
 };
 
-function relativeBaselinePath(baselineUrl: string): string {
+export function relativeBaselinePath(baselineUrl: string): string {
   const parsed = new URL(baselineUrl, "http://visual-delta.local");
   const prefix = "/visual-baselines/";
   if (!parsed.pathname.startsWith(prefix)) {
@@ -42,13 +43,14 @@ function relativeBaselinePath(baselineUrl: string): string {
   return normalized;
 }
 
-function assertBaselineBelongsToStory(options: {
+export function assertBaselineBelongsToStory(options: {
   root: string;
   hostOptions: VisualDeltaHostOptions;
   storyId: string;
   relativePath: string;
+  entry?: StoryIndexEntry;
 }) {
-  const entry = loadStoryIndex(options.root)[options.storyId];
+  const entry = options.entry ?? loadStoryIndex(options.root)[options.storyId];
   if (!entry) {
     throw new Error(`Story not found in index: ${options.storyId}`);
   }
@@ -73,6 +75,38 @@ function assertBaselineBelongsToStory(options: {
       `Screenshot does not belong to story ${options.storyId}: ${options.relativePath}`,
     );
   }
+}
+
+/** Resolve and verify one `/visual-baselines/` URL without mutating it. */
+export function resolveVisualBaselinePath(
+  root: string,
+  hostOptions: VisualDeltaHostOptions,
+  request: Pick<DeleteVisualBaselineRequest, "storyId" | "baselineUrl"> & {
+    entry?: StoryIndexEntry;
+  },
+): { absolutePath: string; relativePath: string; snapshotRoot: string } {
+  const storyId = request.storyId.trim();
+  const baselineUrl = request.baselineUrl.trim();
+  if (!storyId || !baselineUrl) {
+    throw new Error("Provide storyId and baselineUrl");
+  }
+  const relativePath = relativeBaselinePath(baselineUrl);
+  assertBaselineBelongsToStory({
+    root,
+    hostOptions,
+    storyId,
+    relativePath,
+    entry: request.entry,
+  });
+  const snapshotRoot = path.resolve(resolveSnapshotDir(hostOptions, root));
+  const absolutePath = path.resolve(snapshotRoot, ...relativePath.split("/"));
+  if (
+    absolutePath !== snapshotRoot &&
+    !absolutePath.startsWith(`${snapshotRoot}${path.sep}`)
+  ) {
+    throw new Error("Baseline screenshot resolves outside the snapshot folder");
+  }
+  return { absolutePath, relativePath, snapshotRoot };
 }
 
 function derivedBaselineFiles(absolutePng: string): string[] {
@@ -100,22 +134,11 @@ export function deleteVisualBaseline(
     throw new Error("Provide storyId and baselineUrl");
   }
 
-  const relativePath = relativeBaselinePath(baselineUrl);
-  assertBaselineBelongsToStory({
+  const { absolutePath: absolutePng, relativePath } = resolveVisualBaselinePath(
     root,
     hostOptions,
-    storyId,
-    relativePath,
-  });
-
-  const snapshotRoot = path.resolve(resolveSnapshotDir(hostOptions, root));
-  const absolutePng = path.resolve(snapshotRoot, ...relativePath.split("/"));
-  if (
-    absolutePng !== snapshotRoot &&
-    !absolutePng.startsWith(`${snapshotRoot}${path.sep}`)
-  ) {
-    throw new Error("Baseline screenshot resolves outside the snapshot folder");
-  }
+    { storyId, baselineUrl },
+  );
   if (!existsSync(absolutePng)) {
     throw new Error(`Baseline screenshot not found: ${relativePath}`);
   }

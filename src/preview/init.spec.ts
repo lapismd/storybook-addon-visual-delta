@@ -23,6 +23,7 @@ describe("buildInitPayload", () => {
       projectDefaults,
     );
     expect(project).toMatchObject({
+      align: "viewport",
       placement: "left",
       opacity: 1,
       passThresholdPercent: 2,
@@ -37,6 +38,7 @@ describe("buildInitPayload", () => {
       {
         images: "/baseline.png",
         placement: "center",
+        align: "canvas",
         opacity: 0.25,
         passThresholdPercent: 0.5,
         baselineLabelOffset: { x: 1, y: 2 },
@@ -44,6 +46,7 @@ describe("buildInitPayload", () => {
       projectDefaults,
     );
     expect(story).toMatchObject({
+      align: "canvas",
       placement: "center",
       opacity: 0.25,
       passThresholdPercent: 0.5,

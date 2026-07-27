@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import type { BaselinePathMode } from "../node/options.js";
@@ -9,6 +10,7 @@ import {
 } from "../node/snapshot-paths.js";
 import { readPlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
 import type {
+  VisualComparisonOutcome,
   VisualDiffSidecar,
   VisualDiffSidecarStatus,
 } from "../visual-diff-sidecar.js";
@@ -23,9 +25,11 @@ export function baselinePngAbs(
   platform: NodeJS.Platform | string = process.platform,
   visualModeName?: string,
 ): string {
+  const snapshotRoot = path.isAbsolute(snapshotDir)
+    ? snapshotDir
+    : path.join(packageRoot, snapshotDir);
   return path.join(
-    packageRoot,
-    snapshotDir,
+    snapshotRoot,
     snapshotFileName(entry, mode, project, platform, visualModeName),
   );
 }
@@ -48,12 +52,13 @@ function snapshotPublicRel(
   packageRoot: string,
   snapshotDir: string,
 ): string {
-  return path
-    .relative(path.join(packageRoot, snapshotDir), absPath)
-    .replace(/\\/g, "/");
+  const snapshotRoot = path.isAbsolute(snapshotDir)
+    ? snapshotDir
+    : path.join(packageRoot, snapshotDir);
+  return path.relative(snapshotRoot, absPath).replace(/\\/g, "/");
 }
 
-function writeVisualDiffSidecar(
+export function writeVisualDiffSidecar(
   filePath: string,
   sidecar: VisualDiffSidecar,
 ): void {
@@ -84,16 +89,60 @@ function buildSidecarBase(
   | "diffRel"
 > {
   return {
-    version: 1,
+    version: 2,
     storyId: entry.id,
     title: entry.title,
     snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
     status,
+    runnerStatus: status,
     ...(visualModeName ? { mode: visualModeName } : {}),
     ...(error ? { error } : {}),
     generatedAt: new Date().toISOString(),
     tool: "playwright",
+    operationId: randomUUID(),
   };
+}
+
+function sha256(value: Buffer | string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+export function visualCaptureConfigHash(value: unknown): string {
+  return sha256(stableJson(value));
+}
+
+function comparisonOutcome(options: {
+  runnerStatus: VisualDiffSidecarStatus;
+  metricsPassed?: boolean;
+  changed?: boolean;
+  dimensionMismatch?: boolean;
+  baselineExists: boolean;
+  actualExists: boolean;
+}): VisualComparisonOutcome {
+  if (options.runnerStatus === "skipped") return "skipped";
+  if (!options.baselineExists) return "missing-baseline";
+  if (options.runnerStatus === "timedOut") return "error";
+  if (!options.actualExists) return "error";
+  if (options.dimensionMismatch || options.metricsPassed === false) {
+    return "mismatch";
+  }
+  if (options.runnerStatus === "failed") {
+    return options.changed ? "mismatch" : "error";
+  }
+  return options.changed ? "changed-within-tolerance" : "passed";
 }
 
 /**
@@ -112,7 +161,12 @@ export function writeDiffArtifactsForBaseline(input: {
   visualModeName?: string;
   viewport?: { width: number; height: number };
   deviceScaleFactor?: number;
-}): void {
+  passThresholdPercent?: number;
+  diffThreshold?: number;
+  includeAntiAliasing?: boolean;
+  captureConfig?: unknown;
+  operationId?: string;
+}): VisualDiffSidecar {
   const {
     entry,
     packageRoot,
@@ -125,37 +179,86 @@ export function writeDiffArtifactsForBaseline(input: {
     visualModeName,
     viewport = VISUAL_VIEWPORT,
     deviceScaleFactor = VISUAL_DEVICE_SCALE_FACTOR,
+    passThresholdPercent,
+    diffThreshold,
+    includeAntiAliasing,
+    captureConfig,
+    operationId,
   } = input;
   const outPath = sidecarJsonPath(baselinePngAbsPath);
   const base = {
     ...buildSidecarBase(entry, mode, status, error, visualModeName),
     viewport,
     deviceScaleFactor,
+    ...(operationId ? { operationId } : {}),
+    ...(captureConfig
+      ? { captureConfigHash: visualCaptureConfigHash(captureConfig) }
+      : {}),
   };
-  if (!actualPng || !existsSync(baselinePngAbsPath)) {
-    writeVisualDiffSidecar(outPath, base);
-    return;
+  const baselineExists = existsSync(baselinePngAbsPath);
+  if (!actualPng || !baselineExists) {
+    const sidecar: VisualDiffSidecar = {
+      ...base,
+      status: "failed",
+      outcome: comparisonOutcome({
+        runnerStatus: status,
+        baselineExists,
+        actualExists: Boolean(actualPng),
+      }),
+      passed: false,
+    };
+    writeVisualDiffSidecar(outPath, sidecar);
+    return sidecar;
   }
   try {
-    const threshold = readPlaywrightPassThresholdPercent(packageRoot);
+    const threshold =
+      passThresholdPercent ?? readPlaywrightPassThresholdPercent(packageRoot);
     const {
       actualPng: fittedActual,
       diffPng,
       ...metrics
-    } = compareBaselineToActualPng(baselinePngAbsPath, actualPng, threshold);
+    } = compareBaselineToActualPng(baselinePngAbsPath, actualPng, {
+      passThresholdPercent: threshold,
+      diffThreshold,
+      includeAntiAliasing,
+    });
     const actualPath = actualPngPath(baselinePngAbsPath);
     const heatmapPath = diffPngPath(baselinePngAbsPath);
     writeFileSync(actualPath, fittedActual);
     writeFileSync(heatmapPath, diffPng);
-    writeVisualDiffSidecar(outPath, {
+    const outcome = comparisonOutcome({
+      runnerStatus: status,
+      metricsPassed: metrics.passed,
+      changed: metrics.diffPixels > 0,
+      dimensionMismatch: metrics.dimensionMismatch,
+      baselineExists: true,
+      actualExists: true,
+    });
+    const passed =
+      status === "passed" &&
+      (outcome === "passed" || outcome === "changed-within-tolerance");
+    const sidecar: VisualDiffSidecar = {
       ...base,
       ...metrics,
-      // Prefer pixel metrics status when compare succeeds.
-      status: metrics.passed ? "passed" : "failed",
+      status: passed ? "passed" : "failed",
+      outcome,
+      passed,
+      baselineHash: sha256(readFileSync(baselinePngAbsPath)),
       actualRel: snapshotPublicRel(actualPath, packageRoot, snapshotDir),
       diffRel: snapshotPublicRel(heatmapPath, packageRoot, snapshotDir),
-    });
-  } catch {
-    writeVisualDiffSidecar(outPath, base);
+    };
+    writeVisualDiffSidecar(outPath, sidecar);
+    return sidecar;
+  } catch (caught) {
+    const sidecar: VisualDiffSidecar = {
+      ...base,
+      status: "failed",
+      outcome: "error",
+      passed: false,
+      error:
+        error ?? (caught instanceof Error ? caught.message : String(caught)),
+    };
+    writeVisualDiffSidecar(outPath, sidecar);
+    return sidecar;
   }
 }

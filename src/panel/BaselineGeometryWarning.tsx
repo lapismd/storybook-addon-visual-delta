@@ -94,3 +94,36 @@ export function BaselineAlignmentWarning({
     </Root>
   );
 }
+
+export function BaselineGeometryUnavailable({
+  detail,
+  onRetry,
+}: {
+  detail: string;
+  onRetry: () => void;
+}) {
+  return (
+    <Root
+      role="status"
+      aria-label="Baseline geometry is unavailable"
+      data-testid="baseline-geometry-unavailable"
+    >
+      <Title>Baseline geometry unavailable</Title>
+      <ActionRow>
+        <Detail>
+          The preview did not settle enough to measure this baseline. The prior
+          warning was cleared.
+        </Detail>
+        <Button
+          size="small"
+          variant="outline"
+          ariaLabel="Retry baseline geometry measurement"
+          title={detail}
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      </ActionRow>
+    </Root>
+  );
+}

@@ -7,6 +7,7 @@ import {
   isSplitPlacement,
   viewportForImage,
   type BaselineGeometryMismatch,
+  type AlignMode,
   type PlacementMode,
   type VisualDeltaImage,
   type VisualDeltaInteraction,
@@ -110,11 +111,14 @@ type StoryData = {
   delay: number;
   ignoreSelectors: string[];
   cropToViewport: boolean;
+  /** Effective capture alignment for hydrated or interaction images. */
+  effectiveAlign: AlignMode;
   previewSplitZoomDefault: VisualDeltaZoomDefault;
   diffResultZoomDefault: VisualDeltaZoomDefault;
   splitZoom: CompareZoomState;
   baselineGeometryMismatch: BaselineGeometryMismatch | null;
   baselineAlignmentMismatch: BaselineAlignmentMismatch | null;
+  baselineGeometryUnavailable: string | null;
 };
 
 function waitTwoFrames(): Promise<void> {
@@ -232,11 +236,13 @@ export function useStoryData() {
       delay: 0,
       ignoreSelectors: [],
       cropToViewport: false,
+      effectiveAlign: "viewport",
       previewSplitZoomDefault: "fit",
       diffResultZoomDefault: "100%",
       splitZoom: compareZoomFromDefault("fit"),
       baselineGeometryMismatch: null,
       baselineAlignmentMismatch: null,
+      baselineGeometryUnavailable: null,
     };
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
@@ -321,6 +327,12 @@ export function useStoryData() {
       let layoutSnapshot = layoutCacheRef.current.get(cacheKey);
 
       let measurementWarningShown = false;
+      let measurementAttempts = 0;
+      setStoryData((prev) =>
+        prev.baselineGeometryUnavailable
+          ? { ...prev, baselineGeometryUnavailable: null }
+          : prev,
+      );
       while (
         !layoutSnapshot &&
         requestGeneration === selectionRequestGenerationRef.current
@@ -348,6 +360,7 @@ export function useStoryData() {
           layoutSnapshot = transaction.result;
           layoutCacheRef.current.set(cacheKey, layoutSnapshot);
         } catch (error) {
+          measurementAttempts += 1;
           // Early selection can race story readiness or a remount. Keep the
           // current request queued until geometry settles; crucially, never
           // apply a fixed-padding fallback while geometry is unknown.
@@ -360,6 +373,21 @@ export function useStoryData() {
               "Visual Delta: Storybook layout measurement is not ready; retrying",
               error,
             );
+          }
+          if (
+            measurementAttempts >= 3 &&
+            requestGeneration === selectionRequestGenerationRef.current
+          ) {
+            setStoryData((prev) => ({
+              ...prev,
+              baselineGeometryMismatch: null,
+              baselineAlignmentMismatch: null,
+              baselineGeometryUnavailable:
+                error instanceof Error
+                  ? error.message
+                  : "Preview geometry could not be measured.",
+            }));
+            return;
           }
         } finally {
           // ResizeObserver delivery for the verified viewport's restoration
@@ -415,6 +443,7 @@ export function useStoryData() {
       delay?: number;
       ignoreSelectors?: string[];
       cropToViewport?: boolean;
+      align?: AlignMode;
       previewSplitZoomDefault?: VisualDeltaZoomDefault;
       diffResultZoomDefault?: VisualDeltaZoomDefault;
       configUpdated?: boolean;
@@ -448,6 +477,9 @@ export function useStoryData() {
           !prev.storyId ||
           prev.storyId !== data.storyId ||
           data.configUpdated === true;
+        const diagnosticsStale =
+          resetDefaults ||
+          prev.renderGeneration !== (data.renderGeneration ?? 0);
         const resolvedPlacement =
           interactionSrcEarly != null
             ? "center"
@@ -497,7 +529,7 @@ export function useStoryData() {
                     src: `${wiredInteraction?.src.split("?")[0] ?? interactionSrc}?t=${Date.now()}`,
                     offsetX: 0,
                     offsetY: 0,
-                    align: "canvas" as const,
+                    align: data.align ?? prev.effectiveAlign,
                     placement: resolvedPlacement,
                   },
                 ],
@@ -548,18 +580,24 @@ export function useStoryData() {
           delay: typeof data.delay === "number" ? data.delay : 0,
           ignoreSelectors: data.ignoreSelectors ?? [],
           cropToViewport: data.cropToViewport ?? false,
+          effectiveAlign:
+            data.align ?? primaryImages[0]?.align ?? prev.effectiveAlign,
           previewSplitZoomDefault: data.previewSplitZoomDefault ?? "fit",
           diffResultZoomDefault: data.diffResultZoomDefault ?? "100%",
           splitZoom: resetDefaults
             ? compareZoomFromDefault(data.previewSplitZoomDefault ?? "fit")
             : prev.splitZoom,
           baselineGeometryMismatch:
-            prev.storyId === data.storyId
+            prev.storyId === data.storyId && !diagnosticsStale
               ? prev.baselineGeometryMismatch
               : null,
           baselineAlignmentMismatch:
-            prev.storyId === data.storyId
+            prev.storyId === data.storyId && !diagnosticsStale
               ? prev.baselineAlignmentMismatch
+              : null,
+          baselineGeometryUnavailable:
+            prev.storyId === data.storyId && !diagnosticsStale
+              ? prev.baselineGeometryUnavailable
               : null,
         };
         emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
@@ -640,6 +678,7 @@ export function useStoryData() {
       setStoryData((prev) => ({
         ...prev,
         baselineGeometryMismatch: data,
+        baselineGeometryUnavailable: null,
       }));
     },
     [EVENTS.BASELINE_ALIGNMENT_STATUS]: (
@@ -990,11 +1029,30 @@ export function useStoryData() {
         const base = img.src.split("?")[0] ?? img.src;
         return { ...img, src: `${base}?${bust}` };
       });
-      const next = { ...prev, images };
+      const next = {
+        ...prev,
+        images,
+        baselineGeometryMismatch: null,
+        baselineAlignmentMismatch: null,
+        baselineGeometryUnavailable: null,
+      };
       void selectImage(prev.index, images);
       return next;
     });
   }, [selectImage]);
+
+  /** Drop diagnostics that belong to a superseded baseline/config revision. */
+  const clearBaselineDiagnostics = useCallback(() => {
+    selectionRequestGenerationRef.current += 1;
+    layoutCacheRef.current.clear();
+    setStoryData((prev) => ({
+      ...prev,
+      baselineGeometryMismatch: null,
+      baselineAlignmentMismatch: null,
+      baselineGeometryUnavailable: null,
+    }));
+    emitRef.current?.(EVENTS.HIDE_OVERLAY, {});
+  }, []);
 
   /**
    * After create/update: bust image cache, force center overlay on, and show
@@ -1011,7 +1069,13 @@ export function useStoryData() {
         opacity: prev.opacity,
       });
       if (prev.images.length === 0) {
-        const next: StoryData = { ...prev, ...patch };
+        const next: StoryData = {
+          ...prev,
+          ...patch,
+          baselineGeometryMismatch: null,
+          baselineAlignmentMismatch: null,
+          baselineGeometryUnavailable: null,
+        };
         persist(next);
         return next;
       }
@@ -1026,6 +1090,9 @@ export function useStoryData() {
         ...prev,
         ...patch,
         images,
+        baselineGeometryMismatch: null,
+        baselineAlignmentMismatch: null,
+        baselineGeometryUnavailable: null,
       };
       persist(next);
       emitStyle(next);
@@ -1050,7 +1117,7 @@ export function useStoryData() {
               src: `${base}?${bust}`,
               offsetX: 0,
               offsetY: 0,
-              align: "canvas" as const,
+              align: prev.effectiveAlign,
               placement: "center" as const,
             };
           }),
@@ -1068,6 +1135,9 @@ export function useStoryData() {
           ...patch,
           images,
           placement: "center",
+          baselineGeometryMismatch: null,
+          baselineAlignmentMismatch: null,
+          baselineGeometryUnavailable: null,
         };
         persist(next);
         emitStyle(next);
@@ -1099,6 +1169,9 @@ export function useStoryData() {
           index,
           overlayOn: index >= 0,
           selectedMode: null,
+          baselineGeometryMismatch: null,
+          baselineAlignmentMismatch: null,
+          baselineGeometryUnavailable: null,
         };
         persist(next);
         emitStyle(next);
@@ -1115,8 +1188,13 @@ export function useStoryData() {
    * baseline URLs from the manager index.
    */
   const seedStoryFromManager = useCallback(
-    (args: { storyId: string; storyName: string; imageSrcs?: string[] }) => {
-      const { storyId, storyName, imageSrcs } = args;
+    (args: {
+      storyId: string;
+      storyName: string;
+      imageSrcs?: string[];
+      align?: AlignMode;
+    }) => {
+      const { storyId, storyName, imageSrcs, align } = args;
       if (!storyId) return;
       setStoryData((prev) => {
         if (
@@ -1135,7 +1213,7 @@ export function useStoryData() {
                     src: `${base}?${bust}`,
                     offsetX: 0,
                     offsetY: 0,
-                    align: "canvas" as const,
+                    align: align ?? prev.effectiveAlign,
                     placement: "center" as const,
                   };
                 }),
@@ -1160,6 +1238,7 @@ export function useStoryData() {
           storyId,
           storyName,
           images,
+          effectiveAlign: align ?? prev.effectiveAlign,
           placement: hasImages ? "center" : prev.placement,
           index: patch
             ? patch.index
@@ -1221,7 +1300,7 @@ export function useStoryData() {
           src: `${base}?${bust}`,
           offsetX: 0,
           offsetY: 0,
-          align: "canvas",
+          align: prev.effectiveAlign,
           placement,
         };
         const images = withPlacement([image], placement);
@@ -1325,6 +1404,7 @@ export function useStoryData() {
     resetOverlay,
     resetSettings,
     reloadBaselineImages,
+    clearBaselineDiagnostics,
     revealCenteredOverlay,
     hydrateBaselineImages,
     removeBaselineImage,

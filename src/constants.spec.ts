@@ -61,7 +61,7 @@ describe("visual review tags", () => {
     expect(isVisualReviewStatus("nope")).toBe(false);
   });
 
-  it("normalizes to a single review tag and clears them when skipping", () => {
+  it("normalizes review actions while skip changes preserve review metadata", () => {
     expect(
       normalizeVisualStoryTags(
         ["dev", "visual-pending", "visual-failed", "example"],
@@ -73,7 +73,7 @@ describe("visual review tags", () => {
         kind: "skip",
         skip: true,
       }),
-    ).toEqual(["dev", "skip-visual"]);
+    ).toEqual(["dev", "visual-ready", "skip-visual"]);
     expect(
       normalizeVisualStoryTags(["dev", "visual-pending"], {
         kind: "clear-review",

@@ -1,6 +1,8 @@
 import { experimental_getStatusStore, type API } from "storybook/manager-api";
+import { buildArgsParam } from "storybook/internal/router";
 import {
   STATUS_TYPE_ID_VISUAL,
+  VISUAL_DEVICE_SCALE_FACTOR,
   VISUAL_DELTA_ACTION_SCOPE_PATH,
   VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
@@ -9,7 +11,6 @@ import {
   VISUAL_DELTA_CREATE_PATH,
   VISUAL_DELTA_DELETE_PATH,
   VISUAL_DELTA_INIT_PATH,
-  VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REBUILD_STATIC_PATH,
   VISUAL_DELTA_REVIEW_PATH,
   VISUAL_DELTA_RUN_EVENTS_PATH,
@@ -18,6 +19,8 @@ import {
   VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_STORY_CONFIG_PATH,
   VISUAL_DELTA_UPDATE_PATH,
+  VISUAL_VIEWPORT,
+  type VisualDeltaParams,
   type VisualReviewStatus,
 } from "../constants.js";
 import type {
@@ -38,6 +41,9 @@ import {
   type VisualComparisonOutcome,
 } from "../shared/visual-result-classification.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
+import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import { postChromiumStoryCompare } from "../panel/chromium-capture.js";
 
 export type VisualRunResultItem = {
   storyId: string;
@@ -268,6 +274,43 @@ export function publishVisualLastRun(lastRun: VisualLastRunSummary | null) {
   }
 }
 
+/**
+ * Remove stale comparison evidence after a baseline/config/eligibility
+ * mutation. Review metadata is intentionally unaffected.
+ */
+export function invalidateVisualLastRun(storyIds?: readonly string[]) {
+  const current = latestLastRun ?? loadPersistedVisualLastRun();
+  if (!current) return;
+  if (!storyIds?.length) {
+    publishVisualLastRun(null);
+    return;
+  }
+  const invalid = new Set(storyIds);
+  const results = (current.results ?? []).filter(
+    (result) => !invalid.has(result.storyId),
+  );
+  if (!results.length) {
+    publishVisualLastRun(null);
+    return;
+  }
+  const summary = { total: results.length, passed: 0, failed: 0, skipped: 0 };
+  for (const result of results) {
+    const outcome = classifyVisualRunResult(result);
+    if (outcome === "skipped") summary.skipped += 1;
+    else if (outcome === "passed" || outcome === "changed-within-tolerance") {
+      summary.passed += 1;
+    } else {
+      summary.failed += 1;
+    }
+  }
+  publishVisualLastRun({
+    ...current,
+    summary,
+    results,
+    error: summary.failed ? `${summary.failed} failed` : undefined,
+  });
+}
+
 /** Vitest-style progress copy for panel / Testing Module. */
 export function formatVisualProgressLabel(
   progress: VisualRunProgress | null,
@@ -436,6 +479,108 @@ export function visualResultFromLiveDiff(input: {
       passThresholdPercent,
       passed,
     },
+  };
+}
+
+/**
+ * Authoritative live Chromium comparison for one exact story. Both the panel's
+ * Story action and the story-level Testing Module route through this helper.
+ */
+export async function compareExactStory(
+  api: API,
+  storyId: string,
+  options?: {
+    baselineUrl?: string;
+    visualCaptureUntil?: string;
+    mode?: string;
+    onProgress?: (progress: { label: string }) => void;
+    signal?: AbortSignal;
+  },
+): Promise<VisualRunResultItem> {
+  const entry = api.getData(storyId);
+  if (!entry || entry.type !== "story") {
+    throw new Error(`Story not found: ${storyId}`);
+  }
+  const params =
+    "parameters" in entry
+      ? (
+          entry.parameters as {
+            visualDelta?: VisualDeltaParams;
+          }
+        ).visualDelta
+      : undefined;
+  const imageInput = Array.isArray(params?.images)
+    ? params.images[0]
+    : params?.images;
+  const image =
+    imageInput && typeof imageInput === "object" ? imageInput : undefined;
+  const baselineUrl =
+    options?.baselineUrl ??
+    (typeof imageInput === "string" ? imageInput : image?.src) ??
+    baselineUrlForStoryRef(
+      {
+        id: storyId,
+        importPath: "importPath" in entry ? entry.importPath : undefined,
+        tags: entry.tags,
+      },
+      { allowSkipVisual: true },
+    );
+  if (!baselineUrl) {
+    throw new Error(`No baseline screenshot for ${storyId}`);
+  }
+  const config = await fetchVisualConfig();
+  const defaults = config.projectDefaults;
+  const modeGlobals =
+    options?.mode && params?.modes?.[options.mode]?.globals
+      ? params.modes[options.mode]!.globals
+      : undefined;
+  const compared = await postChromiumStoryCompare(
+    {
+      storyId,
+      story: {
+        id: storyId,
+        title:
+          "title" in entry && typeof entry.title === "string"
+            ? entry.title
+            : undefined,
+        name:
+          "name" in entry && typeof entry.name === "string"
+            ? entry.name
+            : undefined,
+        importPath:
+          "importPath" in entry && typeof entry.importPath === "string"
+            ? entry.importPath
+            : undefined,
+        tags: entry.tags,
+      },
+      baselineUrl,
+      align: params?.align ?? image?.align ?? "viewport",
+      visualCaptureUntil: options?.visualCaptureUntil,
+      mode: options?.mode,
+      globals: modeGlobals ? buildArgsParam({}, modeGlobals) : undefined,
+      viewport: image?.viewport ?? VISUAL_VIEWPORT,
+      deviceScaleFactor: image?.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR,
+      delay: params?.delay ?? defaults.delay,
+      ignoreSelectors: resolveIgnoreSelectors(params?.ignoreSelectors),
+      cropToViewport: params?.cropToViewport ?? defaults.cropToViewport,
+      passThresholdPercent:
+        params?.passThresholdPercent ?? defaults.passThresholdPercent,
+      diffThreshold: params?.diffThreshold ?? defaults.diffThreshold,
+      includeAntiAliasing:
+        params?.diffIncludeAntiAliasing ?? defaults.diffIncludeAntiAliasing,
+    },
+    {
+      signal: options?.signal,
+      onProgress: (progress) => options?.onProgress?.(progress),
+    },
+  );
+  return {
+    storyId,
+    title: storyId,
+    status: compared.sidecar.status,
+    sidecar: compared.sidecar,
+    outcome: compared.sidecar.outcome,
+    ...(compared.sidecar.error ? { error: compared.sidecar.error } : {}),
   };
 }
 
@@ -933,33 +1078,6 @@ export async function resumePersistedVisualStatusJob(): Promise<{
   }
 }
 
-/** Persist package-wide Playwright pass threshold (%) on the host. */
-export async function postPlaywrightPassThreshold(
-  passThresholdPercent: number,
-): Promise<{ ok: true; playwrightPassThresholdPercent: number }> {
-  const response = await fetch(VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ passThresholdPercent }),
-  });
-  const data = (await response.json()) as {
-    ok?: boolean;
-    error?: string;
-    playwrightPassThresholdPercent?: number;
-    passThresholdPercent?: number;
-  };
-  if (!response.ok || !data.ok) {
-    throw new Error(
-      data.error || `Playwright threshold update failed (${response.status})`,
-    );
-  }
-  const next = data.playwrightPassThresholdPercent ?? data.passThresholdPercent;
-  if (typeof next !== "number") {
-    throw new Error("Playwright threshold response missing percent");
-  }
-  return { ok: true, playwrightPassThresholdPercent: next };
-}
-
 export type VisualSkipVisualResponse = {
   ok: boolean;
   storyId: string;
@@ -1196,6 +1314,9 @@ async function postVisualBaselineWrite(
       logTail: log || undefined,
       ...fraction,
     });
+    invalidateVisualLastRun(
+      body.storyIds ?? (body.storyId ? [body.storyId] : undefined),
+    );
     return { ok: true, log };
   } catch (error) {
     if (

@@ -330,18 +330,24 @@ function resolveSubjectRect(canvasElement: HTMLElement): DOMRect {
   return canvasElement.getBoundingClientRect();
 }
 
-function emitBaselineGeometryStatus(status: BaselineGeometryMismatch | null) {
+function emitBaselineGeometryStatus(
+  status: BaselineGeometryMismatch | null,
+  force = false,
+) {
   const signature = status ? JSON.stringify(status) : "";
-  if (signature === lastGeometryStatusSignature) return;
+  if (!force && signature === lastGeometryStatusSignature) return;
   lastGeometryStatusSignature = signature;
   addons.getChannel().emit(EVENTS.BASELINE_GEOMETRY_STATUS, status);
 }
 
 let lastAlignmentStatusSignature = "";
 
-function emitBaselineAlignmentStatus(status: BaselineAlignmentMismatch | null) {
+function emitBaselineAlignmentStatus(
+  status: BaselineAlignmentMismatch | null,
+  force = false,
+) {
   const signature = status ? JSON.stringify(status) : "";
-  if (signature === lastAlignmentStatusSignature) return;
+  if (!force && signature === lastAlignmentStatusSignature) return;
   lastAlignmentStatusSignature = signature;
   addons.getChannel().emit(EVENTS.BASELINE_ALIGNMENT_STATUS, status);
 }
@@ -1579,8 +1585,8 @@ function removeOverlayDom(retainSelection: boolean) {
     document.getElementById(SPLIT_ID)?.remove();
   }
   syncModeBadge(false);
-  emitBaselineGeometryStatus(null);
-  emitBaselineAlignmentStatus(null);
+  emitBaselineGeometryStatus(null, true);
+  emitBaselineAlignmentStatus(null, true);
 }
 
 function clearOverlay() {

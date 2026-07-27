@@ -63,7 +63,7 @@ function fixture() {
 }
 
 describe("deleteVisualBaseline", () => {
-  it("removes the exact source reference, review tag, PNG, and sidecars", () => {
+  it("removes the exact source reference, PNG, and sidecars without changing review metadata", () => {
     const { root, storyPath, baselinePath, baselineUrl } = fixture();
     const result = deleteVisualBaseline(
       root,
@@ -81,12 +81,15 @@ describe("deleteVisualBaseline", () => {
     );
     const source = readFileSync(storyPath, "utf8");
     expect(source).not.toContain(baselineUrl);
-    expect(source).not.toContain("visual-approved");
+    expect(source).toContain("visual-approved");
     expect(source).toContain("docs-only");
     const index = JSON.parse(
       readFileSync(path.join(root, "storybook-static/index.json"), "utf8"),
     ) as { entries: Record<string, { tags?: string[] }> };
-    expect(index.entries["shadcn-demo--default"]?.tags).toEqual(["docs-only"]);
+    expect(index.entries["shadcn-demo--default"]?.tags).toEqual([
+      "visual-approved",
+      "docs-only",
+    ]);
   });
 
   it("rejects a screenshot path belonging to another story", () => {
