@@ -7,6 +7,7 @@ import {
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
+  VISUAL_DELTA_DELETE_PATH,
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REBUILD_STATIC_PATH,
@@ -1213,6 +1214,45 @@ export async function postVisualUpdateBaseline(body: {
   rebuild?: boolean;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("update", body);
+}
+
+/** Remove one exact screenshot from story CSF and the local snapshot folder. */
+export async function postVisualDeleteBaseline(body: {
+  storyId: string;
+  baselineUrl: string;
+  interactionId?: string;
+}): Promise<{
+  ok: true;
+  storyId: string;
+  baselineUrl: string;
+  sourceUpdated: boolean;
+  deletedFiles: string[];
+}> {
+  const response = await fetch(VISUAL_DELTA_DELETE_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json()) as {
+    ok?: boolean;
+    storyId?: string;
+    baselineUrl?: string;
+    sourceUpdated?: boolean;
+    deletedFiles?: string[];
+    error?: string;
+  };
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      data.error || `Delete screenshot failed (${response.status})`,
+    );
+  }
+  return {
+    ok: true,
+    storyId: data.storyId ?? body.storyId,
+    baselineUrl: data.baselineUrl ?? body.baselineUrl,
+    sourceUpdated: data.sourceUpdated ?? false,
+    deletedFiles: data.deletedFiles ?? [],
+  };
 }
 
 /**

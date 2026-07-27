@@ -50,6 +50,24 @@ to siblings or the complete suite.
 - [x] Run focused unit, Storybook, panel Playwright, compare-only visual, and
       repository checks; record unrelated aggregate blockers below.
 
+## Follow-up: exact runner selection and baseline actions
+
+- [x] Replace reporter-glyph story selectors with Playwright-compatible exact
+      story-ID suffix selectors.
+- [x] Verify global comparison results continue into the enabled review-status
+      phase.
+- [x] Move per-baseline History and Update actions into an accordion kebab.
+- [x] Add Delete screenshot to remove the exact CSF image/interaction,
+      corresponding local PNG, and derived sidecars without touching siblings.
+- [x] Re-run focused unit, manager browser, panel, compare-only, and repository
+      checks without updating baselines.
+
+The component/global regression came from treating the list reporter's `›`
+separator as part of the title matched by Playwright. Playwright applies grep to
+a whitespace-joined internal title, so the selector found zero tests and the
+action sequence stopped before the enabled status-update phase. All selected
+runners now share a whitespace-delimited, escaped story-ID leaf selector.
+
 ## Validation evidence
 
 - Add-on scope/UI/prefs tests: 18 passed.
@@ -75,3 +93,16 @@ to siblings or the complete suite.
 - Final `pnpm checks`: formatting, Svelte diagnostics, add-on and docs type
   checks, and the no-Tailwind gate passed; the command then stopped at the same
   existing F-Mode workspace contract failure recorded above.
+- Follow-up selector/delete tests: 14 add-on tests and 30 host pipeline tests
+  passed, including exact sibling-suffix rejection, primary/interaction/named
+  mode removal, review invalidation, and sidecar deletion.
+- Popover component regression: Playwright listed exactly the three component
+  stories and the compare-only run passed 3/3.
+- Updated Visual Delta catalog interactions: focused 33/33 and full Storybook
+  503/503 passed.
+- Follow-up full panel Playwright: 37 passed with the same four existing
+  component-overlay Fit placement canaries; the review/update/delete workflow
+  passed. No baseline update command was run.
+- Follow-up `pnpm checks`: formatting, Svelte diagnostics, both add-on type
+  checks, and the no-Tailwind gate passed; unit tests reached 672/673 before the
+  same unrelated F-Mode source-shape assertion stopped the aggregate command.

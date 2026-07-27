@@ -481,7 +481,6 @@ export function PanelShell({
         diffEngine,
         onDiffEngineChange: setDiffEngine,
         onCreate: () => void handleCreate(),
-        onUpdateBaselines: () => void handleUpdate(),
         onRebuildStatic: () => void handleRebuildStatic(),
         onResetSettings: () => {
           setDiffResult(null);
@@ -502,7 +501,6 @@ export function PanelShell({
         acceptRunAvailable: runAvailable,
         onToggleSkipVisual: () => void handleToggleSkipVisual(),
         onOpenConfiguration: () => setShowConfiguration(true),
-        isUpdating: busy && !isRebuilding,
         isRebuilding,
       }}
       configuration={
@@ -628,6 +626,7 @@ export function PanelShell({
             onCreate={(step) => void handleCreateInteraction(step)}
             onUpdate={(step) => void handleCreateInteraction(step)}
             onUpdateDefault={() => void handleUpdate()}
+            onDelete={() => undefined}
             onToggleDistribution={() => setShowDistribution((v) => !v)}
             renderBody={(section) => (
               <FormPlaceholder

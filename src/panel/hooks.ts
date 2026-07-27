@@ -1063,6 +1063,37 @@ export function useStoryData() {
     [emitStyle, persist, selectImage],
   );
 
+  /** Remove one exact primary image from the live gallery after local delete. */
+  const removeBaselineImage = useCallback(
+    (src: string) => {
+      const target = src.split("?")[0] ?? src;
+      pinInteractionSrc(activeInteractionSrcRef, null);
+      setStoryData((prev) => {
+        const primary = primaryImagesRef.current.filter(
+          (image) => (image.src.split("?")[0] ?? image.src) !== target,
+        );
+        primaryImagesRef.current = primary;
+        const images = withPlacement(primary, prev.placement);
+        const index =
+          images.length > 0
+            ? Math.min(Math.max(prev.index, 0), images.length - 1)
+            : -1;
+        const next: StoryData = {
+          ...prev,
+          images,
+          index,
+          overlayOn: index >= 0,
+          selectedMode: null,
+        };
+        persist(next);
+        emitStyle(next);
+        void selectImage(index, images);
+        return next;
+      });
+    },
+    [emitStyle, persist, selectImage],
+  );
+
   /**
    * Unblock the panel when preview INIT_IMAGE is missed (slow iframe, channel
    * race after Storybook restart). Sets story identity and optionally hydrates
@@ -1281,6 +1312,7 @@ export function useStoryData() {
     reloadBaselineImages,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    removeBaselineImage,
     seedStoryFromManager,
     selectInteractionBaseline,
     restorePrimaryBaselines,

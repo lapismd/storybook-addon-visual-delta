@@ -203,7 +203,7 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   the static index when needed, captures missing PNGs, then wires
   `visualDelta.images`. When CSF was already wired (no HMR), the panel hydrates
   the baseline URL so the gallery is not left empty.
-- **Update baselines** — Dev-only kebab action posts to
+- **Update baseline** — The concrete baseline accordion kebab posts to
   `/__visual-delta/update-baseline`, which runs the guarded visual-update
   pipeline for exactly the open story. Repeated exact `--story-id` values
   support Testing Module batches; only explicit `--component` operations may
@@ -211,6 +211,12 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   Logs stream into the panel status bar like create (progress button +
   popover); on success the panel enables a center overlay with the refreshed
   baseline. Log popovers use monospace.
+- **Delete screenshot** — The same accordion kebab posts the exact story ID and
+  selected baseline URL to `/__visual-delta/delete-baseline`. The middleware
+  validates that the nested/flat snapshot path belongs to that story, removes
+  only its matching `visualDelta.images`, named-mode `src`, or interaction
+  entry, clears stale review state, and deletes the local PNG plus
+  `.actual.png`, `.diff.png`, and `.json` artifacts when present.
 - **Rebuild storybook static** — Dev-only kebab action posts to
   `/__visual-delta/rebuild-static` and runs `pnpm build-storybook` only (no
   Playwright capture). Use after CSS/markup edits when you want a fresh
@@ -258,7 +264,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   Affected is `visible ∩ refreshed affected`. Empty scopes never broaden.
   Rewrite clears review tags only for the exact rewritten IDs. Panel Accept,
   Unaccept, Ready, and Failed call review endpoints directly and ignore these
-  preferences. Results map to sidebar status dots. Ephemeral artifacts:
+  preferences. Selected runs use escaped story-ID suffix filters; reporter
+  `›` separators are presentation only and are never included in Playwright's
+  internal grep expression. Results map to sidebar status dots. Ephemeral artifacts:
   gitignored `*.json` /
   `*.actual.png` / `*.diff.png` under
   `tests/visual/storybook.spec.ts-snapshots/`.

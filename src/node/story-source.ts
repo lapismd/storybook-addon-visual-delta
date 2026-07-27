@@ -19,6 +19,7 @@ import {
 export type StorySourceMutation =
   | { kind: "skip"; skip: boolean }
   | { kind: "review"; status: VisualReviewStatus }
+  | { kind: "clear-review" }
   | {
       kind: "baseline";
       url: string;
@@ -30,6 +31,12 @@ export type StorySourceMutation =
       interaction: { id: string; label: string; src: string };
       /** When set, review tags are normalized to this status in the same write. */
       reviewStatus?: VisualReviewStatus;
+    }
+  | {
+      kind: "remove-baseline";
+      url: string;
+      /** Present for a named mid-play capture; absent for a primary image. */
+      interactionId?: string;
     };
 function resolveStoriesPath(
   packageRoot: string,
@@ -46,13 +53,18 @@ function parseStringArray(source: string): string[] {
 
 function nextTags(
   current: string[],
-  mutation: Extract<StorySourceMutation, { kind: "skip" | "review" }>,
+  mutation: Extract<
+    StorySourceMutation,
+    { kind: "skip" | "review" | "clear-review" }
+  >,
 ): string[] {
   return normalizeVisualStoryTags(
     current,
     mutation.kind === "skip"
       ? { kind: "skip", skip: mutation.skip }
-      : { kind: "review", status: mutation.status },
+      : mutation.kind === "review"
+        ? { kind: "review", status: mutation.status }
+        : { kind: "clear-review" },
   );
 }
 
@@ -100,6 +112,76 @@ function parseVisualDeltaObjectLiteral(
   } catch {
     return null;
   }
+}
+
+function visualImageSource(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { src?: unknown }).src === "string"
+  ) {
+    return (value as { src: string }).src;
+  }
+  return null;
+}
+
+function removeVisualDeltaBaseline(
+  visualDelta: Record<string, unknown>,
+  mutation: Extract<StorySourceMutation, { kind: "remove-baseline" }>,
+): boolean {
+  if (mutation.interactionId) {
+    if (!Array.isArray(visualDelta.interactions)) return false;
+    const interactions = visualDelta.interactions as Array<
+      Record<string, unknown>
+    >;
+    const next = interactions.filter(
+      (item) =>
+        item?.id !== mutation.interactionId &&
+        visualImageSource(item) !== mutation.url,
+    );
+    if (next.length === interactions.length) return false;
+    if (next.length) visualDelta.interactions = next;
+    else delete visualDelta.interactions;
+    return true;
+  }
+
+  let changed = false;
+  if (Array.isArray(visualDelta.images)) {
+    const images = visualDelta.images as unknown[];
+    const next = images.filter(
+      (image) => visualImageSource(image) !== mutation.url,
+    );
+    if (next.length !== images.length) {
+      changed = true;
+      if (next.length) visualDelta.images = next;
+      else delete visualDelta.images;
+    }
+  }
+
+  if (
+    visualDelta.modes &&
+    typeof visualDelta.modes === "object" &&
+    !Array.isArray(visualDelta.modes)
+  ) {
+    for (const [name, value] of Object.entries(
+      visualDelta.modes as Record<string, unknown>,
+    )) {
+      if (
+        !value ||
+        typeof value !== "object" ||
+        Array.isArray(value) ||
+        visualImageSource(value) !== mutation.url
+      ) {
+        continue;
+      }
+      const nextMode = { ...(value as Record<string, unknown>) };
+      delete nextMode.src;
+      (visualDelta.modes as Record<string, unknown>)[name] = nextMode;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function mutateSvelteOpenTag(
@@ -173,6 +255,22 @@ function mutateSvelteOpenTag(
       });
     }
     return next;
+  }
+
+  if (mutation.kind === "remove-baseline") {
+    const range = findVisualDeltaObjectRange(openTag);
+    if (!range) return openTag;
+    const parsed = parseVisualDeltaObjectLiteral(
+      openTag.slice(range.start, range.end),
+    );
+    if (!parsed || !removeVisualDeltaBaseline(parsed, mutation)) {
+      return openTag;
+    }
+    return (
+      openTag.slice(0, range.start) +
+      JSON.stringify(parsed) +
+      openTag.slice(range.end)
+    );
   }
 
   const match = /\btags=\{\[([\s\S]*?)\]\}/.exec(openTag);
@@ -378,7 +476,10 @@ function insertObjectProperty(objectText: string, property: string): string {
 
 function mutateTsTags(
   objectText: string,
-  mutation: Extract<StorySourceMutation, { kind: "skip" | "review" }>,
+  mutation: Extract<
+    StorySourceMutation,
+    { kind: "skip" | "review" | "clear-review" }
+  >,
 ): string {
   const property = findTopLevelProperty(objectText, "tags");
   const current =
@@ -464,6 +565,44 @@ function mutateTsInteraction(
   );
 }
 
+function mutateTsRemoveBaseline(
+  objectText: string,
+  mutation: Extract<StorySourceMutation, { kind: "remove-baseline" }>,
+): string {
+  const parameters = findTopLevelProperty(objectText, "parameters");
+  if (!parameters || objectText[parameters.valueStart] !== "{") {
+    return objectText;
+  }
+  const end = findBalancedEnd(objectText, parameters.valueStart, "{", "}");
+  if (end < 0) return objectText;
+  const parametersObject = objectText.slice(parameters.valueStart, end + 1);
+  const visualDelta = findTopLevelProperty(parametersObject, "visualDelta");
+  if (!visualDelta || parametersObject[visualDelta.valueStart] !== "{") {
+    return objectText;
+  }
+  const vdEnd = findBalancedEnd(
+    parametersObject,
+    visualDelta.valueStart,
+    "{",
+    "}",
+  );
+  if (vdEnd < 0) return objectText;
+  const vdText = parametersObject.slice(visualDelta.valueStart, vdEnd + 1);
+  const parsed = parseVisualDeltaObjectLiteral(vdText);
+  if (!parsed || !removeVisualDeltaBaseline(parsed, mutation)) {
+    return objectText;
+  }
+  const nextParameters =
+    parametersObject.slice(0, visualDelta.valueStart) +
+    JSON.stringify(parsed) +
+    parametersObject.slice(vdEnd + 1);
+  return (
+    objectText.slice(0, parameters.valueStart) +
+    nextParameters +
+    objectText.slice(end + 1)
+  );
+}
+
 function exportNameSlug(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -529,6 +668,8 @@ function patchTsStory(
         status: mutation.reviewStatus,
       });
     }
+  } else if (mutation.kind === "remove-baseline") {
+    next = mutateTsRemoveBaseline(objectText, mutation);
   } else {
     next = mutateTsTags(objectText, mutation);
   }
@@ -732,6 +873,48 @@ export function patchStoryInteraction(options: {
     { storyId: options.storyId, status: reviewStatus },
   ]);
   return { ok: true, storyId: options.storyId };
+}
+
+/**
+ * Remove one exact primary/interaction reference and invalidate the story's
+ * review tag. The PNG is deleted separately only after the middleware has
+ * validated that its path belongs to this story.
+ */
+export function patchStoryRemoveBaseline(options: {
+  packageRoot: string;
+  storyId: string;
+  url: string;
+  interactionId?: string;
+}): {
+  ok: boolean;
+  storyId: string;
+  sourceUpdated?: boolean;
+  error?: string;
+} {
+  const entry = loadStoryIndex(options.packageRoot)[options.storyId];
+  if (!entry?.importPath) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: `Story not found in index: ${options.storyId}`,
+    };
+  }
+  const removedReference = patchStoryFile(options.packageRoot, entry, {
+    kind: "remove-baseline",
+    url: options.url,
+    interactionId: options.interactionId,
+  });
+  const clearedReview = patchStoryFile(options.packageRoot, entry, {
+    kind: "clear-review",
+  });
+  syncStaticIndexReviewStatus(options.packageRoot, [
+    { storyId: options.storyId, status: null },
+  ]);
+  return {
+    ok: true,
+    storyId: options.storyId,
+    sourceUpdated: removedReference || clearedReview,
+  };
 }
 
 export function injectTypeScriptStoryBaselines(
