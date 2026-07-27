@@ -223,4 +223,30 @@ describe("VisualTestModuleUI", () => {
       "0/2",
     );
   });
+
+  it("shows preflight activity without presenting comparison as started", () => {
+    const statusLine = "Rebuilding Storybook static… 12s";
+    renderWithTheme(
+      <VisualTestModuleUI
+        variant="global"
+        {...baseProps}
+        statusLine={statusLine}
+        runnerBusy
+        isCompareRunning={false}
+      />,
+    );
+
+    const root = screen.getByTestId("visual-test-module-global");
+    expect(
+      root.querySelector("#visual-testing-module-description-global"),
+    ).toHaveTextContent(statusLine);
+    expect(
+      within(root).queryByTestId("compare-row-progress"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(root).getByRole("button", {
+        name: "Run tests to see results",
+      }),
+    ).toBeInTheDocument();
+  });
 });

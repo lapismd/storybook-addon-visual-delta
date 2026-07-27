@@ -173,6 +173,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   preflights and incomplete static output rebuild automatically. Create fails
   if the expected PNG was not written (no more silent `No tests found` +
   exit 0).
+- **Observable global preflight** — `/__visual-delta/action-scope` streams
+  resolving, static-rebuild heartbeat, and exact-scope freezing milestones as
+  NDJSON. The Testing Module keeps comparison progress idle during this
+  preflight and starts it only when `/run-tests` opens.
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).

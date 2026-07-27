@@ -36,3 +36,20 @@ export type VisualActionScopeResponse = {
   /** True when the preflight rebuilt Storybook before freezing the ids. */
   rebuilt: boolean;
 };
+
+/** Streamed phases before a global Testing Module action scope is frozen. */
+export type VisualActionScopePhase = "resolving" | "rebuilding" | "freezing";
+
+/** Live progress reported while resolving a global Testing Module scope. */
+export type VisualActionScopeProgress = {
+  phase: VisualActionScopePhase;
+  message: string;
+  /** Elapsed wall time for a long-running phase such as build-storybook. */
+  elapsedMs?: number;
+};
+
+/** NDJSON protocol for the affected-scope correctness preflight. */
+export type VisualActionScopeStreamEvent =
+  | ({ type: "progress" } & VisualActionScopeProgress)
+  | ({ type: "done" } & VisualActionScopeResponse)
+  | { type: "error"; error: string; logTail?: string };

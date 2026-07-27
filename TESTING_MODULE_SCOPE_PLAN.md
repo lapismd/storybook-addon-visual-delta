@@ -68,6 +68,16 @@ a whitespace-joined internal title, so the selector found zero tests and the
 action sequence stopped before the enabled status-update phase. All selected
 runners now share a whitespace-delimited, escaped story-ID leaf selector.
 
+## Follow-up: observable global preflight
+
+- [x] Stream resolving, correctness-rebuild, and scope-freezing milestones from
+      the global action-scope endpoint.
+- [x] Emit an elapsed heartbeat during long `build-storybook` preflights.
+- [x] Keep the comparison row idle until the Playwright run actually begins.
+- [x] Restore the explicit comparison phase after manager HMR reconnects.
+- [x] Cover stream success/failure parsing and preflight UI state with focused
+      tests.
+
 ## Validation evidence
 
 - Add-on scope/UI/prefs tests: 18 passed.
@@ -106,3 +116,23 @@ runners now share a whitespace-delimited, escaped story-ID leaf selector.
 - Follow-up `pnpm checks`: formatting, Svelte diagnostics, both add-on type
   checks, and the no-Tailwind gate passed; unit tests reached 672/673 before the
   same unrelated F-Mode source-shape assertion stopped the aggregate command.
+- Observable-preflight tests: 19 focused add-on tests passed, including streamed
+  resolving/rebuilding/freezing phases, failure propagation, action ordering,
+  and a non-running comparison row during the rebuild.
+- Live slow-path endpoint: a real affected preflight streamed one-second
+  `Rebuilding Storybook static… Ns` heartbeats for its full build, then
+  `Refreshing affected plan…`, exact-scope freezing, and the final two-story
+  frozen result. No baseline writer or visual comparison was invoked.
+- Live manager acceptance on port 9009: the global runner immediately displayed
+  `Resolving affected scope…`, advanced to the elapsed rebuild heartbeat, and
+  kept the comparison row at `Run tests to see results` until comparison began.
+- Observable-preflight full add-on suite: 267/267 tests passed; focused
+  Storybook Testing Module interactions passed 6/6.
+- Compare-only panel Playwright: 29 passed and 12 visual canaries failed. Four
+  are the existing component-overlay Fit placement failures; eight show the
+  intentional per-baseline kebab replacing the prior inline update icon in
+  stale panel snapshots. No baseline update command was run.
+- Observable-preflight `pnpm checks`: formatting, Svelte diagnostics, both
+  add-on type checks, docs type checks, and the no-Tailwind gate passed; unit
+  tests reached 675/676 before the same unrelated F-Mode source-shape
+  assertion stopped the aggregate command.

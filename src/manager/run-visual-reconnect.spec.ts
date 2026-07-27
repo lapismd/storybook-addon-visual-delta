@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { reconnectVisualRun, type VisualRunProgress } from "./run-visual.js";
+import {
+  postVisualActionScope,
+  reconnectVisualRun,
+  type VisualRunProgress,
+} from "./run-visual.js";
+import type { VisualActionScopeProgress } from "../shared/affected-types.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -75,5 +80,123 @@ describe("reconnectVisualRun", () => {
       idle: true,
       error: "Reconnect failed (503)",
     });
+  });
+});
+
+describe("postVisualActionScope", () => {
+  it("reports streamed preflight phases before returning the frozen scope", async () => {
+    const events = [
+      {
+        type: "progress",
+        phase: "resolving",
+        message: "Resolving affected scope…",
+      },
+      {
+        type: "progress",
+        phase: "rebuilding",
+        message: "Rebuilding Storybook static… 12s",
+        elapsedMs: 12_000,
+      },
+      {
+        type: "progress",
+        phase: "freezing",
+        message: "Freezing 2 affected stories…",
+      },
+      {
+        type: "done",
+        ok: true,
+        storyIds: ["menu--checkboxes", "dialog--default"],
+        summary: {
+          selection: "affected",
+          selected: 2,
+          unchanged: 3,
+          total: 5,
+          noChange: false,
+          storyIds: ["menu--checkboxes", "dialog--default"],
+        },
+        rebuilt: true,
+      },
+    ]
+      .map((event) => JSON.stringify(event))
+      .join("\n");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(`${events}\n`, {
+          headers: { "content-type": "application/x-ndjson" },
+        }),
+      ),
+    );
+    const progress: VisualActionScopeProgress[] = [];
+
+    const result = await postVisualActionScope(
+      {
+        visibleStoryIds: [
+          "menu--checkboxes",
+          "dialog--default",
+          "hidden--story",
+        ],
+        affectedOnly: true,
+      },
+      {
+        onProgress: (next) => progress.push(next),
+      },
+    );
+
+    expect(progress).toEqual([
+      {
+        phase: "resolving",
+        message: "Resolving affected scope…",
+      },
+      {
+        phase: "rebuilding",
+        message: "Rebuilding Storybook static… 12s",
+        elapsedMs: 12_000,
+      },
+      {
+        phase: "freezing",
+        message: "Freezing 2 affected stories…",
+      },
+    ]);
+    expect(result).toMatchObject({
+      ok: true,
+      rebuilt: true,
+      storyIds: ["menu--checkboxes", "dialog--default"],
+      summary: { selected: 2, unchanged: 3, total: 5 },
+    });
+  });
+
+  it("surfaces a streamed preflight failure", async () => {
+    const events = [
+      {
+        type: "progress",
+        phase: "rebuilding",
+        message: "Rebuilding Storybook static… 1s",
+        elapsedMs: 1_000,
+      },
+      {
+        type: "error",
+        error: "build-storybook failed while refreshing the affected scope",
+      },
+    ]
+      .map((event) => JSON.stringify(event))
+      .join("\n");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(`${events}\n`, {
+          headers: { "content-type": "application/x-ndjson" },
+        }),
+      ),
+    );
+
+    await expect(
+      postVisualActionScope({
+        visibleStoryIds: ["menu--checkboxes"],
+        affectedOnly: true,
+      }),
+    ).rejects.toThrow(
+      "build-storybook failed while refreshing the affected scope",
+    );
   });
 });

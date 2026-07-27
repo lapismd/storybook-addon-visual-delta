@@ -21,7 +21,9 @@ import {
 } from "../constants.js";
 import type {
   AffectedVisualSummary,
+  VisualActionScopeProgress,
   VisualActionScopeResponse,
+  VisualActionScopeStreamEvent,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
@@ -678,15 +680,71 @@ export async function fetchAffectedVisualPlan(): Promise<
 }
 
 /** Resolve and freeze global visible ids after any affected safety rebuild. */
-export async function postVisualActionScope(body: {
-  visibleStoryIds: string[];
-  affectedOnly: boolean;
-}): Promise<VisualActionScopeResponse> {
+export async function postVisualActionScope(
+  body: {
+    visibleStoryIds: string[];
+    affectedOnly: boolean;
+  },
+  options?: {
+    onProgress?: (progress: VisualActionScopeProgress) => void;
+  },
+): Promise<VisualActionScopeResponse> {
   const response = await fetch(VISUAL_DELTA_ACTION_SCOPE_PATH, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("Visual action scope response had no body");
+    }
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let final: VisualActionScopeResponse | null = null;
+    let streamError: string | undefined;
+
+    const consumeLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      let event: VisualActionScopeStreamEvent;
+      try {
+        event = JSON.parse(trimmed) as VisualActionScopeStreamEvent;
+      } catch {
+        return;
+      }
+      if (event.type === "progress") {
+        const { type: _type, ...progress } = event;
+        void _type;
+        options?.onProgress?.(progress);
+      } else if (event.type === "error") {
+        streamError = event.error;
+      } else if (event.type === "done") {
+        const { type: _type, ...result } = event;
+        void _type;
+        final = result;
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) consumeLine(line);
+    }
+    buffer += decoder.decode();
+    consumeLine(buffer);
+
+    if (final) return final;
+    throw new Error(
+      streamError ?? "Visual action scope ended without a result",
+    );
+  }
+
   const data = (await response.json()) as
     | VisualActionScopeResponse
     | { ok?: false; error?: string };

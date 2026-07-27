@@ -352,6 +352,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     loadPersistedVisualLastRun(),
   );
   const [progress, setProgress] = useState<VisualRunProgress | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
   const [createProgress, setCreateProgress] =
     useState<VisualCreateProgress | null>(null);
   const [statusLog, setStatusLog] = useState<string | null>(null);
@@ -577,6 +578,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
 
       await testProviderStore.runWithState(async () => {
+        setIsComparing(false);
         setScopeMessage(null);
         setStatusLog(null);
         setStatusProgress(null);
@@ -604,10 +606,22 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             setScopeMessage("No visible stories");
             return;
           }
-          const resolved = await postVisualActionScope({
-            visibleStoryIds,
-            affectedOnly: affectedOnlyEnabled,
-          });
+          setStatusLog(
+            affectedOnlyEnabled
+              ? "Resolving affected scope…"
+              : "Resolving visible scope…",
+          );
+          const resolved = await postVisualActionScope(
+            {
+              visibleStoryIds,
+              affectedOnly: affectedOnlyEnabled,
+            },
+            {
+              onProgress: (next) => {
+                setStatusLog(next.message);
+              },
+            },
+          );
           frozenIds = [...resolved.storyIds];
           compareScope = affectedOnlyEnabled ? "affected" : "all";
           resolvedSummary = resolved.summary;
@@ -632,8 +646,18 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               }
             : undefined,
           runVisualTests: runVisual
-            ? () =>
-                runCompareRef.current(compareScope, frozenIds, resolvedSummary)
+            ? async () => {
+                setIsComparing(true);
+                try {
+                  return await runCompareRef.current(
+                    compareScope,
+                    frozenIds,
+                    resolvedSummary,
+                  );
+                } finally {
+                  setIsComparing(false);
+                }
+              }
             : undefined,
           updateStatus: updateStatus
             ? async (results) => {
@@ -821,6 +845,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       if (cancelled) return;
 
       if (hub.phase === "running") {
+        setIsComparing(true);
         if (hub.total > 0) {
           setProgress({
             completed: hub.completed,
@@ -829,27 +854,31 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             failed: hub.failed,
           });
         }
-        await testProviderStore.runWithState(async () => {
-          const data = await reconnectVisualRun();
-          if (cancelled || data.idle) return;
-          applyVisualRunResults(undefined, data.results);
-          publishVisualLastRun({
-            finishedAt: Date.now(),
-            summary: data.summary,
-            completed: !data.crashed,
-            error: data.crashed
-              ? (data.error ?? "Visual test run crashed")
-              : data.summary.failed > 0
-                ? `${data.summary.failed} failed`
-                : undefined,
-            logTail: data.logTail,
-            results: data.results,
-            affected: data.affected,
+        try {
+          await testProviderStore.runWithState(async () => {
+            const data = await reconnectVisualRun();
+            if (cancelled || data.idle) return;
+            applyVisualRunResults(undefined, data.results);
+            publishVisualLastRun({
+              finishedAt: Date.now(),
+              summary: data.summary,
+              completed: !data.crashed,
+              error: data.crashed
+                ? (data.error ?? "Visual test run crashed")
+                : data.summary.failed > 0
+                  ? `${data.summary.failed} failed`
+                  : undefined,
+              logTail: data.logTail,
+              results: data.results,
+              affected: data.affected,
+            });
+            if (data.crashed) {
+              throw new Error(data.error ?? "Visual test run crashed");
+            }
           });
-          if (data.crashed) {
-            throw new Error(data.error ?? "Visual test run crashed");
-          }
-        });
+        } finally {
+          setIsComparing(false);
+        }
       } else if (hub.phase === "done") {
         const data = await reconnectVisualRun();
         if (!cancelled && !data.idle) {
@@ -943,8 +972,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           ? "positive"
           : "unknown";
 
-  const label = chipLabel(chipStatus, isRunning, progress, lastRun, counts);
-  const failedCount = isRunning
+  const label = chipLabel(chipStatus, isComparing, progress, lastRun, counts);
+  const failedCount = isComparing
     ? (progress?.failed ?? 0)
     : counts.failed > 0
       ? counts.failed
@@ -963,7 +992,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       anyActionSelected,
       statusLog,
     );
-  const compareRowProgress = isRunning
+  const compareRowProgress = isComparing
     ? (formatProgressFraction(progress?.completed, progress?.total) ?? "…")
     : null;
   const baselineRowProgress = isWritingBaselines
@@ -1038,7 +1067,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       statusRowProgress={statusRowProgress}
       isWritingBaselines={isWritingBaselines}
       isUpdatingStatus={isUpdatingStatus}
-      isCompareRunning={isRunning}
+      isCompareRunning={isComparing}
       onRunVisualChange={(next) => {
         setRunVisualEnabled(next);
         writeBoolFlag(RUN_VISUAL_KEY, next);

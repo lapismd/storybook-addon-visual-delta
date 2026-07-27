@@ -13,6 +13,8 @@ export type TestingModuleShellProps = {
   seedRewriteMode?: boolean;
   /** Demo live progress under checkboxes + streamed title line. */
   seedRunningProgress?: boolean;
+  /** Demo a global scope/rebuild preflight before Playwright starts. */
+  seedPreflightProgress?: boolean;
   /** Demo the development-only sidebar filter menu. */
   seedFilters?: boolean;
 };
@@ -24,6 +26,7 @@ export function TestingModuleShell({
   variant = "global",
   seedRewriteMode = false,
   seedRunningProgress = false,
+  seedPreflightProgress = false,
   seedFilters = false,
 }: TestingModuleShellProps) {
   const [runVisualEnabled, setRunVisualEnabled] = useState<boolean>(
@@ -48,7 +51,9 @@ export function TestingModuleShell({
   const [statusLine, setStatusLine] = useState<string>(
     seedRunningProgress
       ? "✓ shadcn-disclosure-accordion--opens-a-section (1/2)"
-      : "Not run",
+      : seedPreflightProgress
+        ? "Rebuilding Storybook static… 12s"
+        : "Not run",
   );
   const [lastAction, setLastAction] = useState("none");
   const [activeFilterIds, setActiveFilterIds] = useState<string[]>([]);
@@ -58,6 +63,7 @@ export function TestingModuleShell({
     createBaselinesEnabled,
     updateStatusEnabled,
   });
+  const runnerBusy = seedRunningProgress || seedPreflightProgress;
 
   const selectedSummary = useMemo(() => {
     const parts: string[] = [];
@@ -88,12 +94,12 @@ export function TestingModuleShell({
         updateStatusEnabled={updateStatusEnabled}
         affectedOnlyEnabled={affectedOnlyEnabled}
         affectedSummaryLabel={
-          seedRunningProgress ? "2 affected · 275 unchanged" : "Up to date"
+          runnerBusy ? "2 affected · 275 unchanged" : "Up to date"
         }
         baselineMode={baselineMode}
-        runnerBusy={seedRunningProgress}
+        runnerBusy={runnerBusy}
         anyActionSelected={anyActionSelected}
-        compareChipStatus={seedRunningProgress ? "warning" : "unknown"}
+        compareChipStatus={runnerBusy ? "warning" : "unknown"}
         compareChipLabel={
           seedRunningProgress ? "Testing... 1/2" : "Run tests to see results"
         }

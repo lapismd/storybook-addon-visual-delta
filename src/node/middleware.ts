@@ -30,6 +30,7 @@ import type {
   AffectedVisualSummary,
   VisualActionScopeRequest,
   VisualActionScopeResponse,
+  VisualActionScopeStreamEvent,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import { resolveVisualActionStoryIds } from "../shared/action-scope.js";
@@ -1167,6 +1168,25 @@ async function handleActionScope(
   const visibleStoryIds = [
     ...new Set(body.visibleStoryIds.map((storyId) => storyId.trim())),
   ].filter(Boolean);
+
+  beginNdjson(res);
+  const write = (event: VisualActionScopeStreamEvent) => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(`${JSON.stringify(event)}\n`);
+    const flushable = res as ServerResponse & { flush?: () => void };
+    flushable.flush?.();
+  };
+  write({
+    type: "progress",
+    phase: "resolving",
+    message: body.affectedOnly
+      ? "Resolving affected scope…"
+      : "Resolving visible scope…",
+  });
+  // Let Node flush the first chunk before dependency-graph planning performs
+  // synchronous filesystem/hash work.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
   let plan = body.affectedOnly
     ? affectedPlan(root, options)
     : planAllVisualTests(root, options);
@@ -1180,24 +1200,62 @@ async function handleActionScope(
     (plan.needsRebuild || forceStaticRebuild || !staticComplete)
   ) {
     if (options.allowRebuild === false) {
-      writeJson(res, 400, {
-        ok: false,
+      write({
+        type: "error",
         error: "Affected visual tests require static Storybook rebuilds",
       });
+      res.end();
       return;
     }
-    const built = await runCommand("pnpm", ["build-storybook"], root);
+    const rebuildStartedAt = Date.now();
+    write({
+      type: "progress",
+      phase: "rebuilding",
+      message: "Rebuilding Storybook static… 0s",
+      elapsedMs: 0,
+    });
+    const heartbeat = setInterval(() => {
+      const elapsedMs = Date.now() - rebuildStartedAt;
+      write({
+        type: "progress",
+        phase: "rebuilding",
+        message: `Rebuilding Storybook static… ${Math.floor(elapsedMs / 1_000)}s`,
+        elapsedMs,
+      });
+    }, 1_000);
+    let built: Awaited<ReturnType<typeof runCommand>>;
+    try {
+      built = await runCommand("pnpm", ["build-storybook"], root);
+    } catch (error) {
+      write({
+        type: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to start build-storybook",
+      });
+      res.end();
+      return;
+    } finally {
+      clearInterval(heartbeat);
+    }
     if (built.code !== 0) {
-      writeJson(res, 500, {
-        ok: false,
+      write({
+        type: "error",
         error: "build-storybook failed while refreshing the affected scope",
         logTail: built.log.slice(-4000),
       });
+      res.end();
       return;
     }
     rebuilt = true;
     forceStaticRebuild = false;
     invalidateWarmStaticStorybookServer();
+    write({
+      type: "progress",
+      phase: "resolving",
+      message: "Refreshing affected plan…",
+    });
     plan = affectedPlan(root, options);
   }
 
@@ -1231,12 +1289,20 @@ async function handleActionScope(
       : {}),
     storyIds,
   };
-  writeJson(res, 200, {
+  const scopeLabel = body.affectedOnly ? "affected" : "visible";
+  write({
+    type: "progress",
+    phase: "freezing",
+    message: `Freezing ${storyIds.length} ${scopeLabel} ${storyIds.length === 1 ? "story" : "stories"}…`,
+  });
+  write({
+    type: "done",
     ok: true,
     storyIds,
     summary,
     rebuilt,
-  } satisfies VisualActionScopeResponse);
+  } satisfies VisualActionScopeStreamEvent);
+  res.end();
 }
 
 function handleRunEvents(res: ServerResponse) {
