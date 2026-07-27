@@ -35,6 +35,7 @@ test.describe("Visual Delta manager integration", () => {
     });
     const reviewBodies: unknown[] = [];
     const baselineBodies: unknown[] = [];
+    const deleteBodies: unknown[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
       if (pathname.endsWith("/review-status")) {
@@ -42,6 +43,9 @@ test.describe("Visual Delta manager integration", () => {
       }
       if (pathname.endsWith("/update-baseline")) {
         baselineBodies.push(request.postDataJSON());
+      }
+      if (pathname.endsWith("/delete-baseline")) {
+        deleteBodies.push(request.postDataJSON());
       }
     });
     await mockVisualBackend(page);
@@ -84,10 +88,31 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       page.getByRole("button", { name: "Rebuild storybook static" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Update baselines" }).click();
+    await expect(
+      page.getByRole("button", { name: "Update baselines" }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    await panel
+      .getByRole("button", { name: "More Default baseline actions" })
+      .click();
+    await page.getByRole("button", { name: "Update Default baseline" }).click();
     await expect.poll(() => baselineBodies.length).toBe(1);
     expect(baselineBodies[0]).toEqual({
       storyId: COMPONENT_OVERLAY_FIXTURE,
+    });
+
+    await panel
+      .getByRole("button", { name: "More Default baseline actions" })
+      .click();
+    await page
+      .getByRole("button", { name: "Delete Default screenshot" })
+      .click();
+    await expect.poll(() => deleteBodies.length).toBe(1);
+    expect(deleteBodies[0]).toEqual({
+      storyId: COMPONENT_OVERLAY_FIXTURE,
+      baselineUrl:
+        "/visual-baselines/shadcn/button/default-chromium-darwin.png",
     });
   });
 
@@ -242,6 +267,9 @@ test.describe("Visual Delta manager integration", () => {
     const panel = page.getByTestId("visual-delta-panel");
 
     await panel
+      .getByRole("button", { name: "More Default baseline actions" })
+      .click();
+    await page
       .getByRole("button", { name: "Open Default baseline history" })
       .click();
     await expect(
@@ -271,6 +299,9 @@ test.describe("Visual Delta manager integration", () => {
       .getByRole("button", { name: "Dark desktop mode, not run" })
       .click();
     await panel
+      .getByRole("button", { name: "More Default baseline actions" })
+      .click();
+    await page
       .getByRole("button", {
         name: "Open Default · Dark desktop baseline history",
       })
@@ -287,6 +318,11 @@ test.describe("Visual Delta manager integration", () => {
       })
       .click();
     await panel
+      .getByRole("button", {
+        name: "More Opened state baseline actions",
+      })
+      .click();
+    await page
       .getByRole("button", {
         name: "Open Opened state baseline history",
       })

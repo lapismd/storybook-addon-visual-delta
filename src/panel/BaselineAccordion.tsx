@@ -1,14 +1,21 @@
-import React, { memo, useMemo } from "react";
+import React, { memo, useMemo, useState } from "react";
 import {
   AddIcon,
   CheckIcon,
   ChevronSmallDownIcon,
   CommitIcon,
   CrossIcon,
+  EllipsisIcon,
   GraphBarIcon,
   SyncIcon,
+  TrashIcon,
 } from "@storybook/icons";
-import { Button, ToggleButton } from "storybook/internal/components";
+import {
+  ActionList,
+  Button,
+  PopoverProvider,
+  ToggleButton,
+} from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { PlayStepInfo } from "./usePlaySteps.js";
@@ -226,6 +233,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onCreate,
   onUpdate,
   onUpdateDefault,
+  onDelete,
   onToggleDistribution,
   onOpenHistory,
   renderBody,
@@ -239,10 +247,13 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onUpdate: (step: PlayStepInfo) => void;
   /** Rewrite the story's primary (Default) baseline. */
   onUpdateDefault: () => void;
+  /** Remove this exact screenshot from CSF and local storage. */
+  onDelete: (section: BaselineSection) => void;
   onToggleDistribution: () => void;
   onOpenHistory?: (target: BaselineSectionHistory) => void;
   renderBody: (section: BaselineSection) => React.ReactNode;
 }) {
+  const [openMenuId, setOpenMenuId] = useState<BaselineSectionId | null>(null);
   const labelWidth = useMemo(() => {
     const longest = sections.reduce(
       (max, section) => Math.max(max, section.label.length),
@@ -257,6 +268,12 @@ export const BaselineAccordion = memo(function BaselineAccordion({
       {sections.map((section) => {
         const expanded = expandedId === section.id;
         const hasDiff = Boolean(section.status && section.stats);
+        const hasBaseline = Boolean(section.thumbSrc || section.wired?.src);
+        const hasMenu =
+          hasBaseline ||
+          Boolean(section.history && onOpenHistory) ||
+          section.id === "default" ||
+          Boolean(section.wired);
         return (
           <Section key={section.id} $expanded={expanded}>
             {/*
@@ -298,18 +315,6 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                 </SummaryRight>
               </SummaryButton>
               <SummaryActions>
-                {section.history && onOpenHistory ? (
-                  <Button
-                    size="small"
-                    variant="ghost"
-                    padding="small"
-                    ariaLabel={`Open ${section.history.label} baseline history`}
-                    title={`Open ${section.history.label} baseline history`}
-                    onClick={() => onOpenHistory(section.history!)}
-                  >
-                    <CommitIcon />
-                  </Button>
-                ) : null}
                 {expanded && hasDiff ? (
                   <ToggleButton
                     size="small"
@@ -323,25 +328,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                     <GraphBarIcon />
                   </ToggleButton>
                 ) : null}
-                {section.id === "default" || section.wired ? (
-                  <Button
-                    size="small"
-                    variant="ghost"
-                    padding="small"
-                    disabled={busy}
-                    ariaLabel="Update baseline"
-                    title="Update baseline"
-                    onClick={() => {
-                      if (section.id === "default") {
-                        onUpdateDefault();
-                        return;
-                      }
-                      if (section.step) onUpdate(section.step);
-                    }}
-                  >
-                    <SyncIcon />
-                  </Button>
-                ) : section.step ? (
+                {!hasBaseline && section.step ? (
                   <Button
                     size="small"
                     variant="ghost"
@@ -353,6 +340,91 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                   >
                     <AddIcon />
                   </Button>
+                ) : null}
+                {hasMenu ? (
+                  <PopoverProvider
+                    ariaLabel={`More ${section.label} baseline actions`}
+                    placement="bottom-end"
+                    padding={0}
+                    visible={openMenuId === section.id}
+                    onVisibleChange={(open) =>
+                      setOpenMenuId(open ? section.id : null)
+                    }
+                    popover={() => (
+                      <div style={{ minWidth: 190 }}>
+                        <ActionList>
+                          {section.history && onOpenHistory ? (
+                            <ActionList.Item>
+                              <ActionList.Action
+                                ariaLabel={`Open ${section.history.label} baseline history`}
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  onOpenHistory(section.history!);
+                                }}
+                              >
+                                <ActionList.Icon>
+                                  <CommitIcon />
+                                </ActionList.Icon>
+                                <ActionList.Text>History</ActionList.Text>
+                              </ActionList.Action>
+                            </ActionList.Item>
+                          ) : null}
+                          {section.id === "default" || section.wired ? (
+                            <ActionList.Item>
+                              <ActionList.Action
+                                ariaLabel={`Update ${section.label} baseline`}
+                                disabled={busy}
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  if (section.id === "default") {
+                                    onUpdateDefault();
+                                    return;
+                                  }
+                                  if (section.step) onUpdate(section.step);
+                                }}
+                              >
+                                <ActionList.Icon>
+                                  <SyncIcon />
+                                </ActionList.Icon>
+                                <ActionList.Text>
+                                  Update baseline
+                                </ActionList.Text>
+                              </ActionList.Action>
+                            </ActionList.Item>
+                          ) : null}
+                          {hasBaseline ? (
+                            <ActionList.Item>
+                              <ActionList.Action
+                                ariaLabel={`Delete ${section.label} screenshot`}
+                                disabled={busy}
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  onDelete(section);
+                                }}
+                              >
+                                <ActionList.Icon>
+                                  <TrashIcon />
+                                </ActionList.Icon>
+                                <ActionList.Text>
+                                  Delete screenshot
+                                </ActionList.Text>
+                              </ActionList.Action>
+                            </ActionList.Item>
+                          ) : null}
+                        </ActionList>
+                      </div>
+                    )}
+                  >
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      padding="small"
+                      ariaLabel={`More ${section.label} baseline actions`}
+                      title={`More ${section.label} baseline actions`}
+                    >
+                      <EllipsisIcon />
+                    </Button>
+                  </PopoverProvider>
                 ) : null}
               </SummaryActions>
             </SummaryRow>

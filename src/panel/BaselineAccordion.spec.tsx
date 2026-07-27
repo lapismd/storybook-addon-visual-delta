@@ -10,6 +10,8 @@ describe("BaselineAccordion", () => {
     const user = userEvent.setup();
     const onExpand = vi.fn();
     const onOpenHistory = vi.fn();
+    const onUpdateDefault = vi.fn();
+    const onDelete = vi.fn();
     renderWithTheme(
       <BaselineAccordion
         sections={[
@@ -17,6 +19,7 @@ describe("BaselineAccordion", () => {
             id: "default",
             label: "Default",
             hint: "End of play · primary baseline",
+            thumbSrc: "/visual-baselines/forms/default.png",
             status: "pass",
             stats: "0%",
             history: {
@@ -37,7 +40,8 @@ describe("BaselineAccordion", () => {
         onExpand={onExpand}
         onCreate={vi.fn()}
         onUpdate={vi.fn()}
-        onUpdateDefault={vi.fn()}
+        onUpdateDefault={onUpdateDefault}
+        onDelete={onDelete}
         onToggleDistribution={vi.fn()}
         onOpenHistory={onOpenHistory}
         renderBody={(section) => <div>Body for {section.label}</div>}
@@ -47,20 +51,38 @@ describe("BaselineAccordion", () => {
     expect(screen.getByText("Body for Default")).toBeInTheDocument();
     expect(screen.getByText("0%")).toBeInTheDocument();
 
+    const moreButton = screen.getByRole("button", {
+      name: "More Default baseline actions",
+    });
+    expect(moreButton).toHaveTextContent("");
+    expect(moreButton).toHaveAttribute(
+      "title",
+      "More Default baseline actions",
+    );
+    await user.click(moreButton);
     const historyButton = screen.getByRole("button", {
       name: "Open Default baseline history",
     });
-    expect(historyButton).toHaveTextContent("");
-    expect(historyButton).toHaveAttribute(
-      "title",
-      "Open Default baseline history",
-    );
     await user.click(historyButton);
     expect(onOpenHistory).toHaveBeenCalledWith({
       path: "forms/default.png",
       label: "Default",
     });
     expect(onExpand).not.toHaveBeenCalled();
+
+    await user.click(moreButton);
+    await user.click(
+      screen.getByRole("button", { name: "Update Default baseline" }),
+    );
+    expect(onUpdateDefault).toHaveBeenCalledTimes(1);
+
+    await user.click(moreButton);
+    await user.click(
+      screen.getByRole("button", { name: "Delete Default screenshot" }),
+    );
+    expect(onDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "default", label: "Default" }),
+    );
 
     await user.click(screen.getByRole("button", { name: /Opens chooser/i }));
     expect(onExpand).toHaveBeenCalledWith("opens");

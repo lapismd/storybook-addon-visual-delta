@@ -187,6 +187,7 @@ export function BaselineAccordionFixture() {
         onCreate={() => undefined}
         onUpdate={() => undefined}
         onUpdateDefault={() => undefined}
+        onDelete={() => undefined}
         onToggleDistribution={() => setShowDistribution((v) => !v)}
         onOpenHistory={(target) => setHistoryOpened(target.label)}
         renderBody={(section) => (
@@ -356,6 +357,7 @@ export function PanelChromeFixture() {
         onCreate={() => undefined}
         onUpdate={() => undefined}
         onUpdateDefault={() => undefined}
+        onDelete={() => undefined}
         onToggleDistribution={() => undefined}
         renderBody={(section) => (
           <FormPlaceholder>Body for {section.label}</FormPlaceholder>

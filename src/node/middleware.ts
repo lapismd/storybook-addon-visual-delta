@@ -11,6 +11,7 @@ import {
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
+  VISUAL_DELTA_DELETE_PATH,
   VISUAL_DELTA_INIT_PATH,
   VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH,
   VISUAL_DELTA_REBUILD_STATIC_PATH,
@@ -81,6 +82,7 @@ import {
   parseListReporterProgress,
   successfulStoryIdsFromPlaywrightResults,
 } from "./playwright-results.js";
+import { playwrightStoryIdGrep } from "./story-id-grep.js";
 export { parseListReporterProgress, stripAnsi } from "./playwright-results.js";
 import { writePlaywrightPassThresholdPercent } from "./playwright-threshold.js";
 import {
@@ -104,6 +106,7 @@ import {
   invalidateWarmStaticStorybookServer,
 } from "./visual-server.js";
 import { createBaselineHistoryEndpoint } from "./baseline-history-endpoint.js";
+import { deleteVisualBaseline } from "./delete-baseline.js";
 import {
   planAffectedVisualTests,
   planAllVisualTests,
@@ -128,6 +131,12 @@ type InteractionUpdateBody = {
   stepId?: string;
   /** Overwrite an existing interaction PNG. */
   overwrite?: boolean;
+};
+
+type DeleteBaselineBody = {
+  storyId?: string;
+  baselineUrl?: string;
+  interactionId?: string;
 };
 
 type SpawnedVisualCommand = ChildProcess & {
@@ -246,20 +255,15 @@ async function handleStoryFacts(
   writeJson(res, 200, response);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Build a Playwright `-g` filter from selected story ids.
+/**
+ * Build a Playwright `-g` filter from selected story ids.
  *
- * Playwright matches against the *full* title (`… › ${storyId}`), so use
- * either the title start or its suite separator as the exact leaf boundary.
+ * List reporters render `›` separators, but Playwright applies grep to its
+ * space-joined internal title. The whitespace boundary plus escaped end anchor
+ * keeps both single and batched selections exact.
  */
 export function grepFromStoryIds(storyIds?: string[]): string | undefined {
-  if (!storyIds?.length) return undefined;
-  const exact = [...new Set(storyIds)].map(escapeRegExp);
-  const leaf = exact.length === 1 ? exact[0] : `(?:${exact.join("|")})`;
-  return `(?:^| › )${leaf}$`;
+  return playwrightStoryIdGrep(storyIds);
 }
 
 type PlaywrightJsonSpec = {
@@ -1365,6 +1369,39 @@ async function handleSkipVisual(
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
+async function handleDeleteBaseline(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+) {
+  let body: DeleteBaselineBody;
+  try {
+    body = await readJsonBody<DeleteBaselineBody>(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    });
+    return;
+  }
+
+  try {
+    const result = deleteVisualBaseline(root, options, {
+      storyId: body.storyId ?? "",
+      baselineUrl: body.baselineUrl ?? "",
+      interactionId: body.interactionId,
+    });
+    writeJson(res, 200, result);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Delete screenshot failed",
+    });
+  }
+}
+
 function resolvedConfigPayload(
   root: string,
   options: VisualDeltaHostOptions,
@@ -1744,6 +1781,17 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           await handleInteractionBaselineWrite(req, res, root, options);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_DELETE_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleDeleteBaseline(req, res, root, options);
           return;
         }
 

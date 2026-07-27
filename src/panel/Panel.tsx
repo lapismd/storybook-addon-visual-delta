@@ -46,6 +46,7 @@ import {
   loadPersistedVisualLastRun,
   postPlaywrightPassThreshold,
   postVisualCreateBaseline,
+  postVisualDeleteBaseline,
   postVisualInit,
   postVisualInteractionBaseline,
   postVisualRebuildStatic,
@@ -206,6 +207,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     resetSettings,
     revealCenteredOverlay,
     hydrateBaselineImages,
+    removeBaselineImage,
     seedStoryFromManager,
     hydrateInteractions,
     selectInteractionBaseline,
@@ -380,6 +382,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     boolean | null
   >(null);
   const [isRunningVisual, setIsRunningVisual] = useState(false);
+  const [isDeletingBaseline, setIsDeletingBaseline] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
   const [showDistribution, setShowDistribution] = useState(false);
@@ -418,6 +421,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isCreating ||
     isRebuilding ||
     isInteractionJob ||
+    isDeletingBaseline ||
     isRunningVisual ||
     runProgress != null ||
     isReviewing ||
@@ -503,9 +507,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     const sections: BaselineSection[] = [];
     if (primaryImages.length > 0) {
       const isActive = activeSectionId === "default";
-      const historyPath = baselinePathFromPublicUrl(
-        images[index]?.src ?? primaryImages[0]?.src,
-      );
+      const selectedPrimary =
+        (selectedMode
+          ? primaryImages.find((image) => image.mode === selectedMode)
+          : undefined) ?? primaryImages[0];
+      const historyPath = baselinePathFromPublicUrl(selectedPrimary?.src);
       const historyLabel = selectedMode
         ? `Default · ${selectedMode}`
         : "Default";
@@ -513,7 +519,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         id: "default",
         label: "Default",
         hint: "End of play · primary baseline",
-        thumbSrc: primaryImages[0]?.src,
+        thumbSrc: selectedPrimary?.src,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
         ...(IS_DEVELOPMENT && historyPath
@@ -557,8 +563,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [
     activeDiffMeta,
     activeSectionId,
-    images,
-    index,
     interactionSteps,
     interactions,
     primaryImages,
@@ -712,17 +716,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isUpdating ||
     isRebuilding ||
     isInteractionJob ||
+    isDeletingBaseline ||
     runInFlight ||
     isDiffing;
   const statusLabel = loading
     ? "Loading…"
-    : isDiffing
-      ? (diffProgressLabel ?? "Diffing…")
-      : statusRunning
-        ? runInFlight
-          ? runProgressLabel
-          : (baselineJob?.label ?? null)
-        : null;
+    : isDeletingBaseline
+      ? "Deleting screenshot…"
+      : isDiffing
+        ? (diffProgressLabel ?? "Diffing…")
+        : statusRunning
+          ? runInFlight
+            ? runProgressLabel
+            : (baselineJob?.label ?? null)
+          : null;
 
   useEffect(() => {
     setCaptureError(null);
@@ -1074,6 +1081,82 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       // Error/log surface via subscribeVisualCreateProgress.
     }
   }, [storyId]);
+
+  const handleDeleteBaseline = useCallback(
+    async (section: BaselineSection) => {
+      if (!storyId) {
+        setCaptureError("No story selected");
+        return;
+      }
+      const baselineUrl = (
+        section.id === "default" ? section.thumbSrc : section.wired?.src
+      )?.split("?")[0];
+      if (!baselineUrl) {
+        setCaptureError("No screenshot selected");
+        return;
+      }
+
+      setIsDeletingBaseline(true);
+      setCaptureError(null);
+      setUpdateLog("Deleting screenshot…");
+      try {
+        const result = await postVisualDeleteBaseline({
+          storyId,
+          baselineUrl,
+          interactionId:
+            section.id === "default" ? undefined : section.wired?.id,
+        });
+        if (section.id === "default") {
+          removeBaselineImage(baselineUrl);
+          setSelectedInteractionId(null);
+          setSelectedMode(null);
+          const remaining = primaryImages.filter(
+            (image) => (image.src.split("?")[0] ?? image.src) !== baselineUrl,
+          );
+          setExpandedId(
+            remaining.length > 0
+              ? "default"
+              : (interactionSteps[0]?.stepId ?? null),
+          );
+        } else {
+          hydrateInteractions(
+            interactions.filter((item) => item.id !== section.wired?.id),
+          );
+          setSelectedInteractionId(null);
+          setExpandedId(primaryImages.length > 0 ? "default" : null);
+          restorePrimaryBaselines();
+        }
+        setDiffResult(null);
+        setDiffEpoch(Date.now());
+        const derivedCount = Math.max(0, result.deletedFiles.length - 1);
+        setUpdateLog(
+          `Deleted ${section.label} screenshot${
+            derivedCount > 0
+              ? ` and ${derivedCount} derived ${
+                  derivedCount === 1 ? "artifact" : "artifacts"
+                }`
+              : ""
+          }`,
+        );
+      } catch (error) {
+        setCaptureError(
+          error instanceof Error ? error.message : "Delete screenshot failed",
+        );
+      } finally {
+        setIsDeletingBaseline(false);
+      }
+    },
+    [
+      hydrateInteractions,
+      interactionSteps,
+      interactions,
+      primaryImages,
+      removeBaselineImage,
+      restorePrimaryBaselines,
+      setSelectedMode,
+      storyId,
+    ],
+  );
 
   const handleRebuildStatic = useCallback(async () => {
     setCaptureError(null);
@@ -1768,7 +1851,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           diffEngine,
           onDiffEngineChange: setDiffEngine,
           onCreate: () => void handleCreateBaselines(),
-          onUpdateBaselines: () => void handleUpdateBaselines(),
           onRebuildStatic: () => void handleRebuildStatic(),
           onResetSettings: resetSettings,
           onStopDiff: handleStopDiff,
@@ -1779,7 +1861,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           acceptRunAvailable: reviewableRunStoryIds.length > 0,
           onToggleSkipVisual: () => void handleToggleSkipVisual(),
           onOpenConfiguration: () => setShowConfiguration(true),
-          isUpdating,
           isRebuilding,
         }}
         loading={loading}
@@ -1828,6 +1909,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               onCreate={(step) => void handleCreateInteraction(step, false)}
               onUpdate={(step) => void handleCreateInteraction(step, true)}
               onUpdateDefault={() => void handleUpdateBaselines()}
+              onDelete={(section) => void handleDeleteBaseline(section)}
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }

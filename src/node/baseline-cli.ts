@@ -30,6 +30,7 @@ import {
   loadStoryIndex,
   syncStaticIndexSkipVisual,
 } from "./visual-sidecars.js";
+import { playwrightStoryIdGrep } from "./story-id-grep.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -135,11 +136,7 @@ function playwrightGrep(
   component: string | undefined,
 ): string {
   if (storyIds.length) {
-    const exact = storyIds.map((storyId) =>
-      storyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-    );
-    const leaf = exact.length === 1 ? exact[0] : `(?:${exact.join("|")})`;
-    return `(?:^| › )${leaf}$`;
+    return playwrightStoryIdGrep(storyIds)!;
   }
   return component?.trim() || "";
 }

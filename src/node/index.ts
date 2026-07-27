@@ -89,10 +89,16 @@ export {
   injectTypeScriptStoryBaselines,
   patchStoryBaselineImages,
   patchStoryInteraction,
+  patchStoryRemoveBaseline,
   patchStorySkipVisual,
   patchStorySourceText,
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
+export {
+  deleteVisualBaseline,
+  type DeleteVisualBaselineRequest,
+  type DeleteVisualBaselineResult,
+} from "./delete-baseline.js";
 export {
   attachSidecars,
   countVisualStories,

@@ -179,6 +179,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | ------ | --------------------------------------------- | ------------------------------------------------------- |
 | `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                   |
 | `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                     |
+| `POST` | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars        |
 | `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                   |
 | `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)             |
 | `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)             |
@@ -203,7 +204,8 @@ Interaction writes spawn `pnpm <visualInteractionUpdateArgs…>` with:
 - `--create-only` unless overwrite
 - `--story-id`, `--step-label`, and optional `--step-id`
 
-Run-tests uses `pnpm <visualTestArgs…>` (optional `-g` grep from story ids)
+Run-tests uses `pnpm <visualTestArgs…>` (optional escaped, end-anchored `-g`
+grep from exact story IDs)
 and may call `pnpm build-storybook` first when `allowRebuild` is enabled and
 `storybook-static` is incomplete/stale (missing `index.json` or `iframe.html`,
 or the client requests a rebuild). Progress is streamed with a **list-only**
@@ -217,13 +219,18 @@ status, and any conservative fallback reason.
 After HMR remounts the Testing Module (e.g. Update status), the client
 reconnects via `/run-status` + `/run-events` instead of losing progress.
 
-### Baseline history
+### Baseline actions and history
 
-In Storybook development, use the icon-only **History** action in a baseline's
-accordion header. The history view is scoped to the concrete Default, named
-mode, or interaction PNG currently selected. Choose any **Before** and
-**After** revisions to use the same 2-up, Diff, Focus, Swipe, Blink, zoom, and
-lightbox tools as the live comparison.
+In Storybook development, each baseline accordion ends with a kebab containing
+**History**, **Update baseline**, and **Delete screenshot** for that concrete
+Default, named mode, or interaction PNG. Delete validates that the path belongs
+to the open story, removes its exact CSF image/interaction and review tag, then
+deletes the local PNG plus derived sidecar/diff artifacts. Sibling stories and
+screenshots are not selected.
+
+The history view is scoped to the concrete PNG currently selected. Choose any
+**Before** and **After** revisions to use the same 2-up, Diff, Focus, Swipe,
+Blink, zoom, and lightbox tools as the live comparison.
 
 The revision timeline and image comparison remain equal-height panes. Beneath
 them, **Component diff** shows an aligned source diff for files in the current

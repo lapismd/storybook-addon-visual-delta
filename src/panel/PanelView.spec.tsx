@@ -22,7 +22,6 @@ const header: PanelViewHeaderProps = {
   diffEngine: "html",
   onDiffEngineChange: noop,
   onCreate: noop,
-  onUpdateBaselines: noop,
   onRebuildStatic: noop,
   onResetSettings: noop,
   onStopDiff: noop,
@@ -32,7 +31,6 @@ const header: PanelViewHeaderProps = {
   onUnaccept: noop,
   onToggleSkipVisual: noop,
   onOpenConfiguration: noop,
-  isUpdating: false,
   isRebuilding: false,
 };
 

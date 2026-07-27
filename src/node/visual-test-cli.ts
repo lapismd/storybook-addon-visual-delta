@@ -15,6 +15,7 @@ import {
   successfulStoryIdsFromPlaywrightResults,
   type PlaywrightListResult,
 } from "./playwright-results.js";
+import { playwrightStoryIdGrep } from "./story-id-grep.js";
 
 export type VisualTestCliOptions = {
   root?: string;
@@ -28,20 +29,6 @@ type CommandResult = {
   code: number;
   results: PlaywrightListResult[];
 };
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function grepFromStoryIds(storyIds: string[]): string | undefined {
-  if (!storyIds.length) return undefined;
-  if (storyIds.length === 1) return `${escapeRegExp(storyIds[0]!)}$`;
-  const heads = storyIds.map((id) => id.split("--")[0] ?? id);
-  if (new Set(heads).size === 1) {
-    return `${escapeRegExp(heads[0]!)}--`;
-  }
-  return `(${storyIds.map(escapeRegExp).join("|")})$`;
-}
 
 function runCommand(
   command: string,
@@ -144,7 +131,7 @@ export async function runVisualTestCli(
     options.selection === "all" ? plan.runnableStoryIds : plan.selectedStoryIds;
   const grep =
     options.selection === "affected" && !plan.summary.fallbackReason
-      ? grepFromStoryIds(selectedStoryIds)
+      ? playwrightStoryIdGrep(selectedStoryIds)
       : undefined;
   const result = await runCommand(
     "pnpm",

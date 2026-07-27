@@ -6,7 +6,6 @@ import {
   EyeCloseIcon,
   EyeIcon,
   RefreshIcon,
-  SyncIcon,
   UndoIcon,
 } from "@storybook/icons";
 import {
@@ -86,7 +85,6 @@ export type VisualDeltaHeaderProps = {
   diffEngine: DiffCaptureEngine;
   onDiffEngineChange: (engine: DiffCaptureEngine) => void;
   onCreate: () => void;
-  onUpdateBaselines: () => void;
   /** Force `build-storybook` without capturing baselines. */
   onRebuildStatic: () => void;
   onResetSettings: () => void;
@@ -98,7 +96,6 @@ export type VisualDeltaHeaderProps = {
   acceptRunAvailable?: boolean;
   onToggleSkipVisual: () => void;
   onOpenConfiguration: () => void;
-  isUpdating: boolean;
   isRebuilding: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
@@ -126,7 +123,6 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   diffEngine,
   onDiffEngineChange,
   onCreate,
-  onUpdateBaselines,
   onRebuildStatic,
   onResetSettings,
   onStopDiff,
@@ -137,7 +133,6 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   acceptRunAvailable = false,
   onToggleSkipVisual,
   onOpenConfiguration,
-  isUpdating,
   isRebuilding,
   onHeightChange,
   reviewLayoutActive = false,
@@ -287,25 +282,6 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
             popover={() => (
               <div style={{ minWidth: 220 }}>
                 <ActionList>
-                  {!empty ? (
-                    <ActionList.Item>
-                      <ActionList.Action
-                        ariaLabel="Update baselines"
-                        disabled={busy || storyMissing || skipVisual}
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onUpdateBaselines();
-                        }}
-                      >
-                        <ActionList.Icon>
-                          <SyncIcon />
-                        </ActionList.Icon>
-                        <ActionList.Text>
-                          {isUpdating ? "Updating…" : "Update baselines"}
-                        </ActionList.Text>
-                      </ActionList.Action>
-                    </ActionList.Item>
-                  ) : null}
                   <ActionList.Item>
                     <ActionList.Action
                       ariaLabel="Rebuild storybook static"

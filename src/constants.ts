@@ -222,6 +222,8 @@ export const VISUAL_COMPARE_PANE_PAD_PX = 0;
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";
 /** Storybook-dev middleware that creates missing baselines only (no overwrite). */
 export const VISUAL_DELTA_CREATE_PATH = "/__visual-delta/create-baseline";
+/** Storybook-dev middleware that removes one exact CSF/local baseline. */
+export const VISUAL_DELTA_DELETE_PATH = "/__visual-delta/delete-baseline";
 /** Storybook-dev middleware that runs `build-storybook` only (no capture). */
 export const VISUAL_DELTA_REBUILD_STATIC_PATH =
   "/__visual-delta/rebuild-static";
