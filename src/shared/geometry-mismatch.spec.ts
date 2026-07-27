@@ -31,7 +31,7 @@ describe("baselineGeometryMismatch", () => {
         { width: 1280, height: 900 },
         { width: 264, height: 187 },
         { width: 1280, height: 900 },
-        true,
+        false,
       ),
     ).toBeNull();
   });

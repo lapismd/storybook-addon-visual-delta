@@ -4,6 +4,21 @@ type Size = { width: number; height: number };
 
 const GEOMETRY_TOLERANCE_CSS_PX = 1;
 
+/** Detect legacy/portal captures whose bitmap already contains the viewport. */
+export function isViewportSizedBaseline(
+  baselineCss: Size,
+  captureViewport: Size,
+): boolean {
+  return (
+    baselineCss.width > 0 &&
+    baselineCss.height > 0 &&
+    Math.abs(baselineCss.width - captureViewport.width) <=
+      GEOMETRY_TOLERANCE_CSS_PX &&
+    Math.abs(baselineCss.height - captureViewport.height) <=
+      GEOMETRY_TOLERANCE_CSS_PX
+  );
+}
+
 function roundedSize(size: Size): Size {
   return {
     width: Math.round(size.width),
@@ -22,7 +37,9 @@ export function baselineGeometryMismatch(
   captureViewport: Size,
   cropToViewport: boolean,
 ): BaselineGeometryMismatch | null {
-  if (cropToViewport) return null;
+  if (cropToViewport || isViewportSizedBaseline(baselineCss, captureViewport)) {
+    return null;
+  }
   if (
     baselineCss.width < 1 ||
     baselineCss.height < 1 ||

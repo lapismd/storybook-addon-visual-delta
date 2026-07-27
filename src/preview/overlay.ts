@@ -26,7 +26,10 @@ import {
   resolvedCompareZoomScale,
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
-import { baselineGeometryMismatch } from "../shared/geometry-mismatch.js";
+import {
+  baselineGeometryMismatch,
+  isViewportSizedBaseline,
+} from "../shared/geometry-mismatch.js";
 import {
   ensureOverlayChip,
   positionOverlayChip,
@@ -347,6 +350,20 @@ function reportBaselineGeometry(
   );
 }
 
+function usesViewportCapture(
+  imageItem: VisualDeltaImage,
+  sizes: BaselineCompareSizes | null | undefined,
+): boolean {
+  return (
+    currentCropToViewport ||
+    imageItem.align === "viewport" ||
+    Boolean(
+      sizes &&
+        isViewportSizedBaseline(sizes.content, viewportForImage(imageItem)),
+    )
+  );
+}
+
 function paneStyleBase(): string {
   return `
     flex: 0 0 auto;
@@ -398,12 +415,12 @@ function syncMeasuredPaneLayout(
   overlay: HTMLElement,
   imageItem: VisualDeltaImage,
   snapshot: PreviewLayoutSnapshot,
+  sizes?: BaselineCompareSizes | null,
 ) {
-  const viewportCapture =
-    currentCropToViewport || imageItem.align === "viewport";
+  const viewportCapture = usesViewportCapture(imageItem, sizes);
   const outerInsets = baselineOuterInsets(snapshot, {
     align: imageItem.align,
-    cropToViewport: currentCropToViewport,
+    cropToViewport: viewportCapture,
   });
   const bodyInsets = bodyOuterInsets(snapshot);
   const baselineBodyInsets = viewportCapture
@@ -918,12 +935,11 @@ function applyEqualPaneViewports(
   const selectedImage = lastSelection?.images[lastSelection.index];
   const snapshot = lastSelection?.layoutSnapshot;
   if (!selectedImage || !snapshot) return;
-  const viewportCapture =
-    currentCropToViewport || selectedImage.align === "viewport";
+  const viewportCapture = usesViewportCapture(selectedImage, sizes);
   const insets = totalInsets(
     baselineOuterInsets(snapshot, {
       align: selectedImage.align,
-      cropToViewport: currentCropToViewport,
+      cropToViewport: viewportCapture,
     }),
   );
   const minPaneW = Math.ceil(sizes.content.width + insets.x);
@@ -1295,11 +1311,18 @@ function calculateCenterPosition(
   imageItem: VisualDeltaImage,
   canvasParent: HTMLElement,
   canvasElement: HTMLElement,
+  sizes?: BaselineCompareSizes | null,
 ) {
   let x = imageItem.offsetX ?? 0;
   let y = imageItem.offsetY ?? 0;
   const scale = getCanvasScale(canvasParent);
   const parentRect = canvasParent.getBoundingClientRect();
+
+  if (usesViewportCapture(imageItem, sizes)) {
+    x += -parentRect.left / scale;
+    y += -parentRect.top / scale;
+    return { x, y };
+  }
 
   if (imageItem.align === "canvas") {
     const subjectRect = resolveSubjectRect(canvasElement);
@@ -1375,6 +1398,7 @@ function applyOverlayPosition(
       overlay,
       imageItem,
       snapshot,
+      compareSizes,
     );
     overlay.style.transform = "none";
     if (compareSizes) {
@@ -1439,6 +1463,7 @@ function applyOverlayPosition(
     imageItem,
     canvasParent,
     canvasElement,
+    compareSizes,
   );
   overlay.style.transform = `translate(${x}px, ${y}px)`;
   requestAnimationFrame(() => {
