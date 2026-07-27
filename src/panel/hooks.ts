@@ -20,6 +20,7 @@ import {
 } from "../shared/overlay-session.js";
 import type { OverlayInfo } from "../types.js";
 import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
+import type { BaselineAlignmentMismatch } from "../shared/story-config.js";
 import {
   compareZoomFromDefault,
   type CompareZoomState,
@@ -113,6 +114,7 @@ type StoryData = {
   diffResultZoomDefault: VisualDeltaZoomDefault;
   splitZoom: CompareZoomState;
   baselineGeometryMismatch: BaselineGeometryMismatch | null;
+  baselineAlignmentMismatch: BaselineAlignmentMismatch | null;
 };
 
 function waitTwoFrames(): Promise<void> {
@@ -234,6 +236,7 @@ export function useStoryData() {
       diffResultZoomDefault: "100%",
       splitZoom: compareZoomFromDefault("fit"),
       baselineGeometryMismatch: null,
+      baselineAlignmentMismatch: null,
     };
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
@@ -554,6 +557,10 @@ export function useStoryData() {
             prev.storyId === data.storyId
               ? prev.baselineGeometryMismatch
               : null,
+          baselineAlignmentMismatch:
+            prev.storyId === data.storyId
+              ? prev.baselineAlignmentMismatch
+              : null,
         };
         emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
           opacity: next.opacity,
@@ -633,6 +640,14 @@ export function useStoryData() {
       setStoryData((prev) => ({
         ...prev,
         baselineGeometryMismatch: data,
+      }));
+    },
+    [EVENTS.BASELINE_ALIGNMENT_STATUS]: (
+      data: BaselineAlignmentMismatch | null,
+    ) => {
+      setStoryData((prev) => ({
+        ...prev,
+        baselineAlignmentMismatch: data,
       }));
     },
   });

@@ -27,6 +27,7 @@ import {
   visualReviewStatusFromTags,
   type VisualDeltaImage,
   type VisualDeltaInteraction,
+  type VisualDeltaParams,
   type VisualReviewStatus,
 } from "../constants.js";
 import type { AcceptScope } from "../manager/AcceptSplitButton.js";
@@ -101,7 +102,10 @@ import { PlacementPad } from "./PlacementPad.js";
 import { CompareZoomControl } from "./CompareZoomControl.js";
 import { ImageLightbox, type LightboxImage } from "./ImageLightbox.js";
 import { RangeNumberInput } from "./RangeNumberInput.js";
-import { BaselineGeometryWarning } from "./BaselineGeometryWarning.js";
+import {
+  BaselineAlignmentWarning,
+  BaselineGeometryWarning,
+} from "./BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
 import { ModeSelector } from "./ModeSelector.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
@@ -180,6 +184,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     index,
     overlayOn,
     storyId,
+    storyName,
     opacity,
     colorInversion,
     placement,
@@ -193,6 +198,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     splitZoom,
     diffResultZoomDefault,
     baselineGeometryMismatch,
+    baselineAlignmentMismatch,
     setIndex,
     setOpacity,
     setColorInversion,
@@ -427,6 +433,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isReviewing ||
     isIniting;
   const storyEntry = storyId ? api.getData(storyId) : undefined;
+  const storyVisualDeltaParameters =
+    storyEntry && "parameters" in storyEntry
+      ? (
+          storyEntry.parameters as {
+            visualDelta?: VisualDeltaParams;
+          }
+        ).visualDelta
+      : undefined;
   const storyTagsKey = (storyEntry?.tags ?? []).join("\0");
   const reviewFromStory = visualReviewStatusFromTags(storyEntry?.tags);
   const reviewStatus = optimisticReview ?? reviewFromStory;
@@ -1868,6 +1882,21 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           showConfiguration ? (
             <ConfigurationPanel
               onClose={() => setShowConfiguration(false)}
+              story={
+                storyId
+                  ? {
+                      id: storyId,
+                      name: storyName || storyId,
+                      parameters: storyVisualDeltaParameters,
+                      alignmentMismatch: baselineAlignmentMismatch,
+                    }
+                  : undefined
+              }
+              onStoryUpdated={() => {
+                if (storyId) {
+                  emit(EVENTS.REQUEST_INIT_IMAGE, { storyId });
+                }
+              }}
               onUpdated={(config) => {
                 emit(EVENTS.CONFIG_UPDATED, {
                   projectDefaults: config.projectDefaults,
@@ -1886,8 +1915,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           />
         }
         notice={
-          baselineGeometryMismatch ? (
-            <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
+          baselineGeometryMismatch || baselineAlignmentMismatch ? (
+            <>
+              {baselineGeometryMismatch ? (
+                <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
+              ) : null}
+              {baselineAlignmentMismatch ? (
+                <BaselineAlignmentWarning
+                  mismatch={baselineAlignmentMismatch}
+                  onOpenConfiguration={() => setShowConfiguration(true)}
+                />
+              ) : null}
+            </>
           ) : null
         }
         emptyState={emptyState}

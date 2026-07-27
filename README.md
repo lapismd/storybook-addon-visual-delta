@@ -431,6 +431,18 @@ Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
 `data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
 
 Panel **More → Configuration** opens a scrolling, tabbed settings surface.
+**Story** is the first tab for a selected story. It shows the effective
+capture/overlay values and whether each value comes from the story, project, or
+built-in settings. Edits write only changed, allow-listed
+`parameters.visualDelta` properties to that exact story; **Remove story
+overrides** restores inheritance without touching its PNG or review tag.
+When the measured baseline geometry confidently disagrees with the configured
+alignment, the tab flags the mismatch and offers an exact-story repair (for
+example, **Use viewport** for a viewport-sized baseline). The regular comparison
+view shows the same alignment warning beside the existing geometry warning and
+links directly to the Story configuration tab, so the problem is visible during
+review.
+
 **Defaults** edits the allow-listed project defaults in
 `.visual-delta/config.json`: pass and pixel thresholds, anti-aliasing,
 capture delay/cropping, placement/opacity, Baseline-label offsets, and the

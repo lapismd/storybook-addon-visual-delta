@@ -121,6 +121,52 @@ export const Light: Story = {
     expect(next).toContain("light-chromium-darwin.png");
   });
 
+  it("updates only allow-listed Visual Delta values in a Svelte story", () => {
+    const svelteEntry: StoryIndexEntry = {
+      id: "demo--light",
+      name: "Light",
+      importPath: "src/Demo.stories.svelte",
+    };
+    const source = `<Story name="Light" tags={["visual-ready"]} parameters={{
+  visualDelta: {
+    images: ["/visual-baselines/demo/light-chromium-darwin.png"],
+    align: "canvas",
+    opacity: 0.5,
+  },
+}}>\n`;
+    const next = patchStorySourceText(source, svelteEntry, {
+      kind: "story-config",
+      values: { align: "viewport", delay: 250 },
+      unset: ["opacity"],
+    });
+    expect(next).toContain('"align":"viewport"');
+    expect(next).toContain('"delay":250');
+    expect(next).not.toContain('"opacity"');
+    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain('tags={["visual-ready"]}');
+  });
+
+  it("updates Visual Delta values in a TypeScript story", () => {
+    const source = `export const Light: Story = {
+  tags: ["visual-ready"],
+  parameters: {
+    visualDelta: {
+      images: ["/visual-baselines/demo/light-chromium-darwin.png"],
+      align: "canvas",
+    },
+  },
+};\n`;
+    const next = patchStorySourceText(source, entry, {
+      kind: "story-config",
+      values: { align: "viewport", cropToViewport: true },
+      unset: [],
+    });
+    expect(next).toContain('"align":"viewport"');
+    expect(next).toContain('"cropToViewport":true');
+    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain('tags: ["visual-ready"]');
+  });
+
   it("clears review tags without removing non-visual tags", () => {
     const source = `export const Light: Story = {
   tags: ["visual-approved", "docs-only"],

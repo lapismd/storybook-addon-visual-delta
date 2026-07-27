@@ -15,6 +15,10 @@ import {
   syncStaticIndexReviewStatus,
   syncStaticIndexSkipVisual,
 } from "./visual-sidecars.js";
+import type {
+  VisualDeltaStoryConfigKey,
+  VisualDeltaStoryConfigPatch,
+} from "../shared/story-config.js";
 
 export type StorySourceMutation =
   | { kind: "skip"; skip: boolean }
@@ -37,6 +41,11 @@ export type StorySourceMutation =
       url: string;
       /** Present for a named mid-play capture; absent for a primary image. */
       interactionId?: string;
+    }
+  | {
+      kind: "story-config";
+      values: VisualDeltaStoryConfigPatch;
+      unset: VisualDeltaStoryConfigKey[];
     };
 function resolveStoriesPath(
   packageRoot: string,
@@ -184,6 +193,25 @@ function removeVisualDeltaBaseline(
   return changed;
 }
 
+function updateVisualDeltaStoryConfig(
+  visualDelta: Record<string, unknown>,
+  mutation: Extract<StorySourceMutation, { kind: "story-config" }>,
+): boolean {
+  let changed = false;
+  for (const key of mutation.unset) {
+    if (key in visualDelta) {
+      delete visualDelta[key];
+      changed = true;
+    }
+  }
+  for (const [key, value] of Object.entries(mutation.values)) {
+    if (JSON.stringify(visualDelta[key]) === JSON.stringify(value)) continue;
+    visualDelta[key] = value;
+    changed = true;
+  }
+  return changed;
+}
+
 function mutateSvelteOpenTag(
   openTag: string,
   mutation: StorySourceMutation,
@@ -271,6 +299,33 @@ function mutateSvelteOpenTag(
       JSON.stringify(parsed) +
       openTag.slice(range.end)
     );
+  }
+
+  if (mutation.kind === "story-config") {
+    const range = findVisualDeltaObjectRange(openTag);
+    if (range) {
+      const parsed = parseVisualDeltaObjectLiteral(
+        openTag.slice(range.start, range.end),
+      );
+      if (!parsed || !updateVisualDeltaStoryConfig(parsed, mutation)) {
+        return openTag;
+      }
+      return (
+        openTag.slice(0, range.start) +
+        JSON.stringify(parsed) +
+        openTag.slice(range.end)
+      );
+    }
+    if (Object.keys(mutation.values).length === 0) return openTag;
+    const visualDelta = JSON.stringify(mutation.values);
+    const parametersIndex = openTag.indexOf("parameters={{");
+    if (parametersIndex >= 0) {
+      const insert = parametersIndex + "parameters={{".length;
+      return `${openTag.slice(0, insert)}\n    visualDelta: ${visualDelta},${openTag.slice(insert)}`;
+    }
+    const attribute = `\n  parameters={{\n    visualDelta: ${visualDelta},\n  }}`;
+    const closeLength = openTag.endsWith("/>") ? 2 : 1;
+    return `${openTag.slice(0, -closeLength)}${attribute}\n${openTag.slice(-closeLength)}`;
   }
 
   const match = /\btags=\{\[([\s\S]*?)\]\}/.exec(openTag);
@@ -603,6 +658,52 @@ function mutateTsRemoveBaseline(
   );
 }
 
+function mutateTsStoryConfig(
+  objectText: string,
+  mutation: Extract<StorySourceMutation, { kind: "story-config" }>,
+): string {
+  const parameters = findTopLevelProperty(objectText, "parameters");
+  if (!parameters) {
+    return Object.keys(mutation.values).length === 0
+      ? objectText
+      : insertObjectProperty(
+          objectText,
+          `parameters: { visualDelta: ${JSON.stringify(mutation.values)} }`,
+        );
+  }
+  if (objectText[parameters.valueStart] !== "{") return objectText;
+  const end = findBalancedEnd(objectText, parameters.valueStart, "{", "}");
+  if (end < 0) return objectText;
+  const parametersObject = objectText.slice(parameters.valueStart, end + 1);
+  const visualDelta = findTopLevelProperty(parametersObject, "visualDelta");
+  if (!visualDelta || parametersObject[visualDelta.valueStart] !== "{") {
+    if (Object.keys(mutation.values).length === 0) return objectText;
+    const nextParameters = insertObjectProperty(
+      parametersObject,
+      `visualDelta: ${JSON.stringify(mutation.values)}`,
+    );
+    return `${objectText.slice(0, parameters.valueStart)}${nextParameters}${objectText.slice(end + 1)}`;
+  }
+  const visualDeltaEnd = findBalancedEnd(
+    parametersObject,
+    visualDelta.valueStart,
+    "{",
+    "}",
+  );
+  if (visualDeltaEnd < 0) return objectText;
+  const parsed = parseVisualDeltaObjectLiteral(
+    parametersObject.slice(visualDelta.valueStart, visualDeltaEnd + 1),
+  );
+  if (!parsed || !updateVisualDeltaStoryConfig(parsed, mutation)) {
+    return objectText;
+  }
+  const nextParameters =
+    parametersObject.slice(0, visualDelta.valueStart) +
+    JSON.stringify(parsed) +
+    parametersObject.slice(visualDeltaEnd + 1);
+  return `${objectText.slice(0, parameters.valueStart)}${nextParameters}${objectText.slice(end + 1)}`;
+}
+
 function exportNameSlug(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -670,6 +771,8 @@ function patchTsStory(
     }
   } else if (mutation.kind === "remove-baseline") {
     next = mutateTsRemoveBaseline(objectText, mutation);
+  } else if (mutation.kind === "story-config") {
+    next = mutateTsStoryConfig(objectText, mutation);
   } else {
     next = mutateTsTags(objectText, mutation);
   }
@@ -832,6 +935,45 @@ export function patchStoryBaselineImages(options: {
     { storyId: options.storyId, status: reviewStatus },
   ]);
   return { ok: true, storyId: options.storyId };
+}
+
+export function patchStoryVisualDeltaConfig(options: {
+  packageRoot: string;
+  storyId: string;
+  values: VisualDeltaStoryConfigPatch;
+  unset: VisualDeltaStoryConfigKey[];
+}): {
+  ok: boolean;
+  storyId: string;
+  sourceUpdated?: boolean;
+  error?: string;
+} {
+  const entry = loadStoryIndex(options.packageRoot)[options.storyId];
+  if (!entry?.importPath) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      error: `Story not found in index: ${options.storyId}`,
+    };
+  }
+  const sourceUpdated = patchStoryFile(options.packageRoot, entry, {
+    kind: "story-config",
+    values: options.values,
+    unset: options.unset,
+  });
+  if (!sourceUpdated) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      sourceUpdated: false,
+      error: `Story configuration could not be updated in ${entry.importPath}.`,
+    };
+  }
+  return {
+    ok: true,
+    storyId: options.storyId,
+    sourceUpdated,
+  };
 }
 
 export function patchStoryInteraction(options: {

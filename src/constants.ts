@@ -44,6 +44,8 @@ export const EVENTS = {
   SPLIT_ZOOM_STATUS: `${ADDON_ID}/split-zoom-status`,
   /** Preview → manager: component baseline and live capture bounds disagree. */
   BASELINE_GEOMETRY_STATUS: `${ADDON_ID}/baseline-geometry-status`,
+  /** Preview → manager: baseline dimensions imply a different align value. */
+  BASELINE_ALIGNMENT_STATUS: `${ADDON_ID}/baseline-alignment-status`,
   /** Manager → preview: persisted project defaults changed. */
   CONFIG_UPDATED: `${ADDON_ID}/config-updated`,
 } as const;
@@ -259,6 +261,9 @@ export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
 export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
 /** Storybook-dev middleware that returns resolved host options (read-only). */
 export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";
+/** Storybook-dev middleware that edits one story's Visual Delta overrides. */
+export const VISUAL_DELTA_STORY_CONFIG_PATH =
+  "/__visual-delta/story-configuration";
 /** Storybook-dev middleware identity used to detect server restarts. */
 export const VISUAL_DELTA_RUNTIME_PATH = "/__visual-delta/runtime";
 /** Storybook-dev middleware that returns VCS history for one baseline PNG. */

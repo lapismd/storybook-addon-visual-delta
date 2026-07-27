@@ -1,6 +1,8 @@
 import React from "react";
+import { Button } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import type { BaselineGeometryMismatch } from "../constants.js";
+import type { BaselineAlignmentMismatch } from "../shared/story-config.js";
 
 const Root = styled.div(({ theme }) => ({
   display: "grid",
@@ -25,6 +27,13 @@ const Detail = styled.span({
   lineHeight: 1.4,
 });
 
+const ActionRow = styled.div({
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+});
+
 export function BaselineGeometryWarning({
   mismatch,
 }: {
@@ -45,6 +54,43 @@ export function BaselineGeometryWarning({
         {viewport} capture viewport. The baseline may be stale or incompatible;
         review it before updating.
       </Detail>
+    </Root>
+  );
+}
+
+export function BaselineAlignmentWarning({
+  mismatch,
+  onOpenConfiguration,
+}: {
+  mismatch: BaselineAlignmentMismatch;
+  onOpenConfiguration: () => void;
+}) {
+  const baseline = `${mismatch.baselineCss.width}×${mismatch.baselineCss.height}`;
+  const configured =
+    mismatch.configured === "canvas" ? "Story canvas" : "Capture viewport";
+  const recommended =
+    mismatch.recommended === "canvas" ? "Story canvas" : "Capture viewport";
+  return (
+    <Root
+      role="alert"
+      aria-label={`Baseline alignment mismatch. ${baseline} CSS pixel baseline is configured as ${configured}; use ${recommended}.`}
+      data-testid="baseline-alignment-warning"
+    >
+      <Title>Baseline alignment does not match this capture</Title>
+      <ActionRow>
+        <Detail>
+          The {baseline} CSS px baseline is configured as {configured}. Use{" "}
+          {recommended} to describe its capture geometry.
+        </Detail>
+        <Button
+          size="small"
+          variant="outline"
+          ariaLabel="Review story alignment configuration"
+          onClick={onOpenConfiguration}
+        >
+          Review configuration
+        </Button>
+      </ActionRow>
     </Root>
   );
 }
