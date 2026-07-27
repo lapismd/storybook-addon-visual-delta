@@ -31,6 +31,10 @@ import {
   isViewportSizedBaseline,
 } from "../shared/geometry-mismatch.js";
 import {
+  baselineAlignmentMismatch,
+  type BaselineAlignmentMismatch,
+} from "../shared/story-config.js";
+import {
   ensureOverlayChip,
   positionOverlayChip,
   syncModeBadge,
@@ -333,6 +337,15 @@ function emitBaselineGeometryStatus(status: BaselineGeometryMismatch | null) {
   addons.getChannel().emit(EVENTS.BASELINE_GEOMETRY_STATUS, status);
 }
 
+let lastAlignmentStatusSignature = "";
+
+function emitBaselineAlignmentStatus(status: BaselineAlignmentMismatch | null) {
+  const signature = status ? JSON.stringify(status) : "";
+  if (signature === lastAlignmentStatusSignature) return;
+  lastAlignmentStatusSignature = signature;
+  addons.getChannel().emit(EVENTS.BASELINE_ALIGNMENT_STATUS, status);
+}
+
 function reportBaselineGeometry(
   canvasElement: HTMLElement,
   imageItem: VisualDeltaImage,
@@ -340,13 +353,24 @@ function reportBaselineGeometry(
 ) {
   if (!sizes) return;
   const subjectRect = resolveSubjectRect(canvasElement);
+  const liveCss = { width: subjectRect.width, height: subjectRect.height };
+  const captureViewport = viewportForImage(imageItem);
   emitBaselineGeometryStatus(
     baselineGeometryMismatch(
       sizes.content,
-      { width: subjectRect.width, height: subjectRect.height },
-      viewportForImage(imageItem),
+      liveCss,
+      captureViewport,
       currentCropToViewport,
     ),
+  );
+  emitBaselineAlignmentStatus(
+    baselineAlignmentMismatch({
+      configured: imageItem.align,
+      baselineCss: sizes.content,
+      liveCss,
+      captureViewport,
+      cropToViewport: currentCropToViewport,
+    }),
   );
 }
 
@@ -1556,6 +1580,7 @@ function removeOverlayDom(retainSelection: boolean) {
   }
   syncModeBadge(false);
   emitBaselineGeometryStatus(null);
+  emitBaselineAlignmentStatus(null);
 }
 
 function clearOverlay() {

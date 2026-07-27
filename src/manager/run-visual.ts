@@ -16,6 +16,7 @@ import {
   VISUAL_DELTA_RUN_PATH,
   VISUAL_DELTA_RUN_STATUS_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
+  VISUAL_DELTA_STORY_CONFIG_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   type VisualReviewStatus,
 } from "../constants.js";
@@ -27,6 +28,10 @@ import type {
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import type {
+  VisualDeltaStoryConfigUpdate,
+  VisualDeltaStoryConfigUpdateResponse,
+} from "../shared/story-config.js";
 import type { VisualModeRunResult } from "../shared/mode-results.js";
 import {
   classifyVisualRunResult,
@@ -976,6 +981,28 @@ export async function postVisualSkipVisual(body: {
   if (!response.ok || !data.ok) {
     throw new Error(
       data.error || `skip-visual update failed (${response.status})`,
+    );
+  }
+  return data;
+}
+
+/** Persist allow-listed `parameters.visualDelta` overrides on one exact story. */
+export async function putVisualStoryConfig(
+  update: VisualDeltaStoryConfigUpdate,
+): Promise<VisualDeltaStoryConfigUpdateResponse> {
+  const response = await fetch(VISUAL_DELTA_STORY_CONFIG_PATH, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  const data = (await response.json()) as
+    | VisualDeltaStoryConfigUpdateResponse
+    | { error?: string };
+  if (!response.ok || !("ok" in data) || data.ok !== true) {
+    throw new Error(
+      "error" in data && data.error
+        ? data.error
+        : `Story configuration update failed (${response.status})`,
     );
   }
   return data;

@@ -127,6 +127,14 @@ Vitest project **`visual-delta`** (`pnpm test:unit`) covers:
 
 Setup: `src/test/setup.ts` + `src/test/render.tsx`.
 
+The panel's **More → Configuration** surface starts with the exact current
+story. It shows effective setting sources, writes only changed allow-listed
+`parameters.visualDelta` values, can remove story overrides, and reports
+high-confidence alignment metadata mismatches. Its one-click alignment repair
+changes story metadata only; it does not rewrite the baseline PNG or review
+status. The normal comparison surface also shows the mismatch in the geometry
+warning area, with a direct link to that Story tab.
+
 ## Local behavior (vs upstream 0.1.5)
 
 - **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +

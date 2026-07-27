@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "storybook/internal/components";
 import { styled } from "storybook/theming";
-import { VISUAL_DELTA_CONFIG_PATH } from "../constants.js";
+import {
+  VISUAL_DELTA_CONFIG_PATH,
+  type VisualDeltaParams,
+} from "../constants.js";
+import { putVisualStoryConfig } from "../manager/run-visual.js";
 import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaProjectDefaults,
@@ -11,6 +15,16 @@ import {
   BUILTIN_VISUAL_DELTA_DEFAULTS,
   validateVisualDeltaProjectDefaults,
 } from "../shared/project-defaults.js";
+import {
+  resolveVisualDeltaStoryConfig,
+  VISUAL_DELTA_STORY_CONFIG_KEYS,
+  type BaselineAlignmentMismatch,
+  type ResolvedVisualDeltaStoryConfig,
+  type VisualDeltaStoryConfig,
+  type VisualDeltaStoryConfigKey,
+  type VisualDeltaStoryConfigUpdate,
+  type VisualDeltaStoryConfigUpdateResponse,
+} from "../shared/story-config.js";
 import { RangeNumberInput } from "./RangeNumberInput.js";
 
 const Root = styled.div(({ theme }) => ({
@@ -178,6 +192,53 @@ const Status = styled.span(({ theme }) => ({
       ? `color-mix(in srgb, ${theme.color.positive} 65%, black)`
       : theme.color.positive,
   lineHeight: 1.4,
+}));
+
+const StoryIdentity = styled.div({
+  display: "flex",
+  minWidth: 0,
+  flexDirection: "column",
+  gap: 2,
+});
+
+const StoryName = styled.strong(({ theme }) => ({
+  color: theme.color.defaultText,
+  fontSize: 12,
+}));
+
+const StoryId = styled.code(({ theme }) => ({
+  color: theme.textMutedColor,
+  fontFamily: theme.typography.fonts.mono,
+  fontSize: 10,
+  overflowWrap: "anywhere",
+}));
+
+const AlignmentWarning = styled.div(({ theme }) => ({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: 10,
+  border: `1px solid ${theme.color.warning}`,
+  borderRadius: theme.appBorderRadius,
+  background: theme.background.content,
+  lineHeight: 1.4,
+}));
+
+const AlignmentCopy = styled.div({
+  display: "flex",
+  minWidth: 0,
+  flex: 1,
+  flexDirection: "column",
+  gap: 2,
+});
+
+const AlignmentTitle = styled.strong(({ theme }) => ({
+  color:
+    theme.base === "light"
+      ? `color-mix(in srgb, ${theme.color.warning} 60%, black)`
+      : theme.color.warning,
 }));
 
 const Validation = styled.ul(({ theme }) => ({
@@ -390,19 +451,61 @@ async function saveDefaults(
   return payload;
 }
 
+export type ConfigurationStory = {
+  id: string;
+  name: string;
+  parameters?: VisualDeltaParams;
+  alignmentMismatch?: BaselineAlignmentMismatch | null;
+};
+
+function updatedStoryParameters(
+  current: VisualDeltaParams | undefined,
+  update: VisualDeltaStoryConfigUpdate,
+): VisualDeltaParams {
+  const next = { ...(current ?? {}), ...(update.values ?? {}) };
+  for (const key of update.unset ?? []) delete next[key];
+  return next;
+}
+
+function clonedStoryConfig(
+  value: VisualDeltaStoryConfig,
+): VisualDeltaStoryConfig {
+  return {
+    ...value,
+    baselineLabelOffset: { ...value.baselineLabelOffset },
+  };
+}
+
+function storyBaselineSummary(params: VisualDeltaParams | undefined): string {
+  const images = params?.images;
+  const list = images == null ? [] : Array.isArray(images) ? images : [images];
+  const sources = list
+    .map((image) => (typeof image === "string" ? image : image.src))
+    .filter(Boolean);
+  return sources.length ? sources.join(", ") : "No primary baseline configured";
+}
+
 export type ConfigurationPanelProps = {
   onClose: () => void;
+  story?: ConfigurationStory;
   initialConfig?: VisualDeltaResolvedConfig;
   onSaveProjectDefaults?: (
     defaults: VisualDeltaProjectDefaults,
   ) => Promise<VisualDeltaResolvedConfig>;
+  onSaveStoryConfig?: (
+    update: VisualDeltaStoryConfigUpdate,
+  ) => Promise<VisualDeltaStoryConfigUpdateResponse>;
+  onStoryUpdated?: (update: VisualDeltaStoryConfigUpdate) => void;
   onUpdated?: (config: VisualDeltaResolvedConfig) => void;
 };
 
 export function ConfigurationPanel({
   onClose,
+  story,
   initialConfig,
   onSaveProjectDefaults,
+  onSaveStoryConfig,
+  onStoryUpdated,
   onUpdated,
 }: ConfigurationPanelProps) {
   const [config, setConfig] = useState<VisualDeltaResolvedConfig | null>(
@@ -414,11 +517,23 @@ export function ConfigurationPanel({
       ...defaultsFor(initialConfig ?? null).baselineLabelOffset,
     },
   }));
-  const [tab, setTab] = useState<"defaults" | "resolved">("defaults");
+  const [tab, setTab] = useState<"story" | "defaults" | "resolved">(
+    story ? "story" : "defaults",
+  );
+  const [storyParameters, setStoryParameters] = useState<
+    VisualDeltaParams | undefined
+  >(story?.parameters);
+  const [storyDraft, setStoryDraft] = useState<VisualDeltaStoryConfig | null>(
+    null,
+  );
+  const [changedStoryKeys, setChangedStoryKeys] = useState<
+    VisualDeltaStoryConfigKey[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialConfig);
   const [saving, setSaving] = useState(false);
+  const [storySaving, setStorySaving] = useState(false);
 
   useEffect(() => {
     if (initialConfig) {
@@ -469,10 +584,41 @@ export function ConfigurationPanel({
     };
   }, [initialConfig]);
 
+  useEffect(() => {
+    setStoryParameters(story?.parameters);
+    setChangedStoryKeys([]);
+    setSaved(null);
+    if (story) setTab("story");
+  }, [story?.id, story?.parameters]);
+
   const sections = useMemo(
     () => (config ? configurationSections(config) : []),
     [config],
   );
+  const resolvedStory = useMemo<ResolvedVisualDeltaStoryConfig | null>(
+    () =>
+      story && config
+        ? resolveVisualDeltaStoryConfig(
+            storyParameters,
+            config.projectDefaults,
+            config.projectDefaultSources,
+          )
+        : null,
+    [config, story, storyParameters],
+  );
+  useEffect(() => {
+    if (!resolvedStory) {
+      setStoryDraft(null);
+      return;
+    }
+    setStoryDraft(clonedStoryConfig(resolvedStory.values));
+  }, [resolvedStory]);
+  const alignmentMismatch =
+    story?.alignmentMismatch &&
+    resolvedStory?.values.align === story.alignmentMismatch.configured
+      ? story.alignmentMismatch
+      : null;
+
   const diagnostics = config
     ? (config.diagnostics ?? fallbackDiagnostics(config))
     : [];
@@ -513,6 +659,94 @@ export function ConfigurationPanel({
         [key]: checked,
       }));
     };
+  const markStoryChanged = (key: VisualDeltaStoryConfigKey) => {
+    setSaved(null);
+    setChangedStoryKeys((current) =>
+      current.includes(key) ? current : [...current, key],
+    );
+  };
+  const setStoryValue = <K extends VisualDeltaStoryConfigKey>(
+    key: K,
+    value: VisualDeltaStoryConfig[K],
+  ) => {
+    markStoryChanged(key);
+    setStoryDraft((current) =>
+      current ? ({ ...current, [key]: value } as VisualDeltaStoryConfig) : null,
+    );
+  };
+  const setStoryOffset = (key: "x" | "y", value: number) => {
+    markStoryChanged("baselineLabelOffset");
+    setStoryDraft((current) =>
+      current
+        ? {
+            ...current,
+            baselineLabelOffset: {
+              ...current.baselineLabelOffset,
+              [key]: value,
+            },
+          }
+        : null,
+    );
+  };
+  const storySource = (key: VisualDeltaStoryConfigKey) =>
+    resolvedStory?.sources[key] ?? "built-in";
+
+  const persistStoryUpdate = async (
+    update: VisualDeltaStoryConfigUpdate,
+    message: string,
+  ) => {
+    setStorySaving(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await (onSaveStoryConfig ?? putVisualStoryConfig)(update);
+      setStoryParameters((current) => updatedStoryParameters(current, update));
+      setChangedStoryKeys([]);
+      onStoryUpdated?.(update);
+      setSaved(message);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save story configuration",
+      );
+    } finally {
+      setStorySaving(false);
+    }
+  };
+
+  const handleSaveStory = async () => {
+    if (!story || !storyDraft || changedStoryKeys.length === 0) return;
+    const values: Partial<VisualDeltaStoryConfig> = {};
+    for (const key of changedStoryKeys) {
+      Object.assign(values, { [key]: storyDraft[key] });
+    }
+    await persistStoryUpdate(
+      { storyId: story.id, values },
+      "Story configuration saved. The next static visual run will rebuild.",
+    );
+  };
+
+  const handleResetStory = async () => {
+    if (!story || !resolvedStory) return;
+    const unset = VISUAL_DELTA_STORY_CONFIG_KEYS.filter(
+      (key) => key in resolvedStory.overrides,
+    );
+    if (unset.length === 0) return;
+    await persistStoryUpdate(
+      { storyId: story.id, unset },
+      "Story overrides removed; project and built-in defaults now apply.",
+    );
+  };
+
+  const handleRepairAlignment = async () => {
+    if (!story || !alignmentMismatch) return;
+    const align = alignmentMismatch.recommended;
+    await persistStoryUpdate(
+      { storyId: story.id, values: { align } },
+      `Story alignment updated to ${align}.`,
+    );
+  };
 
   const handleSave = async () => {
     if (validation.errors.length) return;
@@ -548,8 +782,8 @@ export function ConfigurationPanel({
           <HeadingCopy>
             <Title>Configuration</Title>
             <Hint>
-              Edit safe project defaults or inspect the complete resolved host
-              configuration.
+              Edit the current story, change safe project defaults, or inspect
+              the complete resolved host configuration.
             </Hint>
           </HeadingCopy>
           <Button size="small" onClick={onClose} ariaLabel="Back to panel">
@@ -557,6 +791,17 @@ export function ConfigurationPanel({
           </Button>
         </Heading>
         <TabList role="tablist" aria-label="Configuration views">
+          {story ? (
+            <Tab
+              type="button"
+              role="tab"
+              aria-selected={tab === "story"}
+              $selected={tab === "story"}
+              onClick={() => setTab("story")}
+            >
+              Story
+            </Tab>
+          ) : null}
           <Tab
             type="button"
             role="tab"
@@ -580,13 +825,305 @@ export function ConfigurationPanel({
 
       <Content
         role="tabpanel"
-        aria-label={tab === "defaults" ? "Defaults" : "Resolved"}
+        aria-label={
+          tab === "story"
+            ? "Story"
+            : tab === "defaults"
+              ? "Defaults"
+              : "Resolved"
+        }
       >
         {loading ? <Hint role="status">Loading configuration…</Hint> : null}
         {error ? <Hint role="alert">{error}</Hint> : null}
         {saved ? <Status role="status">{saved}</Status> : null}
 
-        {tab === "defaults" ? (
+        {tab === "story" ? (
+          story && storyDraft && resolvedStory ? (
+            <>
+              <StoryIdentity>
+                <StoryName>{story.name}</StoryName>
+                <StoryId>{story.id}</StoryId>
+              </StoryIdentity>
+
+              {alignmentMismatch ? (
+                <AlignmentWarning
+                  role="alert"
+                  aria-label="Story alignment configuration mismatch"
+                >
+                  <AlignmentCopy>
+                    <AlignmentTitle>
+                      Alignment does not describe this baseline
+                    </AlignmentTitle>
+                    <span>
+                      The {alignmentMismatch.baselineCss.width}×
+                      {alignmentMismatch.baselineCss.height} CSS px baseline is{" "}
+                      {alignmentMismatch.reason === "viewport-sized-baseline"
+                        ? "viewport-sized"
+                        : "component-sized"}
+                      , but this story is configured as{" "}
+                      <code>{alignmentMismatch.configured}</code>. Visual Delta
+                      is correcting placement at runtime; persist{" "}
+                      <code>{alignmentMismatch.recommended}</code> to describe
+                      the capture accurately.
+                    </span>
+                  </AlignmentCopy>
+                  <Button
+                    size="small"
+                    variant="solid"
+                    ariaLabel={`Use ${alignmentMismatch.recommended} alignment`}
+                    disabled={storySaving}
+                    onClick={() => void handleRepairAlignment()}
+                  >
+                    {storySaving
+                      ? "Updating…"
+                      : `Use ${alignmentMismatch.recommended}`}
+                  </Button>
+                </AlignmentWarning>
+              ) : null}
+
+              <Section>
+                <SectionTitle>Story source</SectionTitle>
+                <Rows>
+                  <Row>
+                    <Label>Primary baseline</Label>
+                    <Value>{storyBaselineSummary(storyParameters)}</Value>
+                  </Row>
+                  <Row>
+                    <Label>Overrides</Label>
+                    <Value>
+                      {Object.keys(resolvedStory.overrides).length
+                        ? Object.keys(resolvedStory.overrides).join(", ")
+                        : "None · project and built-in defaults apply"}
+                    </Value>
+                  </Row>
+                </Rows>
+              </Section>
+
+              <DefaultsGrid>
+                <Field>
+                  <FieldLabel>
+                    Alignment <Source>{storySource("align")}</Source>
+                  </FieldLabel>
+                  <Select
+                    aria-label="Story baseline alignment"
+                    value={storyDraft.align}
+                    onChange={(event) =>
+                      setStoryValue(
+                        "align",
+                        event.currentTarget
+                          .value as VisualDeltaStoryConfig["align"],
+                      )
+                    }
+                  >
+                    <option value="canvas">Story canvas</option>
+                    <option value="viewport">Capture viewport</option>
+                  </Select>
+                  <FieldHint>
+                    Canvas pins component clips to the story subject; viewport
+                    pins full captures to the iframe origin.
+                  </FieldHint>
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Placement <Source>{storySource("placement")}</Source>
+                  </FieldLabel>
+                  <Select
+                    aria-label="Story baseline placement"
+                    value={storyDraft.placement}
+                    onChange={(event) =>
+                      setStoryValue(
+                        "placement",
+                        event.currentTarget
+                          .value as VisualDeltaStoryConfig["placement"],
+                      )
+                    }
+                  >
+                    <option value="right">Right</option>
+                    <option value="left">Left</option>
+                    <option value="above">Above</option>
+                    <option value="below">Below</option>
+                    <option value="center">Centered overlay</option>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Pass threshold (%){" "}
+                    <Source>{storySource("passThresholdPercent")}</Source>
+                  </FieldLabel>
+                  <RangeNumberInput
+                    label="Story pass threshold percentage"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    value={storyDraft.passThresholdPercent}
+                    suffix="%"
+                    onChange={(value) =>
+                      setStoryValue("passThresholdPercent", value)
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Pixel diff threshold{" "}
+                    <Source>{storySource("diffThreshold")}</Source>
+                  </FieldLabel>
+                  <RangeNumberInput
+                    label="Story pixel diff threshold"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={storyDraft.diffThreshold}
+                    onChange={(value) => setStoryValue("diffThreshold", value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Capture delay (ms) <Source>{storySource("delay")}</Source>
+                  </FieldLabel>
+                  <RangeNumberInput
+                    label="Story capture delay milliseconds"
+                    min={0}
+                    max={60000}
+                    step={1}
+                    value={storyDraft.delay}
+                    inputWidth="5.25rem"
+                    onChange={(value) => setStoryValue("delay", value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Overlay opacity <Source>{storySource("opacity")}</Source>
+                  </FieldLabel>
+                  <RangeNumberInput
+                    label="Story overlay opacity"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={storyDraft.opacity}
+                    onChange={(value) => setStoryValue("opacity", value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Baseline label offset{" "}
+                    <Source>{storySource("baselineLabelOffset")}</Source>
+                  </FieldLabel>
+                  <OffsetRow>
+                    <RangeNumberInput
+                      label="Story baseline label X offset"
+                      min={-1000}
+                      max={1000}
+                      step={1}
+                      value={storyDraft.baselineLabelOffset.x}
+                      inputWidth="4rem"
+                      onChange={(value) => setStoryOffset("x", value)}
+                    />
+                    <RangeNumberInput
+                      label="Story baseline label Y offset"
+                      min={-1000}
+                      max={1000}
+                      step={1}
+                      value={storyDraft.baselineLabelOffset.y}
+                      inputWidth="4rem"
+                      onChange={(value) => setStoryOffset("y", value)}
+                    />
+                  </OffsetRow>
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Capture behavior <Source>effective story</Source>
+                  </FieldLabel>
+                  <CheckboxRow>
+                    <Input
+                      aria-label="Story include anti-aliasing differences"
+                      type="checkbox"
+                      checked={storyDraft.diffIncludeAntiAliasing}
+                      onChange={(event) =>
+                        setStoryValue(
+                          "diffIncludeAntiAliasing",
+                          event.currentTarget.checked,
+                        )
+                      }
+                      style={{ width: 16 }}
+                    />
+                    Include anti-aliasing differences
+                    <Source>{storySource("diffIncludeAntiAliasing")}</Source>
+                  </CheckboxRow>
+                  <CheckboxRow>
+                    <Input
+                      aria-label="Story crop capture to viewport"
+                      type="checkbox"
+                      checked={storyDraft.cropToViewport}
+                      onChange={(event) =>
+                        setStoryValue(
+                          "cropToViewport",
+                          event.currentTarget.checked,
+                        )
+                      }
+                      style={{ width: 16 }}
+                    />
+                    Crop HTML capture to viewport
+                    <Source>{storySource("cropToViewport")}</Source>
+                  </CheckboxRow>
+                  <CheckboxRow>
+                    <Input
+                      aria-label="Story invert baseline colors"
+                      type="checkbox"
+                      checked={storyDraft.colorInversion}
+                      onChange={(event) =>
+                        setStoryValue(
+                          "colorInversion",
+                          event.currentTarget.checked,
+                        )
+                      }
+                      style={{ width: 16 }}
+                    />
+                    Invert baseline colors
+                    <Source>{storySource("colorInversion")}</Source>
+                  </CheckboxRow>
+                </Field>
+              </DefaultsGrid>
+
+              <Actions>
+                <Button
+                  size="small"
+                  variant="solid"
+                  ariaLabel={false}
+                  disabled={changedStoryKeys.length === 0 || storySaving}
+                  onClick={() => void handleSaveStory()}
+                >
+                  {storySaving ? "Saving…" : "Save story"}
+                </Button>
+                <Button
+                  size="small"
+                  ariaLabel={false}
+                  disabled={changedStoryKeys.length === 0 || storySaving}
+                  onClick={() => {
+                    setStoryDraft(clonedStoryConfig(resolvedStory.values));
+                    setChangedStoryKeys([]);
+                    setError(null);
+                    setSaved(null);
+                  }}
+                >
+                  Revert unsaved changes
+                </Button>
+                <Button
+                  size="small"
+                  ariaLabel={false}
+                  disabled={
+                    Object.keys(resolvedStory.overrides).length === 0 ||
+                    storySaving
+                  }
+                  onClick={() => void handleResetStory()}
+                >
+                  Remove story overrides
+                </Button>
+              </Actions>
+            </>
+          ) : (
+            <Hint>No story configuration is available.</Hint>
+          )
+        ) : tab === "defaults" ? (
           <>
             <DefaultsGrid>
               <Field>

@@ -22,6 +22,7 @@ import {
   VISUAL_DELTA_RUN_STATUS_PATH,
   VISUAL_DELTA_SKIP_VISUAL_PATH,
   VISUAL_DELTA_STORY_FACTS_PATH,
+  VISUAL_DELTA_STORY_CONFIG_PATH,
   VISUAL_DELTA_UPDATE_PATH,
   isVisualReviewStatus,
   type VisualReviewStatus,
@@ -68,8 +69,13 @@ import { resolveVisualStoryFacts } from "./story-facts.js";
 import { createVisualDeltaRuntimeEndpoint } from "./runtime-instance.js";
 import {
   patchStorySkipVisual,
+  patchStoryVisualDeltaConfig,
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
+import {
+  validateVisualDeltaStoryConfigUpdate,
+  type VisualDeltaStoryConfigUpdateResponse,
+} from "../shared/story-config.js";
 import {
   baselinePngExistsForStoryId,
   loadModeSidecarsForStoryId,
@@ -1580,6 +1586,55 @@ async function handleConfigPut(
   }
 }
 
+async function handleStoryConfigPut(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+) {
+  let body: unknown;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    });
+    return;
+  }
+  const validation = validateVisualDeltaStoryConfigUpdate(body);
+  if (!validation.value) {
+    writeJson(res, 400, {
+      ok: false,
+      error: validation.errors.join(" "),
+      errors: validation.errors,
+    });
+    return;
+  }
+  const { storyId, values = {}, unset = [] } = validation.value;
+  const result = patchStoryVisualDeltaConfig({
+    packageRoot: root,
+    storyId,
+    values,
+    unset,
+  });
+  if (!result.ok) {
+    writeJson(res, 400, result);
+    return;
+  }
+  forceStaticRebuild = true;
+  invalidateWarmStaticStorybookServer();
+  const response: VisualDeltaStoryConfigUpdateResponse & {
+    sourceUpdated?: boolean;
+  } = {
+    ok: true,
+    storyId,
+    values,
+    unset,
+    sourceUpdated: result.sourceUpdated,
+  };
+  writeJson(res, 200, response);
+}
+
 async function handlePlaywrightThreshold(
   req: IncomingMessage,
   res: ServerResponse,
@@ -1705,6 +1760,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - GET  /__visual-delta/baseline-history/diff — component-folder source diff
  * - GET  /__visual-delta/config — resolved host options
  * - PUT  /__visual-delta/config — persist allow-listed project defaults
+ * - PUT  /__visual-delta/story-configuration — persist exact-story overrides
  * - POST /__visual-delta/story-facts — resolve primary-baseline coverage
  * - POST /__visual-delta/playwright-threshold — write host Playwright pass %
  * - POST /__visual-delta/init — scaffold portable Playwright suite/config
@@ -1782,6 +1838,17 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
+        }
+
+        if (url === VISUAL_DELTA_STORY_CONFIG_PATH) {
+          if (req.method !== "PUT") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "PUT");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleStoryConfigPut(req, res, root);
+          return;
         }
 
         if (url === VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH) {

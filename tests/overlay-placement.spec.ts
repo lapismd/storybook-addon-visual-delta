@@ -359,6 +359,52 @@ test.describe("Visual Delta manager overlay placement", () => {
     expect(writes).toEqual([]);
   });
 
+  test("flags and repairs viewport alignment from the Story configuration tab", async ({
+    page,
+  }) => {
+    const storyConfigBodies: unknown[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.endsWith("/story-configuration")) {
+        storyConfigBodies.push(request.postDataJSON());
+      }
+    });
+    const writes = await mockVisualBackend(page);
+    await openManager(page, "shadcn-overlays-popover--open-panel");
+    const panel = page.getByTestId("visual-delta-panel");
+
+    await expect(
+      panel.getByRole("alert", { name: /Baseline alignment mismatch/ }),
+    ).toContainText("configured as Story canvas");
+    await panel
+      .getByRole("button", {
+        name: "Review story alignment configuration",
+      })
+      .click();
+
+    await expect(
+      panel.getByRole("tab", { name: "Story", selected: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("alert", {
+        name: "Story alignment configuration mismatch",
+      }),
+    ).toContainText("viewport-sized");
+    await panel.getByRole("button", { name: "Use viewport alignment" }).click();
+
+    await expect
+      .poll(() => storyConfigBodies)
+      .toEqual([
+        {
+          storyId: "shadcn-overlays-popover--open-panel",
+          values: { align: "viewport" },
+        },
+      ]);
+    await expect(
+      panel.getByText("Story alignment updated to viewport."),
+    ).toBeVisible();
+    expect(writes).toEqual(["/__visual-delta/story-configuration"]);
+  });
+
   test("auto-selected baseline waits for storyFinished and measurement", async ({
     page,
   }) => {

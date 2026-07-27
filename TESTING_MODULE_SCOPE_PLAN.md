@@ -93,8 +93,37 @@ runners now share a whitespace-delimited, escaped story-ID leaf selector.
       center overlay uses the viewport origin and does not show a false geometry
       warning.
 
+## Follow-up: story configuration and alignment repair
+
+- [x] Add a story-scoped first tab to Configuration with effective values and
+      story/project/built-in source labels.
+- [x] Persist only changed, allow-listed `parameters.visualDelta` properties
+      for the exact current story, with an explicit reset-overrides action.
+- [x] Report high-confidence baseline alignment metadata disagreements without
+      breaking the runtime geometry fallback.
+- [x] Offer a one-click alignment repair that updates story configuration only;
+      never rewrite the PNG or review status.
+- [x] Show the alignment warning in the normal comparison notice area and link
+      directly to the current story's Configuration tab.
+- [x] Cover Svelte and TypeScript story-source updates, middleware validation,
+      Configuration UI behavior, and the Popover viewport-alignment regression.
+
 ## Validation evidence
 
+- Story-configuration add-on unit suite: 277/277 passed, including source
+  resolution/validation, Svelte and TypeScript exact-story patches,
+  Configuration editing/repair, and the linked comparison warning.
+- Popover manager regression: 2/2 passed for viewport-origin centering and the
+  comparison warning → Story configuration → exact `align: "viewport"` repair;
+  no PNG or review endpoint was called.
+- Add-on typecheck, Node build, static Storybook build, and live catalog review:
+  passed. The live panel showed the warning in the normal geometry notice area
+  and the Story tab showed effective values/source labels. No baseline update
+  command was run.
+- Final aggregate `pnpm checks`: formatting, Svelte diagnostics, add-on/docs
+  type checks, and the no-Tailwind gate passed; unit tests reached 687/688
+  before the same unrelated F-Mode source-shape assertion recorded below
+  stopped the command.
 - Add-on scope/UI/prefs tests: 18 passed.
 - Host middleware/pipeline tests: 29 passed, including the exact Dropdown Menu
   sibling review-reset regression.
