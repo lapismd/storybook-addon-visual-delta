@@ -27,10 +27,12 @@ import {
   ensureWarmStaticStorybookServer,
 } from "./visual-server.js";
 import {
+  invalidateVisualResultArtifacts,
   loadStoryIndex,
   syncStaticIndexSkipVisual,
 } from "./visual-sidecars.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
+import { decideStorybookStaticBuild } from "./static-build.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -79,29 +81,34 @@ function assertApproved(options: BaselineCliOptions, verb: string): void {
 
 function ensureStorybookStatic(
   root: string,
-  options: { skipBuild?: boolean; forceRebuild?: boolean } = {},
+  options: {
+    skipBuild?: boolean;
+    forceRebuild?: boolean;
+    forceReason?: "unskip" | "explicit-rebuild";
+    storyIds?: string[];
+    component?: string;
+  } = {},
 ): void {
-  const indexPath = path.join(root, "storybook-static", "index.json");
-  const iframePath = path.join(root, "storybook-static", "iframe.html");
-  const complete = existsSync(indexPath) && existsSync(iframePath);
-  const { skipBuild, forceRebuild } = options;
-
-  // Playwright captures against storybook-static, not live Storybook.
-  // --skip-build reuses a complete tree; --rebuild forces build-storybook.
-  if (complete && !forceRebuild) return;
-  if (skipBuild && !forceRebuild) {
-    throw new Error(
-      !existsSync(indexPath)
-        ? "storybook-static/index.json missing — run build-storybook first"
-        : "storybook-static incomplete (missing iframe.html) — run build-storybook",
-    );
+  const decision = decideStorybookStaticBuild({
+    packageRoot: root,
+    skipBuild: Boolean(options.skipBuild),
+    forceRebuild: options.forceRebuild,
+    forceReason: options.forceReason,
+    storyIdPrefix: options.component ?? "",
+    storyIds: options.storyIds,
+  });
+  if (decision.reason === "skip-build-missing") {
+    throw new Error(decision.message);
   }
-
+  if (!decision.shouldBuild) return;
   execFileSync("pnpm", ["build-storybook"], {
     cwd: root,
     stdio: "inherit",
   });
-  if (!existsSync(indexPath) || !existsSync(iframePath)) {
+  if (
+    !existsSync(path.join(root, "storybook-static", "index.json")) ||
+    !existsSync(path.join(root, "storybook-static", "iframe.html"))
+  ) {
     throw new Error(
       "build-storybook did not produce a complete storybook-static (index.json + iframe.html)",
     );
@@ -154,8 +161,8 @@ function interactionSnapshotFileName(
 
 /**
  * Create missing or overwrite primary baselines via Playwright, then wire CSF
- * `parameters.visualDelta.images` and stamp `visual-ready` (clears pending /
- * approved / failed).
+ * `parameters.visualDelta.images` and stamp `visual-pending` (clears ready /
+ * approved / failed). A later explicit comparison may move it to ready.
  */
 export async function runBaselineUpdate(
   options: BaselineCliOptions,
@@ -180,16 +187,18 @@ export async function runBaselineUpdate(
   const mode = pathModeOf(options);
   const snapshotDir = snapshotDirOf(options, root);
   const port = resolveVisualServerPort(options);
+  let unskipped = false;
 
   if (options.createOnly) {
     const matched = matchingEntries(root, storyIds, component);
     for (const entry of matched) {
       if ((entry.tags ?? []).includes("skip-visual")) {
-        patchStorySkipVisual({
+        const patched = patchStorySkipVisual({
           packageRoot: root,
           storyId: entry.id,
           skip: false,
         });
+        unskipped ||= patched.ok;
       }
     }
     // Playwright loads stories from storybook-static/index.json. With
@@ -203,7 +212,10 @@ export async function runBaselineUpdate(
 
   ensureStorybookStatic(root, {
     skipBuild: options.skipBuild,
-    forceRebuild: options.forceRebuild,
+    forceRebuild: options.forceRebuild || unskipped,
+    forceReason: unskipped ? "unskip" : "explicit-rebuild",
+    storyIds: storyIds.length ? storyIds : undefined,
+    component,
   });
   const warm = await ensureWarmStaticStorybookServer(root, port);
   if (!warm.ok) await ensurePlaywrightWebServerPort(port);
@@ -249,8 +261,23 @@ export async function runBaselineUpdate(
     );
   } catch (error) {
     // Create-only can exit non-zero when existing baselines still mismatch.
-    if (!options.createOnly) throw error;
+    if (!options.createOnly) {
+      invalidateVisualResultArtifacts({
+        packageRoot: root,
+        snapshotDir,
+        mode,
+        storyIds: targets.map((entry) => entry.id),
+      });
+      throw error;
+    }
   }
+
+  invalidateVisualResultArtifacts({
+    packageRoot: root,
+    snapshotDir,
+    mode,
+    storyIds: targets.map((entry) => entry.id),
+  });
 
   for (const entry of targets) {
     const png = path.join(snapshotDir, snapshotFileName(entry, mode));
@@ -260,7 +287,7 @@ export async function runBaselineUpdate(
       packageRoot: root,
       storyId: entry.id,
       url,
-      reviewStatus: "ready",
+      reviewStatus: "pending",
     });
   }
 
@@ -365,6 +392,13 @@ export async function runInteractionUpdate(
       );
     }
   }
+
+  invalidateVisualResultArtifacts({
+    packageRoot: root,
+    snapshotDir,
+    mode,
+    storyIds: [storyId],
+  });
 
   patchStoryInteraction({
     packageRoot: root,

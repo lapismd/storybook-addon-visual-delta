@@ -1,9 +1,17 @@
-import { VISUAL_DELTA_CAPTURE_PATH } from "../constants.js";
+import {
+  VISUAL_DELTA_CAPTURE_PATH,
+  VISUAL_DELTA_COMPARE_STORY_PATH,
+} from "../constants.js";
 import type {
   CaptureSubjectProgress,
   CaptureSubjectResult,
   CaptureSubjectStreamEvent,
 } from "../shared/capture-subject-types.js";
+import type {
+  CompareStoryRequest,
+  CompareStoryResult,
+  CompareStoryStreamEvent,
+} from "../shared/compare-story-types.js";
 
 export type { CaptureSubjectProgress, CaptureSubjectStreamEvent };
 
@@ -130,4 +138,69 @@ export async function postChromiumSubjectCapture(
     width: doneResult.width,
     height: doneResult.height,
   };
+}
+
+/** Capture, compare, persist artifacts, and classify one exact live story. */
+export async function postChromiumStoryCompare(
+  body: Omit<CompareStoryRequest, "origin"> & { origin?: string },
+  options?: {
+    onProgress?: (progress: CaptureSubjectProgress) => void;
+    signal?: AbortSignal;
+  },
+): Promise<CompareStoryResult> {
+  const origin =
+    body.origin ??
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const response = await fetch(VISUAL_DELTA_COMPARE_STORY_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, origin }),
+    signal: options?.signal,
+  });
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error(`Chromium comparison failed (${response.status})`);
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: CompareStoryResult | null = null;
+  let streamError: string | null = null;
+  const consume = (line: string) => {
+    if (!line.trim()) return;
+    let event: CompareStoryStreamEvent;
+    try {
+      event = JSON.parse(line) as CompareStoryStreamEvent;
+    } catch {
+      return;
+    }
+    if (event.type === "progress") {
+      options?.onProgress?.({ phase: event.phase, label: event.label });
+    } else if (event.type === "done") {
+      result = event;
+    } else if (event.type === "error") {
+      streamError = event.error;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) consume(line);
+  }
+  buffer += decoder.decode();
+  consume(buffer);
+
+  if (streamError) throw new Error(streamError);
+  if (!result) {
+    throw new Error(
+      response.ok
+        ? "Chromium comparison ended without a result"
+        : `Chromium comparison failed (${response.status})`,
+    );
+  }
+  return result;
 }

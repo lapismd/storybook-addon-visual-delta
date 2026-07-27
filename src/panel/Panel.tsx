@@ -41,11 +41,12 @@ import {
   applyVisualStatuses,
   cancelVisualRun,
   clearVisualStatuses,
+  compareExactStory,
   componentStoryIdsFor,
   formatVisualProgressLabel,
+  invalidateVisualLastRun,
   fetchVisualConfig,
   loadPersistedVisualLastRun,
-  postPlaywrightPassThreshold,
   postVisualCreateBaseline,
   postVisualDeleteBaseline,
   postVisualInit,
@@ -61,7 +62,6 @@ import {
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
-  visualResultFromLiveDiff,
   visualRunnableStoryIds,
   type VisualCreateProgress,
   type VisualLastRunSummary,
@@ -79,7 +79,6 @@ import {
   loadImage,
   withVerifiedPreviewViewport,
 } from "./capture.js";
-import { postChromiumSubjectCapture } from "./chromium-capture.js";
 import { compareLoadedImages } from "./image-comparison.js";
 import { DiffResult } from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
@@ -103,6 +102,7 @@ import { CompareZoomControl } from "./CompareZoomControl.js";
 import { ImageLightbox, type LightboxImage } from "./ImageLightbox.js";
 import { RangeNumberInput } from "./RangeNumberInput.js";
 import {
+  BaselineGeometryUnavailable,
   BaselineAlignmentWarning,
   BaselineGeometryWarning,
 } from "./BaselineGeometryWarning.js";
@@ -124,7 +124,6 @@ import {
   usePlaySteps,
   type PlayStepInfo,
 } from "./usePlaySteps.js";
-import { SyncIcon } from "@storybook/icons";
 import { baselinePathFromPublicUrl } from "../shared/baseline-history.js";
 import {
   BaselineHistoryView,
@@ -136,7 +135,6 @@ import {
   CheckboxContainer,
   ErrorText,
   InlineControl,
-  ThreshMismatchNote,
   ThreshStack,
   Toolbar as PanelToolbar,
   ToolbarRow,
@@ -199,6 +197,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     diffResultZoomDefault,
     baselineGeometryMismatch,
     baselineAlignmentMismatch,
+    baselineGeometryUnavailable,
     setIndex,
     setOpacity,
     setColorInversion,
@@ -211,6 +210,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     showOverlay,
     resetOverlay,
     resetSettings,
+    clearBaselineDiagnostics,
     revealCenteredOverlay,
     hydrateBaselineImages,
     removeBaselineImage,
@@ -317,6 +317,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               visualDelta?: {
                 images?: Array<string | { src?: string }>;
                 interactions?: VisualDeltaInteraction[];
+                align?: "viewport" | "canvas";
               };
             })
           : undefined;
@@ -344,6 +345,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         storyId: currentStoryId,
         storyName,
         imageSrcs,
+        align: params?.visualDelta?.align,
       });
       const interactions = params?.visualDelta?.interactions;
       if (interactions?.length) hydrateInteractions(interactions);
@@ -374,10 +376,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     loadDiffCaptureEngine(),
   );
   const passThresholdPercent = passThresholdByEngine[diffEngine];
-  const [playwrightPassThresholdPercent, setPlaywrightPassThresholdPercent] =
-    useState<number | null>(null);
-  const [isUpdatingPlaywrightThreshold, setIsUpdatingPlaywrightThreshold] =
-    useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState<boolean | null>(null);
   const [onboardingHint, setOnboardingHint] = useState<string | null>(null);
@@ -455,57 +453,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setShowDistribution(false);
     setHistoryTarget(null);
   }, [storyId, storyTagsKey]);
-
-  useEffect(() => {
-    if (diffEngine !== "chromium") return;
-    let cancelled = false;
-    void fetchVisualConfig()
-      .then((config) => {
-        if (cancelled) return;
-        setPlaywrightPassThresholdPercent(
-          config.playwrightPassThresholdPercent,
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setPlaywrightPassThresholdPercent(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [diffEngine]);
-
-  const playwrightThresholdMismatch =
-    diffEngine === "chromium" &&
-    playwrightPassThresholdPercent != null &&
-    Math.abs(playwrightPassThresholdPercent - passThresholdPercent) > 1e-6;
-
-  const handleUpdatePlaywrightThreshold = useCallback(async () => {
-    setIsUpdatingPlaywrightThreshold(true);
-    try {
-      const result = await postPlaywrightPassThreshold(passThresholdPercent);
-      setPlaywrightPassThresholdPercent(result.playwrightPassThresholdPercent);
-      setUpdateLog(
-        `Playwright config: pass threshold ${result.playwrightPassThresholdPercent}%`,
-      );
-    } catch (error) {
-      setCaptureError(
-        error instanceof Error
-          ? error.message
-          : "Failed to update Playwright threshold",
-      );
-    } finally {
-      setIsUpdatingPlaywrightThreshold(false);
-    }
-  }, [passThresholdPercent]);
-
-  /** Copy package Playwright thresh into local Diff Chromium localStorage. */
-  const handleResetLocalThresholdToPlaywright = useCallback(() => {
-    if (playwrightPassThresholdPercent == null) return;
-    setPassThresholdPercent("chromium", playwrightPassThresholdPercent);
-    setUpdateLog(
-      `Local thresh reset to Playwright ${playwrightPassThresholdPercent}%`,
-    );
-  }, [playwrightPassThresholdPercent, setPassThresholdPercent]);
 
   const activeSectionId: BaselineSectionId = selectedInteractionId ?? "default";
   const activeDiffMeta = useMemo(() => {
@@ -860,6 +807,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       // Rebuild-static only refreshes storybook-static — no baseline hydrate.
       if (next.kind === "rebuild") return;
+      setOptimisticReview("pending");
+      clearBaselineDiagnostics();
       // CSF may already be wired (no HMR) or index tags still say skip-visual —
       // hydrate from the known PNG path so the empty-state panel fills.
       const entry = currentStoryId ? api.getData(currentStoryId) : undefined;
@@ -881,7 +830,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setDiffResult(null);
       setDiffEpoch(Date.now());
     });
-  }, [api, currentStoryId, hydrateBaselineImages, revealCenteredOverlay]);
+  }, [
+    api,
+    clearBaselineDiagnostics,
+    currentStoryId,
+    hydrateBaselineImages,
+    revealCenteredOverlay,
+  ]);
 
   const handleDiff = useCallback(
     async (engine: DiffCaptureEngine = "html") => {
@@ -922,27 +877,45 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         let observedCaptureViewport = captureViewport;
 
         if (engine === "chromium") {
-          const capture = await postChromiumSubjectCapture(
-            {
-              storyId: storyId!,
-              visualCaptureUntil: selectedInteractionId ?? undefined,
-              viewport: captureViewport,
-              deviceScaleFactor: captureDeviceScale,
-              delay,
-              ignoreSelectors: resolveIgnoreSelectors(ignoreSelectors),
-              cropToViewport,
-            },
-            {
-              signal: abort.signal,
-              onProgress: (progress) => {
-                setDiffProgressLabel(progress.label);
-              },
-            },
-          );
+          const result = await compareExactStory(api, storyId!, {
+            baselineUrl: baselineSrcForDiff,
+            visualCaptureUntil: selectedInteractionId ?? undefined,
+            mode: selectedMode ?? undefined,
+            signal: abort.signal,
+            onProgress: (progress) => setDiffProgressLabel(progress.label),
+          });
           if (abort.signal.aborted) return;
-          setDiffProgressLabel("Comparing…");
-          actual = await loadImage(capture.dataUrl);
-          captureTag = "chromium";
+          applyVisualStatuses([result]);
+          const outcomePassed =
+            result.outcome === "passed" ||
+            result.outcome === "changed-within-tolerance";
+          publishVisualLastRun({
+            finishedAt: Date.now(),
+            completed: true,
+            summary: {
+              total: 1,
+              passed: outcomePassed ? 1 : 0,
+              failed: outcomePassed ? 0 : 1,
+              skipped: 0,
+            },
+            error: outcomePassed ? undefined : "1 failed",
+            scope: "story",
+            results: [result],
+            logTail: "Live Chromium story comparison",
+          });
+          const stem =
+            baselineSrcForDiff.split("?")[0] ??
+            selectedImage.src.split("?")[0] ??
+            "";
+          const loaded = stem
+            ? await loadPlaywrightDiffResult(stem, Date.now())
+            : null;
+          if (stem && loaded) {
+            diffResultCacheRef.current.set(stem, loaded);
+          }
+          setDiffResult(loaded);
+          setDiffEpoch(Date.now());
+          return;
         } else {
           const overlayHidden = waitForOverlayHidden();
           hideOverlay();
@@ -1007,15 +980,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           `${captureDeviceScale}× · bitmap ${actual.width}×${actual.height} · ${sizeCore}`;
         const threshold =
           passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
-        const nextResult = compareLoadedImages(baseline, actual, {
-          pixelThreshold: diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
-          includeAntiAliasing: diffIncludeAntiAliasing,
-          passThresholdPercent: threshold,
-          deviceScaleFactor: captureDeviceScale,
-          captureViewport,
-          observedCaptureViewport,
-          sizeNote,
-        });
+        const nextResult = {
+          ...compareLoadedImages(baseline, actual, {
+            pixelThreshold: diffThreshold ?? DEFAULT_DIFF_THRESHOLD,
+            includeAntiAliasing: diffIncludeAntiAliasing,
+            passThresholdPercent: threshold,
+            deviceScaleFactor: captureDeviceScale,
+            captureViewport,
+            observedCaptureViewport,
+            sizeNote,
+          }),
+          source: "html" as const,
+        };
         const { diffPercent, diffPixels, totalPixels } = nextResult;
         // Cache under the gallery stem so soft-hide / reload effects keep DiffResult.
         const stemKey =
@@ -1026,18 +1002,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           diffResultCacheRef.current.set(stemKey, nextResult);
         }
         setDiffResult(nextResult);
-        if (storyId) {
-          applyVisualStatuses([
-            visualResultFromLiveDiff({
-              storyId,
-              diffPercent,
-              diffPixels,
-              totalPixels,
-              passThresholdPercent: threshold,
-              passed: nextResult.passed,
-            }),
-          ]);
-        }
+        // Diff HTML is intentionally diagnostic-only. It does not publish a
+        // durable run, sidebar status, or review outcome.
       } catch (error) {
         if (abort.signal.aborted) return;
         const message = error instanceof Error ? error.message : "Diff failed";
@@ -1056,6 +1022,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     },
     [
       applyVisualStatuses,
+      api,
       cropToViewport,
       delay,
       diffIncludeAntiAliasing,
@@ -1067,6 +1034,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       index,
       passThresholdPercent,
       selectedInteractionId,
+      selectedMode,
       showOverlay,
       storyId,
       waitForOverlayHidden,
@@ -1142,6 +1110,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         }
         setDiffResult(null);
         setDiffEpoch(Date.now());
+        invalidateVisualLastRun([storyId]);
+        clearBaselineDiagnostics();
         const derivedCount = Math.max(0, result.deletedFiles.length - 1);
         setUpdateLog(
           `Deleted ${section.label} screenshot${
@@ -1164,6 +1134,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       hydrateInteractions,
       interactionSteps,
       interactions,
+      clearBaselineDiagnostics,
       primaryImages,
       removeBaselineImage,
       restorePrimaryBaselines,
@@ -1366,8 +1337,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setCaptureError(null);
     try {
       await postVisualSkipVisual({ storyId, skip: nextSkip });
+      invalidateVisualLastRun([storyId]);
+      clearBaselineDiagnostics();
       setOptimisticSkipVisual(nextSkip);
-      if (nextSkip) setOptimisticReview(null);
       setUpdateLog(
         nextSkip
           ? "Added skip-visual — excluded from Playwright visual runs."
@@ -1380,7 +1352,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     } finally {
       setIsReviewing(false);
     }
-  }, [skipVisual, storyId]);
+  }, [clearBaselineDiagnostics, skipVisual, storyId]);
 
   const handleRunVisual = useCallback(
     async (scope: VisualRunMode) => {
@@ -1406,6 +1378,38 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           );
         }
         await testProviderStore.runWithState(async () => {
+          if (scope === "story") {
+            applyPendingVisualStatuses([storyId!]);
+            const result = await compareExactStory(api, storyId!, {
+              baselineUrl: baselineSrc,
+              visualCaptureUntil: selectedInteractionId ?? undefined,
+              mode: selectedMode ?? undefined,
+              onProgress: (progress) => setDiffProgressLabel(progress.label),
+            });
+            applyVisualRunResults([storyId!], [result]);
+            const outcomePassed =
+              result.outcome === "passed" ||
+              result.outcome === "changed-within-tolerance";
+            publishVisualLastRun({
+              finishedAt: Date.now(),
+              completed: true,
+              summary: {
+                total: 1,
+                passed: outcomePassed ? 1 : 0,
+                failed: outcomePassed ? 0 : 1,
+                skipped: 0,
+              },
+              error: outcomePassed ? undefined : "1 failed",
+              scope: "story",
+              results: [result],
+              logTail: "Live Chromium story comparison",
+            });
+            setDiffEpoch(Date.now());
+            if (!outcomePassed) {
+              setCaptureError("Visual: 1 failed · 0 passed");
+            }
+            return;
+          }
           if (storyIds?.length) {
             applyPendingVisualStatuses(storyIds);
           } else {
@@ -1461,7 +1465,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsRunningVisual(false);
       }
     },
-    [api, storyId],
+    [api, baselineSrc, selectedInteractionId, selectedMode, storyId],
   );
 
   const handleRun = useCallback(
@@ -1483,9 +1487,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       ? ("pass" as const)
       : ("fail" as const)
     : null;
-  const latestStoryResult = lastRun?.results?.find(
+  const latestStoryResultCandidate = lastRun?.results?.find(
     (result) => result.storyId === storyId,
   );
+  const latestStoryResult =
+    latestStoryResultCandidate?.sidecar?.version === 2 &&
+    (!diffResult ||
+      latestStoryResultCandidate.sidecar.baselineHash !==
+        diffResult.baselineHash ||
+      latestStoryResultCandidate.sidecar.captureConfigHash !==
+        diffResult.captureConfigHash)
+      ? undefined
+      : latestStoryResultCandidate;
   const modeResultStatuses = useMemo(
     () =>
       Object.fromEntries(
@@ -1537,6 +1550,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       state = "missing";
       title = "Baseline missing";
       detail = "Create a visual baseline to enable comparison.";
+    } else if (
+      baselineJob &&
+      !baselineJob.running &&
+      !baselineJob.error &&
+      baselineJob.kind !== "rebuild" &&
+      !latestStoryResult
+    ) {
+      state = "ready";
+      title =
+        baselineJob.kind === "create" ? "Baseline created" : "Baseline updated";
+      detail =
+        "Review is pending. Run Story or Diff Chromium to produce a fresh official result.";
     } else if (aggregateModeStatus === "error") {
       state = "error";
       title = "Mode capture error";
@@ -1569,21 +1594,30 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       state = "error";
       title = "Capture error";
       detail = captureError;
+    } else if (diffResult?.source === "playwright") {
+      state = "ready";
+      title = "Baseline updated";
+      detail =
+        "Run Story or Diff Chromium to refresh the official comparison result.";
     } else if (badgeStatus === "fail") {
       state = "failed";
-      title = "Live comparison failed";
-      detail = "The current baseline exceeds the local pass threshold.";
+      title = "HTML preview differs";
+      detail =
+        "Diagnostic only — run Story or Diff Chromium for an official result.";
     } else if (badgeStatus === "pass") {
       state = "passed";
-      title = "Live comparison passed";
-      detail = "The current baseline is within the local pass threshold.";
+      title = "HTML preview matches";
+      detail =
+        "Diagnostic only — run Story or Diff Chromium for an official result.";
     }
 
     return { state, title, detail };
   }, [
     badgeStatus,
     aggregateModeStatus,
+    baselineJob,
     captureError,
+    diffResult,
     isEmpty,
     latestStoryResult,
     needsScaffold,
@@ -1699,53 +1733,26 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               <ThreshStack>
                 <InlineControl title="Pass if diff % is below this">
                   <span>Thresh</span>
-                  <RangeNumberInput
-                    label={`${diffEngine === "html" ? "HTML" : "Chromium"} pass threshold percentage`}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    value={passThresholdPercent}
-                    suffix="%"
-                    inputWidth="3.75rem"
-                    onChange={(value) =>
-                      setPassThresholdPercent(diffEngine, value)
-                    }
-                  />
+                  {diffEngine === "html" ? (
+                    <RangeNumberInput
+                      label="HTML preview pass threshold percentage"
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      value={passThresholdPercent}
+                      suffix="%"
+                      inputWidth="3.75rem"
+                      onChange={(value) =>
+                        setPassThresholdPercent("html", value)
+                      }
+                    />
+                  ) : (
+                    <span title="Edit the official Chromium threshold in Configuration">
+                      {passThresholdPercent}%
+                    </span>
+                  )}
                 </InlineControl>
-                {playwrightThresholdMismatch ? (
-                  <ThreshMismatchNote title="Local Diff Chromium thresh differs from package Playwright default">
-                    Playwright {playwrightPassThresholdPercent}% ≠ local{" "}
-                    {passThresholdPercent}%
-                  </ThreshMismatchNote>
-                ) : null}
               </ThreshStack>
-              {playwrightThresholdMismatch ? (
-                <ButtonGroup
-                  role="group"
-                  aria-label="Sync pass threshold with Playwright"
-                >
-                  <Button
-                    size="small"
-                    disabled={isUpdatingPlaywrightThreshold || busy}
-                    ariaLabel={false}
-                    title="Write local Thresh into package Playwright config"
-                    onClick={() => void handleUpdatePlaywrightThreshold()}
-                  >
-                    {isUpdatingPlaywrightThreshold
-                      ? "Updating…"
-                      : "Update Playwright"}
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={busy || playwrightPassThresholdPercent == null}
-                    ariaLabel="Reset local thresh to Playwright value"
-                    title="Reset local thresh to Playwright value"
-                    onClick={handleResetLocalThresholdToPlaywright}
-                  >
-                    <SyncIcon />
-                  </Button>
-                </ButtonGroup>
-              ) : null}
             </ToolbarRow>
             {captureError ? <ErrorText>{captureError}</ErrorText> : null}
           </PanelToolbar>
@@ -1766,13 +1773,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffEngine,
       diffResult,
       handleModeChange,
-      handleResetLocalThresholdToPlaywright,
-      handleUpdatePlaywrightThreshold,
       images.length,
       images,
       index,
       isSplit,
-      isUpdatingPlaywrightThreshold,
       liveVisible,
       modeNames,
       modeResultStatuses,
@@ -1780,8 +1784,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       overlayOn,
       passThresholdPercent,
       placement,
-      playwrightPassThresholdPercent,
-      playwrightThresholdMismatch,
       primaryImages,
       resetOverlay,
       selectedInteractionId,
@@ -1894,10 +1896,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               }
               onStoryUpdated={() => {
                 if (storyId) {
+                  invalidateVisualLastRun([storyId]);
+                  clearBaselineDiagnostics();
+                  setDiffResult(null);
+                  diffResultCacheRef.current.clear();
                   emit(EVENTS.REQUEST_INIT_IMAGE, { storyId });
                 }
               }}
               onUpdated={(config) => {
+                invalidateVisualLastRun();
+                clearBaselineDiagnostics();
+                setDiffResult(null);
+                diffResultCacheRef.current.clear();
                 emit(EVENTS.CONFIG_UPDATED, {
                   projectDefaults: config.projectDefaults,
                 });
@@ -1915,8 +1925,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           />
         }
         notice={
-          baselineGeometryMismatch || baselineAlignmentMismatch ? (
+          baselineGeometryMismatch ||
+          baselineAlignmentMismatch ||
+          baselineGeometryUnavailable ? (
             <>
+              {baselineGeometryUnavailable ? (
+                <BaselineGeometryUnavailable
+                  detail={baselineGeometryUnavailable}
+                  onRetry={() => setIndex(index)}
+                />
+              ) : null}
               {baselineGeometryMismatch ? (
                 <BaselineGeometryWarning mismatch={baselineGeometryMismatch} />
               ) : null}

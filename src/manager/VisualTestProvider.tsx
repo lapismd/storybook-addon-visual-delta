@@ -39,6 +39,7 @@ import {
   applyVisualStatuses,
   cancelVisualRun,
   clearVisualStatuses,
+  compareExactStory,
   fetchAffectedVisualPlan,
   fetchVisualRunStatus,
   formatVisualProgressLabel,
@@ -65,6 +66,7 @@ import {
 } from "./run-visual.js";
 import {
   executeVisualActionSequence,
+  resultsForFrozenVisualScope,
   resolveVisualActionStoryIds,
 } from "../shared/action-scope.js";
 import {
@@ -305,38 +307,6 @@ type VisualStatusByStory = Record<
   Partial<Record<string, { value?: string }>>
 >;
 
-function resultsFromStatusStore(
-  allStatuses: ReturnType<typeof experimental_useStatusStore>,
-  scopeIds?: string[],
-): VisualRunResultItem[] {
-  const allow = scopeIds?.length ? new Set(scopeIds) : null;
-  const results: VisualRunResultItem[] = [];
-  const byStory = allStatuses as VisualStatusByStory;
-  for (const [storyId, byType] of Object.entries(byStory)) {
-    if (allow && !allow.has(storyId)) continue;
-    const status = byType?.[STATUS_TYPE_ID_VISUAL];
-    if (!status) continue;
-    if (status.value === "status-value:success") {
-      results.push({ storyId, status: "passed", title: storyId });
-    } else if (status.value === "status-value:warning") {
-      results.push({
-        storyId,
-        status: "failed",
-        title: storyId,
-        outcome: "mismatch",
-      });
-    } else if (status.value === "status-value:error") {
-      results.push({
-        storyId,
-        status: "failed",
-        title: storyId,
-        outcome: "error",
-      });
-    }
-  }
-  return results;
-}
-
 export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const api = useStorybookApi();
   const storybookState = useStorybookState() as {
@@ -519,6 +489,33 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         );
       }
       applyPendingVisualStatuses(runnable);
+      if (scope === "story" && runnable.length === 1) {
+        const result = await compareExactStory(api, runnable[0]!, {
+          onProgress: (next) => {
+            setStatusLog(next.label);
+          },
+        });
+        applyVisualRunResults(runnable, [result]);
+        const outcomePassed =
+          result.outcome === "passed" ||
+          result.outcome === "changed-within-tolerance";
+        const summary: VisualLastRunSummary = {
+          finishedAt: Date.now(),
+          summary: {
+            total: 1,
+            passed: outcomePassed ? 1 : 0,
+            failed: outcomePassed ? 0 : 1,
+            skipped: 0,
+          },
+          completed: true,
+          error: outcomePassed ? undefined : "1 failed",
+          scope,
+          logTail: "Live Chromium story comparison",
+          results: [result],
+        };
+        publishVisualLastRun(summary);
+        return [result];
+      }
       const data = await postVisualRun({
         storyIds: runnable,
         selection: "selected",
@@ -561,8 +558,6 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   runCompareRef.current = runCompare;
 
   const latestResultsRef = useRef<VisualRunResultItem[] | undefined>(undefined);
-  const allStatusesRef = useRef(allStatuses);
-  allStatusesRef.current = allStatuses;
   const entryStoryIdsRef = useRef(entryStoryIds);
   entryStoryIdsRef.current = entryStoryIds;
   const sidebarStoryIdsRef = useRef(sidebarStoryIds);
@@ -666,10 +661,51 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                   const priorResults = latestResultsRef.current?.filter(
                     (item) => frozenIds.includes(item.storyId),
                   );
+                  let freshPriorResults: VisualRunResultItem[] | undefined;
+                  if (priorResults?.length) {
+                    const requested = new Set(frozenIds);
+                    const evidenceResponse = await fetch(
+                      VISUAL_DELTA_STORY_FACTS_PATH,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          stories: storyDescriptors.filter((story) =>
+                            requested.has(story.id),
+                          ),
+                        }),
+                      },
+                    );
+                    const evidence =
+                      (await evidenceResponse.json()) as VisualStoryFactsResponse;
+                    if (evidenceResponse.ok && evidence.ok) {
+                      const facts = new Map(
+                        evidence.stories.map((fact) => [fact.storyId, fact]),
+                      );
+                      const matchingResults = priorResults.filter((item) => {
+                        const sidecar = item.sidecar;
+                        const fact = facts.get(item.storyId);
+                        return Boolean(
+                          sidecar?.baselineHash &&
+                            sidecar.captureConfigHash &&
+                            fact?.baselineHash === sidecar.baselineHash &&
+                            fact.resultBaselineHash === sidecar.baselineHash &&
+                            fact.resultCaptureConfigHash ===
+                              sidecar.captureConfigHash,
+                        );
+                      });
+                      freshPriorResults = resultsForFrozenVisualScope(
+                        frozenIds,
+                        matchingResults,
+                      );
+                    }
+                  }
                   const source =
                     results ??
-                    (priorResults?.length ? priorResults : undefined) ??
-                    resultsFromStatusStore(allStatusesRef.current, frozenIds);
+                    (freshPriorResults?.length
+                      ? freshPriorResults
+                      : undefined) ??
+                    [];
                   if (!source.length) {
                     throw new Error(
                       "No visual results to update status from — run visual tests first",
@@ -707,7 +743,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         });
       });
     },
-    [affectedOnlyEnabled, api],
+    [affectedOnlyEnabled, api, storyDescriptors],
   );
 
   const runSelectedRef = useRef(runSelectedActions);

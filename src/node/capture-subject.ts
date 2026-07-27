@@ -48,6 +48,8 @@ export type CaptureSubjectRequest = {
   ignoreSelectors?: string[];
   /** Capture full viewport instead of subject clip. */
   cropToViewport?: boolean;
+  /** Storybook `globals` query serialization for mode captures. */
+  globals?: string;
 };
 
 export type CaptureSubjectError = {
@@ -221,6 +223,7 @@ export async function captureSubjectWithChromium(
     if (request.visualCaptureUntil) {
       params.set(VISUAL_CAPTURE_UNTIL_PARAM, request.visualCaptureUntil);
     }
+    if (request.globals) params.set("globals", request.globals);
 
     onProgress?.({
       phase: "navigating",
@@ -281,8 +284,7 @@ export async function captureSubjectWithChromium(
       ...fromDom.ignoreSelectors,
     ]);
     const mask = ignoreSelectors.map((sel) => page.locator(sel));
-    const cropToViewport =
-      request.cropToViewport === true || fromDom.cropToViewport;
+    const cropToViewport = request.cropToViewport ?? fromDom.cropToViewport;
 
     onProgress?.({
       phase: "capturing",

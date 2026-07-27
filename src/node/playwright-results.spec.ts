@@ -83,7 +83,7 @@ describe("Playwright result normalization", () => {
     ]);
   });
 
-  it("keeps genuine and unexpected-pass failures affected", () => {
+  it("treats visual-failed as review metadata rather than expected-failure behavior", () => {
     const root = fixtureRoot();
     const results = [
       { storyId: "button--passed", status: "passed" as const },
@@ -101,6 +101,6 @@ describe("Playwright result normalization", () => {
         },
         results,
       }).sort(),
-    ).toEqual(["button--expected-failure", "button--passed"]);
+    ).toEqual(["button--passed"]);
   });
 });

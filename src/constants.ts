@@ -259,6 +259,8 @@ export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
 export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
 /** Storybook-dev middleware that captures a story subject via Playwright Chromium. */
 export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
+/** Authoritative exact-story Chromium capture, compare, and sidecar write. */
+export const VISUAL_DELTA_COMPARE_STORY_PATH = "/__visual-delta/compare-story";
 /** Storybook-dev middleware that returns resolved host options (read-only). */
 export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";
 /** Storybook-dev middleware that edits one story's Visual Delta overrides. */
@@ -342,8 +344,8 @@ export type VisualStoryTagChange =
   | { kind: "clear-review" };
 
 /**
- * Mutually exclusive visual tags: at most one review tag, and never a review
- * tag alongside `skip-visual`. Used by every CSF tag patcher.
+ * Review actions normalize to one review tag. Eligibility changes add/remove
+ * `skip-visual` without mutating the independent review state.
  */
 export function normalizeVisualStoryTags(
   current: readonly string[],
@@ -352,7 +354,7 @@ export function normalizeVisualStoryTags(
   const reviewTags = new Set<string>(VISUAL_REVIEW_TAGS);
   const filtered = current.filter((tag) => {
     if (change.kind === "skip") {
-      return tag !== SKIP_VISUAL_TAG && !reviewTags.has(tag);
+      return tag !== SKIP_VISUAL_TAG;
     }
     return !reviewTags.has(tag);
   });

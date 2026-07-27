@@ -1,22 +1,47 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import {
   SKIP_VISUAL_TAG,
   normalizeVisualStoryTags,
   type VisualReviewStatus,
 } from "../constants.js";
-import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import {
+  isVisualDiffSidecar,
+  type VisualDiffSidecar,
+} from "../visual-diff-sidecar.js";
 import type { BaselinePathMode } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
 
 function readSidecar(filePath: string): VisualDiffSidecar | null {
   try {
-    const value = JSON.parse(
-      readFileSync(filePath, "utf8"),
-    ) as VisualDiffSidecar;
-    return value?.version === 1 && value.storyId ? value : null;
+    const value = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+    return isVisualDiffSidecar(value) ? value : null;
   } catch {
     return null;
+  }
+}
+
+function fileHash(filePath: string): string {
+  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
+}
+
+function sidecarMatchesBaseline(
+  sidecar: VisualDiffSidecar | null,
+  baselinePng: string,
+): sidecar is VisualDiffSidecar {
+  if (!sidecar) return false;
+  if (!sidecar.baselineHash) return true;
+  try {
+    return sidecar.baselineHash === fileHash(baselinePng);
+  } catch {
+    return false;
   }
 }
 
@@ -184,7 +209,51 @@ export function loadSidecarForStoryId(
     platform,
   );
   if (!png) return null;
-  return readSidecar(png.replace(/\.png$/i, ".json"));
+  const sidecar = readSidecar(png.replace(/\.png$/i, ".json"));
+  return sidecarMatchesBaseline(sidecar, png) ? sidecar : null;
+}
+
+/** Remove ephemeral comparison evidence without changing committed PNGs/tags. */
+export function invalidateVisualResultArtifacts(options: {
+  packageRoot: string;
+  snapshotDir: string;
+  mode?: BaselinePathMode;
+  storyIds?: readonly string[];
+}): string[] {
+  const storyIds =
+    options.storyIds ??
+    Object.values(loadStoryIndex(options.packageRoot))
+      .filter((entry) => entry.type === "story" || !entry.type)
+      .map((entry) => entry.id);
+  const deleted: string[] = [];
+  for (const storyId of storyIds) {
+    const primary = baselinePngPathForStoryId(
+      storyId,
+      options.packageRoot,
+      options.snapshotDir,
+      options.mode,
+    );
+    if (!primary) continue;
+    const directory = path.dirname(primary);
+    if (!existsSync(directory)) continue;
+    const primaryName = path.basename(primary);
+    const platformSuffix = `-chromium-${process.platform}.png`;
+    const stem = primaryName.endsWith(platformSuffix)
+      ? primaryName.slice(0, -platformSuffix.length)
+      : primaryName.replace(/\.png$/i, "");
+    for (const name of readdirSync(directory)) {
+      if (
+        !name.startsWith(stem) ||
+        !/\.(?:json|actual\.png|diff\.png)$/i.test(name)
+      ) {
+        continue;
+      }
+      const filePath = path.join(directory, name);
+      unlinkSync(filePath);
+      deleted.push(filePath);
+    }
+  }
+  return deleted;
 }
 
 /** Named-mode sidecars beside the story's primary baseline. */
@@ -217,7 +286,12 @@ export function loadModeSidecarsForStoryId(
         name.startsWith(prefix) &&
         name.endsWith(`-${project}-${platform}.json`),
     )
-    .map((name) => readSidecar(path.join(directory, name)))
+    .map((name) => {
+      const sidecar = readSidecar(path.join(directory, name));
+      if (!sidecar) return null;
+      const png = path.join(directory, name.replace(/\.json$/i, ".png"));
+      return sidecarMatchesBaseline(sidecar, png) ? sidecar : null;
+    })
     .filter((sidecar): sidecar is VisualDiffSidecar =>
       Boolean(sidecar?.mode && sidecar.storyId === storyId),
     )

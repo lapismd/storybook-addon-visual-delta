@@ -13,6 +13,10 @@ export type VisualBaselineCoverage = "present" | "missing" | "unresolved";
 export type VisualStoryFact = {
   storyId: string;
   baseline: VisualBaselineCoverage;
+  /** Current PNG revision and matching persisted result evidence (v2). */
+  baselineHash?: string;
+  resultBaselineHash?: string;
+  resultCaptureConfigHash?: string;
 };
 
 export type VisualStoryFactsRequest = {
@@ -21,7 +25,7 @@ export type VisualStoryFactsRequest = {
 
 export type VisualStoryFactsResponse = {
   ok: true;
-  version: 1;
+  version: 1 | 2;
   generatedAt: number;
   stories: VisualStoryFact[];
 };

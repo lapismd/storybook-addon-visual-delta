@@ -23,6 +23,48 @@ describe("classifyVisualRunResult", () => {
     ).toBe("error");
   });
 
+  it("trusts the separated v2 outcome and dimension mismatch", () => {
+    expect(
+      classifyVisualRunResult({
+        status: "failed",
+        sidecar: {
+          version: 2,
+          status: "failed",
+          runnerStatus: "failed",
+          outcome: "mismatch",
+          dimensionMismatch: true,
+        },
+      }),
+    ).toBe("mismatch");
+    expect(
+      classifyVisualRunResult({
+        status: "failed",
+        sidecar: {
+          version: 2,
+          status: "failed",
+          runnerStatus: "failed",
+          outcome: "error",
+        },
+      }),
+    ).toBe("error");
+  });
+
+  it("rejects a contradictory v2 pass outcome when its runner failed", () => {
+    expect(
+      classifyVisualRunResult({
+        status: "failed",
+        outcome: "passed",
+        sidecar: {
+          version: 2,
+          status: "passed",
+          runnerStatus: "failed",
+          outcome: "passed",
+          passed: true,
+        },
+      }),
+    ).toBe("error");
+  });
+
   it("recognizes a changed image that remains within tolerance", () => {
     expect(
       classifyVisualRunResult({
@@ -32,6 +74,18 @@ describe("classifyVisualRunResult", () => {
           passed: true,
           diffPixels: 4,
           diffPercent: 0.4,
+          passThresholdPercent: 1,
+        },
+      }),
+    ).toBe("changed-within-tolerance");
+    expect(
+      classifyVisualRunResult({
+        status: "passed",
+        sidecar: {
+          status: "passed",
+          passed: true,
+          diffPixels: 10,
+          diffPercent: 1,
           passThresholdPercent: 1,
         },
       }),

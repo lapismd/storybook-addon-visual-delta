@@ -48,3 +48,18 @@ export async function executeVisualActionSequence<Result>(actions: {
   await actions.updateStatus?.(results);
   return results;
 }
+
+/**
+ * Reuse prior evidence only when it covers the complete frozen invocation
+ * scope. A partial prior run must not silently update just the stories for
+ * which stale manager state happens to remain.
+ */
+export function resultsForFrozenVisualScope<Result extends { storyId: string }>(
+  storyIds: readonly string[],
+  results: readonly Result[],
+): Result[] | undefined {
+  const byStoryId = new Map(results.map((result) => [result.storyId, result]));
+  const frozenIds = uniqueStoryIds(storyIds);
+  if (frozenIds.some((storyId) => !byStoryId.has(storyId))) return undefined;
+  return frozenIds.map((storyId) => byStoryId.get(storyId)!);
+}

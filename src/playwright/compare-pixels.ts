@@ -10,6 +10,9 @@ import {
 export type PixelCompareResult = {
   imageWidth: number;
   imageHeight: number;
+  capturedWidth: number;
+  capturedHeight: number;
+  dimensionMismatch: boolean;
   diffPixels: number;
   totalPixels: number;
   diffPercent: number;
@@ -140,12 +143,29 @@ function fitRgba(src: PNG, width: number, height: number): Uint8Array {
 export function compareBaselineToActualPng(
   baselinePath: string,
   actualPng: Buffer,
-  passThresholdPercent = PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
+  options:
+    | number
+    | {
+        passThresholdPercent?: number;
+        diffThreshold?: number;
+        includeAntiAliasing?: boolean;
+      } = PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
 ): PixelCompareResult {
+  const passThresholdPercent =
+    typeof options === "number"
+      ? options
+      : (options.passThresholdPercent ?? PLAYWRIGHT_PASS_THRESHOLD_PERCENT);
+  const diffThreshold =
+    typeof options === "number" ? 0.2 : (options.diffThreshold ?? 0.2);
+  const includeAntiAliasing =
+    typeof options === "number"
+      ? false
+      : (options.includeAntiAliasing ?? false);
   const baseline = PNG.sync.read(readFileSync(baselinePath));
   const actual = PNG.sync.read(actualPng);
   const width = baseline.width;
   const height = baseline.height;
+  const dimensionMismatch = actual.width !== width || actual.height !== height;
   const baselineData = new Uint8ClampedArray(baseline.data);
   const actualData = new Uint8ClampedArray(
     actual.width === width && actual.height === height
@@ -160,8 +180,8 @@ export function compareBaselineToActualPng(
     width,
     height,
     {
-      threshold: 0.2,
-      includeAA: false,
+      threshold: diffThreshold,
+      includeAA: includeAntiAliasing,
       alpha: 0.1,
       diffColor: [255, 0, 0],
       diffColorAlt: [0, 255, 0],
@@ -178,11 +198,14 @@ export function compareBaselineToActualPng(
   return {
     imageWidth: width,
     imageHeight: height,
+    capturedWidth: actual.width,
+    capturedHeight: actual.height,
+    dimensionMismatch,
     diffPixels,
     totalPixels,
     diffPercent,
     passThresholdPercent,
-    passed: diffPercent < passThresholdPercent,
+    passed: !dimensionMismatch && diffPercent <= passThresholdPercent,
     changeBounds: changeBoundsFromDiff(
       new Uint8Array(diffData.buffer, diffData.byteOffset, diffData.byteLength),
       width,

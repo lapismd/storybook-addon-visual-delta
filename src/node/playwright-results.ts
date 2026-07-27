@@ -1,14 +1,4 @@
-import { VISUAL_REVIEW_FAILED_TAG } from "../constants.js";
-import {
-  resolveBaselinePathMode,
-  resolveSnapshotDir,
-  type VisualDeltaHostOptions,
-} from "./options.js";
-import {
-  loadModeSidecarsForStoryId,
-  loadSidecarForStoryId,
-  loadStoryIndex,
-} from "./visual-sidecars.js";
+import type { VisualDeltaHostOptions } from "./options.js";
 
 export type PlaywrightListResult = {
   index: number;
@@ -55,11 +45,8 @@ function primaryStoryId(storyId: string): string {
 /**
  * Return stories Playwright successfully exercised after a partial run.
  *
- * The list reporter renders expected failures with the same cross as genuine
- * failures. Visual Delta can distinguish the catalog's expected visual
- * failures because they carry `visual-failed` and their sidecar records an
- * actual failed comparison. An unexpectedly passing `visual-failed` test has
- * a passing sidecar and deliberately remains affected.
+ * Review metadata never changes Playwright expectations, so only genuinely
+ * passed results are reusable by the affected-results cache.
  */
 export function successfulStoryIdsFromPlaywrightResults(options: {
   root: string;
@@ -69,10 +56,8 @@ export function successfulStoryIdsFromPlaywrightResults(options: {
     status: "passed" | "failed" | "skipped" | "timedOut";
   }>;
 }): string[] {
-  const hostOptions = options.hostOptions ?? {};
-  const index = loadStoryIndex(options.root);
-  const snapshotDir = resolveSnapshotDir(hostOptions, options.root);
-  const mode = resolveBaselinePathMode(hostOptions);
+  void options.root;
+  void options.hostOptions;
   const successful = new Set<string>();
 
   for (const result of options.results) {
@@ -80,30 +65,6 @@ export function successfulStoryIdsFromPlaywrightResults(options: {
     if (result.status === "passed") {
       successful.add(storyId);
       continue;
-    }
-    if (result.status !== "failed") continue;
-
-    const expectedFailure = (index[storyId]?.tags ?? []).includes(
-      VISUAL_REVIEW_FAILED_TAG,
-    );
-    if (!expectedFailure) continue;
-    const primary = loadSidecarForStoryId(
-      storyId,
-      options.root,
-      snapshotDir,
-      mode,
-    );
-    const modes = loadModeSidecarsForStoryId(
-      storyId,
-      options.root,
-      snapshotDir,
-      mode,
-    );
-    if (
-      primary?.status === "failed" ||
-      modes.some((sidecar) => sidecar.status === "failed")
-    ) {
-      successful.add(storyId);
     }
   }
 

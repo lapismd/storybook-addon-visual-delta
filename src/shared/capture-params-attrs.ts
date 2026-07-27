@@ -1,5 +1,6 @@
 /** Preview document markers read by Playwright / Chromium capture. */
 export const VISUAL_DELTA_DELAY_ATTR = "data-visual-delta-delay";
+export const VISUAL_DELTA_ALIGN_ATTR = "data-visual-delta-align";
 export const VISUAL_DELTA_IGNORE_ATTR_LIST =
   "data-visual-delta-ignore-selectors";
 export const VISUAL_DELTA_CROP_ATTR = "data-visual-delta-crop-to-viewport";

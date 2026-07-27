@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   executeVisualActionSequence,
+  resultsForFrozenVisualScope,
   resolveVisualActionStoryIds,
 } from "./action-scope.js";
 
@@ -135,5 +136,23 @@ describe("resolveVisualActionStoryIds", () => {
       }),
     ).resolves.toBe(results);
     expect(calls).toEqual(["baseline", "compare", "status"]);
+  });
+
+  it("reuses prior results only when they cover the frozen scope", () => {
+    const menu = { storyId: "menu--checkboxes", status: "passed" };
+    const dialog = { storyId: "dialog--default", status: "failed" };
+
+    expect(
+      resultsForFrozenVisualScope(
+        ["menu--checkboxes", "dialog--default"],
+        [dialog, menu],
+      ),
+    ).toEqual([menu, dialog]);
+    expect(
+      resultsForFrozenVisualScope(
+        ["menu--checkboxes", "dialog--default"],
+        [menu],
+      ),
+    ).toBeUndefined();
   });
 });

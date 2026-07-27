@@ -98,7 +98,7 @@ describe("syncStaticIndexSkipVisual", () => {
     ]);
   });
 
-  it("clears review tags when marking skip-visual on the index", () => {
+  it("preserves review tags when marking skip-visual on the index", () => {
     const root = mkdtempSync(path.join(tmpdir(), "vd-index-skip-"));
     mkdirSync(path.join(root, "storybook-static"), { recursive: true });
     const indexPath = path.join(root, "storybook-static", "index.json");
@@ -120,6 +120,8 @@ describe("syncStaticIndexSkipVisual", () => {
     };
     expect(parsed.entries["forms-input--error"]?.tags).toEqual([
       "dev",
+      "visual-pending",
+      "visual-ready",
       "skip-visual",
     ]);
   });

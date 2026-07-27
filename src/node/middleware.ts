@@ -8,6 +8,7 @@ import {
   VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CAPTURE_PATH,
+  VISUAL_DELTA_COMPARE_STORY_PATH,
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
   VISUAL_DELTA_CREATE_PATH,
@@ -48,6 +49,11 @@ import {
   type CaptureSubjectRequest,
 } from "./capture-subject.js";
 import type { CaptureSubjectStreamEvent } from "../shared/capture-subject-types.js";
+import type {
+  CompareStoryRequest,
+  CompareStoryStreamEvent,
+} from "../shared/compare-story-types.js";
+import { compareLiveStoryWithChromium } from "./compare-story.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   DEFAULT_VISUAL_TEST_ARGS,
@@ -78,6 +84,7 @@ import {
 } from "../shared/story-config.js";
 import {
   baselinePngExistsForStoryId,
+  invalidateVisualResultArtifacts,
   loadModeSidecarsForStoryId,
   loadSidecarForStoryId,
 } from "./visual-sidecars.js";
@@ -119,6 +126,14 @@ import {
   planAllVisualTests,
   recordAffectedVisualResults,
 } from "./affected-visual-tests.js";
+import {
+  decideStorybookStaticBuild,
+  invalidateStorybookStaticFreshness,
+  isStorybookStaticComplete,
+  markStorybookStaticFresh,
+  runStaticBuildSingleFlight,
+  type StaticBuildReason,
+} from "./static-build.js";
 
 type UpdateBody = {
   /** Exact story ids to write in one Playwright invocation. */
@@ -172,7 +187,10 @@ export type {
 } from "./run-hub.js";
 
 let activeRun: ChildProcess | null = null;
-let forceStaticRebuild = false;
+let staticStaleReason: Extract<
+  StaticBuildReason,
+  "stale-config" | "unskip"
+> | null = null;
 
 function readJsonBody<T>(req: IncomingMessage, maxBytes = 64_000): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -251,7 +269,7 @@ async function handleStoryFacts(
   }
   const response: VisualStoryFactsResponse = {
     ok: true,
-    version: 1,
+    version: 2,
     generatedAt: Date.now(),
     stories: resolveVisualStoryFacts(
       stories,
@@ -578,16 +596,15 @@ async function handleRebuildStatic(
   res.write("Rebuilding storybook-static…\n");
 
   try {
-    const { code } = await runCommand(
-      "pnpm",
-      ["build-storybook"],
-      root,
-      undefined,
-      (chunk) => {
+    const { code } = await runStaticBuildSingleFlight(root, () =>
+      runCommand("pnpm", ["build-storybook"], root, undefined, (chunk) => {
         res.write(chunk);
-      },
+      }),
     );
     if (code === 0) {
+      staticStaleReason = null;
+      markStorybookStaticFresh(root);
+      invalidateWarmStaticStorybookServer();
       const warm = await ensureWarmStaticStorybookServer(root, visualPort);
       if (warm.message) {
         res.write(`${warm.message}\n`);
@@ -872,9 +889,6 @@ async function handleRun(
     return;
   }
 
-  const staticIndex = path.join(root, "storybook-static", "index.json");
-  const staticIframe = path.join(root, "storybook-static", "iframe.html");
-  const staticComplete = existsSync(staticIndex) && existsSync(staticIframe);
   const allowRebuild = options.allowRebuild !== false;
   if (selection === "affected" && !allowRebuild) {
     writeJson(res, 400, {
@@ -890,32 +904,86 @@ async function handleRun(
     } satisfies VisualRunResponse);
     return;
   }
-  const rebuild =
-    selection === "affected" ||
-    (allowRebuild &&
-      (Boolean(body.rebuild) || forceStaticRebuild || !staticComplete));
+  const forceReason =
+    selection === "affected"
+      ? ("affected-plan" as const)
+      : body.rebuild
+        ? ("explicit-rebuild" as const)
+        : (staticStaleReason ?? undefined);
+  const buildDecision = decideStorybookStaticBuild({
+    packageRoot: root,
+    skipBuild: !allowRebuild,
+    forceRebuild: Boolean(forceReason),
+    forceReason,
+    storyIdPrefix: "",
+    storyIds: selectedStoryIds,
+  });
+  if (buildDecision.shouldBuild && !allowRebuild) {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error: buildDecision.message,
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+      affected,
+    } satisfies VisualRunResponse);
+    return;
+  }
+  if (buildDecision.reason === "skip-build-missing") {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error: buildDecision.message,
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+      affected,
+    } satisfies VisualRunResponse);
+    return;
+  }
+  const rebuild = buildDecision.shouldBuild;
   let grep =
     selection === "all" ? undefined : grepFromStoryIds(selectedStoryIds);
   let log = "";
 
   beginVisualRunHub();
   subscribeVisualRunHub(res);
+  emitRun({
+    type: "start",
+    total:
+      countVisualStories(root, selectedStoryIds) ??
+      selectedStoryIds?.length ??
+      0,
+    affected,
+  });
 
   try {
     if (rebuild) {
-      const rebuildLine =
-        selection === "affected"
-          ? "Rebuilding storybook-static — refreshing affected dependency graph"
-          : body.rebuild
-            ? "Rebuilding storybook-static — explicit rebuild requested"
-            : forceStaticRebuild
-              ? "Rebuilding storybook-static — project defaults changed"
-              : !existsSync(staticIndex)
-                ? "Building storybook-static — index.json missing"
-                : "Rebuilding storybook-static — incomplete (missing iframe.html)";
+      const rebuildLine = buildDecision.message;
       emitRun({ type: "log", line: rebuildLine });
       log += `${rebuildLine}\n`;
-      const built = await runCommand("pnpm", ["build-storybook"], root);
+      const rebuildStartedAt = Date.now();
+      const heartbeat = setInterval(() => {
+        emitRun({
+          type: "log",
+          line: `${rebuildLine}… ${Math.floor(
+            (Date.now() - rebuildStartedAt) / 1_000,
+          )}s`,
+        });
+      }, 5_000);
+      let built: Awaited<ReturnType<typeof runCommand>>;
+      try {
+        built = await runStaticBuildSingleFlight(root, () =>
+          runCommand("pnpm", ["build-storybook"], root),
+        );
+      } finally {
+        clearInterval(heartbeat);
+      }
       log += built.log;
       if (built.code !== 0) {
         emitRun({
@@ -938,7 +1006,9 @@ async function handleRun(
         });
         return;
       }
-      forceStaticRebuild = false;
+      staticStaleReason = null;
+      markStorybookStaticFresh(root);
+      invalidateWarmStaticStorybookServer();
 
       if (selection === "affected") {
         plan = affectedPlan(root, options);
@@ -974,7 +1044,7 @@ async function handleRun(
           selection,
         );
       }
-    } else if (staticComplete) {
+    } else if (isStorybookStaticComplete(root)) {
       emitRun({
         type: "log",
         line: "Using existing storybook-static",
@@ -1197,27 +1267,36 @@ async function handleActionScope(
     ? affectedPlan(root, options)
     : planAllVisualTests(root, options);
   let rebuilt = false;
-  const staticComplete =
-    existsSync(path.join(root, "storybook-static", "index.json")) &&
-    existsSync(path.join(root, "storybook-static", "iframe.html"));
-
+  const preflightReason = plan.needsRebuild
+    ? ("affected-plan" as const)
+    : (staticStaleReason ?? undefined);
+  const buildDecision = decideStorybookStaticBuild({
+    packageRoot: root,
+    skipBuild: options.allowRebuild === false,
+    forceRebuild: Boolean(preflightReason),
+    forceReason: preflightReason,
+    storyIdPrefix: "",
+    storyIds: visibleStoryIds,
+  });
   if (
     body.affectedOnly &&
-    (plan.needsRebuild || forceStaticRebuild || !staticComplete)
+    options.allowRebuild === false &&
+    (buildDecision.shouldBuild || buildDecision.reason === "skip-build-missing")
   ) {
-    if (options.allowRebuild === false) {
-      write({
-        type: "error",
-        error: "Affected visual tests require static Storybook rebuilds",
-      });
-      res.end();
-      return;
-    }
+    write({
+      type: "error",
+      error: buildDecision.message,
+    });
+    res.end();
+    return;
+  }
+
+  if (body.affectedOnly && buildDecision.shouldBuild) {
     const rebuildStartedAt = Date.now();
     write({
       type: "progress",
       phase: "rebuilding",
-      message: "Rebuilding Storybook static… 0s",
+      message: `${buildDecision.message}… 0s`,
       elapsedMs: 0,
     });
     const heartbeat = setInterval(() => {
@@ -1225,13 +1304,15 @@ async function handleActionScope(
       write({
         type: "progress",
         phase: "rebuilding",
-        message: `Rebuilding Storybook static… ${Math.floor(elapsedMs / 1_000)}s`,
+        message: `${buildDecision.message}… ${Math.floor(elapsedMs / 1_000)}s`,
         elapsedMs,
       });
     }, 1_000);
     let built: Awaited<ReturnType<typeof runCommand>>;
     try {
-      built = await runCommand("pnpm", ["build-storybook"], root);
+      built = await runStaticBuildSingleFlight(root, () =>
+        runCommand("pnpm", ["build-storybook"], root),
+      );
     } catch (error) {
       write({
         type: "error",
@@ -1255,7 +1336,8 @@ async function handleActionScope(
       return;
     }
     rebuilt = true;
-    forceStaticRebuild = false;
+    staticStaleReason = null;
+    markStorybookStaticFresh(root);
     invalidateWarmStaticStorybookServer();
     write({
       type: "progress",
@@ -1412,6 +1494,7 @@ async function handleSkipVisual(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
+  options: VisualDeltaHostOptions,
 ) {
   let body: SkipVisualBody;
   try {
@@ -1438,6 +1521,16 @@ async function handleSkipVisual(
     storyId,
     skip: body.skip,
   });
+  if (result.ok) {
+    invalidateVisualResultArtifacts({
+      packageRoot: root,
+      snapshotDir: resolveSnapshotDir(options, root),
+      mode: resolveBaselinePathMode(options),
+      storyIds: [storyId],
+    });
+    staticStaleReason = "unskip";
+    invalidateStorybookStaticFreshness(root);
+  }
   writeJson(res, result.ok ? 200 : 400, result);
 }
 
@@ -1573,7 +1666,13 @@ async function handleConfigPut(
         ? (body as { projectDefaults: unknown }).projectDefaults
         : body;
     writeVisualDeltaProjectConfig(root, defaults);
-    forceStaticRebuild = true;
+    invalidateVisualResultArtifacts({
+      packageRoot: root,
+      snapshotDir: resolveSnapshotDir(options, root),
+      mode: resolveBaselinePathMode(options),
+    });
+    staticStaleReason = "stale-config";
+    invalidateStorybookStaticFreshness(root);
     invalidateWarmStaticStorybookServer();
     writeJson(res, 200, resolvedConfigPayload(root, options, visualPort));
     return true;
@@ -1590,6 +1689,7 @@ async function handleStoryConfigPut(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
+  options: VisualDeltaHostOptions,
 ) {
   let body: unknown;
   try {
@@ -1621,7 +1721,14 @@ async function handleStoryConfigPut(
     writeJson(res, 400, result);
     return;
   }
-  forceStaticRebuild = true;
+  staticStaleReason = "stale-config";
+  invalidateStorybookStaticFreshness(root);
+  invalidateVisualResultArtifacts({
+    packageRoot: root,
+    snapshotDir: resolveSnapshotDir(options, root),
+    mode: resolveBaselinePathMode(options),
+    storyIds: [storyId],
+  });
   invalidateWarmStaticStorybookServer();
   const response: VisualDeltaStoryConfigUpdateResponse & {
     sourceUpdated?: boolean;
@@ -1739,6 +1846,48 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
   if (!res.writableEnded) res.end();
 }
 
+async function handleCompareStory(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  options: VisualDeltaHostOptions,
+) {
+  let body: CompareStoryRequest;
+  try {
+    body = await readJsonBody<CompareStoryRequest>(req);
+  } catch (error) {
+    writeJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  beginNdjson(res);
+  const write = (event: CompareStoryStreamEvent) => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(`${JSON.stringify(event)}\n`);
+    const flushable = res as ServerResponse & { flush?: () => void };
+    flushable.flush?.();
+  };
+  write({ type: "start", storyId: body.storyId });
+  try {
+    const result = await compareLiveStoryWithChromium({
+      root,
+      hostOptions: options,
+      request: body,
+      onProgress: (progress) => write({ type: "progress", ...progress }),
+    });
+    write({ type: "done", ...result });
+  } catch (error) {
+    write({
+      type: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  if (!res.writableEnded) res.end();
+}
+
 /**
  * Dev-only Visual Delta endpoints:
  * - POST /__visual-delta/update-baseline — regenerate baselines (overwrite)
@@ -1746,6 +1895,7 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
  * - POST /__visual-delta/rebuild-static — run build-storybook only (no capture)
  * - POST /__visual-delta/create-interaction-baseline — mid-play step capture
  * - POST /__visual-delta/capture-subject — Playwright Chromium subject PNG
+ * - POST /__visual-delta/compare-story — authoritative live story comparison
  * - POST /__visual-delta/run-tests — run Playwright visual suite (no updates)
  * - GET  /__visual-delta/affected-plan — plan affected stories without capture
  * - GET  /__visual-delta/run-events — replay / continue an in-flight or recent run
@@ -1847,7 +1997,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleStoryConfigPut(req, res, root);
+          await handleStoryConfigPut(req, res, root, options);
           return;
         }
 
@@ -1939,6 +2089,17 @@ export function visualDeltaMiddlewarePlugin(
           return;
         }
 
+        if (url === VISUAL_DELTA_COMPARE_STORY_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          await handleCompareStory(req, res, root, options);
+          return;
+        }
+
         if (url === VISUAL_DELTA_REVIEW_PATH) {
           if (req.method !== "POST") {
             res.statusCode = 405;
@@ -1957,7 +2118,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleSkipVisual(req, res, root);
+          await handleSkipVisual(req, res, root, options);
           return;
         }
 

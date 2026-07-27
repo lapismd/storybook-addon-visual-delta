@@ -1,10 +1,11 @@
 import React from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../test/render.js";
 import {
   BaselineAlignmentWarning,
+  BaselineGeometryUnavailable,
   BaselineGeometryWarning,
 } from "./BaselineGeometryWarning.js";
 
@@ -62,5 +63,25 @@ describe("BaselineGeometryWarning", () => {
       }),
     );
     expect(opened).toBe(true);
+  });
+});
+
+describe("BaselineGeometryUnavailable", () => {
+  it("offers an explicit retry without retaining a stale mismatch", async () => {
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <BaselineGeometryUnavailable
+        detail="Preview layout did not settle"
+        onRetry={onRetry}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Retry baseline geometry measurement",
+      }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Baseline geometry mismatch")).toBeNull();
   });
 });

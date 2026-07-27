@@ -181,7 +181,8 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
 | `POST` | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
 | `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
-| `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)               |
+| `POST` | `/__visual-delta/compare-story`               | Authoritative exact-story Chromium compare + sidecar      |
+| `POST` | `/__visual-delta/capture-subject`             | Legacy Chromium subject capture (NDJSON progress)         |
 | `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
 | `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
 | `POST` | `/__visual-delta/action-scope`                | Stream preflight progress, then freeze Testing Module IDs |
@@ -205,11 +206,15 @@ Interaction writes spawn `pnpm <visualInteractionUpdateArgs…>` with:
 - `--story-id`, `--step-label`, and optional `--step-id`
 
 Run-tests uses `pnpm <visualTestArgs…>` (optional escaped, end-anchored `-g`
-grep from exact story IDs)
-and may call `pnpm build-storybook` first when `allowRebuild` is enabled and
-`storybook-static` is incomplete/stale (missing `index.json` or `iframe.html`,
-or the client requests a rebuild). Progress is streamed with a **list-only**
-Playwright reporter so the Testing Module can show live `Testing N/M` counts.
+grep from exact story IDs). All static consumers share one rebuild service. It
+checks static output health, source/import freshness, effective configuration,
+affected graph/cache validity, and skip/include changes before optionally
+calling `pnpm build-storybook`. A single-flight lock and short-lived freshness
+token prevent affected preflight and its following run from rebuilding twice.
+The stream opens before that decision, emits the explicit rebuild reason and
+periodic heartbeats, and always terminates with success or error. Progress is
+reported with a **list-only** Playwright reporter so the Testing Module can show
+live `Testing N/M` counts.
 The global Testing Module resolves its visible story IDs before the first
 enabled action. An affected preflight first reads the cached graph, returns
 immediately when every fingerprint is current, or rebuilds static Storybook
@@ -228,9 +233,10 @@ reconnects via `/run-status` + `/run-events` instead of losing progress.
 In Storybook development, each baseline accordion ends with a kebab containing
 **History**, **Update baseline**, and **Delete screenshot** for that concrete
 Default, named mode, or interaction PNG. Delete validates that the path belongs
-to the open story, removes its exact CSF image/interaction and review tag, then
-deletes the local PNG plus derived sidecar/diff artifacts. Sibling stories and
-screenshots are not selected.
+to the open story, removes its exact CSF image/interaction, then deletes the
+local PNG plus derived sidecar/diff artifacts. It invalidates only the selected
+comparison and geometry evidence; review metadata and sibling stories remain
+unchanged.
 
 The history view is scoped to the concrete PNG currently selected. Choose any
 **Before** and **After** revisions to use the same 2-up, Diff, Focus, Swipe,
@@ -482,17 +488,17 @@ review tags from the panel or by editing `tags={…}` / posting
 `POST /__visual-delta/review-status` (single `{ storyId, status }` or batched
 `{ updates: [{ storyId, status }] }`). Patchers keep **exactly one** review tag:
 setting `ready` clears `failed` / `pending` / `approved` even when the desired
-tag was already present alongside a sibling. Skipping visual clears all review
-tags. **Update status** / middleware refuse `visual-failed` when no committed
-baseline PNG exists for the story (missing-baseline Playwright failures are
-skipped, not stamped failed).
+tag was already present alongside a sibling. Skip/include eligibility is
+independent and preserves the review tag. **Update status** / middleware refuse
+`visual-failed` when no committed baseline PNG exists for the story
+(missing-baseline Playwright failures are skipped, not stamped failed).
 
-| Tag               | Meaning                                                | How it is set                                   |
-| ----------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| `visual-pending`  | Baseline exists; awaiting review after unaccept        | **Unaccept**                                    |
-| `visual-ready`    | Agent/dev finished visual work; ready for human review | Create / rewrite baselines; panel **Ready** pad |
-| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)           |
-| `visual-failed`   | Review rejected / known bad                            | Panel **Failed** pad                            |
+| Tag               | Meaning                                                | How it is set                                  |
+| ----------------- | ------------------------------------------------------ | ---------------------------------------------- |
+| `visual-pending`  | Baseline exists; awaiting review                       | Baseline write or **Unaccept**                 |
+| `visual-ready`    | Agent/dev finished visual work; ready for human review | Explicit status update or panel **Ready** pad  |
+| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)          |
+| `visual-failed`   | Review rejected / known bad                            | Explicit status update or panel **Failed** pad |
 
 **Panel controls**
 
@@ -502,10 +508,12 @@ skipped, not stamped failed).
 - **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
   on this pad; use Accept/Unaccept for those).
 
-**Agent guidance:** Create / Update baselines stamp `visual-ready` (and clear
-`visual-pending` / approved / failed) so humans can scan the sidebar for
-`⚑ Ready`. Do **not** set `visual-approved` from agent work — leave Accept to
-a human. **Unaccept** returns a story to `visual-pending`.
+**Agent guidance:** Create / Update baselines reset exactly the written stories
+to `visual-pending` and invalidate their prior comparison evidence. A baseline
+write is not a passing comparison. Run Story, Diff Chromium, or the static
+suite, then explicitly update status to map pass/tolerance → `visual-ready` and
+mismatch → `visual-failed`. Do **not** set `visual-approved` from agent work —
+leave Accept to a human.
 
 ### `skip-visual` from the panel
 
@@ -515,15 +523,17 @@ to Create visual. When the story is already skipped, the header shows
 include under **More** as well. Both paths patch CSF via
 `POST /__visual-delta/skip-visual`:
 
-| Action                      | Effect                                      |
-| --------------------------- | ------------------------------------------- |
-| **Skip visual tests**       | Adds `skip-visual` (and clears review tags) |
-| **Include in visual tests** | Removes `skip-visual`                       |
+| Action                      | Effect                |
+| --------------------------- | --------------------- |
+| **Skip visual tests**       | Adds `skip-visual`    |
+| **Include in visual tests** | Removes `skip-visual` |
 
 Skipped stories are excluded from Playwright visual runs and from Visual Delta
-Testing Module scope. Review status and Update baselines stay disabled while
-skipped. Prefer this over hand-editing tags when flake cannot be stabilized
-(document why in the story if the skip is permanent). CLI:
+Testing Module scope. Their last result becomes ineligible/stale and the next
+static consumer rebuilds, but the independent review tag is retained. Review
+controls and Update baselines stay disabled while skipped. Prefer this over
+hand-editing tags when flake cannot be stabilized (document why in the story if
+the skip is permanent). CLI:
 `pnpm ui visual:tag skip|include` or `visual-delta skip|include`.
 
 ### Review layout (canvas + panel)
@@ -545,19 +555,25 @@ Visual Delta stays selected.
 
 Diff is its own split button (separate from Story / Component / All runs):
 
-| Mode              | Capture                                                   | Use when                                 |
-| ----------------- | --------------------------------------------------------- | ---------------------------------------- |
-| **Diff HTML**     | `html-to-image` in the live preview iframe                | Fast iteration                           |
-| **Diff Chromium** | Playwright Chromium via `/__visual-delta/capture-subject` | Matching committed baselines (fonts, AA) |
+| Mode              | Capture                                                     | State effect                         |
+| ----------------- | ----------------------------------------------------------- | ------------------------------------ |
+| **Diff HTML**     | `html-to-image` in the live preview iframe                  | Preview-only diagnostic              |
+| **Diff Chromium** | Playwright Chromium via `/__visual-delta/compare-story`     | Official exact-story result          |
+| **Story**         | The same `/__visual-delta/compare-story` request and config | The same official exact-story result |
 
-**Diff Chromium** streams NDJSON progress (`launching` → `navigating` →
-`settling` → `capturing` → `encoding`) into the Diff Stop control. Stop aborts
-the fetch mid-capture.
+**Diff Chromium** and **Story** resolve the same effective story configuration,
+wait for the play function, capture the same baseline/mode/interaction key, and
+persist the same v2 sidecar. They stream NDJSON progress (`launching` →
+`navigating` → `settling` → `capturing` → `comparing` → `persisting`) and
+never build `storybook-static`. Diff Stop aborts a Diff-triggered fetch
+mid-capture.
 
 `html-to-image` rasterizes through SVG `foreignObject`, so variable fonts
 (e.g. DM Sans Variable) can paint at different glyph widths than Playwright’s
-native screenshots. Prefer **Diff Chromium** when diagnosing baseline parity.
-Requires `playwright` installed in the host (optional peer of this package).
+native screenshots. Prefer the authoritative Chromium actions when diagnosing
+baseline parity. Diff HTML cannot update an official result or review state.
+Chromium comparison requires `playwright` installed in the host (optional peer
+of this package).
 
 Before Diff HTML rasterizes, Visual Delta hides its overlay and establishes the
 selected image’s CSS `viewport` (default 1280×900) in the preview iframe. The
@@ -575,6 +591,20 @@ For placement, an image whose CSS dimensions match its declared capture
 viewport is treated as a viewport capture even when older metadata says
 `align: "canvas"`. Center mode anchors that image to the preview viewport
 origin and suppresses the otherwise false canvas-geometry warning.
+
+Geometry/alignment diagnostics are keyed to the selected baseline revision and
+effective capture configuration. Baseline create/update/delete and config
+changes clear the old diagnostic immediately, reload a cache-busted image, and
+remeasure only after the story, fonts, and layout settle. If measurement cannot
+complete, the panel reports a retryable **Baseline geometry unavailable** state
+instead of retaining a stale mismatch.
+
+Official comparisons write a backwards-compatible sidecar v2 with independent
+runner status and classified outcome, original captured dimensions, baseline
+and effective-config hashes, metrics, and operation ID. Passing fitted pixels
+cannot override a runner failure or dimension mismatch. The panel selects only
+fresh evidence whose baseline/config hashes match; review tags never affect
+Playwright pass/fail semantics.
 
 Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 

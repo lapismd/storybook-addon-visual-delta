@@ -169,6 +169,13 @@ warning area, with a direct link to that Story tab.
   only applies in `over` placement.
 - **Pass threshold** — Configurable `%` (default `0.1`).
 - **Diff fit** — Pad/crop actual → baseline size instead of stretching.
+- **Canonical result evidence** — New writes use sidecar v2: independent runner
+  status and classified outcome, original captured dimensions, comparison
+  metrics, baseline/config hashes, and operation ID. v1 remains readable, but
+  only hash-current evidence can drive the panel header or a later status-only
+  run. Runner failures and dimension mismatches cannot become passes because
+  fitted pixels happen to match. Review tags are metadata, not Playwright
+  expectations.
 - **Quiet preset** — No Vite/Webpack console logs.
 - **Run Diff capture** — Forces the preview iframe to the Playwright viewport
   (`1280×900`) before `html-to-image` of the story subject
@@ -182,14 +189,18 @@ warning area, with a direct link to that Story tab.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
   still sees the story under `--skip-build`. The panel kebab **Rebuild
-  storybook static** or CLI `--rebuild` forces `build-storybook`; affected
-  preflights and incomplete static output rebuild automatically. Create fails
-  if the expected PNG was not written (no more silent `No tests found` +
-  exit 0).
+  storybook static** or CLI `--rebuild` forces `build-storybook`. All static
+  consumers share one decision service that checks output health, source/import
+  freshness, effective config, affected graph/cache validity, and eligibility
+  changes. A single-flight lock/freshness token prevents duplicate preflight/run
+  builds. Create fails if the expected PNG was not written (no more silent
+  `No tests found` + exit 0).
 - **Observable global preflight** — `/__visual-delta/action-scope` streams
   resolving, static-rebuild heartbeat, and exact-scope freezing milestones as
   NDJSON. The Testing Module keeps comparison progress idle during this
-  preflight and starts it only when `/run-tests` opens.
+  preflight and starts it only when `/run-tests` opens. Run streams open before
+  the rebuild decision, report its reason, heartbeat during slow work, and end
+  with an explicit success/error event.
 - **Agent commits** — After each verified slice of work in this package,
   commit with `jj` immediately (do not leave finished plugin changes only in
   `@`).
@@ -232,8 +243,9 @@ warning area, with a direct link to that Story tab.
   selected baseline URL to `/__visual-delta/delete-baseline`. The middleware
   validates that the nested/flat snapshot path belongs to that story, removes
   only its matching `visualDelta.images`, named-mode `src`, or interaction
-  entry, clears stale review state, and deletes the local PNG plus
-  `.actual.png`, `.diff.png`, and `.json` artifacts when present.
+  entry, invalidates that comparison/geometry evidence, and deletes the local
+  PNG plus `.actual.png`, `.diff.png`, and `.json` artifacts when present.
+  Independent review metadata and siblings remain unchanged.
 - **Rebuild storybook static** — Dev-only kebab action posts to
   `/__visual-delta/rebuild-static` and runs `pnpm build-storybook` only (no
   Playwright capture). Use after CSS/markup edits when you want a fresh
@@ -253,15 +265,18 @@ warning area, with a direct link to that Story tab.
   `visual-pending` (orange clock), `visual-ready` (blue flag), `visual-approved`
   (green shield), `visual-failed` (red ✕). Accept / Unaccept set approved /
   pending; the panel pad toggles ready / failed (agents mark `visual-ready`
-  when work is ready for human review). Create/update baselines stamp
-  `visual-ready` and clear sibling review tags (`visual-pending`,
-  `visual-approved`, `visual-failed`). Tag patchers always normalize via
+  when work is ready for human review). Create/update baselines reset exactly
+  their written story IDs to `visual-pending` and invalidate prior comparison
+  evidence. Only explicit comparison/status/review actions produce ready,
+  failed, or approved states. Tag patchers normalize via
   `normalizeVisualStoryTags` and sync `storybook-static/index.json`.
 - **skip-visual** — Panel **More** menu: **Skip visual tests** /
   **Include in visual tests** posts to `/__visual-delta/skip-visual` to add or
-  remove the CSF tag on the current story. Adding skip clears review tags.
-  Skipped stories are excluded from Playwright / Testing Module runs; review
-  and Update baselines stay disabled until included again.
+  remove the CSF tag on the current story. It invalidates result eligibility
+  and marks static output stale for the next static consumer while preserving
+  independent review metadata. Skipped stories are excluded from Playwright /
+  Testing Module runs; review and Update baselines stay disabled until included
+  again.
 - **Testing module target** — Registers a Storybook `test-provider` that shells
   out to the existing Playwright visual suite (`pnpm test:visual`). Global
   Testing Module heading: **Run visual tests** with a streamed single-line
@@ -279,20 +294,29 @@ warning area, with a direct link to that Story tab.
   → status). A story context contains one story, a component context contains
   all descendants, global contains the filtered sidebar leaves, and global
   Affected is `visible ∩ refreshed affected`. Empty scopes never broaden.
-  Rewrite clears review tags only for the exact rewritten IDs. Panel Accept,
-  Unaccept, Ready, and Failed call review endpoints directly and ignore these
-  preferences. Selected runs use escaped story-ID suffix filters; reporter
+  Rewrite resets only the exact rewritten IDs to `visual-pending`. Panel
+  Accept, Unaccept, Ready, and Failed call review endpoints directly and ignore
+  these preferences. Selected runs use escaped story-ID suffix filters; reporter
   `›` separators are presentation only and are never included in Playwright's
   internal grep expression. Results map to sidebar status dots. Ephemeral artifacts:
   gitignored `*.json` /
   `*.actual.png` / `*.diff.png` under
   `tests/visual/storybook.spec.ts-snapshots/`.
-- **Playwright pass threshold** — Package-wide default lives in host
-  `.visual-delta/playwright.json` (`passThresholdPercent`, default 1%).
-  `defineVisualPlaywrightConfig` reads it. Panel Diff Chromium shows a
-  mismatch note under Thresh, plus a split control: **Update Playwright**
-  (`POST /__visual-delta/playwright-threshold`) and a reset icon that copies
-  the Playwright value into local Thresh prefs.
+- **Effective capture configuration** — Official live and static comparisons
+  resolve the same project/story alignment, viewport, pass/pixel thresholds,
+  anti-aliasing, delay, crop, ignore selectors, mode globals, and interaction
+  key. The legacy `.visual-delta/playwright.json` pass threshold remains a
+  fallback only. Opacity, blend, and overlay placement stay local presentation
+  preferences.
+- **Exact live Chromium comparison** — Panel **Story** and **Diff Chromium**
+  both post the same request to `/__visual-delta/compare-story`, wait for play,
+  publish the same official result, and never build static Storybook. Diff HTML
+  remains a preview-only approximation and cannot update result or review
+  state.
+- **Warning lifecycle** — Geometry/alignment diagnostics are keyed by baseline
+  revision plus effective config. Baseline/config changes clear them first,
+  cache-bust the image, and remeasure after story/fonts/layout settle. Failure
+  to measure produces a retryable unavailable state, never a retained mismatch.
 - **Capture parity with Playwright** — Live Diff blurs the preview's active
   element and temporarily disables animations/transitions/caret (same prep as
   `tests/visual/storybook.spec.ts`) before `html-to-image` capture, so play
