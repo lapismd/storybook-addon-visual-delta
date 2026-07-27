@@ -141,8 +141,6 @@ export type VisualTestModuleUIProps = {
   affectedOnlyEnabled: boolean;
   /** "Up to date" or "N affected · M unchanged" planner summary. */
   affectedSummaryLabel?: string | null;
-  /** Force build-storybook before create/update/compare captures. */
-  rebuildStaticEnabled: boolean;
   baselineMode: BaselineWriteMode;
   runnerBusy: boolean;
   anyActionSelected: boolean;
@@ -167,7 +165,6 @@ export type VisualTestModuleUIProps = {
   onCreateBaselinesChange: (enabled: boolean) => void;
   onUpdateStatusChange: (enabled: boolean) => void;
   onAffectedOnlyChange: (enabled: boolean) => void;
-  onRebuildStaticChange: (enabled: boolean) => void;
   onBaselineModeChange: (mode: BaselineWriteMode) => void;
   onRun: () => void;
   onStop: () => void;
@@ -194,7 +191,6 @@ export function VisualTestModuleUI({
   updateStatusEnabled,
   affectedOnlyEnabled,
   affectedSummaryLabel = null,
-  rebuildStaticEnabled,
   baselineMode,
   runnerBusy,
   anyActionSelected,
@@ -216,7 +212,6 @@ export function VisualTestModuleUI({
   onCreateBaselinesChange,
   onUpdateStatusChange,
   onAffectedOnlyChange,
-  onRebuildStaticChange,
   onBaselineModeChange,
   onRun,
   onStop,
@@ -282,6 +277,48 @@ export function VisualTestModuleUI({
           <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
               <Form.Checkbox
+                name={baselineRowLabel}
+                checked={createBaselinesEnabled}
+                disabled={runnerBusy}
+                onChange={(event) => {
+                  onCreateBaselinesChange(event.currentTarget.checked);
+                }}
+              />
+            </ActionList.Icon>
+            <ActionList.Text>
+              <RowLabel>
+                <span>{baselineRowLabel}</span>
+                {baselineRowProgress ? (
+                  <RowProgress data-testid="baseline-row-progress">
+                    {baselineRowProgress}
+                  </RowProgress>
+                ) : null}
+              </RowLabel>
+            </ActionList.Text>
+          </ActionList.Action>
+          <ActionList.Button
+            ariaLabel={
+              baselineRowProgress
+                ? `${baselineChipTooltip} (${baselineRowProgress})`
+                : baselineChipTooltip
+            }
+            tooltip={baselineChipTooltip}
+            disabled={!createBaselinesEnabled && !isWritingBaselines}
+            onClick={onOpenBaselineStatus}
+          >
+            {baselineChipValue != null ? (
+              <ChipProgress>{baselineChipValue}</ChipProgress>
+            ) : null}
+            <TestStatusIcon
+              status={baselineChipStatus}
+              isRunning={isWritingBaselines}
+            />
+          </ActionList.Button>
+        </ActionList.Item>
+        <ActionList.Item>
+          <ActionList.Action as="label" ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
                 name="Run visual tests"
                 checked={runVisualEnabled}
                 disabled={runnerBusy}
@@ -329,7 +366,7 @@ export function VisualTestModuleUI({
                 <Form.Checkbox
                   name="Affected only"
                   checked={affectedOnlyEnabled}
-                  disabled={runnerBusy || !runVisualEnabled}
+                  disabled={runnerBusy}
                   onChange={(event) => {
                     onAffectedOnlyChange(event.currentTarget.checked);
                   }}
@@ -347,48 +384,6 @@ export function VisualTestModuleUI({
             </ActionList.Action>
           </ActionList.Item>
         ) : null}
-        <ActionList.Item>
-          <ActionList.Action as="label" ariaLabel={false}>
-            <ActionList.Icon>
-              <Form.Checkbox
-                name={baselineRowLabel}
-                checked={createBaselinesEnabled}
-                disabled={runnerBusy}
-                onChange={(event) => {
-                  onCreateBaselinesChange(event.currentTarget.checked);
-                }}
-              />
-            </ActionList.Icon>
-            <ActionList.Text>
-              <RowLabel>
-                <span>{baselineRowLabel}</span>
-                {baselineRowProgress ? (
-                  <RowProgress data-testid="baseline-row-progress">
-                    {baselineRowProgress}
-                  </RowProgress>
-                ) : null}
-              </RowLabel>
-            </ActionList.Text>
-          </ActionList.Action>
-          <ActionList.Button
-            ariaLabel={
-              baselineRowProgress
-                ? `${baselineChipTooltip} (${baselineRowProgress})`
-                : baselineChipTooltip
-            }
-            tooltip={baselineChipTooltip}
-            disabled={!createBaselinesEnabled && !isWritingBaselines}
-            onClick={onOpenBaselineStatus}
-          >
-            {baselineChipValue != null ? (
-              <ChipProgress>{baselineChipValue}</ChipProgress>
-            ) : null}
-            <TestStatusIcon
-              status={baselineChipStatus}
-              isRunning={isWritingBaselines}
-            />
-          </ActionList.Button>
-        </ActionList.Item>
         <ActionList.Item>
           <ActionList.Action as="label" ariaLabel={false}>
             <ActionList.Icon>
@@ -433,26 +428,6 @@ export function VisualTestModuleUI({
               isRunning={isUpdatingStatus}
             />
           </ActionList.Button>
-        </ActionList.Item>
-        <ActionList.Item>
-          <ActionList.Action as="label" ariaLabel={false}>
-            <ActionList.Icon>
-              <Form.Checkbox
-                name="Rebuild static"
-                checked={rebuildStaticEnabled}
-                disabled={runnerBusy}
-                onChange={(event) => {
-                  onRebuildStaticChange(event.currentTarget.checked);
-                }}
-              />
-            </ActionList.Icon>
-            <ActionList.Text>
-              <RowLabel>
-                <span>Rebuild static</span>
-                <RowProgress>build-storybook before capture</RowProgress>
-              </RowLabel>
-            </ActionList.Text>
-          </ActionList.Action>
         </ActionList.Item>
       </StyledActionList>
     </Root>

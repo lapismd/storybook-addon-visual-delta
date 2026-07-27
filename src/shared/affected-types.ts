@@ -19,3 +19,20 @@ export type AffectedVisualSummary = {
   /** Exact selected story ids (omitted from compact status displays). */
   storyIds?: string[];
 };
+
+/** Global Testing Module scope-resolution request. */
+export type VisualActionScopeRequest = {
+  /** Leaf story ids visible in the filtered Storybook sidebar at invocation. */
+  visibleStoryIds: string[];
+  /** Intersect visible ids with a refreshed affected plan. */
+  affectedOnly: boolean;
+};
+
+/** Frozen exact ids reused by every enabled Testing Module action. */
+export type VisualActionScopeResponse = {
+  ok: true;
+  storyIds: string[];
+  summary: AffectedVisualSummary;
+  /** True when the preflight rebuilt Storybook before freezing the ids. */
+  rebuilt: boolean;
+};

@@ -236,6 +236,11 @@ export const VISUAL_DELTA_RUN_PATH = "/__visual-delta/run-tests";
 /** Storybook-dev middleware that plans affected stories without capture. */
 export const VISUAL_DELTA_AFFECTED_PLAN_PATH = "/__visual-delta/affected-plan";
 /**
+ * Resolve and freeze visible Testing Module story ids, rebuilding the affected
+ * graph first when correctness requires it.
+ */
+export const VISUAL_DELTA_ACTION_SCOPE_PATH = "/__visual-delta/action-scope";
+/**
  * Storybook-dev middleware that replays / continues an in-flight (or recent)
  * visual run as NDJSON — used to recover after manager HMR.
  */
