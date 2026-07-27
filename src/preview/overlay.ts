@@ -8,7 +8,6 @@ import type { DecoratorFunction } from "storybook/internal/types";
 import {
   DEFAULT_PLACEMENT,
   EVENTS,
-  VISUAL_COMPARE_PANE_PAD_PX,
   deviceScaleFactorForImage,
   isSplitPlacement,
   normalizePlacement,
@@ -19,32 +18,35 @@ import {
   type VisualDeltaParams,
 } from "../constants.js";
 import {
-  baselinePanePaddingPx,
-  canvasCompareInsetsPx,
-} from "../shared/compare-insets.js";
-import {
   baselineCompareSizesFromNatural,
   sharedScrollExtentSize,
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
-import { resolvePaintedBackground } from "../shared/preview-background.js";
 import {
   resolvedCompareZoomScale,
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
 import { baselineGeometryMismatch } from "../shared/geometry-mismatch.js";
 import {
-  BASELINE_CHIP_GUTTER_PX,
   ensureOverlayChip,
   positionOverlayChip,
   syncModeBadge,
 } from "../shared/preview-chip.js";
+import {
+  baselineOuterInsets,
+  bodyOuterInsets,
+  totalInsets,
+  type BackgroundSnapshot,
+  type BoxSidesPx,
+  type PreviewLayoutSnapshot,
+} from "../shared/preview-layout.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
 const SPLIT_ID = "visual-delta-split";
 const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
 const BASELINE_PANE_ID = "visual-delta-baseline-pane";
+const BASELINE_LAYOUT_FRAME_ID = "visual-delta-baseline-layout-frame";
 const SCROLL_RAIL_V_ID = "visual-delta-scroll-rail-v";
 const SCROLL_SPACER_V_ID = "visual-delta-scroll-spacer-v";
 const SCROLL_RAIL_H_ID = "visual-delta-scroll-rail-h";
@@ -99,6 +101,7 @@ let lastCompareSizes: BaselineCompareSizes | null = null;
 let lastSelection: {
   index: number;
   images: VisualDeltaImage[];
+  layoutSnapshot: PreviewLayoutSnapshot;
 } | null = null;
 /**
  * Bumped when selection is replaced or cleared so async applySelection /
@@ -114,8 +117,8 @@ let currentBaselineLabelOffset = { x: 0, y: 0 };
 let currentSplitZoom: CompareZoomState = { mode: "fit", scale: 1 };
 let currentCropToViewport = false;
 let lastGeometryStatusSignature = "";
-let centerLabelGutterRestoreRef: (() => void) | null = null;
-let centerLabelGutterSubject: HTMLElement | null = null;
+let splitHostRestoreRef: (() => void) | null = null;
+let centerHostRestoreRef: (() => void) | null = null;
 
 function syncOverlayChip(overlay: HTMLElement) {
   return ensureOverlayChip(overlay, {
@@ -123,27 +126,6 @@ function syncOverlayChip(overlay: HTMLElement) {
   });
 }
 
-function applyCenterLabelGutter(canvasElement: HTMLElement) {
-  if (centerLabelGutterSubject === canvasElement) return;
-  restoreCenterLabelGutter();
-  const previous = canvasElement.style.paddingTop;
-  const computed = Number.parseFloat(
-    getComputedStyle(canvasElement).paddingTop,
-  );
-  canvasElement.style.paddingTop = `${
-    (Number.isFinite(computed) ? computed : 0) + BASELINE_CHIP_GUTTER_PX
-  }px`;
-  centerLabelGutterSubject = canvasElement;
-  centerLabelGutterRestoreRef = () => {
-    canvasElement.style.paddingTop = previous;
-  };
-}
-
-function restoreCenterLabelGutter() {
-  centerLabelGutterRestoreRef?.();
-  centerLabelGutterRestoreRef = null;
-  centerLabelGutterSubject = null;
-}
 /** Survives FORCE_REMOUNT / Vite HMR — decorator useChannel does not. */
 const OVERLAY_CHANNEL_INSTALLED_KEY = "__visualDeltaOverlayChannelInstalled";
 function isOverlayChannelInstalled(): boolean {
@@ -163,6 +145,11 @@ function markOverlayChannelInstalled() {
  * (or other non-story modes) own the preview iframe.
  */
 let previewViewMode: string | null = null;
+let pendingSelection: {
+  index: number;
+  images?: VisualDeltaImage[];
+  layoutSnapshot?: PreviewLayoutSnapshot;
+} | null = null;
 
 function isStoryPreviewMode(viewMode: string | null | undefined): boolean {
   return viewMode == null || viewMode === "story";
@@ -178,7 +165,11 @@ type OverlayChannelApi = {
   onSetCurrentStory(payload?: { viewMode?: string; storyId?: string }): void;
   onDocsPrepared(): void;
   onDocsRendered(): void;
-  onSelectImage(data: { index: number; images?: VisualDeltaImage[] }): void;
+  onSelectImage(data: {
+    index: number;
+    images?: VisualDeltaImage[];
+    layoutSnapshot?: PreviewLayoutSnapshot;
+  }): void;
   onResetOverlay(): void;
   onUpdateOverlayStyle(data: {
     opacity: number;
@@ -368,31 +359,130 @@ function paneStyleBase(): string {
   `;
 }
 
-/**
- * Baselines are component-clipped (no canvas chrome). Mirror `#storybook-root`
- * padding **plus** the story subject's margins onto the baseline pane so the
- * PNG lines up with the live subject (e.g. `my-2` on a full-width control).
- */
-function syncBaselinePaneInset(
-  canvasElement: HTMLElement,
-  baselinePane: HTMLElement,
-) {
-  const style = getComputedStyle(canvasElement);
-  const subject = canvasElement.querySelector(":scope > *");
-  const subjectStyle =
-    subject instanceof Element ? getComputedStyle(subject) : null;
-  const pad = baselinePanePaddingPx(style, subjectStyle);
+function applyPadding(element: HTMLElement, sides: BoxSidesPx) {
+  element.style.paddingTop = `${sides.top}px`;
+  element.style.paddingRight = `${sides.right}px`;
+  element.style.paddingBottom = `${sides.bottom}px`;
+  element.style.paddingLeft = `${sides.left}px`;
+}
 
-  baselinePane.style.paddingTop = `${pad.top + BASELINE_CHIP_GUTTER_PX}px`;
-  baselinePane.style.paddingRight = `${pad.right}px`;
-  baselinePane.style.paddingBottom = `${pad.bottom}px`;
-  baselinePane.style.paddingLeft = `${pad.left}px`;
-  baselinePane.style.borderTopWidth = style.borderTopWidth;
-  baselinePane.style.borderRightWidth = style.borderRightWidth;
-  baselinePane.style.borderBottomWidth = style.borderBottomWidth;
-  baselinePane.style.borderLeftWidth = style.borderLeftWidth;
-  baselinePane.style.borderStyle = "solid";
-  baselinePane.style.borderColor = "transparent";
+function applyBackground(element: HTMLElement, background: BackgroundSnapshot) {
+  element.style.backgroundColor = background.color;
+  element.style.backgroundImage = background.image;
+  element.style.backgroundPosition = background.position;
+  element.style.backgroundSize = background.size;
+  element.style.backgroundRepeat = background.repeat;
+  element.style.backgroundAttachment = background.attachment;
+  element.style.backgroundOrigin = background.origin;
+  element.style.backgroundClip = background.clip;
+}
+
+function subtractSides(a: BoxSidesPx, b: BoxSidesPx): BoxSidesPx {
+  return {
+    top: Math.max(0, a.top - b.top),
+    right: Math.max(0, a.right - b.right),
+    bottom: Math.max(0, a.bottom - b.bottom),
+    left: Math.max(0, a.left - b.left),
+  };
+}
+
+/**
+ * Rebuild only layout absent from a component-clipped PNG. The live pane
+ * receives the body's measured outer box because moving `#storybook-root`
+ * out of body flow would otherwise discard it.
+ */
+function syncMeasuredPaneLayout(
+  livePane: HTMLElement,
+  baselinePane: HTMLElement,
+  baselineFrame: HTMLElement,
+  overlay: HTMLElement,
+  imageItem: VisualDeltaImage,
+  snapshot: PreviewLayoutSnapshot,
+) {
+  const viewportCapture =
+    currentCropToViewport || imageItem.align === "viewport";
+  const outerInsets = baselineOuterInsets(snapshot, {
+    align: imageItem.align,
+    cropToViewport: currentCropToViewport,
+  });
+  const bodyInsets = bodyOuterInsets(snapshot);
+  const baselineBodyInsets = viewportCapture
+    ? { top: 0, right: 0, bottom: 0, left: 0 }
+    : bodyInsets;
+
+  applyPadding(livePane, bodyInsets);
+  applyPadding(baselinePane, baselineBodyInsets);
+  applyBackground(livePane, snapshot.body.background);
+  applyBackground(baselinePane, snapshot.body.background);
+  applyBackground(baselineFrame, snapshot.root.background);
+
+  baselineFrame.style.cssText += `
+    position: relative;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+  `;
+  const centeredComponent =
+    snapshot.layout === "centered" && !viewportCapture && snapshot.subject;
+  if (centeredComponent && snapshot.subject) {
+    applyPadding(baselineFrame, {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+    baselineFrame.style.width = `${snapshot.root.rect.width}px`;
+    baselineFrame.style.height = `${snapshot.root.rect.height}px`;
+    overlay.style.position = "absolute";
+    overlay.style.left = `${
+      snapshot.subject.rect.left - snapshot.root.rect.left
+    }px`;
+    overlay.style.top = `${
+      snapshot.subject.rect.top - snapshot.root.rect.top
+    }px`;
+  } else {
+    applyPadding(
+      baselineFrame,
+      viewportCapture
+        ? { top: 0, right: 0, bottom: 0, left: 0 }
+        : subtractSides(outerInsets, baselineBodyInsets),
+    );
+    baselineFrame.style.width = "max-content";
+    baselineFrame.style.height = "max-content";
+    overlay.style.position = "relative";
+    overlay.style.left = "auto";
+    overlay.style.top = "auto";
+  }
+
+  const paintRootBorder = !viewportCapture;
+  const border = snapshot.root;
+  baselineFrame.style.borderTopWidth = paintRootBorder
+    ? `${border.border.top}px`
+    : "0px";
+  baselineFrame.style.borderRightWidth = paintRootBorder
+    ? `${border.border.right}px`
+    : "0px";
+  baselineFrame.style.borderBottomWidth = paintRootBorder
+    ? `${border.border.bottom}px`
+    : "0px";
+  baselineFrame.style.borderLeftWidth = paintRootBorder
+    ? `${border.border.left}px`
+    : "0px";
+  baselineFrame.style.borderTopStyle = border.borderPaint.style.top;
+  baselineFrame.style.borderRightStyle = border.borderPaint.style.right;
+  baselineFrame.style.borderBottomStyle = border.borderPaint.style.bottom;
+  baselineFrame.style.borderLeftStyle = border.borderPaint.style.left;
+  baselineFrame.style.borderTopColor = border.borderPaint.color.top;
+  baselineFrame.style.borderRightColor = border.borderPaint.color.right;
+  baselineFrame.style.borderBottomColor = border.borderPaint.color.bottom;
+  baselineFrame.style.borderLeftColor = border.borderPaint.color.left;
+
+  const centerFrames = snapshot.layout === "centered" && !viewportCapture;
+  for (const pane of [livePane, baselinePane]) {
+    pane.style.display = "flex";
+    pane.style.flexDirection = "column";
+    pane.style.alignItems = centerFrames ? "center" : "flex-start";
+    pane.style.justifyContent = centerFrames ? "center" : "flex-start";
+  }
 }
 
 /**
@@ -413,6 +503,8 @@ function lockLiveViewportWidth(
     maxWidth: canvasElement.style.maxWidth,
     minWidth: canvasElement.style.minWidth,
     boxSizing: canvasElement.style.boxSizing,
+    scale: canvasElement.style.scale,
+    transformOrigin: canvasElement.style.transformOrigin,
     subjectZoom: subject instanceof HTMLElement ? subject.style.zoom : "",
     subjectScale: subject instanceof HTMLElement ? subject.style.scale : "",
     subjectTransformOrigin:
@@ -428,6 +520,8 @@ function lockLiveViewportWidth(
     canvasElement.style.maxWidth = prev.maxWidth;
     canvasElement.style.minWidth = prev.minWidth;
     canvasElement.style.boxSizing = prev.boxSizing;
+    canvasElement.style.scale = prev.scale;
+    canvasElement.style.transformOrigin = prev.transformOrigin;
     if (subject instanceof HTMLElement) {
       subject.style.zoom = prev.subjectZoom;
       subject.style.scale = prev.subjectScale;
@@ -453,6 +547,8 @@ function unlockLiveViewportWidth() {
     currentCanvas.style.removeProperty("width");
     currentCanvas.style.removeProperty("max-width");
     currentCanvas.style.removeProperty("min-width");
+    currentCanvas.style.removeProperty("scale");
+    currentCanvas.style.removeProperty("transform-origin");
     const currentSubject = currentCanvas.querySelector(":scope > *");
     if (currentSubject instanceof HTMLElement) {
       currentSubject.style.removeProperty("zoom");
@@ -460,36 +556,6 @@ function unlockLiveViewportWidth() {
       currentSubject.style.removeProperty("transform-origin");
     }
   }
-}
-
-function measureCanvasInsets(canvasElement: HTMLElement): {
-  x: number;
-  y: number;
-} {
-  const style = getComputedStyle(canvasElement);
-  const subject = canvasElement.querySelector(":scope > *");
-  const subjectStyle =
-    subject instanceof Element ? getComputedStyle(subject) : null;
-  return canvasCompareInsetsPx(style, subjectStyle);
-}
-
-/**
- * `#storybook-root` uses `min-height: 100vh`, which forces tall scrollable
- * content inside short compare panes. Collapse that while split is active.
- */
-function lockLiveCanvasForSplit(canvasElement: HTMLElement) {
-  unlockLiveCanvasForSplit();
-  const prev = {
-    minHeight: canvasElement.style.minHeight,
-    height: canvasElement.style.height,
-  };
-  canvasElement.style.minHeight = "0";
-  canvasElement.style.height = "auto";
-  liveCanvasSplitSubject = canvasElement;
-  liveCanvasSplitRestoreRef = () => {
-    canvasElement.style.minHeight = prev.minHeight;
-    canvasElement.style.height = prev.height;
-  };
 }
 
 function unlockLiveCanvasForSplit() {
@@ -726,11 +792,11 @@ function bindSharedScrollRails(
   };
 
   const onVRailScroll = () => {
-    if (syncing) return;
+    if (syncing && vRail.scrollTop === desiredTop) return;
     applyScroll(vRail.scrollTop, desiredLeft);
   };
   const onHRailScroll = () => {
-    if (syncing) return;
+    if (syncing && hRail.scrollLeft === desiredLeft) return;
     applyScroll(desiredTop, hRail.scrollLeft);
   };
 
@@ -805,13 +871,18 @@ function teardownSplit(canvasElement: HTMLElement) {
   unlockLiveCanvasForSplit();
   lastCompareSizes = null;
   const split = document.getElementById(SPLIT_ID);
-  if (!(split instanceof HTMLElement)) return;
-  const host = split.parentElement;
-  if (!host) return;
-  if (canvasElement.parentElement === document.getElementById(LIVE_PANE_ID)) {
-    host.insertBefore(canvasElement, split);
+  if (split instanceof HTMLElement) {
+    const host = split.parentElement;
+    if (
+      host &&
+      canvasElement.parentElement === document.getElementById(LIVE_PANE_ID)
+    ) {
+      host.insertBefore(canvasElement, split);
+    }
+    split.remove();
   }
-  split.remove();
+  splitHostRestoreRef?.();
+  splitHostRestoreRef = null;
   applyLiveVisibility(canvasElement);
 }
 
@@ -844,13 +915,19 @@ function applyEqualPaneViewports(
     0,
     (hostEl?.clientHeight ?? sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
   );
-  const insets = measureCanvasInsets(canvasElement);
-  const minPaneW = Math.ceil(
-    sizes.content.width + Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.x),
+  const selectedImage = lastSelection?.images[lastSelection.index];
+  const snapshot = lastSelection?.layoutSnapshot;
+  if (!selectedImage || !snapshot) return;
+  const viewportCapture =
+    currentCropToViewport || selectedImage.align === "viewport";
+  const insets = totalInsets(
+    baselineOuterInsets(snapshot, {
+      align: selectedImage.align,
+      cropToViewport: currentCropToViewport,
+    }),
   );
-  const minPaneH = Math.ceil(
-    sizes.content.height + Math.max(VISUAL_COMPARE_PANE_PAD_PX * 2, insets.y),
-  );
+  const minPaneW = Math.ceil(sizes.content.width + insets.x);
+  const minPaneH = Math.ceil(sizes.content.height + insets.y);
 
   let paneW: number;
   let paneH: number;
@@ -880,28 +957,30 @@ function applyEqualPaneViewports(
   panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
   panesWrap.style.height = horizontal ? `${paneH}px` : `${paneH * 2 + 1}px`;
 
-  lockLiveCanvasForSplit(canvasElement);
-  const selectedImage = lastSelection?.images[lastSelection.index] ?? undefined;
-  lockLiveViewportWidth(canvasElement, viewportForImage(selectedImage).width);
-  if (selectedImage) {
-    reportBaselineGeometry(canvasElement, selectedImage, sizes);
-  }
-  syncBaselinePaneInset(canvasElement, baselinePane);
+  lockLiveViewportWidth(canvasElement, snapshot.root.rect.width);
+  reportBaselineGeometry(canvasElement, selectedImage, sizes);
   const subject = canvasElement.querySelector(":scope > *");
   const baselineImage = baselinePane.querySelector(`#${OVERLAY_ID} > img`);
   const zoomScale = resolvedCompareZoomScale(currentSplitZoom, {
     availableWidth: Math.max(1, paneW - insets.x),
-    availableHeight: Math.max(1, paneH - insets.y - BASELINE_CHIP_GUTTER_PX),
+    availableHeight: Math.max(1, paneH - insets.y),
     contentWidth: sizes.content.width,
     contentHeight: sizes.content.height,
   });
   if (subject instanceof HTMLElement) {
-    // CSS `zoom` re-resolves percentage widths, so a width:100% subject can
-    // remain visually full width. Individual transform `scale` preserves the
-    // 1280px capture layout and shrinks its painted box for Fit.
-    subject.style.zoom = "";
-    subject.style.scale = String(zoomScale);
-    subject.style.transformOrigin = "top left";
+    if (viewportCapture) {
+      // The PNG already contains the root padding and border, so scale the
+      // complete measured live frame by the same amount as the baseline.
+      canvasElement.style.scale = String(zoomScale);
+      canvasElement.style.transformOrigin = "top left";
+    } else {
+      // CSS `zoom` re-resolves percentage widths, so a width:100% subject can
+      // remain visually full width. Individual transform `scale` preserves the
+      // capture layout and shrinks its painted box for component clips.
+      subject.style.zoom = "";
+      subject.style.scale = String(zoomScale);
+      subject.style.transformOrigin = "top left";
+    }
   }
   if (baselineImage instanceof HTMLImageElement) {
     baselineImage.style.zoom = String(zoomScale);
@@ -915,8 +994,16 @@ function ensureSplit(
   canvasElement: HTMLElement,
   placement: PlacementMode,
   sizes?: BaselineCompareSizes | null,
-): { livePane: HTMLElement; baselinePane: HTMLElement } {
-  const host = canvasElement.parentElement;
+): {
+  livePane: HTMLElement;
+  baselinePane: HTMLElement;
+  baselineFrame: HTMLElement;
+} {
+  const existingSplit = document.getElementById(SPLIT_ID);
+  const host =
+    (existingSplit instanceof HTMLElement
+      ? existingSplit.parentElement
+      : null) ?? canvasElement.parentElement;
   if (!host) {
     throw new Error("Visual Delta: canvas has no parent");
   }
@@ -925,6 +1012,7 @@ function ensureSplit(
   let panesWrap = document.getElementById(PANES_WRAP_ID);
   let livePane = document.getElementById(LIVE_PANE_ID);
   let baselinePane = document.getElementById(BASELINE_PANE_ID);
+  let baselineFrame = document.getElementById(BASELINE_LAYOUT_FRAME_ID);
   let vRail = document.getElementById(SCROLL_RAIL_V_ID);
   let vSpacer = document.getElementById(SCROLL_SPACER_V_ID);
   let hRail = document.getElementById(SCROLL_RAIL_H_ID);
@@ -936,6 +1024,7 @@ function ensureSplit(
     !(panesWrap instanceof HTMLElement) ||
     !(livePane instanceof HTMLElement) ||
     !(baselinePane instanceof HTMLElement) ||
+    !(baselineFrame instanceof HTMLElement) ||
     !(vRail instanceof HTMLElement) ||
     !(vSpacer instanceof HTMLElement) ||
     !(hRail instanceof HTMLElement) ||
@@ -944,7 +1033,15 @@ function ensureSplit(
 
   if (needsBuild) {
     unbindSharedScroll();
+    if (
+      split instanceof HTMLElement &&
+      canvasElement.parentElement?.id === LIVE_PANE_ID
+    ) {
+      split.parentElement?.insertBefore(canvasElement, split);
+    }
     split?.remove();
+    splitHostRestoreRef?.();
+    splitHostRestoreRef = null;
     split = document.createElement("div");
     split.id = SPLIT_ID;
     panesWrap = document.createElement("div");
@@ -953,6 +1050,8 @@ function ensureSplit(
     livePane.id = LIVE_PANE_ID;
     baselinePane = document.createElement("div");
     baselinePane.id = BASELINE_PANE_ID;
+    baselineFrame = document.createElement("div");
+    baselineFrame.id = BASELINE_LAYOUT_FRAME_ID;
     vRail = document.createElement("div");
     vRail.id = SCROLL_RAIL_V_ID;
     vSpacer = document.createElement("div");
@@ -963,9 +1062,20 @@ function ensureSplit(
     hSpacer.id = SCROLL_SPACER_H_ID;
     corner = document.createElement("div");
     corner.id = SCROLL_CORNER_ID;
+    centerHostRestoreRef?.();
+    centerHostRestoreRef = null;
+    const hostStyles = {
+      position: host.style.position,
+      minHeight: host.style.minHeight,
+    };
     host.style.position = "relative";
+    splitHostRestoreRef = () => {
+      host.style.position = hostStyles.position;
+      host.style.minHeight = hostStyles.minHeight;
+    };
     host.insertBefore(split, canvasElement);
     livePane.appendChild(canvasElement);
+    baselinePane.appendChild(baselineFrame);
     panesWrap.appendChild(livePane);
     panesWrap.appendChild(baselinePane);
     vRail.appendChild(vSpacer);
@@ -981,6 +1091,7 @@ function ensureSplit(
     !(panesWrap instanceof HTMLElement) ||
     !(livePane instanceof HTMLElement) ||
     !(baselinePane instanceof HTMLElement) ||
+    !(baselineFrame instanceof HTMLElement) ||
     !(vRail instanceof HTMLElement) ||
     !(vSpacer instanceof HTMLElement) ||
     !(hRail instanceof HTMLElement) ||
@@ -993,8 +1104,15 @@ function ensureSplit(
   ensurePaneScrollbarStyles();
 
   const horizontal = placement === "left" || placement === "right";
-  const paneBackground = resolvePaintedBackground(document, canvasElement);
-  host.style.minHeight = "100vh";
+  const snapshot = lastSelection?.layoutSnapshot;
+  if (!snapshot) {
+    throw new Error("Visual Delta: measured preview layout missing");
+  }
+  // The split is absolutely positioned, so keep its host at the measured
+  // preview height while the root is reparented. This is measured geometry,
+  // not an addon-owned `100vh` assumption, and teardown restores the inline
+  // value captured above.
+  host.style.minHeight = `${snapshot.body.rect.height}px`;
   split.style.cssText = `
     display: grid;
     grid-template-columns: 1fr ${RAIL_THICKNESS_PX}px;
@@ -1006,7 +1124,7 @@ function ensureSplit(
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
-    background: ${paneBackground};
+    background: transparent;
   `;
   panesWrap.style.cssText = `
     grid-column: 1;
@@ -1026,28 +1144,33 @@ function ensureSplit(
     grid-row: 1;
     overflow-y: scroll;
     overflow-x: hidden;
-    background: ${paneBackground};
+    background: transparent;
   `;
   hRail.style.cssText = `
     grid-column: 1;
     grid-row: 2;
     overflow-x: scroll;
     overflow-y: hidden;
-    background: ${paneBackground};
+    background: transparent;
   `;
   corner.style.cssText = `
     grid-column: 2;
     grid-row: 2;
-    background: ${paneBackground};
+    background: transparent;
   `;
   vSpacer.style.cssText = `width: 1px; height: 1px;`;
   hSpacer.style.cssText = `width: 1px; height: 1px;`;
 
-  livePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
-  baselinePane.style.cssText = `${paneStyleBase()} background: ${paneBackground};`;
+  livePane.style.cssText = `${paneStyleBase()} background: transparent;`;
+  baselinePane.style.cssText = `${paneStyleBase()} background: transparent;`;
   livePane.style.padding = "0";
-  livePane.style.paddingTop = `${BASELINE_CHIP_GUTTER_PX}px`;
-  syncBaselinePaneInset(canvasElement, baselinePane);
+  baselinePane.style.padding = "0";
+  applyBackground(split, snapshot.body.background);
+  applyBackground(livePane, snapshot.body.background);
+  applyBackground(baselinePane, snapshot.body.background);
+  applyBackground(vRail, snapshot.body.background);
+  applyBackground(hRail, snapshot.body.background);
+  applyBackground(corner, snapshot.body.background);
 
   const baselineFirst = placement === "left" || placement === "above";
   const first = baselineFirst ? baselinePane : livePane;
@@ -1082,7 +1205,7 @@ function ensureSplit(
   } else {
     sharedScrollRefreshRef?.();
   }
-  return { livePane, baselinePane };
+  return { livePane, baselinePane, baselineFrame };
 }
 
 function ensureOverlayElement(): HTMLElement {
@@ -1112,7 +1235,6 @@ function ensureOverlayElement(): HTMLElement {
 
 function styleOverlayForMode(overlay: HTMLElement, placement: PlacementMode) {
   if (isSplitPlacement(placement)) {
-    restoreCenterLabelGutter();
     overlay.style.cssText = `
       position: relative;
       top: auto;
@@ -1230,21 +1352,44 @@ function applyOverlayPosition(
           return baselineCompareSizesFromNatural(
             img.naturalWidth,
             img.naturalHeight,
-            VISUAL_COMPARE_PANE_PAD_PX,
+            0,
             deviceScaleFactorForImage(imageItem),
           );
         }
         return null;
       })();
-    const { baselinePane } = ensureSplit(
+    const { livePane, baselinePane, baselineFrame } = ensureSplit(
       canvasElement,
       placement,
       compareSizes,
     );
-    if (overlay.parentElement !== baselinePane) {
-      baselinePane.appendChild(overlay);
+    if (overlay.parentElement !== baselineFrame) {
+      baselineFrame.appendChild(overlay);
     }
+    const snapshot = lastSelection?.layoutSnapshot;
+    if (!snapshot) return;
+    syncMeasuredPaneLayout(
+      livePane,
+      baselinePane,
+      baselineFrame,
+      overlay,
+      imageItem,
+      snapshot,
+    );
     overlay.style.transform = "none";
+    if (compareSizes) {
+      const panesWrap = document.getElementById(PANES_WRAP_ID);
+      if (panesWrap instanceof HTMLElement) {
+        applyEqualPaneViewports(
+          canvasElement,
+          livePane,
+          baselinePane,
+          panesWrap,
+          placement,
+          compareSizes,
+        );
+      }
+    }
     // Chip rides on the overlay inside the baseline pane for left/right/above/below.
     syncOverlayChip(overlay);
     applyLiveVisibility(canvasElement);
@@ -1252,7 +1397,6 @@ function applyOverlayPosition(
   }
 
   teardownSplit(canvasElement);
-  applyCenterLabelGutter(canvasElement);
   const canvasParent = canvasElement.parentElement;
   if (!canvasParent) return;
   const compareSizes =
@@ -1268,7 +1412,7 @@ function applyOverlayPosition(
         return baselineCompareSizesFromNatural(
           img.naturalWidth,
           img.naturalHeight,
-          VISUAL_COMPARE_PANE_PAD_PX,
+          0,
           deviceScaleFactorForImage(imageItem),
         );
       }
@@ -1276,10 +1420,18 @@ function applyOverlayPosition(
     })();
   if (compareSizes) {
     lastCompareSizes = compareSizes;
-    lockLiveViewportWidth(canvasElement, viewportForImage(imageItem).width);
+    const snapshot = lastSelection?.layoutSnapshot;
+    if (!snapshot) return;
+    lockLiveViewportWidth(canvasElement, snapshot.root.rect.width);
     reportBaselineGeometry(canvasElement, imageItem, compareSizes);
   }
-  canvasParent.style.position = "relative";
+  if (!centerHostRestoreRef) {
+    const previousPosition = canvasParent.style.position;
+    canvasParent.style.position = "relative";
+    centerHostRestoreRef = () => {
+      canvasParent.style.position = previousPosition;
+    };
+  }
   if (overlay.parentElement !== canvasParent) {
     canvasParent.appendChild(overlay);
   }
@@ -1346,6 +1498,7 @@ function watchLayout(overlay: HTMLElement) {
 function removeOverlayDom(retainSelection: boolean) {
   if (!retainSelection) {
     lastSelection = null;
+    pendingSelection = null;
   }
   layoutObserverRef?.disconnect();
   layoutObserverRef = null;
@@ -1360,7 +1513,8 @@ function removeOverlayDom(retainSelection: boolean) {
   const canvasElement = resolveStoryCanvas();
   if (canvasElement) {
     teardownSplit(canvasElement);
-    restoreCenterLabelGutter();
+    centerHostRestoreRef?.();
+    centerHostRestoreRef = null;
     canvasElement.style.visibility = "";
   } else {
     // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
@@ -1368,7 +1522,10 @@ function removeOverlayDom(retainSelection: boolean) {
     unbindSharedScroll();
     unlockLiveViewportWidth();
     unlockLiveCanvasForSplit();
-    restoreCenterLabelGutter();
+    splitHostRestoreRef?.();
+    splitHostRestoreRef = null;
+    centerHostRestoreRef?.();
+    centerHostRestoreRef = null;
     lastCompareSizes = null;
     document.getElementById(SPLIT_ID)?.remove();
   }
@@ -1424,7 +1581,7 @@ function applySelection(attempt: number, generation = selectionGeneration) {
       const sizes = baselineCompareSizesFromNatural(
         img.naturalWidth,
         img.naturalHeight,
-        VISUAL_COMPARE_PANE_PAD_PX,
+        0,
         deviceScaleFactorForImage(selectedImageItem),
       );
       scheduleOverlayPosition(overlay, selectedImageItem, sizes, generation);
@@ -1467,8 +1624,19 @@ function syncOverlayChannelApi(): void {
     }
     const selectedImageItem = data.images[data.index];
     if (!selectedImageItem) return;
+    if (!data.layoutSnapshot) {
+      // SELECT can race storyFinished. Keep it pending and paint nothing; the
+      // manager re-emits the same selection after measured geometry is ready.
+      pendingSelection = data;
+      return;
+    }
+    pendingSelection = null;
     selectionGeneration += 1;
-    lastSelection = { index: data.index, images: data.images };
+    lastSelection = {
+      index: data.index,
+      images: data.images,
+      layoutSnapshot: data.layoutSnapshot,
+    };
     applySelection(0, selectionGeneration);
   };
   overlayChannelApi.onResetOverlay = () => {
@@ -1584,7 +1752,11 @@ export function ensureOverlayChannel(): void {
   });
   channel.on(
     EVENTS.SELECT_IMAGE,
-    (data: { index: number; images?: VisualDeltaImage[] }) => {
+    (data: {
+      index: number;
+      images?: VisualDeltaImage[];
+      layoutSnapshot?: PreviewLayoutSnapshot;
+    }) => {
       api.onSelectImage(data);
     },
   );

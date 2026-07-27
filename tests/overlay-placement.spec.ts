@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   COMPONENT_OVERLAY_FIXTURE,
+  DELAYED_OVERLAY_FIXTURE,
   FULL_VIEWPORT_MANAGER_FIXTURE,
   mockVisualBackend,
   openManager,
@@ -149,15 +150,65 @@ test.describe("Visual Delta manager overlay placement", () => {
           await expect
             .poll(() =>
               baselineChip.evaluate((chip) => {
-                const image = chip.parentElement?.querySelector(":scope > img");
-                if (!(image instanceof HTMLImageElement)) return false;
+                const overlay = chip.parentElement;
+                const image = overlay?.querySelector(":scope > img");
+                if (
+                  !(overlay instanceof HTMLElement) ||
+                  !(image instanceof HTMLImageElement)
+                ) {
+                  return false;
+                }
+                const chipRect = chip.getBoundingClientRect();
+                const overlayRect = overlay.getBoundingClientRect();
+                const imageRect = image.getBoundingClientRect();
                 return (
-                  chip.getBoundingClientRect().bottom <=
-                  image.getBoundingClientRect().top + 1
+                  getComputedStyle(chip).position === "absolute" &&
+                  chipRect.width > 0 &&
+                  chipRect.height > 0 &&
+                  Math.abs(overlayRect.width - imageRect.width) <= 1 &&
+                  Math.abs(overlayRect.height - imageRect.height) <= 1
                 );
               }),
             )
             .toBe(true);
+
+          const alignment = await frame.locator("body").evaluate((body) => {
+            const livePane = body.querySelector("#visual-delta-live-pane");
+            const baselinePane = body.querySelector(
+              "#visual-delta-baseline-pane",
+            );
+            const subject = body.querySelector("#storybook-root > *");
+            const image = body.querySelector(
+              "#visual-delta-baseline-pane #visual-delta-overlay img",
+            );
+            if (!livePane || !baselinePane || !subject || !image) return null;
+            const live = livePane.getBoundingClientRect();
+            const baseline = baselinePane.getBoundingClientRect();
+            const subjectRect = subject.getBoundingClientRect();
+            const imageRect = image.getBoundingClientRect();
+            return {
+              subject: {
+                left: subjectRect.left - live.left,
+                top: subjectRect.top - live.top,
+              },
+              image: {
+                left: imageRect.left - baseline.left,
+                top: imageRect.top - baseline.top,
+              },
+            };
+          });
+          expect(alignment).not.toBeNull();
+          if (capture.name === "component-baseline") {
+            expect(
+              Math.abs(alignment!.subject.left - alignment!.image.left),
+            ).toBeLessThanOrEqual(1);
+            expect(
+              Math.abs(alignment!.subject.top - alignment!.image.top),
+            ).toBeLessThanOrEqual(1);
+          } else {
+            expect(Math.abs(alignment!.image.left)).toBeLessThanOrEqual(1);
+            expect(Math.abs(alignment!.image.top)).toBeLessThanOrEqual(1);
+          }
 
           const originalViewport = page.viewportSize();
           await page.setViewportSize({ width: 900, height: 650 });
@@ -185,8 +236,11 @@ test.describe("Visual Delta manager overlay placement", () => {
 
           const horizontalRail = frame.locator("#visual-delta-scroll-rail-h");
           await expect(horizontalRail).toBeVisible();
+          const expectedScrollLeft = await horizontalRail.evaluate((rail) =>
+            Math.min(80, rail.scrollWidth - rail.clientWidth),
+          );
           await horizontalRail.evaluate((rail) => {
-            rail.scrollLeft = 80;
+            rail.scrollLeft = Math.min(80, rail.scrollWidth - rail.clientWidth);
             rail.dispatchEvent(new Event("scroll"));
           });
           await expect
@@ -197,7 +251,10 @@ test.describe("Visual Delta manager overlay placement", () => {
               ]);
               return { liveLeft, baselineLeft };
             })
-            .toEqual({ liveLeft: 80, baselineLeft: 80 });
+            .toEqual({
+              liveLeft: expectedScrollLeft,
+              baselineLeft: expectedScrollLeft,
+            });
 
           if (originalViewport) {
             await page.setViewportSize(originalViewport);
@@ -208,6 +265,138 @@ test.describe("Visual Delta manager overlay placement", () => {
           expect(writes).toEqual([]);
         });
       }
+
+      test("center", async ({ page }) => {
+        const writes = await mockVisualBackend(page);
+        await openManager(page, capture.storyId);
+        const panel = page.getByTestId("visual-delta-panel");
+        await panel
+          .getByRole("switch", { name: "Baseline centered over live" })
+          .click();
+
+        const frame = previewFrame(page);
+        const overlay = frame.locator("#visual-delta-overlay");
+        const image = overlay.locator(":scope > img");
+        const chip = overlay.getByTestId("baseline-overlay-chip");
+        await expect(overlay).toBeVisible();
+        await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
+        await expect
+          .poll(() =>
+            overlay.evaluate((element) => {
+              const image = element.querySelector(":scope > img");
+              const chip = element.querySelector(
+                '[data-testid="baseline-overlay-chip"]',
+              );
+              if (!image || !chip) return null;
+              const overlayRect = element.getBoundingClientRect();
+              const imageRect = image.getBoundingClientRect();
+              const chipRect = chip.getBoundingClientRect();
+              return {
+                imageMatchesOverlay:
+                  Math.abs(overlayRect.width - imageRect.width) <= 1 &&
+                  Math.abs(overlayRect.height - imageRect.height) <= 1,
+                chipInside:
+                  chipRect.top >= imageRect.top - 1 &&
+                  chipRect.bottom <= imageRect.bottom + 1,
+              };
+            }),
+          )
+          .toEqual({ imageMatchesOverlay: true, chipInside: true });
+        await expect(image).toBeVisible();
+        await expect(chip).toBeVisible();
+
+        const delta = await frame.locator("body").evaluate((body) => {
+          const subject = body.querySelector("#storybook-root > *");
+          const image = body.querySelector("#visual-delta-overlay > img");
+          if (!subject || !image) return null;
+          const subjectRect = subject.getBoundingClientRect();
+          const imageRect = image.getBoundingClientRect();
+          return {
+            left: imageRect.left - subjectRect.left,
+            top: imageRect.top - subjectRect.top,
+          };
+        });
+        if (capture.name === "component-baseline") {
+          expect(Math.abs(delta?.left ?? Infinity)).toBeLessThanOrEqual(1);
+          expect(Math.abs(delta?.top ?? Infinity)).toBeLessThanOrEqual(1);
+        } else {
+          const viewportDelta = await image.evaluate((element) => {
+            const value = element.getBoundingClientRect();
+            return { left: value.left, top: value.top };
+          });
+          expect(Math.abs(viewportDelta.left)).toBeLessThanOrEqual(1);
+          expect(Math.abs(viewportDelta.top)).toBeLessThanOrEqual(1);
+        }
+        expect(writes).toEqual([]);
+      });
     });
   }
+
+  test("auto-selected baseline waits for storyFinished and measurement", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    const startedAt = Date.now();
+    await page.goto(
+      `/?path=/story/${DELAYED_OVERLAY_FIXTURE}&panel=visual-delta%2Fpanel`,
+      { waitUntil: "domcontentloaded" },
+    );
+    const frame = previewFrame(page);
+    await expect(
+      frame.locator("[data-visual-delta-delayed-play]"),
+    ).not.toHaveAttribute("data-visual-delta-delayed-play", "complete");
+    await expect(frame.locator("#visual-delta-overlay")).toHaveCount(0);
+    await expect(
+      frame.locator("[data-visual-delta-delayed-play]"),
+    ).toHaveAttribute("data-visual-delta-delayed-play", "complete");
+    await expect(frame.locator("#visual-delta-overlay")).toBeVisible({
+      timeout: 10_000,
+    });
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(1_000);
+  });
+
+  test("soft hide restores preview styles and measured viewport", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE);
+    const frame = previewFrame(page);
+    const panel = page.getByTestId("visual-delta-panel");
+    const iframe = page.locator('iframe[title="storybook-preview-iframe"]');
+    const beforeHide = await frame
+      .locator("#storybook-root")
+      .evaluate((root) => ({
+        width: (root as HTMLElement).style.width,
+        minWidth: (root as HTMLElement).style.minWidth,
+        maxWidth: (root as HTMLElement).style.maxWidth,
+        height: (root as HTMLElement).style.height,
+        minHeight: (root as HTMLElement).style.minHeight,
+      }));
+    const iframeStyleBefore = await iframe.getAttribute("style");
+
+    await panel
+      .getByRole("switch", {
+        name: "Hide overlay (Baseline right of live)",
+      })
+      .click();
+    await expect(frame.locator("#visual-delta-overlay")).toHaveCount(0);
+    await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
+
+    expect(
+      await frame.locator("#storybook-root").evaluate((root) => ({
+        width: (root as HTMLElement).style.width,
+        minWidth: (root as HTMLElement).style.minWidth,
+        maxWidth: (root as HTMLElement).style.maxWidth,
+        height: (root as HTMLElement).style.height,
+        minHeight: (root as HTMLElement).style.minHeight,
+      })),
+    ).toEqual({
+      width: "",
+      minWidth: "",
+      maxWidth: "",
+      height: "",
+      minHeight: beforeHide.minHeight,
+    });
+    expect(await iframe.getAttribute("style")).toBe(iframeStyleBefore);
+  });
 });

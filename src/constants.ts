@@ -142,7 +142,7 @@ export type VisualDeltaParams = {
   /** Accepts legacy `"beside"` / `"over"` (normalized at runtime). */
   placement?: PlacementMode | "beside" | "over";
   opacity?: number;
-  /** Fine tune the Baseline chip after its default top-start anchor. */
+  /** Fine tune the absolute Baseline chip inside its default top-start anchor. */
   baselineLabelOffset?: { x: number; y: number };
   colorInversion?: boolean;
   /** Live Diff / suite pass threshold as a percent of differing pixels. */
@@ -213,10 +213,10 @@ export function viewportForImage(
 }
 
 /**
- * Padding (each side) added to baseline CSS size when sizing equal compare
- * panes in the overlay split.
+ * @deprecated Overlay sizing now uses measured Storybook geometry. Retained as
+ * a zero-valued compatibility export for integrations that imported it.
  */
-export const VISUAL_COMPARE_PANE_PAD_PX = 16;
+export const VISUAL_COMPARE_PANE_PAD_PX = 0;
 
 /** Storybook-dev middleware that regenerates on-disk baselines. */
 export const VISUAL_DELTA_UPDATE_PATH = "/__visual-delta/update-baseline";

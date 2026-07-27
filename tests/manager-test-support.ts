@@ -7,6 +7,8 @@ export const FULL_VIEWPORT_MANAGER_FIXTURE =
   "visual-delta-panel-shell--manager-full-viewport-integration-fixture";
 export const CUSTOM_VIEWPORT_MANAGER_FIXTURE =
   "visual-delta-panel-shell--responsive-1440-viewport-canary";
+export const DELAYED_OVERLAY_FIXTURE =
+  "visual-delta-panel-shell--delayed-story-completion";
 export const NATURAL_WIDTH_COMPONENT_FIXTURE =
   "ui-forms-form-inputs-task-due-calendar--shows-a-selected-date";
 export const OVERVIEW = "visual-delta-panel-shell--overview";

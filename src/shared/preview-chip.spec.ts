@@ -62,7 +62,7 @@ describe("ensureOverlayChip", () => {
     overlay.remove();
   });
 
-  it("keeps the label outside the image and applies X/Y offsets", () => {
+  it("keeps the absolute label inside the image without reserving a gutter", () => {
     const parent = document.createElement("div");
     const overlay = document.createElement("div");
     parent.appendChild(overlay);
@@ -107,10 +107,8 @@ describe("ensureOverlayChip", () => {
 
     positionOverlayChip(overlay, { x: 4, y: -2 });
 
-    expect(chip.style.left).toBe("4px");
-    expect(chip.style.top).toBe("-26px");
-    // 18px chip + 6px gap + 2px additional upward offset.
-    expect(Number.parseFloat(chip.style.top) + 18).toBeLessThan(0);
+    expect(chip.style.left).toBe("10px");
+    expect(chip.style.top).toBe("4px");
     parent.remove();
   });
 });

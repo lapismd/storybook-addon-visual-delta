@@ -3,7 +3,9 @@ import { useChannel } from "storybook/manager-api";
 import {
   DEFAULT_DIFF_THRESHOLD,
   EVENTS,
+  deviceScaleFactorForImage,
   isSplitPlacement,
+  viewportForImage,
   type BaselineGeometryMismatch,
   type PlacementMode,
   type VisualDeltaImage,
@@ -23,6 +25,16 @@ import {
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
 import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
+import {
+  measureCurrentPreviewLayout,
+  previewContainsVisualDeltaDom,
+  withVerifiedPreviewViewport,
+} from "./capture.js";
+import {
+  previewLayoutCacheKey,
+  type PreviewLayoutSnapshot,
+  type StorybookLayoutMode,
+} from "../shared/preview-layout.js";
 import {
   clearSettings,
   DEFAULT_SETTINGS,
@@ -73,6 +85,10 @@ type StoryData = {
   selectedMode: string | null;
   storyId: string;
   storyName: string;
+  /** Merged Storybook `parameters.layout` for the current render. */
+  layout: StorybookLayoutMode | null;
+  /** Preview-owned generation; globals/remounts receive a fresh snapshot. */
+  renderGeneration: number;
   index: number;
   /**
    * Whether the baseline overlay / split chrome is visible. Distinct from
@@ -199,6 +215,8 @@ export function useStoryData() {
       selectedMode: null,
       storyId: "",
       storyName: "",
+      layout: null,
+      renderGeneration: 0,
       index: -1,
       overlayOn: false,
       opacity: prefs.opacity,
@@ -230,6 +248,18 @@ export function useStoryData() {
     readPinnedInteractionSrc(),
   );
   const emitRef = useRef<ReturnType<typeof useChannel> | null>(null);
+  const storyDataRef = useRef(storyData);
+  storyDataRef.current = storyData;
+  const selectionContextRef = useRef({
+    storyId: "",
+    layout: null as StorybookLayoutMode | null,
+    renderGeneration: 0,
+  });
+  const layoutCacheRef = useRef(new Map<string, PreviewLayoutSnapshot>());
+  const selectionRequestGenerationRef = useRef(0);
+  const overlayHiddenWaitersRef = useRef<Array<() => void>>([]);
+  const measuringLayoutRef = useRef(false);
+  const layoutMeasurementCountRef = useRef(0);
 
   const persist = useCallback((next: StoryData) => {
     const priorStyle = styleBeforeImageOnlyRef.current;
@@ -251,19 +281,115 @@ export function useStoryData() {
     saveSettings(settings);
   }, []);
 
+  const waitForOverlayTeardown = useCallback((): Promise<void> => {
+    if (!previewContainsVisualDeltaDom()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout>;
+      const waiter = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      timeout = setTimeout(() => {
+        overlayHiddenWaitersRef.current =
+          overlayHiddenWaitersRef.current.filter((entry) => entry !== waiter);
+        reject(new Error("Timed out waiting for Visual Delta teardown"));
+      }, 5_000);
+      overlayHiddenWaitersRef.current.push(waiter);
+      emitRef.current?.(EVENTS.HIDE_OVERLAY, {});
+    });
+  }, []);
+
   const selectImage = useCallback(
     async (index: number, images: VisualDeltaImage[]) => {
-      emitRef.current?.(EVENTS.SELECT_IMAGE, { index, images });
-      if (index >= 0) {
-        await waitTwoFrames();
-        // Remount / soft-hide can leave the overlay missing or hidden — show
-        // again after the canvas has had a chance to attach.
-        emitRef.current?.(EVENTS.SELECT_IMAGE, { index, images });
-        emitRef.current?.(EVENTS.SHOW_OVERLAY, {});
-        emitRef.current?.(EVENTS.RESET_OVERLAY, {});
+      const requestGeneration = ++selectionRequestGenerationRef.current;
+      if (index < 0 || index >= images.length) {
+        emitRef.current?.(EVENTS.SELECT_IMAGE, { index: -1, images: [] });
+        return;
       }
+      const image = images[index];
+      const context = selectionContextRef.current;
+      if (!image || !context.storyId) return;
+      const viewport = viewportForImage(image);
+      const cacheKey = previewLayoutCacheKey({
+        storyId: context.storyId,
+        renderGeneration: context.renderGeneration,
+        viewport,
+      });
+      let layoutSnapshot = layoutCacheRef.current.get(cacheKey);
+
+      let measurementWarningShown = false;
+      while (
+        !layoutSnapshot &&
+        requestGeneration === selectionRequestGenerationRef.current
+      ) {
+        try {
+          layoutMeasurementCountRef.current += 1;
+          measuringLayoutRef.current = true;
+          await waitForOverlayTeardown();
+          if (requestGeneration !== selectionRequestGenerationRef.current) {
+            return;
+          }
+          const transaction = await withVerifiedPreviewViewport(
+            async () =>
+              measureCurrentPreviewLayout({
+                storyId: context.storyId,
+                viewport,
+                layout: context.layout,
+              }),
+            {
+              storyId: context.storyId,
+              viewport,
+              deviceScaleFactor: deviceScaleFactorForImage(image),
+            },
+          );
+          layoutSnapshot = transaction.result;
+          layoutCacheRef.current.set(cacheKey, layoutSnapshot);
+        } catch (error) {
+          // Early selection can race story readiness or a remount. Keep the
+          // current request queued until geometry settles; crucially, never
+          // apply a fixed-padding fallback while geometry is unknown.
+          if (
+            requestGeneration === selectionRequestGenerationRef.current &&
+            !measurementWarningShown
+          ) {
+            measurementWarningShown = true;
+            console.warn(
+              "Visual Delta: Storybook layout measurement is not ready; retrying",
+              error,
+            );
+          }
+        } finally {
+          // ResizeObserver delivery for the verified viewport's restoration
+          // can trail the transaction promise. Keep responsive invalidation
+          // suppressed through two manager frames so it cannot tear down the
+          // overlay immediately after applying the freshly measured layout.
+          await waitTwoFrames();
+          layoutMeasurementCountRef.current = Math.max(
+            0,
+            layoutMeasurementCountRef.current - 1,
+          );
+          measuringLayoutRef.current = layoutMeasurementCountRef.current > 0;
+        }
+        if (!layoutSnapshot) await waitTwoFrames();
+      }
+
+      if (
+        requestGeneration !== selectionRequestGenerationRef.current ||
+        !layoutSnapshot
+      ) {
+        return;
+      }
+      const payload = { index, images, layoutSnapshot };
+      emitRef.current?.(EVENTS.SELECT_IMAGE, payload);
+      await waitTwoFrames();
+      if (requestGeneration !== selectionRequestGenerationRef.current) return;
+      // Remount / soft-hide can leave the overlay missing or hidden — show
+      // again after the canvas has had a chance to attach.
+      emitRef.current?.(EVENTS.SELECT_IMAGE, payload);
+      emitRef.current?.(EVENTS.SHOW_OVERLAY, {});
+      emitRef.current?.(EVENTS.RESET_OVERLAY, {});
     },
-    [],
+    [waitForOverlayTeardown],
   );
 
   const emit = useChannel({
@@ -274,6 +400,8 @@ export function useStoryData() {
       modeNames?: string[];
       storyId: string;
       storyName: string;
+      layout?: StorybookLayoutMode | null;
+      renderGeneration?: number;
       opacity?: number;
       baselineLabelOffset?: { x: number; y: number };
       colorInversion?: boolean;
@@ -288,6 +416,11 @@ export function useStoryData() {
       diffResultZoomDefault?: VisualDeltaZoomDefault;
       configUpdated?: boolean;
     }) => {
+      selectionContextRef.current = {
+        storyId: data.storyId,
+        layout: data.layout ?? null,
+        renderGeneration: data.renderGeneration ?? 0,
+      };
       const imagesArray = Array.isArray(data.images)
         ? data.images
         : [data.images];
@@ -387,6 +520,8 @@ export function useStoryData() {
             prev.storyId === data.storyId ? prev.selectedMode : null,
           storyId: data.storyId,
           storyName: data.storyName,
+          layout: data.layout ?? null,
+          renderGeneration: data.renderGeneration ?? 0,
           index: selection.index,
           overlayOn: selection.overlayOn,
           opacity: resolvedOpacity,
@@ -477,6 +612,10 @@ export function useStoryData() {
         return prev;
       });
     },
+    [EVENTS.OVERLAY_HIDDEN]: () => {
+      const waiters = overlayHiddenWaitersRef.current.splice(0);
+      for (const resolve of waiters) resolve();
+    },
     [EVENTS.SPLIT_ZOOM_STATUS]: (data: CompareZoomState) => {
       setStoryData((prev) => {
         if (
@@ -498,6 +637,56 @@ export function useStoryData() {
     },
   });
   emitRef.current = emit;
+
+  useEffect(() => {
+    const iframe = document.getElementById("storybook-preview-iframe");
+    if (!(iframe instanceof HTMLIFrameElement) || !globalThis.ResizeObserver) {
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let previous = {
+      width: iframe.clientWidth,
+      height: iframe.clientHeight,
+    };
+    const observer = new ResizeObserver(() => {
+      const next = { width: iframe.clientWidth, height: iframe.clientHeight };
+      if (
+        measuringLayoutRef.current ||
+        (next.width === previous.width && next.height === previous.height)
+      ) {
+        previous = next;
+        return;
+      }
+      previous = next;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const current = storyDataRef.current;
+        if (
+          measuringLayoutRef.current ||
+          !current.overlayOn ||
+          current.index < 0
+        ) {
+          return;
+        }
+        const image = current.images[current.index];
+        if (!image) return;
+        const viewport = viewportForImage(image);
+        layoutCacheRef.current.delete(
+          previewLayoutCacheKey({
+            storyId: current.storyId,
+            renderGeneration: current.renderGeneration,
+            viewport,
+          }),
+        );
+        void selectImage(current.index, current.images);
+      }, 120);
+    });
+    observer.observe(iframe);
+    return () => {
+      observer.disconnect();
+      if (timer) clearTimeout(timer);
+    };
+  }, [selectImage]);
 
   // Keep prefsRef in sync if another tab updates storage.
   useEffect(() => {

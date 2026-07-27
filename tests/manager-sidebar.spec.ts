@@ -5,7 +5,10 @@ import {
   openManager,
 } from "./manager-test-support.js";
 
-const DEV_STORYBOOK = "http://127.0.0.1:9013";
+const DEV_STORYBOOK = `http://127.0.0.1:${
+  process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ??
+  Number(process.env.STORYBOOK_PORT ?? "9009") + 4
+}`;
 const SIDEBAR_STATUS_FIXTURE = "shadcn-actions-button--default";
 const SIDEBAR_LABEL_FIXTURE = "shadcn-feedback-empty--preview";
 

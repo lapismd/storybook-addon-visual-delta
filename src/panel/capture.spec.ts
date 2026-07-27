@@ -4,6 +4,7 @@ import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs
 import {
   PreviewViewportEstablishmentError,
   capturePreviewSubject,
+  measureCurrentPreviewLayout,
   withVerifiedPreviewViewport,
 } from "./capture.js";
 
@@ -51,7 +52,20 @@ function installPreviewIframe(options?: {
     configurable: true,
     value: { ready: Promise.resolve() },
   });
-  vi.spyOn(view, "scrollTo").mockImplementation(() => undefined);
+  let scrollX = 0;
+  let scrollY = 0;
+  Object.defineProperty(view, "scrollX", {
+    configurable: true,
+    get: () => scrollX,
+  });
+  Object.defineProperty(view, "scrollY", {
+    configurable: true,
+    get: () => scrollY,
+  });
+  vi.spyOn(view, "scrollTo").mockImplementation((x, y) => {
+    scrollX = x;
+    scrollY = y;
+  });
   return { iframe, view, doc };
 }
 
@@ -85,6 +99,40 @@ describe("verified Diff HTML viewport transaction", () => {
     expect(iframe.style.height).toBe("400px");
   });
 
+  it("measures initial Storybook geometry inside the verified viewport", async () => {
+    const { iframe, doc } = installPreviewIframe();
+    doc.body.style.padding = "3px 5px 7px 11px";
+    const root = doc.getElementById("storybook-root")!;
+    root.setAttribute("style", "padding: 13px 17px");
+
+    const transaction = await withVerifiedPreviewViewport(
+      async () =>
+        measureCurrentPreviewLayout({
+          storyId: "example--ready",
+          viewport: { width: 1440, height: 960 },
+          layout: "padded",
+        }),
+      {
+        storyId: "example--ready",
+        viewport: { width: 1440, height: 960 },
+      },
+    );
+
+    expect(transaction.result).toMatchObject({
+      storyId: "example--ready",
+      viewport: { width: 1440, height: 960 },
+      layout: "padded",
+      body: {
+        padding: { top: 3, right: 5, bottom: 7, left: 11 },
+      },
+      root: {
+        padding: { top: 13, right: 17, bottom: 13, left: 17 },
+      },
+    });
+    expect(iframe.style.width).toBe("640px");
+    expect(iframe.style.height).toBe("400px");
+  });
+
   it("waits for storyFinished, preparation clearance, fonts, and one explicit delay", async () => {
     const { doc } = installPreviewIframe();
     doc.documentElement.removeAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR);
@@ -92,9 +140,13 @@ describe("verified Diff HTML viewport transaction", () => {
     preparing.className = "sb-show-preparing-story";
     doc.body.appendChild(preparing);
     let resolveFonts!: () => void;
+    let fontStatus: FontFaceSetLoadStatus = "loading";
     Object.defineProperty(doc, "fonts", {
       configurable: true,
       value: {
+        get status() {
+          return fontStatus;
+        },
         ready: new Promise<void>((resolve) => {
           resolveFonts = resolve;
         }),
@@ -106,6 +158,7 @@ describe("verified Diff HTML viewport transaction", () => {
         "example--ready",
       );
       preparing.remove();
+      fontStatus = "loaded";
       resolveFonts();
     }, 25);
     const startedAt = performance.now();
@@ -153,6 +206,29 @@ describe("verified Diff HTML viewport transaction", () => {
 
     expect(iframe.style.width).toBe("640px");
     expect(iframe.style.height).toBe("400px");
+  });
+
+  it("restores preview scroll and focus after measurement", async () => {
+    const { view, doc } = installPreviewIframe();
+    const subject = doc.querySelector("#storybook-root > section")!;
+    subject.setAttribute("tabindex", "0");
+    (subject as HTMLElement).focus();
+    view.scrollTo(19, 37);
+
+    await withVerifiedPreviewViewport(
+      async () => {
+        view.scrollTo(200, 300);
+        (doc.body as HTMLElement).focus();
+      },
+      {
+        storyId: "example--ready",
+        viewport: { width: 1280, height: 900 },
+      },
+    );
+
+    expect(view.scrollX).toBe(19);
+    expect(view.scrollY).toBe(37);
+    expect(doc.activeElement).toBe(subject);
   });
 
   it("restores the preview after cancellation", async () => {

@@ -5,6 +5,11 @@ import {
   resolvePaintedBackground,
   toOpaqueRgb,
 } from "../shared/preview-background.js";
+import {
+  measurePreviewLayout,
+  type PreviewLayoutSnapshot,
+  type StorybookLayoutMode,
+} from "../shared/preview-layout.js";
 
 export type CaptureResult = {
   dataUrl: string;
@@ -31,10 +36,13 @@ export class PreviewViewportEstablishmentError extends Error {
   constructor(
     requested: { width: number; height: number },
     observed: { width: number; height: number },
+    readiness?: string,
   ) {
     super(
       `Unable to establish Diff HTML viewport ${requested.width}×${requested.height}; ` +
-        `observed ${observed.width}×${observed.height}.`,
+        `observed ${observed.width}×${observed.height}` +
+        (readiness ? ` (${readiness})` : "") +
+        ".",
     );
     this.name = "PreviewViewportEstablishmentError";
   }
@@ -51,6 +59,34 @@ export function waitTwoFrames(): Promise<void> {
 function getPreviewIframe(): HTMLIFrameElement | null {
   const iframe = document.getElementById("storybook-preview-iframe");
   return iframe instanceof HTMLIFrameElement ? iframe : null;
+}
+
+/** True when preview-owned Visual Delta DOM must be removed before measuring. */
+export function previewContainsVisualDeltaDom(): boolean {
+  const doc = getPreviewIframe()?.contentDocument;
+  return Boolean(
+    doc?.querySelector(
+      "#visual-delta-overlay, #visual-delta-split, #visual-delta-panes",
+    ),
+  );
+}
+
+/**
+ * Read layout from the manager's current preview iframe. This is intentionally
+ * separate from the viewport transaction so the same settled geometry can be
+ * tested without raster capture.
+ */
+export function measureCurrentPreviewLayout(options: {
+  storyId: string;
+  viewport: { width: number; height: number };
+  layout?: StorybookLayoutMode | null;
+}): PreviewLayoutSnapshot {
+  const iframe = getPreviewIframe();
+  const doc = iframe?.contentDocument;
+  if (!doc) {
+    throw new Error("Storybook preview iframe not found");
+  }
+  return measurePreviewLayout(doc, options);
 }
 
 function nextFrame(view: Window): Promise<void> {
@@ -77,10 +113,18 @@ type StableLayout = {
   viewportHeight: number;
   documentWidth: number;
   documentHeight: number;
+  bodyLeft: number;
+  bodyTop: number;
+  bodyWidth: number;
+  bodyHeight: number;
   rootLeft: number;
   rootTop: number;
   rootWidth: number;
   rootHeight: number;
+  subjectLeft: number;
+  subjectTop: number;
+  subjectWidth: number;
+  subjectHeight: number;
 };
 
 function readStableLayout(
@@ -89,29 +133,80 @@ function readStableLayout(
 ): StableLayout {
   const observed = readObservedViewport(iframe);
   const root = doc.querySelector("#storybook-root");
-  const rect = root?.getBoundingClientRect();
+  const bodyRect = doc.body.getBoundingClientRect();
+  const rootRect = root?.getBoundingClientRect();
+  const subjectRect = root?.firstElementChild?.getBoundingClientRect();
   return {
     viewportWidth: observed.width,
     viewportHeight: observed.height,
     documentWidth: doc.documentElement.scrollWidth,
     documentHeight: doc.documentElement.scrollHeight,
-    rootLeft: rect?.left ?? 0,
-    rootTop: rect?.top ?? 0,
-    rootWidth: rect?.width ?? 0,
-    rootHeight: rect?.height ?? 0,
+    bodyLeft: bodyRect.left,
+    bodyTop: bodyRect.top,
+    bodyWidth: bodyRect.width,
+    bodyHeight: bodyRect.height,
+    rootLeft: rootRect?.left ?? 0,
+    rootTop: rootRect?.top ?? 0,
+    rootWidth: rootRect?.width ?? 0,
+    rootHeight: rootRect?.height ?? 0,
+    subjectLeft: subjectRect?.left ?? 0,
+    subjectTop: subjectRect?.top ?? 0,
+    subjectWidth: subjectRect?.width ?? 0,
+    subjectHeight: subjectRect?.height ?? 0,
   };
 }
 
 function sameLayout(a: StableLayout | null, b: StableLayout): boolean {
   if (!a) return false;
   return (Object.keys(b) as Array<keyof StableLayout>).every(
-    (key) => a[key] === b[key],
+    (key) => Math.abs(a[key] - b[key]) <= 0.5,
   );
+}
+
+function largestLayoutDelta(a: StableLayout | null, b: StableLayout): string {
+  if (!a) return "initial";
+  const [key, delta] = (Object.keys(b) as Array<keyof StableLayout>).reduce<
+    [keyof StableLayout, number]
+  >(
+    (largest, candidate) => {
+      const next = Math.abs(a[candidate] - b[candidate]);
+      return next > largest[1] ? [candidate, next] : largest;
+    },
+    ["viewportWidth", 0],
+  );
+  return `${key}:${delta.toFixed(3)}`;
 }
 
 function hasPreparationOverlay(doc: Document): boolean {
   return Boolean(
     doc.querySelector(".sb-show-preparing-story, .sb-show-preparing-docs"),
+  );
+}
+
+async function settleUsedPreviewFonts(doc: Document): Promise<void> {
+  const fonts = doc.fonts;
+  if (!fonts) return;
+  if (typeof fonts.load !== "function") {
+    await fonts.ready;
+    return;
+  }
+  const root = doc.querySelector("#storybook-root");
+  const elements = [
+    doc.body,
+    ...(root ? [root] : []),
+    ...(root?.firstElementChild ? [root.firstElementChild] : []),
+  ];
+  const requests = new Set<string>();
+  for (const element of elements) {
+    const style = doc.defaultView?.getComputedStyle(element);
+    if (!style) continue;
+    const font =
+      style.font ||
+      `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    if (font.trim()) requests.add(font);
+  }
+  await Promise.allSettled(
+    Array.from(requests, (font) => fonts.load(font, "BESbswy 0123456789")),
   );
 }
 
@@ -130,6 +225,9 @@ async function waitForStableRequestedViewport(options: {
   }
   const deadline = performance.now() + timeout;
   let previous: StableLayout | null = null;
+  let fontsSettledAfterStory = !doc.fonts?.ready;
+  let fontSettlementStarted = fontsSettledAfterStory;
+  let lastReadiness = "preview not sampled";
   while (performance.now() <= deadline) {
     throwIfAborted(signal);
     await nextFrame(view);
@@ -140,11 +238,35 @@ async function waitForStableRequestedViewport(options: {
     const storyFinished =
       doc.documentElement.getAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR) ===
       storyId;
+    const preparing = hasPreparationOverlay(doc);
     if (
       exactViewport &&
       storyFinished &&
-      !hasPreparationOverlay(doc) &&
-      sameLayout(previous, current)
+      !preparing &&
+      !fontSettlementStarted
+    ) {
+      fontSettlementStarted = true;
+      void settleUsedPreviewFonts(doc).then(() => {
+        fontsSettledAfterStory = true;
+      });
+    }
+    const layoutStable = sameLayout(previous, current);
+    const layoutDelta = largestLayoutDelta(previous, current);
+    lastReadiness = [
+      `exactViewport=${exactViewport}`,
+      `storyFinished=${storyFinished}`,
+      `fonts=${doc.fonts?.status ?? "unavailable"}`,
+      `fontsSettledAfterStory=${fontsSettledAfterStory}`,
+      `preparing=${preparing}`,
+      `layoutStable=${layoutStable}`,
+      `largestDelta=${layoutDelta}`,
+    ].join(", ");
+    if (
+      exactViewport &&
+      storyFinished &&
+      fontsSettledAfterStory &&
+      !preparing &&
+      layoutStable
     ) {
       return {
         width: current.viewportWidth,
@@ -152,13 +274,14 @@ async function waitForStableRequestedViewport(options: {
       };
     }
     previous =
-      exactViewport && storyFinished && !hasPreparationOverlay(doc)
+      exactViewport && storyFinished && fontsSettledAfterStory && !preparing
         ? current
         : null;
   }
   throw new PreviewViewportEstablishmentError(
     viewport,
     readObservedViewport(iframe),
+    lastReadiness,
   );
 }
 
@@ -274,7 +397,6 @@ export async function withVerifiedPreviewViewport<T>(
   view.scrollTo(0, 0);
   try {
     throwIfAborted(options.signal);
-    if (doc.fonts?.ready) await doc.fonts.ready;
     const observedViewport = await waitForStableRequestedViewport({
       iframe,
       doc,
