@@ -208,6 +208,40 @@ describe("verified Diff HTML viewport transaction", () => {
     expect(iframe.style.height).toBe("400px");
   });
 
+  it("retries against the current preview when Storybook replaces the iframe", async () => {
+    const first = installPreviewIframe();
+    let captures = 0;
+    window.setTimeout(() => {
+      installPreviewIframe();
+    }, 0);
+
+    const transaction = await withVerifiedPreviewViewport(
+      async () => {
+        captures += 1;
+        const current = document.querySelector<HTMLIFrameElement>(
+          "#storybook-preview-iframe",
+        )!;
+        return {
+          width: current.contentWindow!.innerWidth,
+          height: current.contentWindow!.innerHeight,
+        };
+      },
+      {
+        storyId: "example--ready",
+        viewport: { width: 1280, height: 900 },
+      },
+    );
+
+    expect(first.iframe.isConnected).toBe(false);
+    expect(captures).toBe(1);
+    expect(transaction.result).toEqual({ width: 1280, height: 900 });
+    const current = document.querySelector<HTMLIFrameElement>(
+      "#storybook-preview-iframe",
+    )!;
+    expect(current.style.width).toBe("640px");
+    expect(current.style.height).toBe("400px");
+  });
+
   it("restores preview scroll and focus after measurement", async () => {
     const { view, doc } = installPreviewIframe();
     const subject = doc.querySelector("#storybook-root > section")!;

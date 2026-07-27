@@ -551,10 +551,18 @@ Before Diff HTML rasterizes, Visual Delta hides its overlay and establishes the
 selected image’s CSS `viewport` (default 1280×900) in the preview iframe. The
 transaction verifies the iframe layout is stable for two frames, the current
 story has finished, preparation chrome is gone, fonts are ready, and the
-explicit story delay has elapsed exactly once. It fails instead of silently
-padding a viewport mismatch, then restores iframe geometry, scroll, and focus
-before revealing the overlay. Capture diagnostics record requested/observed
-viewport, device scale, and bitmap dimensions in the Diff result.
+explicit story delay has elapsed exactly once. If Storybook replaces the
+preview iframe during that transaction, Visual Delta discards the detached
+frame and retries once against the current preview. It fails instead of
+silently padding a viewport mismatch, then restores iframe geometry, scroll,
+and focus before revealing the overlay. Capture diagnostics record
+requested/observed viewport, device scale, and bitmap dimensions in the Diff
+result.
+
+For placement, an image whose CSS dimensions match its declared capture
+viewport is treated as a viewport capture even when older metadata says
+`align: "canvas"`. Center mode anchors that image to the preview viewport
+origin and suppresses the otherwise false canvas-geometry warning.
 
 Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 

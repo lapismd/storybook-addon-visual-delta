@@ -332,6 +332,33 @@ test.describe("Visual Delta manager overlay placement", () => {
     });
   }
 
+  test("centers a viewport-sized canvas baseline at the viewport origin", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await openManager(page, "shadcn-overlays-popover--open-panel");
+    const panel = page.getByTestId("visual-delta-panel");
+    await panel
+      .getByRole("switch", { name: "Baseline centered over live" })
+      .click();
+
+    const frame = previewFrame(page);
+    const image = frame.locator("#visual-delta-overlay > img");
+    await expect(image).toBeVisible();
+    await expect
+      .poll(() =>
+        image.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left, top: rect.top };
+        }),
+      )
+      .toEqual({ left: 0, top: 0 });
+    await expect(
+      panel.getByRole("alert", { name: /Baseline geometry mismatch/ }),
+    ).toHaveCount(0);
+    expect(writes).toEqual([]);
+  });
+
   test("auto-selected baseline waits for storyFinished and measurement", async ({
     page,
   }) => {

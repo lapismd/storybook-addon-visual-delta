@@ -152,7 +152,10 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   matching Playwright clips. Legacy `align: "viewport"` pins to the iframe
   origin with transforms only — no iframe resize. Center overlay also locks the
   live subject to the baseline CSS width (same as split) so a narrow addon
-  panel does not reflow the component under a wider capture.
+  panel does not reflow the component under a wider capture. A baseline whose
+  CSS dimensions match its declared capture viewport is also inferred to be a
+  viewport capture, even if older metadata says `align: "canvas"`; center and
+  split placement use the viewport origin and omit the false geometry warning.
 - **Auto-select** — First baseline image is selected on `INIT_IMAGE`.
 - **Difference blend** — `mix-blend-mode: difference`; defaults to off on load;
   only applies in `over` placement.
@@ -165,7 +168,9 @@ Setup: `src/test/setup.ts` + `src/test/render.tsx`.
   menus/dialogs are open), so layout/wrapping matches baselines. Still
   approximate vs real Chromium screenshots. Portal clips use the story
   subject box — not `#storybook-root` (`min-height: 100vh`) — so open
-  popovers do not explode to a full-viewport PNG.
+  popovers do not explode to a full-viewport PNG. A preview iframe replacement
+  during measurement/capture retries once against the current frame instead of
+  waiting on detached geometry.
 - **Create + skip-visual** — `visual-delta update --create-only` removes
   `skip-visual` from CSF **and** `storybook-static/index.json` so Playwright
   still sees the story under `--skip-build`. The panel kebab **Rebuild

@@ -26,6 +26,15 @@ type IframeSizeStyles = {
   minHeight: string;
 };
 
+type VerifiedPreviewViewportOptions = {
+  storyId: string;
+  viewport?: { width: number; height: number };
+  deviceScaleFactor?: number;
+  delay?: number;
+  signal?: AbortSignal;
+  timeout?: number;
+};
+
 export type CaptureViewportDiagnostics = {
   requestedViewport: { width: number; height: number };
   observedViewport: { width: number; height: number };
@@ -45,6 +54,13 @@ export class PreviewViewportEstablishmentError extends Error {
         ".",
     );
     this.name = "PreviewViewportEstablishmentError";
+  }
+}
+
+class PreviewIframeReplacedError extends Error {
+  constructor() {
+    super("Storybook replaced the preview iframe during Diff HTML capture");
+    this.name = "PreviewIframeReplacedError";
   }
 }
 
@@ -231,6 +247,9 @@ async function waitForStableRequestedViewport(options: {
   while (performance.now() <= deadline) {
     throwIfAborted(signal);
     await nextFrame(view);
+    if (!iframe.isConnected || getPreviewIframe() !== iframe) {
+      throw new PreviewIframeReplacedError();
+    }
     const current = readStableLayout(iframe, doc);
     const exactViewport =
       current.viewportWidth === viewport.width &&
@@ -335,16 +354,9 @@ export function applyPreviewViewport(
  * Geometry, scroll positions, and focus are restored even when capture aborts
  * or rasterization fails.
  */
-export async function withVerifiedPreviewViewport<T>(
+async function withVerifiedPreviewViewportAttempt<T>(
   fn: () => Promise<T>,
-  options: {
-    storyId: string;
-    viewport?: { width: number; height: number };
-    deviceScaleFactor?: number;
-    delay?: number;
-    signal?: AbortSignal;
-    timeout?: number;
-  },
+  options: VerifiedPreviewViewportOptions,
 ): Promise<{ result: T; diagnostics: CaptureViewportDiagnostics }> {
   const iframe = getPreviewIframe();
   if (!iframe) {
@@ -420,8 +432,14 @@ export async function withVerifiedPreviewViewport<T>(
       });
     }
     throwIfAborted(options.signal);
+    if (!iframe.isConnected || getPreviewIframe() !== iframe) {
+      throw new PreviewIframeReplacedError();
+    }
     const result = await fn();
     throwIfAborted(options.signal);
+    if (!iframe.isConnected || getPreviewIframe() !== iframe) {
+      throw new PreviewIframeReplacedError();
+    }
     return {
       result,
       diagnostics: {
@@ -431,28 +449,51 @@ export async function withVerifiedPreviewViewport<T>(
       },
     };
   } finally {
-    writeIframeSizeStyles(iframe, iframeStyles);
-    view.scrollTo(previewScroll.x, previewScroll.y);
-    for (const scroll of wrapperScroll) {
-      scroll.node.scrollLeft = scroll.left;
-      scroll.node.scrollTop = scroll.top;
+    if (iframe.isConnected && getPreviewIframe() === iframe) {
+      writeIframeSizeStyles(iframe, iframeStyles);
+      view.scrollTo(previewScroll.x, previewScroll.y);
+      for (const scroll of wrapperScroll) {
+        scroll.node.scrollLeft = scroll.left;
+        scroll.node.scrollTop = scroll.top;
+      }
+      if (originalViewport.width > 0 && originalViewport.height > 0) {
+        await waitForStableRequestedViewport({
+          iframe,
+          doc,
+          viewport: originalViewport,
+          storyId: options.storyId,
+          timeout: 1_000,
+        });
+      } else {
+        await waitTwoFrames();
+      }
     }
-    if (originalViewport.width > 0 && originalViewport.height > 0) {
-      await waitForStableRequestedViewport({
-        iframe,
-        doc,
-        viewport: originalViewport,
-        storyId: options.storyId,
-        timeout: 1_000,
-      });
-    } else {
-      await waitTwoFrames();
-    }
-    if (previewActive?.isConnected) {
+    if (
+      previewActive?.isConnected &&
+      iframe.isConnected &&
+      getPreviewIframe() === iframe
+    ) {
       previewActive.focus({ preventScroll: true });
     } else if (managerActive?.isConnected) {
       managerActive.focus({ preventScroll: true });
     }
+  }
+}
+
+/**
+ * Establish and prove the baseline viewport, retrying transparently when
+ * Storybook remounts its preview iframe during manager/HMR updates.
+ */
+export async function withVerifiedPreviewViewport<T>(
+  fn: () => Promise<T>,
+  options: VerifiedPreviewViewportOptions,
+): Promise<{ result: T; diagnostics: CaptureViewportDiagnostics }> {
+  try {
+    return await withVerifiedPreviewViewportAttempt(fn, options);
+  } catch (error) {
+    if (!(error instanceof PreviewIframeReplacedError)) throw error;
+    throwIfAborted(options.signal);
+    return withVerifiedPreviewViewportAttempt(fn, options);
   }
 }
 

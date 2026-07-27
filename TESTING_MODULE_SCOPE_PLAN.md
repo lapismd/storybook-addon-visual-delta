@@ -78,6 +78,21 @@ runners now share a whitespace-delimited, escaped story-ID leaf selector.
 - [x] Cover stream success/failure parsing and preflight UI state with focused
       tests.
 
+## Follow-up: capture geometry and preview remounts
+
+- [x] Restore the longstanding 1.5rem catalog inset for regular fullscreen
+      stories so their 1280px viewport captures remain 1232 CSS pixels wide.
+- [x] Limit edge-to-edge `#storybook-root` layout to Workspace and Shell story
+      groups, preserving their existing 1280 CSS pixel baselines.
+- [x] Retry Diff HTML once when Storybook replaces the preview iframe during
+      viewport establishment or capture.
+- [x] Align wrapped host commands with the main catalog's 9009/9010 port lane so
+      compare-only validation cannot reuse another checkout's 6007 server.
+- [x] Treat a baseline whose CSS dimensions match its declared capture viewport
+      as viewport-sized even when older metadata says `align: "canvas"`, so the
+      center overlay uses the viewport origin and does not show a false geometry
+      warning.
+
 ## Validation evidence
 
 - Add-on scope/UI/prefs tests: 18 passed.
@@ -91,7 +106,7 @@ runners now share a whitespace-delimited, escaped story-ID leaf selector.
 - Full panel Playwright: 37 passed; four existing component-overlay Fit
   placement canaries failed because the live subject exceeded its pane
   (full-viewport placements and all new workflow coverage passed).
-- Full unit: 665 passed; one existing workspace story-mode contract failed
+- Full unit: 679 passed; one existing workspace story-mode contract failed
   because `FMode.stories.svelte` uses the demo helper's `mobileMode: "never"`
   form rather than the contract's older computed-key syntax.
 - Storybook interactions: 502 passed; one existing AppShell play test tried to
@@ -103,6 +118,10 @@ runners now share a whitespace-delimited, escaped story-ID leaf selector.
 - Final `pnpm checks`: formatting, Svelte diagnostics, add-on and docs type
   checks, and the no-Tailwind gate passed; the command then stopped at the same
   existing F-Mode workspace contract failure recorded above.
+- Popover center-overlay regression: failed before the fix at `(24, 24)`, then
+  passed at the viewport origin `(0, 0)` with no geometry warning.
+- Focused compare-only geometry validation: Label, Select Scrollable, Popover
+  Open panel, and Workspace Empty View passed without updating baselines.
 - Follow-up selector/delete tests: 14 add-on tests and 30 host pipeline tests
   passed, including exact sibling-suffix rejection, primary/interaction/named
   mode removal, review invalidation, and sidecar deletion.
