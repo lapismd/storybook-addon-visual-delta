@@ -175,24 +175,24 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 
 ### Middleware routes
 
-| Method | Path                                          | Action                                                  |
-| ------ | --------------------------------------------- | ------------------------------------------------------- |
-| `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                   |
-| `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                     |
-| `POST` | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars        |
-| `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                   |
-| `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)             |
-| `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)             |
-| `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason    |
-| `POST` | `/__visual-delta/action-scope`                | Freeze visible / refreshed-affected Testing Module IDs  |
-| `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run            |
-| `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run          |
-| `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                  |
-| `POST` | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`) |
-| `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                  |
-| `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG           |
-| `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision         |
-| `GET`  | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions      |
+| Method | Path                                          | Action                                                    |
+| ------ | --------------------------------------------- | --------------------------------------------------------- |
+| `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                     |
+| `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
+| `POST` | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
+| `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
+| `POST` | `/__visual-delta/capture-subject`             | Diff Chromium subject PNG (NDJSON progress)               |
+| `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
+| `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
+| `POST` | `/__visual-delta/action-scope`                | Stream preflight progress, then freeze Testing Module IDs |
+| `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run              |
+| `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run            |
+| `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                    |
+| `POST` | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`)   |
+| `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                    |
+| `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG             |
+| `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision           |
+| `GET`  | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions        |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -213,9 +213,13 @@ Playwright reporter so the Testing Module can show live `Testing N/M` counts.
 The global Testing Module resolves its visible story IDs before the first
 enabled action. An affected preflight first reads the cached graph, returns
 immediately when every fingerprint is current, or rebuilds static Storybook
-and recomputes the plan before freezing `visible ∩ affected`. Responses and
-run events include the selection, selected and unchanged counts, no-change
-status, and any conservative fallback reason.
+and recomputes the plan before freezing `visible ∩ affected`. The action-scope
+response is NDJSON: it reports resolving, rebuilding (with a one-second elapsed
+heartbeat), and freezing phases before the final exact-ID result. The Testing
+Module therefore does not present the comparison row as running until
+`/run-tests` actually begins. Responses and run events include the selection,
+selected and unchanged counts, no-change status, and any conservative fallback
+reason.
 After HMR remounts the Testing Module (e.g. Update status), the client
 reconnects via `/run-status` + `/run-events` instead of losing progress.
 
