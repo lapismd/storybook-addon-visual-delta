@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
+  interactionSnapshotUpdateMode,
   interactionScreenshotRelativePath,
   slugifyStepLabel,
 } from "../shared/interaction-capture.js";
@@ -369,18 +370,24 @@ export async function runInteractionUpdate(
     stepLabel,
     captureCallId: options.captureCallId?.trim() || undefined,
   });
-  execFileSync("pnpm", ["exec", "playwright", "test"], {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      PLAYWRIGHT_INTERACTION_CAPTURE: capture,
-      PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
-      VISUAL_UPDATE_APPROVED: "1",
-      VISUAL_DELTA_BASELINE_PATH_MODE: mode,
-      VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+  const updateMode = interactionSnapshotUpdateMode(options.createOnly);
+  execFileSync(
+    "pnpm",
+    ["exec", "playwright", "test", `--update-snapshots=${updateMode}`],
+    {
+      cwd: root,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        PLAYWRIGHT_INTERACTION_CAPTURE: capture,
+        PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
+        PLAYWRIGHT_UPDATE_MODE: updateMode,
+        VISUAL_UPDATE_APPROVED: "1",
+        VISUAL_DELTA_BASELINE_PATH_MODE: mode,
+        VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+      },
     },
-  });
+  );
 
   if (!existsSync(interactionPng)) {
     // Fallback: Playwright may write the toHaveScreenshot relative name + suffix.
