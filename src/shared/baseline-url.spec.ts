@@ -44,6 +44,27 @@ describe("baselineUrlForStoryRef", () => {
     ).toBe("/visual-baselines/shadcn/button/default-chromium-darwin.png");
   });
 
+  it("builds nested-import URLs for filter stories", () => {
+    expect(
+      baselineUrlForStoryRef({
+        id: "filter-power-search--add-filter-via-combobox",
+        importPath:
+          "./src/shared/filter/power-search/PowerSearch.stories.svelte",
+      }),
+    ).toBe(
+      "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium-darwin.png",
+    );
+  });
+
+  it("includes the story filename when sibling story files share a directory", () => {
+    expect(
+      baselineUrlForStoryRef({
+        id: "ai-chat-composer--states",
+        importPath: "./src/shared/ai/chat/Composer.stories.svelte",
+      }),
+    ).toBe("/visual-baselines/ai/chat/composer/states-chromium-darwin.png");
+  });
+
   it("skips skip-visual unless allowSkipVisual", () => {
     const story = {
       id: "shadcn-actions-button--default",
@@ -56,11 +77,11 @@ describe("baselineUrlForStoryRef", () => {
     );
   });
 
-  it("ignores unwired directories", () => {
+  it("rejects import paths that escape the snapshot root", () => {
     expect(
       baselineUrlForStoryRef({
         id: "misc--default",
-        importPath: "./src/other/Thing.stories.svelte",
+        importPath: "../../outside/Thing.stories.svelte",
       }),
     ).toBeUndefined();
   });

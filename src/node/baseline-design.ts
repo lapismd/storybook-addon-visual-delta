@@ -7,7 +7,7 @@
  */
 
 import {
-  snapshotDirFromImportPath,
+  baselineUrlForStoryRef,
   VISUAL_BASELINE_SUFFIX as SHARED_SUFFIX,
 } from "../shared/baseline-url.js";
 
@@ -35,12 +35,6 @@ export function familyFromTitle(title: string): string {
   return segment.toLowerCase().replace(/\s+/g, "-");
 }
 
-const WIRED_SNAPSHOT_PREFIXES = ["shadcn/", "forms/", "workspace/"] as const;
-
-function isWiredSnapshotDir(directory: string): boolean {
-  return WIRED_SNAPSHOT_PREFIXES.some((prefix) => directory.startsWith(prefix));
-}
-
 /**
  * Returns a baseline PNG URL for catalog stories that participate in visual
  * baselines, or undefined when the story should not show one.
@@ -56,10 +50,8 @@ export function baselineUrlForStory(
   if (!id.includes("--")) return undefined;
 
   if (story.importPath) {
-    const directory = snapshotDirFromImportPath(story.importPath);
-    if (isWiredSnapshotDir(directory)) {
-      return `/visual-baselines/${directory}/${storySlugFromId(id)}${VISUAL_BASELINE_SUFFIX}.png`;
-    }
+    const url = baselineUrlForStoryRef(story);
+    if (url) return url;
   }
 
   // Title-only fallback when importPath is missing (Shadcn catalog).

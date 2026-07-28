@@ -61,6 +61,7 @@ export {
 export {
   findStoryOpenTagEnd,
   injectVisualBaselineVisualDeltas,
+  injectNestedImportVisualDeltas,
   sanitizeStoryName,
   visualBaselineVisualDeltaPlugin,
 } from "./baseline-vite-plugin.js";

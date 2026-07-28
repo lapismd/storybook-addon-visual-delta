@@ -5,8 +5,6 @@
 
 export const VISUAL_BASELINE_SUFFIX = "-chromium-darwin";
 
-const WIRED_SNAPSHOT_PREFIXES = ["shadcn/", "forms/", "workspace/"] as const;
-
 export function snapshotDirFromImportPath(importPath: string): string {
   const normalized = importPath.replace(/\\/g, "/");
   const stripped = normalized
@@ -22,6 +20,49 @@ export function storySlugFromId(storyId: string): string {
     throw new Error(`Unexpected story id (missing --): ${storyId}`);
   }
   return parts.slice(1).join("--");
+}
+
+function slugifyPathPart(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
+function collisionSafeSnapshotDir(story: {
+  id: string;
+  importPath: string;
+}): string {
+  const directory = snapshotDirFromImportPath(story.importPath);
+  const normalized = story.importPath.replace(/\\/g, "/");
+  const match = normalized.match(/\/([^/]+)\.stories\.\w+$/);
+  if (!match) return directory;
+
+  const parts = directory.split("/");
+  const storyFile = slugifyPathPart(match[1]!);
+  const directoryLeaf = slugifyPathPart(parts.at(-1) ?? "");
+  if (parts.length < 2 || storyFile === directoryLeaf) return directory;
+
+  const storyPrefix = story.id.split("--")[0] ?? "";
+  const directoryPrefix = parts.map(slugifyPathPart).join("-");
+  return storyPrefix.startsWith(`${directoryPrefix}-`)
+    ? `${directory}/${storyFile}`
+    : directory;
+}
+
+function isSafeSnapshotDirectory(directory: string): boolean {
+  const parts = directory.split("/");
+  return (
+    parts.length > 0 &&
+    parts.every(
+      (part) =>
+        part.length > 0 &&
+        part !== "." &&
+        part !== ".." &&
+        /^[a-zA-Z0-9._-]+$/.test(part),
+    )
+  );
 }
 
 export function baselineUrlForStoryRef(
@@ -44,9 +85,10 @@ export function baselineUrlForStoryRef(
     return undefined;
   }
   if (!id.includes("--") || !story.importPath) return undefined;
-  const directory = snapshotDirFromImportPath(story.importPath);
-  if (!WIRED_SNAPSHOT_PREFIXES.some((prefix) => directory.startsWith(prefix))) {
-    return undefined;
-  }
+  const directory = collisionSafeSnapshotDir({
+    id,
+    importPath: story.importPath,
+  });
+  if (!isSafeSnapshotDirectory(directory)) return undefined;
   return `/visual-baselines/${directory}/${storySlugFromId(id)}${VISUAL_BASELINE_SUFFIX}.png`;
 }

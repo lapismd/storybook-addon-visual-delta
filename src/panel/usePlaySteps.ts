@@ -5,7 +5,7 @@ import {
   type Call,
   type SyncPayload,
 } from "storybook/internal/instrumenter";
-import { addons } from "storybook/manager-api";
+import { addons, useAddonState } from "storybook/manager-api";
 import { EVENTS, type VisualDeltaInteraction } from "../constants.js";
 import {
   interactionIdForInstrumenterCall,
@@ -52,6 +52,12 @@ type PlayStepsPayload = {
   steps: Array<{ label: string; stepId: string }>;
 };
 
+type StorybookInteractionsAddonState = {
+  interactions?: Call[];
+};
+
+const STORYBOOK_INTERACTIONS_ADDON_ID = "storybook/interactions";
+
 /**
  * Merge CSF-wired interactions with live-discovered play steps.
  * Prefer rows that have a callId (GOTO works); always keep CSF labels/ids.
@@ -89,6 +95,39 @@ export function mergeInteractionRows(
   return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/** Recover calls retained by Storybook's Interactions addon before this panel mounted. */
+export function instrumenterStepsFromCalls(
+  calls: readonly Call[],
+  storyId: string,
+): PlayStepInfo[] {
+  const callsById = new Map(calls.map((call) => [call.id, call]));
+  const seen = new Set<string>();
+  const out: PlayStepInfo[] = [];
+  for (const call of calls) {
+    if (call.storyId !== storyId) continue;
+    if (!call.interceptable || call.ancestors.length > 0) continue;
+    const namedStep = call.method === "step";
+    const label = namedStep
+      ? String(call.args?.[0] ?? "").trim()
+      : instrumenterCallLabel(call);
+    if (!label) continue;
+    const stepId = namedStep
+      ? slugifyStepLabel(label)
+      : interactionIdForInstrumenterCall(call.cursor, call.method);
+    if (!stepId || seen.has(stepId)) continue;
+    seen.add(stepId);
+    out.push({
+      callId: call.id,
+      label,
+      syntax: instrumenterCallSyntax(call, callsById),
+      stepId,
+      status: call.status,
+      captureCallId: namedStep ? undefined : call.id,
+    });
+  }
+  return out;
+}
+
 /**
  * Collect named play steps for the Interactions tab.
  *
@@ -111,6 +150,10 @@ export function usePlaySteps(storyId: string | undefined): {
   );
   const [logItems, setLogItems] = useState<SyncPayload["logItems"]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [storybookInteractionsState] =
+    useAddonState<StorybookInteractionsAddonState>(
+      STORYBOOK_INTERACTIONS_ADDON_ID,
+    );
 
   useEffect(() => {
     setPreviewSteps([]);
@@ -165,38 +208,38 @@ export function usePlaySteps(storyId: string | undefined): {
 
   const instrumenterSteps = useMemo(() => {
     if (!storyId) return [] as PlayStepInfo[];
-    const seen = new Set<string>();
-    const out: PlayStepInfo[] = [];
-    for (const item of logItems) {
+    const orderedCalls = logItems.flatMap((item) => {
       const call = callsById.get(item.callId);
-      if (!call) continue;
-      if (call.storyId !== storyId) continue;
-      if (!call.interceptable || call.ancestors.length > 0) continue;
-      const namedStep = call.method === "step";
-      const label = namedStep
-        ? String(call.args?.[0] ?? "").trim()
-        : instrumenterCallLabel(call);
-      if (!label) continue;
-      const stepId = namedStep
-        ? slugifyStepLabel(label)
-        : interactionIdForInstrumenterCall(call.cursor, call.method);
-      if (!stepId || seen.has(stepId)) continue;
-      seen.add(stepId);
-      out.push({
-        callId: call.id,
-        label,
-        syntax: instrumenterCallSyntax(call, callsById),
-        stepId,
-        status: call.status ?? item.status,
-        captureCallId: namedStep ? undefined : call.id,
-      });
-    }
-    return out;
+      return call
+        ? [
+            {
+              ...call,
+              status: call.status ?? item.status,
+            } as Call,
+          ]
+        : [];
+    });
+    return instrumenterStepsFromCalls(orderedCalls, storyId);
   }, [callsById, logItems, storyId]);
 
+  const retainedInstrumenterSteps = useMemo(
+    () =>
+      storyId
+        ? instrumenterStepsFromCalls(
+            storybookInteractionsState?.interactions ?? [],
+            storyId,
+          )
+        : [],
+    [storybookInteractionsState?.interactions, storyId],
+  );
+
   const steps = useMemo(
-    () => mergeInteractionRows([...previewSteps, ...instrumenterSteps], []),
-    [instrumenterSteps, previewSteps],
+    () =>
+      mergeInteractionRows(
+        [...previewSteps, ...retainedInstrumenterSteps, ...instrumenterSteps],
+        [],
+      ),
+    [instrumenterSteps, previewSteps, retainedInstrumenterSteps],
   );
   const selectedStepId = useMemo(
     () => steps.find((step) => step.callId === selectedCallId)?.stepId ?? null,

@@ -154,7 +154,6 @@ import {
   baselineSourceStem,
   verifyBaselineSources,
 } from "./baseline-source-availability.js";
-import { BaselineCreatePicker } from "./BaselineCreatePicker.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 const IS_DEVELOPMENT =
@@ -253,6 +252,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [unavailableBaselineSources, setUnavailableBaselineSources] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  const markBaselineSourceAvailable = useCallback((source: string) => {
+    const stem = baselineSourceStem(source);
+    setUnavailableBaselineSources((previous) => {
+      if (!previous.has(stem)) return previous;
+      const next = new Set(previous);
+      next.delete(stem);
+      return next;
+    });
+  }, []);
   const images = useMemo(
     () =>
       configuredImages.filter(
@@ -671,6 +679,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const reviewStatus = optimisticReview ?? reviewFromStory;
   const skipFromStory = (storyEntry?.tags ?? []).includes(SKIP_VISUAL_TAG);
   const skipVisual = optimisticSkipVisual ?? skipFromStory;
+  const showMissingCaptureChoices =
+    primaryImages.length === 0 &&
+    interactions.length === 0 &&
+    interactionSteps.length > 0 &&
+    !skipVisual;
+
+  useEffect(() => {
+    if (showMissingCaptureChoices) setExpandedId(null);
+  }, [showMissingCaptureChoices, storyId]);
 
   useEffect(() => {
     setOptimisticReview(null);
@@ -702,7 +719,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const baselineSections = useMemo((): BaselineSection[] => {
     const sections: BaselineSection[] = [];
-    if (primaryImages.length > 0) {
+    if (primaryImages.length > 0 || showMissingCaptureChoices) {
       const isActive = activeSectionId === "default";
       const selectedPrimary =
         (selectedMode
@@ -715,7 +732,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       sections.push({
         id: "default",
         label: "Default",
-        hint: "End of play · primary baseline",
+        hint:
+          primaryImages.length > 0
+            ? "End of play · primary baseline"
+            : "No baseline yet · end of play",
         thumbSrc: selectedPrimary?.src,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
@@ -735,6 +755,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (
         !wired &&
         !showAllInteractions &&
+        !showMissingCaptureChoices &&
         step.stepId !== selectedInteractionId
       ) {
         continue;
@@ -773,6 +794,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     selectedInteractionId,
     selectedMode,
     showAllInteractions,
+    showMissingCaptureChoices,
     storyEntry?.importPath,
   ]);
 
@@ -882,6 +904,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             )
           : undefined;
         if (src) {
+          markBaselineSourceAvailable(src);
           const nextInteractions = [
             ...interactions.filter((item) => item.id !== step.stepId),
             { id: step.stepId, label: step.label, src },
@@ -905,6 +928,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       api,
       hydrateInteractions,
       interactions,
+      markBaselineSourceAvailable,
       revealCenteredOverlay,
       selectInteractionBaseline,
       storyId,
@@ -1073,7 +1097,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (url) {
         // Prefer hydrate over remount: remount can re-emit INIT_IMAGE with
         // stale empty parameters before CSF HMR lands and wipe the gallery.
-        hydrateBaselineImages([url]);
+        markBaselineSourceAvailable(url);
+        hydrateBaselineImages([`${url}?t=${Date.now()}`]);
       } else {
         revealCenteredOverlay();
       }
@@ -1085,6 +1110,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     clearBaselineDiagnostics,
     currentStoryId,
     hydrateBaselineImages,
+    markBaselineSourceAvailable,
     revealCenteredOverlay,
   ]);
 
@@ -1764,14 +1790,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   );
 
   const isEmpty = primaryImages.length === 0 && images.length === 0;
-  const hasAvailableInteractionBaseline = interactions.some((item) =>
-    Boolean(item.src),
-  );
-  const requiresBaselineChoice =
-    isEmpty &&
-    !hasAvailableInteractionBaseline &&
-    interactionSteps.length > 1 &&
-    !skipVisual;
+  const requiresBaselineChoice = isEmpty && showMissingCaptureChoices;
   const needsScaffold = onboardingReady === false;
 
   useEffect(() => {
@@ -1926,6 +1945,32 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const renderSectionBody = useCallback(
     (section: BaselineSection) => {
+      const hasBaseline = Boolean(section.thumbSrc || section.wired?.src);
+      if (!hasBaseline) {
+        const label =
+          section.step?.syntax?.text ?? section.step?.label ?? section.label;
+        const actionLabel = section.step
+          ? `Create ${label} baseline (${section.step.stepId})`
+          : `Create ${label} baseline`;
+        return (
+          <Button
+            size="small"
+            ariaLabel={actionLabel}
+            disabled={busy}
+            onClick={() => {
+              if (section.id === "default") {
+                void handleCreateBaselines();
+                return;
+              }
+              if (section.step) {
+                void handleCreateInteraction(section.step, false);
+              }
+            }}
+          >
+            Create baseline
+          </Button>
+        );
+      }
       return (
         <>
           <PanelToolbar>
@@ -2069,6 +2114,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffEngine,
       diffResult,
       handleModeChange,
+      handleCreateBaselines,
+      handleCreateInteraction,
       images.length,
       images,
       index,
@@ -2109,9 +2156,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             : needsScaffold
               ? (onboardingHint ??
                 "Set up the Playwright suite and config, then create a baseline for this story.")
-              : requiresBaselineChoice
-                ? "Choose the exact capture point to baseline, or Skip visual tests from the header if this story should stay out of the suite."
-                : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
+              : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
           footer:
             needsScaffold && !skipVisual ? (
               <Button
@@ -2131,15 +2176,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               >
                 Include in visual tests
               </Button>
-            ) : requiresBaselineChoice ? (
-              <BaselineCreatePicker
-                steps={interactionSteps}
-                busy={busy}
-                onCreateDefault={() => void handleCreateBaselines()}
-                onCreateInteraction={(step) =>
-                  void handleCreateInteraction(step, false)
-                }
-              />
             ) : (
               <Button
                 size="small"
@@ -2302,6 +2338,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               hiddenInteractionCount={hiddenInteractionCount}
               showInteractionFilter
               onExpand={selectSection}
+              onCreateDefault={() => void handleCreateBaselines()}
               onCreate={(step) => void handleCreateInteraction(step, false)}
               onUpdate={(step) => void handleCreateInteraction(step, true)}
               onUpdateDefault={() => void handleUpdateBaselines()}
