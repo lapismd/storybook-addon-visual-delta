@@ -1,5 +1,9 @@
 # Parity with Chromatic Visual Tests addon
 
+> Comparative and non-normative. Use the
+> [`Visual Delta system specification`](./specs/index.md) for current behavior
+> and acceptance criteria. This audit can contain historical gaps.
+
 Gap analysis of this package against [`@chromatic-com/storybook`](https://www.npmjs.com/package/@chromatic-com/storybook)
 (Chromatic Visual Tests addon). Focus: Storybook **configuration** and
 **manager views**. Cloud/CI product features are intentional non-goals.

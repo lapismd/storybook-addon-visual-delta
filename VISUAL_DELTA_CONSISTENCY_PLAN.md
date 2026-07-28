@@ -1,5 +1,9 @@
 # Visual Delta consistency plan
 
+> Historical implementation record. Use the
+> [`Visual Delta system specification`](./specs/index.md) for the normative
+> contract.
+
 This document tracks the consistency audit for Visual Delta. It separates
 execution state, comparison outcome, and review metadata so every entry point
 reports the same result for the same story.

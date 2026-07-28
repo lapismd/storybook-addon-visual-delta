@@ -1,5 +1,9 @@
 # Baseline history implementation
 
+> Historical implementation record. Use the
+> [`Visual Delta system specification`](./specs/index.md) for the normative
+> contract.
+
 Visual Delta will expose read-only baseline history from the checkout's active
 version-control system and reuse the existing compare tools for revision
 inspection.

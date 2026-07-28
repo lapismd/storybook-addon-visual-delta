@@ -5,6 +5,10 @@ overlay / heatmap Live Diff, Create / Update baselines, Run visual tests, and
 review tags. In development, each concrete baseline also has read-only VCS
 history with revision-to-revision comparison.
 
+The [`Visual Delta system specification`](./specs/index.md) is the normative
+contract for behavior and acceptance. This README is an integration guide and
+command reference.
+
 See [`VENDOR.md`](./VENDOR.md) for implementation history and behavior notes.
 Storybook loads TypeScript/`tsx` from `src/` (no committed manager/preview
 `dist/`). The Node CLI builds to `dist/node/` (`visual-delta` bin).
