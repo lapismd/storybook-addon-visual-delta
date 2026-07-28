@@ -9,7 +9,7 @@ These requirements make authoritative captures deterministic and distinguish the
 | ID         | Requirement                                                                                                                                                                                                                                                 |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | VD-CAP-001 | Authoritative captures MUST use Chromium at a `1280 × 900` CSS viewport, device scale factor `3`, light color scheme, `en-GB`, `Europe/London`, reduced motion, hidden caret, and disabled animations.                                                      |
-| VD-CAP-002 | Capture MUST wait for the exact story generation to finish, relevant fonts to load, preparation chrome to disappear, the configured delay, and stable body, root, and subject geometry. A fixed padding fallback MUST NOT substitute for measured geometry. |
+| VD-CAP-002 | Capture MUST wait for the exact story generation to finish, relevant fonts to load, preparation chrome to disappear, the configured delay, and stable body, root, and subject geometry. Completion and cleanup MUST remain scoped to that render generation across same-story rerenders. A fixed padding fallback MUST NOT substitute for measured geometry. |
 | VD-CAP-003 | Target selection MUST use the viewport when cropped, the union of the subject and visible external portals when portals are open, the first story-root child otherwise, and the viewport only when no subject can be resolved.                              |
 | VD-CAP-004 | Ignore selectors MUST combine built-in markers, compatible Chromatic markers, and story selectors. Invalid selectors MUST be reported or ignored safely without aborting unrelated selectors.                                                               |
 | VD-CAP-005 | Baseline images MUST display at CSS size using their device scale factor. Overlay and split alignment MUST reconstruct measured body, root, and subject insets and report geometry mismatches.                                                              |
@@ -37,7 +37,7 @@ Hosts MAY add deterministic setup, but they MUST not change these values without
 
 ## Readiness handshake
 
-The preview assigns a monotonically increasing generation to each render. It marks readiness only after Storybook’s exact `storyFinished` event for the active story and generation.
+The preview assigns a monotonically increasing generation to each render. It marks readiness only after Storybook’s exact `storyFinished` event for the active story and generation. A same-story rerender that retains the active Storybook hook instance retains its generation and completion state. A true remount starts a new unfinished generation. Delayed completion or cleanup from an older generation MUST NOT finish or clear a newer generation.
 
 Capture then waits for:
 
