@@ -18,6 +18,7 @@ describe("buildInitPayload", () => {
         name: "Story",
         layout: "centered",
         renderGeneration: 7,
+        storyFinished: true,
       },
       { images: "/baseline.png" },
       projectDefaults,
@@ -31,6 +32,7 @@ describe("buildInitPayload", () => {
       baselineLabelOffset: { x: 5, y: -3 },
       layout: "centered",
       renderGeneration: 7,
+      storyFinished: true,
     });
 
     const story = buildInitPayload(

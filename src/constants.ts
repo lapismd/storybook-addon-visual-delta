@@ -16,6 +16,8 @@ export const EVENTS = {
   INIT_IMAGE: `${ADDON_ID}/init-image`,
   /** Manager → preview: re-emit INIT_IMAGE (missed while play was parked). */
   REQUEST_INIT_IMAGE: `${ADDON_ID}/request-init-image`,
+  /** Preview → manager: exact Storybook completion for one render generation. */
+  PREVIEW_READY: `${ADDON_ID}/preview-ready`,
   SELECT_IMAGE: `${ADDON_ID}/select-image`,
   UPDATE_OVERLAY_STYLE: `${ADDON_ID}/update-overlay-style`,
   RESET_OVERLAY: `${ADDON_ID}/reset-overlay`,
