@@ -6,20 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PACKAGE_ROOT = path.resolve(SCRIPT_DIR, "..");
-const REQUIRED_LEGACY_POINTERS = [
-  "architecture.md",
-  "baseline-model.md",
-  "capture-and-comparison.md",
-  "configuration.md",
-  "host-profile.md",
-  "index.md",
-  "interfaces.md",
-  "mutations-and-review.md",
-  "panel-and-preview.md",
-  "test-runs-and-scopes.md",
-  "vcs-and-history.md",
-  "verification.md",
-];
+const REQUIRED_ROOT_MARKDOWN = ["AGENTS.md", "DEVELOPMENT.md", "README.md"];
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -69,10 +56,9 @@ function addLinkErrors({ files, directory, packageRoot, errors }) {
 
 export function validateSpecStructure({
   packageRoot = DEFAULT_PACKAGE_ROOT,
-  legacyPointerNames = REQUIRED_LEGACY_POINTERS,
 } = {}) {
   const sourceDirectory = path.join(packageRoot, "spec", "src");
-  const pointerDirectory = path.join(packageRoot, "specs");
+  const obsoleteSpecDirectory = path.join(packageRoot, "specs");
   const summaryPath = path.join(sourceDirectory, "SUMMARY.md");
   const verificationPath = path.join(sourceDirectory, "verification.md");
   const bookConfigPath = path.join(packageRoot, "spec", "book.toml");
@@ -88,7 +74,10 @@ export function validateSpecStructure({
   const canonicalFiles = sourceFiles
     .filter((file) => file !== "SUMMARY.md")
     .sort();
-  const pointerFiles = markdownFiles(pointerDirectory);
+  const rootMarkdownFiles = readdirSync(packageRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
 
   addLinkErrors({
     files: sourceFiles,
@@ -96,12 +85,22 @@ export function validateSpecStructure({
     packageRoot,
     errors,
   });
-  addLinkErrors({
-    files: pointerFiles,
-    directory: pointerDirectory,
-    packageRoot,
-    errors,
-  });
+
+  if (existsSync(obsoleteSpecDirectory)) {
+    errors.push("obsolete specs/ directory must not exist; use spec/src/");
+  }
+  for (const file of REQUIRED_ROOT_MARKDOWN) {
+    if (!rootMarkdownFiles.includes(file)) {
+      errors.push(`${file}: required package-root Markdown file is missing`);
+    }
+  }
+  for (const file of rootMarkdownFiles) {
+    if (!REQUIRED_ROOT_MARKDOWN.includes(file)) {
+      errors.push(
+        `${file}: package-root Markdown is limited to ${REQUIRED_ROOT_MARKDOWN.join(", ")}`,
+      );
+    }
+  }
 
   if (existsSync(summaryPath)) {
     const summary = readFileSync(summaryPath, "utf8");
@@ -165,35 +164,6 @@ export function validateSpecStructure({
     }
   }
 
-  for (const file of pointerFiles) {
-    const source = readFileSync(path.join(pointerDirectory, file), "utf8");
-    if (!/\bnon-normative\b/i.test(source)) {
-      errors.push(`specs/${file}: compatibility pointer is not non-normative`);
-    }
-    if (/^\|\s*VD-[A-Z]+-\d{3}\s*\|/m.test(source)) {
-      errors.push(`specs/${file}: compatibility pointer defines a requirement`);
-    }
-  }
-  for (const file of legacyPointerNames) {
-    if (!pointerFiles.includes(file)) {
-      errors.push(`specs/${file}: required compatibility pointer is missing`);
-      continue;
-    }
-    const pointerPath = path.join(pointerDirectory, file);
-    const source = readFileSync(pointerPath, "utf8");
-    const expectedTarget = path.resolve(sourceDirectory, file);
-    const matchingTargets = localMarkdownTargets(source)
-      .map(targetFile)
-      .filter(Boolean)
-      .map((target) => path.resolve(path.dirname(pointerPath), target))
-      .filter((target) => target === expectedTarget);
-    if (matchingTargets.length !== 1) {
-      errors.push(
-        `specs/${file}: expected one pointer to ../spec/src/${file}, found ${matchingTargets.length}`,
-      );
-    }
-  }
-
   if (existsSync(bookConfigPath)) {
     const bookConfig = readFileSync(bookConfigPath, "utf8");
     if (!/^\s*src\s*=\s*"src"\s*$/m.test(bookConfig)) {
@@ -209,7 +179,6 @@ export function validateSpecStructure({
     errors,
     stats: {
       pages: canonicalFiles.length,
-      pointers: pointerFiles.length,
       requirements: requirementDefinitions.length,
     },
   };
@@ -225,7 +194,7 @@ function main() {
   }
 
   console.log(
-    `Visual Delta specification validated: ${result.stats.pages} pages, ${result.stats.requirements} requirements, ${result.stats.pointers} compatibility pointers.`,
+    `Visual Delta specification validated: ${result.stats.pages} pages, ${result.stats.requirements} requirements.`,
   );
 }
 

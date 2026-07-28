@@ -9,11 +9,12 @@ import { validateSpecStructure } from "./check-spec-structure.mjs";
 function createFixture(overrides = {}) {
   const packageRoot = mkdtempSync(path.join(os.tmpdir(), "visual-delta-spec-"));
   const sourceDirectory = path.join(packageRoot, "spec", "src");
-  const pointerDirectory = path.join(packageRoot, "specs");
   mkdirSync(sourceDirectory, { recursive: true });
-  mkdirSync(pointerDirectory, { recursive: true });
 
   const files = {
+    "AGENTS.md": "# Agent guide\n",
+    "DEVELOPMENT.md": "# Development\n",
+    "README.md": "# Package\n",
     "spec/book.toml": `[book]
 src = "src"
 
@@ -37,12 +38,6 @@ build-dir = "book"
 
 \`VD-TEST-001\`
 `,
-    "specs/index.md": `# Moved
-
-> Compatibility pointer. This file is non-normative.
-
-[Canonical](../spec/src/index.md)
-`,
     ...overrides,
   };
 
@@ -65,7 +60,6 @@ function withFixture(overrides, assertion) {
     assertion(
       validateSpecStructure({
         packageRoot,
-        legacyPointerNames: ["index.md"],
       }),
     );
   } finally {
@@ -78,7 +72,6 @@ test("accepts a complete canonical specification", () => {
     assert.equal(result.ok, true);
     assert.deepEqual(result.stats, {
       pages: 2,
-      pointers: 1,
       requirements: 1,
     });
   });
@@ -146,48 +139,40 @@ test("rejects untraced requirements", () => {
   );
 });
 
-test("rejects normative compatibility pointers", () => {
+test("rejects the obsolete specs tree", () => {
   withFixture(
     {
-      "specs/index.md": `# Old contract
-
-| ID | Requirement |
-| -- | ----------- |
-| VD-OLD-001 | This pointer MUST not define behavior. |
-`,
-    },
-    (result) => {
-      assert.equal(result.ok, false);
-      assert.match(result.errors.join("\n"), /is not non-normative/);
-      assert.match(result.errors.join("\n"), /defines a requirement/);
-    },
-  );
-});
-
-test("requires every preserved legacy pointer to target its replacement", () => {
-  withFixture(
-    {
-      "specs/index.md": `# Moved
-
-> Compatibility pointer. This file is non-normative.
-
-[Wrong canonical page](../spec/src/verification.md)
-`,
+      "specs/index.md": "# Obsolete specification pointer\n",
     },
     (result) => {
       assert.equal(result.ok, false);
       assert.match(
         result.errors.join("\n"),
-        /expected one pointer to \.\.\/spec\/src\/index\.md, found 0/,
+        /obsolete specs\/ directory must not exist/,
+      );
+    },
+  );
+});
+
+test("requires exactly the allowed package-root Markdown files", () => {
+  withFixture(
+    {
+      "HISTORY.md": "# Historical record\n",
+    },
+    (result) => {
+      assert.equal(result.ok, false);
+      assert.match(
+        result.errors.join("\n"),
+        /HISTORY\.md: package-root Markdown is limited to/,
       );
     },
   );
 
-  withFixture({ "specs/index.md": null }, (result) => {
+  withFixture({ "AGENTS.md": null }, (result) => {
     assert.equal(result.ok, false);
     assert.match(
       result.errors.join("\n"),
-      /required compatibility pointer is missing/,
+      /AGENTS\.md: required package-root Markdown file is missing/,
     );
   });
 });

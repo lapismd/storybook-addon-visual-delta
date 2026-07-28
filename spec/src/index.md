@@ -17,7 +17,7 @@ When documents disagree, use this order:
 2. An accepted specification change in the same commit
 3. Automated tests and fixtures as implementation evidence
 4. Package and host source code as implementation evidence
-5. Package `README.md`, root `README.md`, `VENDOR.md`, `PARITY.md`, and completed plan files as explanatory or historical material
+5. Package-root `AGENTS.md`, `DEVELOPMENT.md`, and `README.md`, plus repository guidance, as operational or explanatory material
 
 Tests and source code do not silently redefine the contract. A mismatch between implementation and this specification is a conformance defect or a proposed specification change.
 
@@ -41,6 +41,14 @@ flowchart LR
 ```
 
 The manager presents state and requests actions. The preview renders stories, exposes capture metadata, and displays comparisons. Middleware validates requests, freezes scope, coordinates processes, and applies allowed mutations. Playwright owns authoritative capture and pixel comparison.
+
+## Scope and non-goals
+
+Visual Delta is a local, offline-capable Storybook integration. Its contract covers the local manager and preview, development middleware, local Playwright Chromium capture, committed PNG baselines, derived comparison artifacts, and guarded local Git or Jujutsu operations.
+
+The system does not provide cloud authentication, project linking, billing, a hosted review queue, published-Storybook sharing, or a multi-browser cloud farm. It does not promise a capture matrix beyond the canonical Chromium environment and explicitly configured Storybook modes. Adding one of those capabilities requires an accepted specification change.
+
+Comparisons with third-party products are research evidence only. They do not define Visual Delta behavior or create a parity obligation.
 
 ## Component specifications
 
@@ -115,4 +123,4 @@ Every intentional behavior change MUST follow [Specification governance](./spec-
 5. Run the verification commands that cover the changed boundary
 6. Update explanatory documentation only after the normative contract is coherent
 
-Removing or weakening a requirement requires an explicit rationale in the change description. Historical plan completion does not authorize a contract change.
+Removing or weakening a requirement requires an explicit rationale in the change description. A historical implementation record does not authorize a contract change.

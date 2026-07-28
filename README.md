@@ -21,9 +21,19 @@ runs checker tests, and rejects protected implementation changes without a
 canonical content update. Generated `spec/book/` output is ignored and
 non-normative.
 
-See [`VENDOR.md`](./VENDOR.md) for implementation history and behavior notes.
 Storybook loads TypeScript/`tsx` from `src/` (no committed manager/preview
 `dist/`). The Node CLI builds to `dist/node/` (`visual-delta` bin).
+
+## Provenance and maintenance
+
+This local package was reimplemented from the
+`storybook-addon-visual-delta@0.1.5` npm tarball. The original package author is
+houjinlong and the package is MIT licensed; see [`package.json`](./package.json)
+and [`LICENSE`](./LICENSE) for retained metadata.
+
+The upstream GitHub source was unavailable when the package was adopted.
+Maintain the workspace implementation under `src/` and judge behavior against
+the [canonical specification](./spec/src/index.md).
 
 ## Quick start (portable host)
 
@@ -202,28 +212,35 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 
 ### Middleware routes
 
-| Method | Path                                          | Action                                                    |
-| ------ | --------------------------------------------- | --------------------------------------------------------- |
-| `POST` | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                     |
-| `POST` | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
-| `POST` | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
-| `POST` | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
-| `POST` | `/__visual-delta/compare-story`               | Authoritative exact-story Chromium compare + sidecar      |
-| `POST` | `/__visual-delta/capture-subject`             | Legacy Chromium subject capture (NDJSON progress)         |
-| `POST` | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
-| `GET`  | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
-| `POST` | `/__visual-delta/action-scope`                | Stream preflight progress, then freeze Testing Module IDs |
-| `GET`  | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run              |
-| `GET`  | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run            |
-| `POST` | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                    |
-| `POST` | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`)   |
-| `POST` | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                    |
-| `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG             |
-| `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision           |
-| `GET`  | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions        |
-| `GET`  | `/__visual-delta/change-sets`                 | Pending and committed UI mutation groups                  |
-| `GET`  | `/__visual-delta/change-set-file`             | Stable before/after bytes for one changed file            |
-| `POST` | `/__visual-delta/change-set-commit`           | Commit one complete, revalidated change set               |
+| Method       | Path                                          | Action                                                    |
+| ------------ | --------------------------------------------- | --------------------------------------------------------- |
+| `GET`        | `/__visual-delta/runtime`                     | Read the current development-server identity              |
+| `GET`, `PUT` | `/__visual-delta/config`                      | Read resolved settings or write project defaults          |
+| `PUT`        | `/__visual-delta/story-configuration`         | Write allow-listed overrides for one story                |
+| `POST`       | `/__visual-delta/playwright-threshold`        | Write the host Playwright threshold                       |
+| `POST`       | `/__visual-delta/story-facts`                 | Resolve coverage and source facts for exact story IDs     |
+| `POST`       | `/__visual-delta/init`                        | Scaffold portable integration files                       |
+| `POST`       | `/__visual-delta/rebuild-static`              | Build static Storybook without capture                    |
+| `POST`       | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                     |
+| `POST`       | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
+| `POST`       | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
+| `POST`       | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
+| `POST`       | `/__visual-delta/compare-story`               | Authoritative exact-story Chromium compare + sidecar      |
+| `POST`       | `/__visual-delta/capture-subject`             | Legacy Chromium subject capture (NDJSON progress)         |
+| `POST`       | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
+| `GET`        | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
+| `POST`       | `/__visual-delta/action-scope`                | Stream preflight progress, then freeze Testing Module IDs |
+| `GET`        | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run              |
+| `GET`        | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run            |
+| `POST`       | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                    |
+| `POST`       | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`)   |
+| `POST`       | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                    |
+| `GET`        | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG             |
+| `GET`        | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision           |
+| `GET`        | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions        |
+| `GET`        | `/__visual-delta/change-sets`                 | Pending and committed UI mutation groups                  |
+| `GET`        | `/__visual-delta/change-set-file`             | Stable before/after bytes for one changed file            |
+| `POST`       | `/__visual-delta/change-set-commit`           | Commit one complete, revalidated change set               |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -455,7 +472,7 @@ parameters: {
     passThresholdPercent: 0.1,
     interactions: [
       {
-        stepId: "opens-chooser",
+        id: "opens-chooser",
         label: "Opens chooser",
         src: "/visual-baselines/…/default--opens-chooser-chromium-darwin.png",
       },
@@ -536,7 +553,8 @@ the leaf stories currently visible in the filtered sidebar. **Affected only**
 uses the intersection of those visible IDs and the refreshed affected plan.
 Empty scopes report **No visible stories** or **Up to date** and never broaden.
 
-Chromatic gap matrix: [`PARITY.md`](./PARITY.md).
+Cloud product parity is outside the package contract; see
+[Scope and non-goals](./spec/src/index.md#scope-and-non-goals).
 
 ### Review tags (Accept vs Ready / Failed)
 
@@ -559,7 +577,7 @@ independent and preserves the review tag. **Update status** / middleware refuse
 | `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)          |
 | `visual-failed`   | Review rejected / known bad                            | Explicit status update or panel **Failed** pad |
 
-**Panel controls**
+#### Panel controls
 
 - **Accept / Unaccept** — human sign-off. Accept → `visual-approved`; Unaccept →
   `visual-pending`. Scope menu: story, entire component, or current run. These
@@ -851,5 +869,6 @@ Published / installed consumers can use the package name instead.
 
 ## Further reading
 
-- [`VENDOR.md`](./VENDOR.md) — behavior details, catalog fixtures, upstream notes
+- [Visual Delta system specification](./spec/src/index.md)
+- [Development reload behavior](./DEVELOPMENT.md)
 - Package Vitest project: `pnpm exec vitest run --project visual-delta`
