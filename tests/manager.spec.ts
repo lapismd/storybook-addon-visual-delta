@@ -574,8 +574,11 @@ test.describe("Visual Delta manager integration", () => {
       })
       .click();
     await page
+      .getByRole("dialog", {
+        name: 'More findByTestId("panel-shell") baseline actions',
+      })
       .getByRole("button", {
-        name: 'Create findByTestId("panel-shell") baseline',
+        name: /Create .*findByTestId\("panel-shell"\) baseline \(interaction-1-findByTestId\)/,
       })
       .click();
 
@@ -587,6 +590,41 @@ test.describe("Visual Delta manager integration", () => {
       captureCallId: `${MANAGER_FIXTURE} [1] findByTestId`,
       overwrite: false,
     });
+  });
+
+  test("scrolls long interaction listings inside the Visual Delta panel", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, FILTER_MISSING_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    const showAll = panel.getByRole("switch", {
+      name: "Show all interactions",
+    });
+    await expect(showAll).toBeVisible({ timeout: 10_000 });
+    // This real story streams retained instrumenter rows while mounting; force
+    // only the presentation-filter setup so the assertion can exercise wheel
+    // behavior on the resulting stable list.
+    await showAll.click({ force: true });
+
+    const list = panel.getByRole("region", {
+      name: "Visual baselines and interactions",
+    });
+    await expect(list).toBeVisible();
+    const metrics = await list.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+    expect(metrics.overflowY).toBe("auto");
+
+    await list.hover();
+    await page.mouse.wheel(0, 420);
+    await expect
+      .poll(() => list.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
   });
 
   test("replays an ordinary interaction call to the requested capture point", async ({

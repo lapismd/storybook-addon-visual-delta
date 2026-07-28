@@ -55,6 +55,39 @@ export function interactionSnapshotUpdateMode(
   return createOnly ? "missing" : "all";
 }
 
+export type InteractionCaptureUpdateMode = "none" | "missing" | "all";
+
+/**
+ * Run one exact interaction capture without misclassifying Playwright's
+ * create-only missing-snapshot signal as a failed writer.
+ *
+ * Playwright may write the requested PNG and still throw for a previously
+ * missing expectation. Recovery is safe only when this invocation created the
+ * exact target and the same capture passes again with updates disabled.
+ */
+export function captureInteractionWithCreateVerification(options: {
+  createOnly: boolean | undefined;
+  baselineExists: () => boolean;
+  capture: (mode: InteractionCaptureUpdateMode) => void;
+  onVerifyCreated?: () => void;
+}): void {
+  const baselineExistedBefore = options.baselineExists();
+  const updateMode = interactionSnapshotUpdateMode(options.createOnly);
+  try {
+    options.capture(updateMode);
+  } catch (error) {
+    if (
+      !options.createOnly ||
+      baselineExistedBefore ||
+      !options.baselineExists()
+    ) {
+      throw error;
+    }
+    options.onVerifyCreated?.();
+    options.capture("none");
+  }
+}
+
 /**
  * Stable, filename-safe id for an ordinary top-level Storybook interaction.
  * Keep the method's casing so the deterministic instrumenter call id can be

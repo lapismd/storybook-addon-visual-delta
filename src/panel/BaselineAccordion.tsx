@@ -19,13 +19,16 @@ import {
 import { styled, type Theme } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { InteractionCallTokenKind, PlayStepInfo } from "./usePlaySteps.js";
-import { VD_HEADER_STICKY_TOP_VAR, panelCanvasBackground } from "./styled.js";
+import { panelCanvasBackground } from "./styled.js";
 
 const List = styled.div({
   display: "flex",
   flexDirection: "column",
   flex: 1,
   minHeight: 0,
+  overflowX: "hidden",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
   marginBottom: "0.5rem",
 });
 
@@ -66,9 +69,9 @@ const SummaryRow = styled.div<{ $expanded?: boolean }>(
     // same top coordinate makes adjacent action buttons overlap after the
     // selected interaction is scrolled into view.
     position: $expanded ? "sticky" : "relative",
-    // No fallback: unset → `top: auto` → behaves like relative, so docs /
-    // catalog scrolls don't glue summaries over SectionBody padding.
-    top: $expanded ? `var(${VD_HEADER_STICKY_TOP_VAR})` : "auto",
+    // The list is the bounded scroll owner and already begins below the fixed
+    // Visual Delta header, so pin the active row to its own top edge.
+    top: $expanded ? 0 : "auto",
     zIndex: $expanded ? 1 : "auto",
     "&:hover": {
       background: theme.background.hoverable,
@@ -327,7 +330,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   }, [sections]);
 
   return (
-    <List>
+    <List role="region" aria-label="Visual baselines and interactions">
       {(showInteractionFilter || hiddenInteractionCount > 0) &&
       onToggleInteractions ? (
         <InteractionFilter>
