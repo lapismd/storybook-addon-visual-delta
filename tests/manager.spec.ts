@@ -19,6 +19,7 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
 const DIALOG_INTERACTION_FIXTURE = "shadcn-overlays-dialog--opens-and-closes";
 const FILTER_INTERACTION_FIXTURE =
   "filter-power-search--add-filter-via-combobox";
+const FILTER_MISSING_FIXTURE = "filter-power-search--edit-remove-and-clear";
 const FIXTURE_BASELINE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -205,6 +206,96 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       panel.getByRole("button", { name: "Create visual baseline" }),
     ).toHaveCount(0);
+  });
+
+  test("keeps baseline-write progress and hydration on the originating story", async ({
+    page,
+  }) => {
+    const sourceBaselineUrl =
+      "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium-darwin.png";
+    const destinationBaselineUrl =
+      "/visual-baselines/filter/power-search/edit-remove-and-clear-chromium-darwin.png";
+    let sourceBaselineCreated = false;
+    let releaseCreate: (() => void) | undefined;
+    let markCreateStarted: (() => void) | undefined;
+    const createStarted = new Promise<void>((resolve) => {
+      markCreateStarted = resolve;
+    });
+    const createCanFinish = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+
+    await page.route(`**${sourceBaselineUrl}*`, async (route) => {
+      if (!sourceBaselineCreated) {
+        await route.fulfill({ status: 404, body: "baseline missing" });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: FIXTURE_BASELINE_PNG,
+      });
+    });
+    await page.route(`**${destinationBaselineUrl}*`, async (route) => {
+      await route.fulfill({ status: 404, body: "baseline missing" });
+    });
+    await mockVisualBackend(page);
+    await page.route("**/__visual-delta/create-baseline", async (route) => {
+      expect(route.request().postDataJSON()).toMatchObject({
+        storyId: FILTER_INTERACTION_FIXTURE,
+      });
+      markCreateStarted?.();
+      await createCanFinish;
+      sourceBaselineCreated = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/plain",
+        body: "[exit 0]\nStory visualDelta patch: 1 updated, 0 already wired\n",
+      });
+    });
+
+    await openManager(page, FILTER_INTERACTION_FIXTURE, DEV_STORYBOOK);
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+    await panel
+      .getByRole("button", { name: "Create Default baseline" })
+      .click();
+    await createStarted;
+    await expect(panel.getByRole("progressbar")).toBeVisible();
+
+    await page
+      .locator(`a[href="/?path=/story/${FILTER_MISSING_FIXTURE}"]`)
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/story/${FILTER_MISSING_FIXTURE}`),
+    );
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(panel.getByRole("progressbar")).toHaveCount(0);
+
+    const createResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith(
+        "/__visual-delta/create-baseline",
+      ),
+    );
+    releaseCreate?.();
+    await createResponse;
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+    await expect(
+      panel.locator(`img[src*="${destinationBaselineUrl}"]`),
+    ).toHaveCount(0);
+    await expect(panel.getByRole("progressbar")).toHaveCount(0);
   });
 
   test("never exposes missing-baseline actions for an explicit AI baseline across refresh and remount", async ({
