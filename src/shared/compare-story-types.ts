@@ -17,6 +17,8 @@ export type CompareStoryRequest = {
   baselineUrl: string;
   align?: "viewport" | "canvas";
   visualCaptureUntil?: string;
+  /** Exact Storybook instrumenter call for an ordinary interaction baseline. */
+  visualCaptureCallId?: string;
   viewport?: { width: number; height: number };
   deviceScaleFactor?: number;
   delay?: number;

@@ -492,6 +492,7 @@ export async function compareExactStory(
   options?: {
     baselineUrl?: string;
     visualCaptureUntil?: string;
+    visualCaptureCallId?: string;
     mode?: string;
     onProgress?: (progress: { label: string }) => void;
     signal?: AbortSignal;
@@ -556,6 +557,7 @@ export async function compareExactStory(
       baselineUrl,
       align: params?.align ?? image?.align ?? "viewport",
       visualCaptureUntil: options?.visualCaptureUntil,
+      visualCaptureCallId: options?.visualCaptureCallId,
       mode: options?.mode,
       globals: modeGlobals ? buildArgsParam({}, modeGlobals) : undefined,
       viewport: image?.viewport ?? VISUAL_VIEWPORT,
@@ -1563,6 +1565,8 @@ export async function postVisualInteractionBaseline(body: {
   storyId: string;
   stepLabel: string;
   stepId?: string;
+  /** Exact Storybook Interactions call selected for an ordinary call capture. */
+  captureCallId?: string;
   overwrite?: boolean;
 }): Promise<VisualCreateResponse> {
   emitVisualCreateProgress({

@@ -330,7 +330,12 @@ warning area, with a direct link to that Story tab.
 - **Interaction baselines (opt-in)** — Primary Default-tab PNG stays end-of-play.
   The Interactions tab lists rows from (1) `parameters.visualDelta.interactions`
   (always, once wired), (2) preview `runStep` → `PLAY_STEPS` channel events, and
-  (3) the Storybook instrumenter when available. **Create** / **Update** writes
-  `{slug}--{stepId}-chromium-darwin.png`, parks play via `?visualCaptureUntil=`
-  (or a session flag for live remount), and patches CSF. Selecting a step uses
-  instrumenter GOTO when a callId exists, otherwise remount + park.
+  (3) every top-level Storybook instrumenter row. A GOTO selection in
+  Storybook’s Interactions panel selects and expands the same Visual Delta
+  accordion. The default list shows wired baselines only; **Show all** reveals
+  uncaptured rows. Call titles resolve nested Storybook call references and use
+  the same syntax-color vocabulary as the Interactions panel, including the
+  complete expectation. **Create** / **Update** writes
+  `{slug}--{interactionId}-chromium-darwin.png`, replays an ordinary row through
+  its exact deterministic instrumenter call, and patches CSF. Named `step()`
+  groups keep using `?visualCaptureUntil=` (or a session flag for live remount).

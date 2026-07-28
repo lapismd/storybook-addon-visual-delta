@@ -31,6 +31,7 @@ function parseShared(argv: string[]): BaselineCliOptions {
     component: readFlag(argv, "--component"),
     stepLabel: readFlag(argv, "--step-label"),
     stepId: readFlag(argv, "--step-id"),
+    captureCallId: readFlag(argv, "--capture-call-id"),
     snapshotDir: readFlag(argv, "--snapshot-dir"),
     baselinePathMode: readFlag(argv, "--baseline-path-mode") as
       | "story-id"
@@ -79,6 +80,7 @@ Flags:
   --component <name>        Grep / title substring (update / skip / include)
   --step-label <label>      Play step label (interaction-update)
   --step-id <id>            Override slugified step id
+  --capture-call-id <id>    Replay an exact Storybook Interactions call
   --create-only             Missing PNGs only (no overwrite)
   --approved                Required unless VISUAL_UPDATE_APPROVED=1
   --allow-dirty             Reserved (host git gates may use this)

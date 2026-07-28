@@ -24,6 +24,7 @@ export async function postChromiumSubjectCapture(
     storyId: string;
     origin?: string;
     visualCaptureUntil?: string;
+    visualCaptureCallId?: string;
     viewport?: { width: number; height: number };
     deviceScaleFactor?: number;
     delay?: number;

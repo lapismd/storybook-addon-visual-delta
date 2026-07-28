@@ -8,6 +8,13 @@
 /** Query param on iframe.html — park play after this step id. */
 export const VISUAL_CAPTURE_UNTIL_PARAM = "visualCaptureUntil";
 
+/**
+ * Optional Storybook instrumenter call id to replay through before capture.
+ * This lets Visual Delta capture ordinary Interactions rows, not only named
+ * `step()` groups handled by `visualCaptureUntil`.
+ */
+export const VISUAL_CAPTURE_CALL_PARAM = "visualCaptureCall";
+
 /** sessionStorage key — same park signal for live Visual Delta panel remounts. */
 export const VISUAL_CAPTURE_UNTIL_SESSION_KEY =
   "storybook-addon-visual-delta/visualCaptureUntil";
@@ -35,6 +42,49 @@ export function slugifyStepLabel(label: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
+}
+
+/**
+ * Stable, filename-safe id for an ordinary top-level Storybook interaction.
+ * Keep the method's casing so the deterministic instrumenter call id can be
+ * reconstructed by static comparisons without adding more CSF metadata.
+ */
+export function interactionIdForInstrumenterCall(
+  cursor: number,
+  method: string,
+): string {
+  const safeMethod =
+    method
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "call";
+  return `interaction-${Math.max(0, Math.trunc(cursor))}-${safeMethod}`;
+}
+
+/**
+ * Reconstruct Storybook's deterministic top-level call id from an interaction
+ * baseline id. Named `step()` baselines intentionally return `null` and keep
+ * using the existing runStep park contract.
+ */
+export function instrumenterCallIdForInteraction(
+  storyId: string,
+  interactionId: string,
+): string | null {
+  const match = interactionId.match(/^interaction-(\d+)-([a-zA-Z0-9_-]+)$/);
+  if (!match) return null;
+  return `${storyId} [${Number(match[1])}] ${match[2]}`;
+}
+
+/** Read an exact Storybook instrumenter call target from iframe query params. */
+export function readVisualCaptureCall(
+  search = typeof location !== "undefined" ? location.search : "",
+): string | null {
+  try {
+    const value = new URLSearchParams(search).get(VISUAL_CAPTURE_CALL_PARAM);
+    return value?.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

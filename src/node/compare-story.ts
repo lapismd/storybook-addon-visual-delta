@@ -54,6 +54,7 @@ export async function compareLiveStoryWithChromium(options: {
       origin: options.request.origin,
       storyId,
       visualCaptureUntil: options.request.visualCaptureUntil,
+      visualCaptureCallId: options.request.visualCaptureCallId,
       viewport: options.request.viewport,
       deviceScaleFactor: options.request.deviceScaleFactor,
       delay: options.request.delay,
