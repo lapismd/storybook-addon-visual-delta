@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import type { API_HashEntry } from "storybook/internal/types";
 import {
+  addons,
   experimental_getStatusStore,
   experimental_getTestProviderStore,
   experimental_useStatusStore,
@@ -97,6 +98,7 @@ import {
   VISUAL_FILTER_ADDON_ID,
   VISUAL_FILTER_QUERY_PARAM,
 } from "./visual-filters.js";
+import { deferUntilPreviewReady } from "./defer-until-preview-ready.js";
 
 type ChipStatus = "positive" | "negative" | "critical" | "warning" | "unknown";
 
@@ -314,6 +316,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     filteredIndex?: Record<string, API_HashEntry>;
     index?: Record<string, API_HashEntry>;
     customQueryParams?: Record<string, unknown>;
+    storyId?: string;
   };
   const testProviderState = experimental_useTestProviderStore(
     (state) => state[TEST_PROVIDER_ID] ?? "test-provider-state:pending",
@@ -415,15 +418,24 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   useEffect(() => {
     if (entry) return;
     const controller = new AbortController();
-    void fetchAffectedVisualPlan()
-      .then((summary) => {
-        if (!controller.signal.aborted) setAffectedSummary(summary);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setAffectedSummary(null);
-      });
-    return () => controller.abort();
-  }, [entry]);
+    const cleanup = deferUntilPreviewReady({
+      channel: addons.getChannel(),
+      storyId: storybookState.storyId,
+      callback: () => {
+        void fetchAffectedVisualPlan()
+          .then((summary) => {
+            if (!controller.signal.aborted) setAffectedSummary(summary);
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) setAffectedSummary(null);
+          });
+      },
+    });
+    return () => {
+      controller.abort();
+      cleanup();
+    };
+  }, [entry, storybookState.storyId]);
 
   const statusIds = useMemo(() => {
     let passedIds: string[] = [];
