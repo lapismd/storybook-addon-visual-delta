@@ -42,6 +42,28 @@ The gate ignores test-only changes, test fixtures, ordinary component stories, c
 
 Only a canonical content page under `spec/src/` satisfies the gate. `SUMMARY.md`, generated HTML, a legacy `specs/` pointer, README text, or a historical plan does not.
 
+## Enforcement
+
+Run the complete local policy check from the repository root:
+
+```bash
+pnpm visual-delta:spec:check
+```
+
+The component commands are:
+
+- `pnpm visual-delta:spec:lint`
+- `pnpm visual-delta:spec:validate`
+- `pnpm visual-delta:spec:build`
+- `pnpm visual-delta:spec:serve`
+- `pnpm visual-delta:spec:first`
+
+The complete check also runs the checker test suite. It runs near the start of `pnpm checks`, before implementation typechecking and browser validation.
+
+On a pull request, the required **Visual Delta Spec First / Validate Visual Delta specification** check compares the exact base and head revisions. Repository settings MUST keep that check required before merge. The workflow pins Node 22, pnpm 10.32.1, and mdBook 0.5.4.
+
+The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
+
 ## Agent workflow
 
 For every protected change:

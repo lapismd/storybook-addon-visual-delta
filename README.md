@@ -9,6 +9,18 @@ The [`Visual Delta system specification`](./spec/src/index.md) is the normative
 contract for behavior and acceptance. This README is an integration guide and
 command reference.
 
+Build or browse the canonical mdBook from the repository root:
+
+```bash
+pnpm visual-delta:spec:check
+pnpm visual-delta:spec:serve
+```
+
+The complete check lints and validates the canonical source, builds the book,
+runs checker tests, and rejects protected implementation changes without a
+canonical content update. Generated `spec/book/` output is ignored and
+non-normative.
+
 See [`VENDOR.md`](./VENDOR.md) for implementation history and behavior notes.
 Storybook loads TypeScript/`tsx` from `src/` (no committed manager/preview
 `dist/`). The Node CLI builds to `dist/node/` (`visual-delta` bin).
