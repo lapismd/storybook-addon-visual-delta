@@ -6,14 +6,14 @@ This reference defines story selection, frozen action scopes, action ordering, s
 
 These requirements keep every run conservative, reconnectable, and compare-only unless a writer is selected.
 
-| ID         | Requirement                                                                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-RUN-001 | Every invocation MUST resolve one exact, de-duplicated set of story IDs before its first action. Later sidebar, filter, graph, or preference changes MUST NOT alter that frozen scope.                                                                                                                  |
-| VD-RUN-002 | Story, component, global, and affected contexts MUST use their defined scope. An empty result MUST report empty and MUST NOT broaden to siblings or the complete suite.                                                                                                                                 |
-| VD-RUN-003 | Enabled Testing Module actions MUST run in this order: baseline writes, visual comparisons, then result-to-review updates. A failed earlier action MUST prevent unsafe dependent actions.                                                                                                               |
-| VD-RUN-004 | Static Playwright MUST run only against a complete and trustworthy static Storybook. Missing or invalid `index.json`, `iframe.html`, graph, or cache evidence MUST trigger rebuild or conservative fallback.                                                                                            |
-| VD-RUN-005 | Affected selection MUST choose all eligible stories when dependency tracing is incomplete or a global-risk input changes. Passing cache entries MAY reduce scope only with matching fingerprints.                                                                                                       |
-| VD-RUN-006 | Every run MUST have a stable job ID, reconnectable progress, one terminal state, and cooperative cancellation. Run and baseline-write progress MUST identify its frozen target scope, and terminal effects MUST NOT follow navigation outside that scope. Compare runs MUST force snapshot updates off. |
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VD-RUN-001 | Every invocation MUST resolve one exact, de-duplicated set of story IDs before its first action. Later sidebar, filter, graph, or preference changes MUST NOT alter that frozen scope.                                                                                                                                                                                     |
+| VD-RUN-002 | Story, component, global, and affected contexts MUST use their defined scope. An empty result MUST report empty and MUST NOT broaden to siblings or the complete suite.                                                                                                                                                                                                    |
+| VD-RUN-003 | Enabled Testing Module actions MUST run in this order: baseline writes, visual comparisons, then result-to-review updates. A failed earlier action MUST prevent unsafe dependent actions.                                                                                                                                                                                  |
+| VD-RUN-004 | Static Playwright MUST run only against a complete, current, and trustworthy static Storybook. Missing or invalid `index.json`, `iframe.html`, graph, or cache evidence, or newer selected story, transitive preview, or static configuration input MUST trigger rebuild or conservative fallback. Primary and interaction writers MUST apply the same freshness decision. |
+| VD-RUN-005 | Affected selection MUST choose all eligible stories when dependency tracing is incomplete or a global-risk input changes. Passing cache entries MAY reduce scope only with matching fingerprints.                                                                                                                                                                          |
+| VD-RUN-006 | Every run MUST have a stable job ID, reconnectable progress, one terminal state, and cooperative cancellation. Run and baseline-write progress MUST identify its frozen target scope, and terminal effects MUST NOT follow navigation outside that scope. Compare runs MUST force snapshot updates off.                                                                    |
 
 ## Scope resolution
 
@@ -50,11 +50,13 @@ A static tree is complete only when both `storybook-static/index.json` and `stor
 Middleware MAY reuse a static tree when:
 
 - Both required files exist
+- The selected story sources and known transitive preview modules are not newer than the static index
+- Static Storybook and Visual Delta configuration inputs are not newer than the static index
 - The requested source graph and affected cache are trustworthy
 - The action does not explicitly require a rebuild
 - The host permits reuse for that action
 
-Affected changes that need a fresh graph trigger a build before capture. Manual rebuild creates static output only and does not capture, compare, mutate review status, or write baselines.
+Affected changes that need a fresh graph trigger a build before capture. Interaction creation and update MUST use the same package-owned static freshness decision as primary writers; the existence of a complete but stale tree is not sufficient. Manual rebuild creates static output only and does not capture, compare, mutate review status, or write baselines.
 
 ## Affected selection
 

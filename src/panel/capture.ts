@@ -2,6 +2,10 @@ import { toPng } from "html-to-image";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs.js";
 import {
+  VISUAL_CAPTURE_SURFACE_SELECTORS,
+  measureVisualCaptureClip,
+} from "../shared/capture-target.js";
+import {
   resolvePaintedBackground,
   toOpaqueRgb,
 } from "../shared/preview-background.js";
@@ -152,6 +156,10 @@ function readStableLayout(
   const bodyRect = doc.body.getBoundingClientRect();
   const rootRect = root?.getBoundingClientRect();
   const subjectRect = root?.firstElementChild?.getBoundingClientRect();
+  const captureClip = measureVisualCaptureClip(
+    VISUAL_CAPTURE_SURFACE_SELECTORS,
+    doc,
+  );
   return {
     viewportWidth: observed.width,
     viewportHeight: observed.height,
@@ -165,10 +173,10 @@ function readStableLayout(
     rootTop: rootRect?.top ?? 0,
     rootWidth: rootRect?.width ?? 0,
     rootHeight: rootRect?.height ?? 0,
-    subjectLeft: subjectRect?.left ?? 0,
-    subjectTop: subjectRect?.top ?? 0,
-    subjectWidth: subjectRect?.width ?? 0,
-    subjectHeight: subjectRect?.height ?? 0,
+    subjectLeft: captureClip?.x ?? subjectRect?.left ?? 0,
+    subjectTop: captureClip?.y ?? subjectRect?.top ?? 0,
+    subjectWidth: captureClip?.width ?? subjectRect?.width ?? 0,
+    subjectHeight: captureClip?.height ?? subjectRect?.height ?? 0,
   };
 }
 
@@ -211,6 +219,7 @@ async function settleUsedPreviewFonts(doc: Document): Promise<void> {
     doc.body,
     ...(root ? [root] : []),
     ...(root?.firstElementChild ? [root.firstElementChild] : []),
+    ...doc.querySelectorAll(VISUAL_CAPTURE_SURFACE_SELECTORS),
   ];
   const requests = new Set<string>();
   for (const element of elements) {
@@ -510,13 +519,6 @@ export function loadImageSize(
   });
 }
 
-const PORTAL_SELECTORS = [
-  '[role="dialog"]',
-  '[role="listbox"]',
-  '[role="menu"]',
-  '[data-state="open"]',
-].join(", ");
-
 /**
  * `instanceof HTMLElement` fails across iframe realms (parent window vs preview
  * document). Compare against the owning window's constructor instead.
@@ -609,39 +611,7 @@ type CaptureTarget = {
 function measureSubjectPortalUnion(
   doc: Document,
 ): { x: number; y: number; width: number; height: number } | null {
-  const view = doc.defaultView;
-  const root = asHtmlElement(doc.querySelector("#storybook-root"), view);
-  if (!root) return null;
-  const subject = asHtmlElement(root.firstElementChild, view) ?? root;
-  const rects: DOMRect[] = [];
-  for (const el of doc.querySelectorAll(PORTAL_SELECTORS)) {
-    const portal = asHtmlElement(el, view);
-    if (!portal) continue;
-    if (root.contains(portal)) continue;
-    const r = portal.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) continue;
-    const style = getComputedStyle(portal);
-    if (style.visibility === "hidden" || style.display === "none") continue;
-    rects.push(r);
-  }
-  if (rects.length === 0) return null;
-  rects.unshift(subject.getBoundingClientRect());
-  let left = Infinity;
-  let top = Infinity;
-  let right = -Infinity;
-  let bottom = -Infinity;
-  for (const r of rects) {
-    left = Math.min(left, r.left);
-    top = Math.min(top, r.top);
-    right = Math.max(right, r.right);
-    bottom = Math.max(bottom, r.bottom);
-  }
-  const x = Math.max(0, Math.floor(left));
-  const y = Math.max(0, Math.floor(top));
-  const width = Math.ceil(right - left);
-  const height = Math.ceil(bottom - top);
-  if (width < 1 || height < 1) return null;
-  return { x, y, width, height };
+  return measureVisualCaptureClip(VISUAL_CAPTURE_SURFACE_SELECTORS, doc);
 }
 
 function resolveCaptureTarget(doc: Document): CaptureTarget {

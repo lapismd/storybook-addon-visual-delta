@@ -13,6 +13,10 @@ import {
   VISUAL_DELTA_MODES_ATTR,
   VISUAL_DELTA_PASS_THRESHOLD_ATTR,
 } from "../shared/capture-params-attrs.js";
+import {
+  VISUAL_CAPTURE_SURFACE_SELECTORS,
+  measureVisualCaptureClip,
+} from "../shared/capture-target.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import type { VisualDeltaModeDef, VisualDeltaModes } from "../shared/modes.js";
 import {
@@ -56,13 +60,6 @@ function serializeGlobals(globals: Record<string, unknown>): string {
   };
   return router.buildArgsParam({}, globals);
 }
-
-const PORTAL_SELECTORS = [
-  '[role="dialog"]',
-  '[role="listbox"]',
-  '[role="menu"]',
-  '[data-state="open"]',
-].join(", ");
 
 export type VisualSuiteOptions = {
   /** Project root (default: cwd). */
@@ -143,47 +140,6 @@ function loadVisualStories(
     if (includeStory && !includeStory(entry)) return false;
     return true;
   });
-}
-
-async function portalUnionClip(
-  page: Page,
-): Promise<{ x: number; y: number; width: number; height: number } | null> {
-  return page.evaluate((portalSelector) => {
-    const root = document.querySelector("#storybook-root");
-    if (!root) return null;
-    // Base on the story subject — not `#storybook-root`, which is often
-    // `min-height: 100vh` and would explode the clip to the full viewport.
-    const subject = root.querySelector(":scope > *") ?? root;
-    const rects: DOMRect[] = [];
-    for (const el of document.querySelectorAll(portalSelector)) {
-      if (!(el instanceof HTMLElement)) continue;
-      // Accordion/Collapsible mark open items with data-state=open inside root.
-      if (root.contains(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 1 || r.height < 1) continue;
-      const style = getComputedStyle(el);
-      if (style.visibility === "hidden" || style.display === "none") continue;
-      rects.push(r);
-    }
-    if (rects.length === 0) return null;
-    rects.unshift(subject.getBoundingClientRect());
-    let left = Infinity;
-    let top = Infinity;
-    let right = -Infinity;
-    let bottom = -Infinity;
-    for (const r of rects) {
-      left = Math.min(left, r.left);
-      top = Math.min(top, r.top);
-      right = Math.max(right, r.right);
-      bottom = Math.max(bottom, r.bottom);
-    }
-    const x = Math.max(0, Math.floor(left));
-    const y = Math.max(0, Math.floor(top));
-    const width = Math.ceil(right - left);
-    const height = Math.ceil(bottom - top);
-    if (width < 1 || height < 1) return null;
-    return { x, y, width, height };
-  }, PORTAL_SELECTORS);
 }
 
 async function prepareStoryPage(
@@ -325,7 +281,10 @@ async function screenshotStorySubject(
     return target;
   }
 
-  const clip = await portalUnionClip(page);
+  const clip = await page.evaluate(
+    measureVisualCaptureClip,
+    VISUAL_CAPTURE_SURFACE_SELECTORS,
+  );
   if (clip) {
     Object.assign(target, {
       subject: null,

@@ -832,14 +832,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       parkedStepRef.current = step.stepId;
       // Prefer GOTO when we have a callId (single remount); otherwise FORCE_REMOUNT.
+      const captureCallId =
+        step.captureCallId ??
+        instrumenterCallIdForInteraction(storyId, step.stepId);
       const callId =
-        step.callId || lookupPlayStepCallId(storyId, step.stepId) || "";
+        step.callId ||
+        lookupPlayStepCallId(storyId, step.stepId) ||
+        captureCallId ||
+        "";
       if (callId) {
-        // Named runStep captures need the session park. Ordinary instrumenter
-        // calls are already paused by GOTO and have no runStep marker.
-        if (!step.captureCallId) {
-          setPlayParkTarget(storyId, step.stepId);
-        }
+        // Named runStep captures park in runStep. Ordinary calls publish the
+        // same marker when Storybook's exact GOTO target completes.
+        setPlayParkTarget(storyId, step.stepId, captureCallId);
         gotoPlayStep(storyId, callId);
       } else {
         runUntilStep(storyId, step.stepId);

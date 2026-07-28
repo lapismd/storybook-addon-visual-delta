@@ -3,8 +3,10 @@ import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs
 import {
   cleanupCaptureReadyRender,
   finishCaptureReadyRender,
+  finishParkedCaptureReadyRender,
   prepareCaptureReadyRender,
 } from "./capture-ready.js";
+import { VISUAL_CAPTURE_READY_ATTR } from "../shared/interaction-capture.js";
 import { beginPreviewRender } from "./render-lifecycle.js";
 
 function captureReadyRoot() {
@@ -54,5 +56,39 @@ describe("preview capture readiness", () => {
 
     cleanupCaptureReadyRender(root, second);
     expect(root.getAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR)).toBeNull();
+  });
+
+  it("treats only the exact parked interaction as generation completion", () => {
+    const root = captureReadyRoot();
+    const render = prepareCaptureReadyRender(
+      root,
+      beginPreviewRender("interaction-story"),
+    );
+    root.setAttribute(VISUAL_CAPTURE_READY_ATTR, "interaction-23-findByRole");
+
+    expect(
+      finishParkedCaptureReadyRender(root, render, {
+        storyId: "another-story",
+        stepId: "interaction-23-findByRole",
+      }),
+    ).toBeNull();
+    expect(
+      finishParkedCaptureReadyRender(root, render, {
+        storyId: "interaction-story",
+        stepId: "interaction-22-click",
+      }),
+    ).toBeNull();
+    expect(
+      finishParkedCaptureReadyRender(root, render, {
+        storyId: "interaction-story",
+        stepId: "interaction-23-findByRole",
+      }),
+    ).toMatchObject({
+      storyId: "interaction-story",
+      storyFinished: true,
+    });
+    expect(root.getAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR)).toBe(
+      "interaction-story",
+    );
   });
 });

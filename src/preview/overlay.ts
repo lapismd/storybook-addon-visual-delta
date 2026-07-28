@@ -23,6 +23,10 @@ import {
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
 import {
+  VISUAL_CAPTURE_SURFACE_SELECTORS,
+  measureVisualCaptureClip,
+} from "../shared/capture-target.js";
+import {
   resolvedCompareZoomScale,
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
@@ -323,6 +327,18 @@ function setupDragOverlay(overlay: HTMLElement): () => void {
 }
 
 function resolveSubjectRect(canvasElement: HTMLElement): DOMRect {
+  const captureClip = measureVisualCaptureClip(
+    VISUAL_CAPTURE_SURFACE_SELECTORS,
+    canvasElement.ownerDocument,
+  );
+  if (captureClip) {
+    return new DOMRect(
+      captureClip.x,
+      captureClip.y,
+      captureClip.width,
+      captureClip.height,
+    );
+  }
   const child = canvasElement.querySelector(":scope > *");
   if (child instanceof HTMLElement) {
     return child.getBoundingClientRect();
