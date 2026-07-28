@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
-  interactionSnapshotUpdateMode,
+  captureInteractionWithCreateVerification,
   interactionScreenshotRelativePath,
   slugifyStepLabel,
 } from "../shared/interaction-capture.js";
@@ -351,8 +351,17 @@ export async function runInteractionUpdate(
     .relative(snapshotDir, interactionPng)
     .replaceAll(path.sep, "/");
   const src = `/visual-baselines/${publicRel}`;
+  const fallbackInteractionPng = path.join(
+    snapshotDir,
+    interactionScreenshotRelativePath(
+      screenshotRelativePath(entry, mode),
+      stepId,
+    ).replace(/\.png$/i, "-chromium-darwin.png"),
+  );
+  const interactionPngExists = () =>
+    existsSync(interactionPng) || existsSync(fallbackInteractionPng);
 
-  if (options.createOnly && existsSync(interactionPng)) {
+  if (options.createOnly && interactionPngExists()) {
     patchStoryInteraction({
       packageRoot: root,
       storyId,
@@ -370,40 +379,34 @@ export async function runInteractionUpdate(
     stepLabel,
     captureCallId: options.captureCallId?.trim() || undefined,
   });
-  const updateMode = interactionSnapshotUpdateMode(options.createOnly);
-  execFileSync(
-    "pnpm",
-    ["exec", "playwright", "test", `--update-snapshots=${updateMode}`],
-    {
-      cwd: root,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        PLAYWRIGHT_INTERACTION_CAPTURE: capture,
-        PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
-        PLAYWRIGHT_UPDATE_MODE: updateMode,
-        VISUAL_UPDATE_APPROVED: "1",
-        VISUAL_DELTA_BASELINE_PATH_MODE: mode,
-        VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
-      },
-    },
-  );
-
-  if (!existsSync(interactionPng)) {
-    // Fallback: Playwright may write the toHaveScreenshot relative name + suffix.
-    const rel = interactionScreenshotRelativePath(
-      screenshotRelativePath(entry, mode),
-      stepId,
-    );
-    const alt = path.join(
-      snapshotDir,
-      rel.replace(/\.png$/i, "-chromium-darwin.png"),
-    );
-    if (!existsSync(alt)) {
-      throw new Error(
-        `Interaction PNG was not written for ${storyId} / ${stepId}`,
+  captureInteractionWithCreateVerification({
+    createOnly: options.createOnly,
+    baselineExists: interactionPngExists,
+    capture: (updateMode) => {
+      execFileSync(
+        "pnpm",
+        ["exec", "playwright", "test", `--update-snapshots=${updateMode}`],
+        {
+          cwd: root,
+          stdio: "inherit",
+          env: {
+            ...process.env,
+            PLAYWRIGHT_INTERACTION_CAPTURE: capture,
+            PLAYWRIGHT_UPDATE_SNAPSHOTS: updateMode === "none" ? "0" : "1",
+            PLAYWRIGHT_UPDATE_MODE: updateMode,
+            VISUAL_UPDATE_APPROVED: "1",
+            VISUAL_DELTA_BASELINE_PATH_MODE: mode,
+            VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+          },
+        },
       );
-    }
+    },
+  });
+
+  if (!interactionPngExists()) {
+    throw new Error(
+      `Interaction PNG was not written for ${storyId} / ${stepId}`,
+    );
   }
 
   invalidateVisualResultArtifacts({

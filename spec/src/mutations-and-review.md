@@ -6,14 +6,14 @@ This reference defines every state-changing action, its authorization, exact tar
 
 These requirements make every durable change explicit, scoped, and reviewable.
 
-| ID         | Requirement                                                                                                                                                                                                           |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-MUT-001 | Creating, overwriting, or deleting a baseline MUST require an explicit action, exact target, and write approval. Inherited process state alone MUST NOT authorize an interactive write.                               |
-| VD-MUT-002 | Every mutation MUST declare exact story IDs and expected file paths or safe prefixes before it starts. Empty targets, traversal, target mismatch, and unexpected changed paths MUST fail closed.                      |
-| VD-MUT-003 | A successful baseline write MUST invalidate prior comparison evidence for written stories and set only those stories to pending review. It MUST NOT change unrelated stories or preserve stale approval.              |
-| VD-MUT-004 | Deletion MUST remove one verified baseline, its derived sidecars, and only its matching story wiring. It MUST reject a baseline that does not belong to the requested story.                                          |
-| VD-MUT-005 | Review status, skip eligibility, coverage, and comparison outcome MUST remain independent. Review actions MUST mutate only review tags, and comparison actions MUST NOT imply review changes without explicit opt-in. |
-| VD-MUT-006 | Project configuration, story configuration, skip or include, initialization, and static rebuild MUST each apply only their documented side effects and MUST report exact changed files.                               |
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VD-MUT-001 | Creating, overwriting, or deleting a baseline MUST require an explicit action, exact target, and write approval. Inherited process state alone MUST NOT authorize an interactive write.                                                                                                                                                                                  |
+| VD-MUT-002 | Every mutation MUST declare exact story IDs and expected file paths or safe prefixes before it starts. Empty targets, traversal, target mismatch, and unexpected changed paths MUST fail closed. A create-only interaction writer MUST NOT overwrite an existing target and MUST verify a newly written missing snapshot with updates disabled before reporting success. |
+| VD-MUT-003 | A successful baseline write MUST invalidate prior comparison evidence for written stories and set only those stories to pending review. It MUST NOT change unrelated stories or preserve stale approval.                                                                                                                                                                 |
+| VD-MUT-004 | Deletion MUST remove one verified baseline, its derived sidecars, and only its matching story wiring. It MUST reject a baseline that does not belong to the requested story.                                                                                                                                                                                             |
+| VD-MUT-005 | Review status, skip eligibility, coverage, and comparison outcome MUST remain independent. Review actions MUST mutate only review tags, and comparison actions MUST NOT imply review changes without explicit opt-in.                                                                                                                                                    |
+| VD-MUT-006 | Project configuration, story configuration, skip or include, initialization, and static rebuild MUST each apply only their documented side effects and MUST report exact changed files.                                                                                                                                                                                  |
 
 ## Mutation matrix
 
@@ -57,6 +57,15 @@ Deletion additionally verifies:
 - The file exists before source wiring changes
 
 A partial failure MUST report completed and failed targets. It MUST not claim success for the full scope.
+
+Playwright can write a requested missing snapshot and still exit non-zero to
+signal that the expectation did not previously exist. An interaction writer MAY
+treat that exit as provisional only when the exact target was absent before the
+run and exists afterward. It MUST replay the same story, interaction ID, and
+capture call with snapshot updates disabled. Only a passing verification replay
+may continue to source wiring and successful mutation completion. A missing
+target or failed verification remains a partial failure and MUST preserve its
+diagnostic change-set evidence.
 
 ## Evidence invalidation
 
