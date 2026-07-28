@@ -45,6 +45,17 @@ export function slugifyStepLabel(label: string): string {
 }
 
 /**
+ * Interaction capture registers only the selected interaction test. Create-only
+ * runs must therefore use Playwright's `missing` mode so unrelated snapshots
+ * are not treated as obsolete and removed.
+ */
+export function interactionSnapshotUpdateMode(
+  createOnly: boolean | undefined,
+): "missing" | "all" {
+  return createOnly ? "missing" : "all";
+}
+
+/**
  * Stable, filename-safe id for an ordinary top-level Storybook interaction.
  * Keep the method's casing so the deterministic instrumenter call id can be
  * reconstructed by static comparisons without adding more CSF metadata.
