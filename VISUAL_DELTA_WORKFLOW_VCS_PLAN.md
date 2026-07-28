@@ -1,5 +1,9 @@
 # Visual Delta workflow and VCS plan
 
+> Historical implementation record. Use the
+> [`Visual Delta system specification`](./specs/index.md) for the normative
+> contract.
+
 ## Action matrix
 
 | Action                                          | Auto-approve eligible           | Change tracking                      | Commit policy       |

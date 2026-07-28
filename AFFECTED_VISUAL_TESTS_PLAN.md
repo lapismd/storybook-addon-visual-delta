@@ -1,5 +1,9 @@
 # Affected visual tests
 
+> Historical implementation record. Use the
+> [`Visual Delta system specification`](./specs/index.md) for the normative
+> contract.
+
 This file tracks the TurboSnap-style affected-run implementation for Visual
 Delta. The local cache is an optimization only; full visual runs remain the
 safety gate.

@@ -1,5 +1,9 @@
 # Visual Delta (local package)
 
+This file records provenance and implementation history. The
+[`Visual Delta system specification`](./specs/index.md) is the normative
+behavioral contract.
+
 Reimplemented from **`storybook-addon-visual-delta@0.1.5`** (npm tarball).
 Upstream GitHub is unavailable; edit **`src/`** like any other workspace package.
 

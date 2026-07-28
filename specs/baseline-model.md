@@ -1,0 +1,117 @@
+# Visual Delta baseline model
+
+This reference defines which stories have visual coverage, how every baseline variant is identified, where artifacts live, how Storybook receives baseline metadata, and when comparison evidence is fresh.
+
+## Normative requirements
+
+These requirements give every comparison target one safe and durable identity.
+
+| ID          | Requirement                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VD-BASE-001 | Every eligible story MUST have one primary comparison target. Configured mode and wired interaction baselines MUST add independent targets without replacing the primary target.                              |
+| VD-BASE-002 | One canonical path resolver MUST determine baseline paths for writers, Playwright, Vite injection, static serving, panel hydration, history, sidecars, and deletion.                                          |
+| VD-BASE-003 | `story-id` and `nested-import` path modes MUST be deterministic, traversal-safe, and collision-resistant. Missing identity data or an unresolved collision MUST fail rather than select another story’s file. |
+| VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists.                                           |
+| VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                           |
+| VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                             |
+
+## Story eligibility and coverage
+
+A Storybook index entry is eligible when it represents a story and does not contain the `skip-visual` tag. Review tags do not change eligibility.
+
+Coverage has three independent dimensions:
+
+- The primary baseline exists
+- Every enabled named mode with a `src` exists
+- Every wired interaction entry has an existing `src`
+
+Missing coverage reports `missing-baseline` for the missing target. It does not classify an existing target as mismatched and does not infer review status.
+
+## Canonical baseline identity
+
+A baseline identity contains:
+
+| Field       | Meaning                                                              |
+| ----------- | -------------------------------------------------------------------- |
+| `storyId`   | Stable Storybook story ID                                            |
+| `variant`   | Primary, named mode, or interaction                                  |
+| `variantId` | Mode slug or interaction `id`, absent for primary                    |
+| `pathMode`  | `story-id` or `nested-import`                                        |
+| `project`   | Playwright project, currently `chromium`                             |
+| `platform`  | Baseline platform, currently `darwin` for committed repository files |
+
+The resolver MUST normalize path separators to `/` for public URLs. It MUST reject `..`, absolute paths outside the snapshot root, missing story-ID separators, and malformed variant IDs.
+
+## Path modes and filenames
+
+`story-id` stores a flat path:
+
+```text
+{story-id}{variant-infix}-chromium-darwin.png
+```
+
+`nested-import` derives a directory from the normalized story import path and a filename from the story slug:
+
+```text
+{import-derived-directory}/{story-slug}{variant-infix}-chromium-darwin.png
+```
+
+The variant infix is:
+
+- Empty for the primary baseline
+- `--{mode-slug}` for a named mode
+- `--{interaction-id}` for an interaction
+
+When several story files share one directory and could produce the same story slug, `nested-import` MUST include a deterministic story-file segment or reject the collision. It MUST preserve established non-colliding paths.
+
+## Story wiring
+
+The canonical interaction shape is:
+
+```ts
+type VisualDeltaInteraction = {
+  id: string;
+  label: string;
+  src: string;
+};
+```
+
+`id` is the stable filename and replay identifier. `label` is human-facing text. `src` is the `/visual-baselines` URL.
+
+An image entry MAY include the capture viewport, device scale factor, alignment, placement, mode, offsets, and anchor. A mode definition MAY contain globals without a baseline `src`; such a mode is selectable but does not create coverage until a baseline is wired.
+
+The Vite injector MUST preserve explicit `parameters.visualDelta`. It MAY inject primary metadata only for a matching file on disk and MUST ignore `skip-visual` stories.
+
+## Static mount
+
+The preset maps the configured snapshot directory to `/visual-baselines`. A host MAY provide an equivalent mapping, and the preset MUST avoid a conflicting duplicate mount.
+
+Static serving is read-only. Development mutations operate on verified filesystem paths under the snapshot root and never derive a writable path from an unchecked public URL.
+
+## Sidecars and diagnostic artifacts
+
+Each comparison target MAY have:
+
+| Artifact        | Purpose                                   | Durability                |
+| --------------- | ----------------------------------------- | ------------------------- |
+| Baseline `.png` | Expected image                            | Committed source of truth |
+| `.json`         | Structured runner and comparison evidence | Local, derived            |
+| `.actual.png`   | Captured image used for diagnosis         | Local, derived            |
+| `.diff.png`     | Changed-pixel visualization               | Local, derived            |
+
+Version 2 sidecars MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`.
+
+When available, a sidecar records `operationId`, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, and diagnostic artifact paths.
+
+## Freshness
+
+A result is fresh only when:
+
+- Its baseline hash matches the current baseline PNG
+- Its capture-configuration hash matches current effective capture settings
+- Its story and variant identity match the selected target
+- Its operation completed with a terminal runner status
+
+Changing a baseline, capture setting, interaction target, named mode, or eligibility MUST invalidate affected sidecars. Invalidating evidence MUST NOT delete the committed baseline or change review status unless the mutation contract explicitly requires pending review.
+
+Related contracts: [Configuration](./configuration.md), [Capture and comparison](./capture-and-comparison.md), [Mutations and review](./mutations-and-review.md), and [Verification](./verification.md).

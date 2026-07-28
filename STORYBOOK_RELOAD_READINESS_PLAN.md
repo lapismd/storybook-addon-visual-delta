@@ -1,5 +1,9 @@
 # Storybook Reload and Visual Delta Readiness
 
+> Historical implementation record. Use the
+> [`Visual Delta system specification`](./specs/index.md) for the normative
+> contract.
+
 ## Goal
 
 Keep Visual Delta provisional until the current preview render has completed,
