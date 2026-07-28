@@ -64,6 +64,7 @@ import {
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
+  visualCreateProgressAppliesToStory,
   visualRunnableStoryIds,
   type VisualCreateProgress,
   type VisualLastRunSummary,
@@ -1065,6 +1066,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   useEffect(() => {
     let wasRunning = false;
     return subscribeVisualCreateProgress((next) => {
+      if (next && !visualCreateProgressAppliesToStory(next, currentStoryId)) {
+        wasRunning = false;
+        setBaselineJob(null);
+        return;
+      }
       setBaselineJob(next);
       if (next?.running) {
         wasRunning = true;

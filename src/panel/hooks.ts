@@ -203,6 +203,8 @@ function withPlacement(
 }
 
 export function useStoryData(currentStoryId?: string) {
+  const currentStoryIdRef = useRef(currentStoryId);
+  currentStoryIdRef.current = currentStoryId;
   const prefsRef = useRef<VisualDeltaSettings>(loadSettings());
   /** Compare prefs to restore when leaving image-only. */
   const placementBeforeImageOnlyRef = useRef<PlacementMode | null>(null);
@@ -457,7 +459,12 @@ export function useStoryData(currentStoryId?: string) {
       diffResultZoomDefault?: VisualDeltaZoomDefault;
       configUpdated?: boolean;
     }) => {
-      if (currentStoryId && data.storyId !== currentStoryId) return;
+      if (
+        currentStoryIdRef.current &&
+        data.storyId !== currentStoryIdRef.current
+      ) {
+        return;
+      }
       const incomingReadiness: PreviewReadiness = {
         storyId: data.storyId,
         renderGeneration: data.renderGeneration ?? 0,
@@ -648,7 +655,12 @@ export function useStoryData(currentStoryId?: string) {
       });
     },
     [EVENTS.PREVIEW_READY]: (data: PreviewReadiness) => {
-      if (currentStoryId && data.storyId !== currentStoryId) return;
+      if (
+        currentStoryIdRef.current &&
+        data.storyId !== currentStoryIdRef.current
+      ) {
+        return;
+      }
       setStoryData((prev) => {
         const readiness = mergeStoryFinished(
           {

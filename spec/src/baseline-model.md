@@ -6,14 +6,14 @@ This reference defines which stories have visual coverage, how every baseline va
 
 These requirements give every comparison target one safe and durable identity.
 
-| ID          | Requirement                                                                                                                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-BASE-001 | Every eligible story MUST have one primary comparison target. Configured mode and wired interaction baselines MUST add independent targets without replacing the primary target.                              |
-| VD-BASE-002 | One canonical path resolver MUST determine baseline paths for writers, Playwright, Vite injection, static serving, panel hydration, history, sidecars, and deletion.                                          |
-| VD-BASE-003 | `story-id` and `nested-import` path modes MUST be deterministic, traversal-safe, and collision-resistant. Missing identity data or an unresolved collision MUST fail rather than select another story’s file. |
-| VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists.                                           |
-| VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                           |
-| VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                             |
+| ID          | Requirement                                                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VD-BASE-001 | Every eligible story MUST have one primary comparison target. Configured mode and wired interaction baselines MUST add independent targets without replacing the primary target.                                                                                               |
+| VD-BASE-002 | One canonical path resolver MUST determine baseline paths for writers, Playwright, Vite injection, static serving, panel hydration, history, sidecars, and deletion.                                                                                                           |
+| VD-BASE-003 | `story-id` and `nested-import` path modes MUST be deterministic, traversal-safe, and collision-resistant. Missing identity data or an unresolved collision MUST fail rather than select another story’s file.                                                                  |
+| VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists. Optimistic post-write hydration MUST attach only the successfully written target to its originating story. |
+| VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                                            |
+| VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                                                                                              |
 
 ## Story eligibility and coverage
 
@@ -81,6 +81,8 @@ type VisualDeltaInteraction = {
 An image entry MAY include the capture viewport, device scale factor, alignment, placement, mode, offsets, and anchor. A mode definition MAY contain globals without a baseline `src`; such a mode is selectable but does not create coverage until a baseline is wired.
 
 The Vite injector MUST preserve explicit `parameters.visualDelta`. It MAY inject primary metadata only for a matching file on disk and MUST ignore `skip-visual` stories.
+
+Post-write hydration uses the completed write scope, not whichever story is active when the response arrives. Navigation during a write MUST NOT synthesize or display a baseline URL for the destination story.
 
 ## Static mount
 

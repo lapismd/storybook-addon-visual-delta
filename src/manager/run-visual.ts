@@ -1161,6 +1161,8 @@ export type VisualCreateProgress = {
   label: string;
   /** Which baseline write / rebuild endpoint produced this progress. */
   kind: VisualBaselineJobKind;
+  /** Frozen story scope for this write. Empty only for global rebuild work. */
+  storyIds: string[];
   error?: string;
   logTail?: string;
   /** 1-based index of the current component target (multi-target writes). */
@@ -1168,6 +1170,16 @@ export type VisualCreateProgress = {
   /** Total component targets in this write job. */
   total?: number;
 };
+
+export function visualCreateProgressAppliesToStory(
+  progress: VisualCreateProgress,
+  storyId: string | undefined,
+): boolean {
+  return (
+    progress.kind === "rebuild" ||
+    Boolean(storyId && progress.storyIds.includes(storyId))
+  );
+}
 
 type CreateProgressListener = (progress: VisualCreateProgress | null) => void;
 const createProgressListeners = new Set<CreateProgressListener>();
@@ -1219,6 +1231,13 @@ async function postVisualBaselineWrite(
   const failVerb =
     kind === "create" ? "Create baselines failed" : "Update baselines failed";
   const exitVerb = kind === "create" ? "Baseline create" : "Baseline update";
+  const storyIds = [
+    ...new Set(
+      (body.storyIds ?? (body.storyId ? [body.storyId] : []))
+        .map((storyId) => storyId.trim())
+        .filter(Boolean),
+    ),
+  ];
   const fraction = {
     completed: options?.completed,
     total: options?.total,
@@ -1228,6 +1247,7 @@ async function postVisualBaselineWrite(
     running: true,
     label: runningLabel,
     kind,
+    storyIds,
     logTail: "",
     ...fraction,
   });
@@ -1250,6 +1270,7 @@ async function postVisualBaselineWrite(
           running: true,
           label: runningLabel,
           kind,
+          storyIds,
           logTail: log.slice(-12_000),
           ...fraction,
         });
@@ -1268,6 +1289,7 @@ async function postVisualBaselineWrite(
         running: false,
         label: failedLabel,
         kind,
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1289,6 +1311,7 @@ async function postVisualBaselineWrite(
         running: false,
         label: failedLabel,
         kind,
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1307,6 +1330,7 @@ async function postVisualBaselineWrite(
         running: false,
         label: failedLabel,
         kind,
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1338,6 +1362,7 @@ async function postVisualBaselineWrite(
       running: false,
       label,
       kind,
+      storyIds,
       logTail: log || undefined,
       ...fraction,
     });
@@ -1358,6 +1383,7 @@ async function postVisualBaselineWrite(
       running: false,
       label: failedLabel,
       kind,
+      storyIds,
       error: message,
       ...fraction,
     });
@@ -1389,6 +1415,7 @@ export async function postVisualCreateBaselinesForStoryIds(
       running: false,
       label: "No stories",
       kind: "create",
+      storyIds: [],
       error: "No stories visible in the sidebar",
     });
     throw new Error("No stories visible in the sidebar");
@@ -1421,6 +1448,7 @@ export async function postVisualUpdateBaselinesForStoryIds(
       running: false,
       label: "No stories",
       kind: "update",
+      storyIds: [],
       error: "No stories visible in the sidebar",
     });
     throw new Error("No stories visible in the sidebar");
@@ -1498,12 +1526,14 @@ export async function postVisualDeleteBaseline(body: {
  */
 export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
   const kind = "rebuild" as const;
+  const storyIds: string[] = [];
   const runningLabel = "Rebuilding static…";
   const failedLabel = "Rebuild failed";
   emitVisualCreateProgress({
     running: true,
     label: runningLabel,
     kind,
+    storyIds,
     logTail: "",
   });
   try {
@@ -1525,6 +1555,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
           running: true,
           label: runningLabel,
           kind,
+          storyIds,
           logTail: log.slice(-12_000),
         });
       }
@@ -1542,6 +1573,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
         running: false,
         label: failedLabel,
         kind,
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1554,6 +1586,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
         running: false,
         label: failedLabel,
         kind,
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1564,6 +1597,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
       running: false,
       label: "Static rebuilt",
       kind,
+      storyIds,
       logTail: log || undefined,
     });
     return { ok: true, log, ...(changes ? { changes } : {}) };
@@ -1583,6 +1617,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
       running: false,
       label: failedLabel,
       kind,
+      storyIds,
       error: message,
     });
     throw error instanceof Error ? error : new Error(message);
@@ -1600,10 +1635,12 @@ export async function postVisualInteractionBaseline(body: {
   captureCallId?: string;
   overwrite?: boolean;
 }): Promise<VisualCreateResponse> {
+  const storyIds = [body.storyId];
   emitVisualCreateProgress({
     running: true,
     label: body.overwrite ? "Updating interaction…" : "Creating interaction…",
     kind: "interaction",
+    storyIds,
     logTail: "",
   });
   try {
@@ -1627,6 +1664,7 @@ export async function postVisualInteractionBaseline(body: {
             ? "Updating interaction…"
             : "Creating interaction…",
           kind: "interaction",
+          storyIds,
           logTail: log.slice(-12_000),
         });
       }
@@ -1644,6 +1682,7 @@ export async function postVisualInteractionBaseline(body: {
         running: false,
         label: "Interaction failed",
         kind: "interaction",
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1656,6 +1695,7 @@ export async function postVisualInteractionBaseline(body: {
         running: false,
         label: "Interaction failed",
         kind: "interaction",
+        storyIds,
         error,
         logTail: log || undefined,
       });
@@ -1666,6 +1706,7 @@ export async function postVisualInteractionBaseline(body: {
       running: false,
       label: body.overwrite ? "Interaction updated" : "Interaction created",
       kind: "interaction",
+      storyIds,
       logTail: log || undefined,
     });
     return { ok: true, log, ...(changes ? { changes } : {}) };
@@ -1683,6 +1724,7 @@ export async function postVisualInteractionBaseline(body: {
       running: false,
       label: "Interaction failed",
       kind: "interaction",
+      storyIds,
       error: message,
     });
     throw error instanceof Error ? error : new Error(message);
