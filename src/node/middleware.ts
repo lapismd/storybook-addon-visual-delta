@@ -151,6 +151,8 @@ type InteractionUpdateBody = {
   stepLabel?: string;
   /** Optional pre-slugified id; defaults to slugify(stepLabel). */
   stepId?: string;
+  /** Exact deterministic Storybook instrumenter call to replay through. */
+  captureCallId?: string;
   /** Overwrite an existing interaction PNG. */
   overwrite?: boolean;
 };
@@ -725,6 +727,7 @@ async function handleInteractionBaselineWrite(
   const storyId = body.storyId?.trim();
   const stepLabel = body.stepLabel?.trim();
   const stepId = body.stepId?.trim();
+  const captureCallId = body.captureCallId?.trim();
   if (!storyId || !stepLabel) {
     res.statusCode = 400;
     res.end("Provide storyId and stepLabel");
@@ -742,6 +745,7 @@ async function handleInteractionBaselineWrite(
     "--step-label",
     stepLabel,
     ...(stepId ? ["--step-id", stepId] : []),
+    ...(captureCallId ? ["--capture-call-id", captureCallId] : []),
   ];
 
   res.statusCode = 200;

@@ -16,9 +16,9 @@ import {
   PopoverProvider,
   ToggleButton,
 } from "storybook/internal/components";
-import { styled } from "storybook/theming";
+import { styled, type Theme } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
-import type { PlayStepInfo } from "./usePlaySteps.js";
+import type { InteractionCallTokenKind, PlayStepInfo } from "./usePlaySteps.js";
 import { VD_HEADER_STICKY_TOP_VAR, panelCanvasBackground } from "./styled.js";
 
 const List = styled.div({
@@ -28,6 +28,16 @@ const List = styled.div({
   minHeight: 0,
   marginBottom: "0.5rem",
 });
+
+const InteractionFilter = styled.div(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  minHeight: 32,
+  padding: "4px 12px",
+  borderBottom: `1px solid ${theme.appBorderColor}`,
+  background: panelCanvasBackground(theme),
+}));
 
 /** Per-section wrapper so sticky summaries are constrained to their body. */
 const Section = styled.div<{ $expanded?: boolean }>(({ $expanded }) => ({
@@ -52,12 +62,14 @@ const SummaryRow = styled.div<{ $expanded?: boolean }>(
       : panelCanvasBackground(theme),
     color: theme.color.defaultText,
     padding: "4px 12px 4px 0",
-    position: "sticky",
-    // Only pins when the live panel publishes `--vd-header-sticky-top`.
+    // Only the expanded summary pins. Stacking every collapsed row at the
+    // same top coordinate makes adjacent action buttons overlap after the
+    // selected interaction is scrolled into view.
+    position: $expanded ? "sticky" : "relative",
     // No fallback: unset → `top: auto` → behaves like relative, so docs /
     // catalog scrolls don't glue summaries over SectionBody padding.
-    top: `var(${VD_HEADER_STICKY_TOP_VAR})`,
-    zIndex: 1,
+    top: $expanded ? `var(${VD_HEADER_STICKY_TOP_VAR})` : "auto",
+    zIndex: $expanded ? 1 : "auto",
     "&:hover": {
       background: theme.background.hoverable,
     },
@@ -127,6 +139,41 @@ const Label = styled.span(({ theme }) => ({
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 }));
+
+const SyntaxContent = styled.span(({ theme }) => ({
+  fontFamily: theme.typography.fonts.mono,
+  fontWeight: theme.typography.weight.regular,
+}));
+
+const syntaxColor = (theme: Theme, kind: InteractionCallTokenKind) => {
+  const dark = theme.base === "dark";
+  switch (kind) {
+    case "method":
+      return dark ? "#5EC1FF" : "#0271B6";
+    case "string":
+      return dark ? "#5FE584" : "#16B242";
+    case "number":
+      return dark ? "#6ba5ff" : "#5D40D0";
+    case "boolean":
+      return dark ? "#ff4191" : "#f41840";
+    case "nullish":
+      return dark ? "#aaa" : "#7D99AA";
+    case "tag":
+      return dark ? "#f57bff" : "#6F2CAC";
+    case "tag-suffix":
+      return dark ? "#8EB5FF" : "#1F99E5";
+    case "meta":
+      return dark ? "#FAD483" : "#EA7509";
+    default:
+      return dark ? "#eee" : "#444";
+  }
+};
+
+const SyntaxToken = styled.span<{ $kind: InteractionCallTokenKind }>(
+  ({ theme, $kind }) => ({
+    color: syntaxColor(theme, $kind),
+  }),
+);
 
 const Hint = styled.span(({ theme }) => ({
   fontSize: theme.typography.size.s1,
@@ -229,12 +276,16 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   expandedId,
   busy,
   showDistribution,
+  showAllInteractions = false,
+  hiddenInteractionCount = 0,
+  showInteractionFilter = false,
   onExpand,
   onCreate,
   onUpdate,
   onUpdateDefault,
   onDelete,
   onToggleDistribution,
+  onToggleInteractions,
   onOpenHistory,
   renderBody,
 }: {
@@ -242,6 +293,12 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   expandedId: BaselineSectionId | null;
   busy: boolean;
   showDistribution: boolean;
+  /** Whether capture points without a baseline are visible. */
+  showAllInteractions?: boolean;
+  /** Number of interaction capture points hidden by the default filter. */
+  hiddenInteractionCount?: number;
+  /** Keep the filter available before Storybook has replayed its call log. */
+  showInteractionFilter?: boolean;
   onExpand: (id: BaselineSectionId) => void;
   onCreate: (step: PlayStepInfo) => void;
   onUpdate: (step: PlayStepInfo) => void;
@@ -250,21 +307,55 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   /** Remove this exact screenshot from CSF and local storage. */
   onDelete: (section: BaselineSection) => void;
   onToggleDistribution: () => void;
+  onToggleInteractions?: () => void;
   onOpenHistory?: (target: BaselineSectionHistory) => void;
   renderBody: (section: BaselineSection) => React.ReactNode;
 }) {
   const [openMenuId, setOpenMenuId] = useState<BaselineSectionId | null>(null);
   const labelWidth = useMemo(() => {
     const longest = sections.reduce(
-      (max, section) => Math.max(max, section.label.length),
+      (max, section) =>
+        Math.max(max, (section.step?.syntax?.text ?? section.label).length),
       0,
     );
-    // Bold s2 labels run a bit wider than plain `ch`; pad slightly.
-    return `${Math.max(longest + 1, 8)}ch`;
+    // Preserve room for the baseline hint even when a resolved expectation is
+    // substantially longer than the original method-only label.
+    return `min(${Math.min(Math.max(longest + 1, 8), 60)}ch, 65%)`;
   }, [sections]);
 
   return (
     <List>
+      {(showInteractionFilter || hiddenInteractionCount > 0) &&
+      onToggleInteractions ? (
+        <InteractionFilter>
+          <ToggleButton
+            size="small"
+            padding="small"
+            pressed={showAllInteractions}
+            onClick={onToggleInteractions}
+            ariaLabel={
+              showAllInteractions
+                ? "Hide interactions without baselines"
+                : "Show all interactions"
+            }
+            title={
+              showAllInteractions
+                ? "Show only interactions with baselines"
+                : hiddenInteractionCount > 0
+                  ? `Show ${hiddenInteractionCount} interaction${
+                      hiddenInteractionCount === 1 ? "" : "s"
+                    } without baselines`
+                  : "Discover and show interactions without baselines"
+            }
+          >
+            {showAllInteractions
+              ? "Baselines only"
+              : hiddenInteractionCount > 0
+                ? `Show all (${hiddenInteractionCount} more)`
+                : "Show all interactions"}
+          </ToggleButton>
+        </InteractionFilter>
+      ) : null}
       {sections.map((section) => {
         const expanded = expandedId === section.id;
         const hasDiff = Boolean(section.status && section.stats);
@@ -273,6 +364,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
           hasBaseline ||
           Boolean(section.history && onOpenHistory) ||
           section.id === "default" ||
+          Boolean(section.step) ||
           Boolean(section.wired);
         return (
           <Section key={section.id} $expanded={expanded}>
@@ -307,7 +399,23 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                   ) : null}
                 </StatusSlot>
                 <Meta $labelWidth={labelWidth}>
-                  <Label title={section.label}>{section.label}</Label>
+                  <Label title={section.step?.syntax?.text ?? section.label}>
+                    {section.step?.syntax ? (
+                      <SyntaxContent>
+                        {section.step.syntax.tokens.map((token, index) => (
+                          <SyntaxToken
+                            // Repeated punctuation is expected in call syntax.
+                            key={`${token.kind}-${index}`}
+                            $kind={token.kind}
+                          >
+                            {token.text}
+                          </SyntaxToken>
+                        ))}
+                      </SyntaxContent>
+                    ) : (
+                      section.label
+                    )}
+                  </Label>
                   <Hint title={section.hint}>{section.hint}</Hint>
                 </Meta>
                 <SummaryRight>
@@ -366,6 +474,25 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                                   <CommitIcon />
                                 </ActionList.Icon>
                                 <ActionList.Text>History</ActionList.Text>
+                              </ActionList.Action>
+                            </ActionList.Item>
+                          ) : null}
+                          {!hasBaseline && section.step ? (
+                            <ActionList.Item>
+                              <ActionList.Action
+                                ariaLabel={`Create ${section.label} baseline`}
+                                disabled={busy}
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  onCreate(section.step!);
+                                }}
+                              >
+                                <ActionList.Icon>
+                                  <AddIcon />
+                                </ActionList.Icon>
+                                <ActionList.Text>
+                                  Create baseline
+                                </ActionList.Text>
                               </ActionList.Action>
                             </ActionList.Item>
                           ) : null}

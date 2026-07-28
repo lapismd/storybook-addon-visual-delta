@@ -31,6 +31,7 @@ import {
   type VisualReviewStatus,
 } from "../constants.js";
 import type { AcceptScope } from "../manager/AcceptSplitButton.js";
+import { instrumenterCallIdForInteraction } from "../shared/interaction-capture.js";
 import {
   DEFAULT_ADDON_STATE,
   type VisualDeltaAddonState,
@@ -119,6 +120,7 @@ import {
   gotoPlayStep,
   lookupPlayStepCallId,
   mergeInteractionRows,
+  remountStory,
   runUntilStep,
   setPlayParkTarget,
   usePlaySteps,
@@ -167,6 +169,19 @@ function baselineLightboxCssSize(
     };
   }
   return viewportForImage(source);
+}
+
+function baselineUrlForComparison(source: string | undefined) {
+  if (!source) return source;
+  const withoutCacheBust = source.split("?")[0] ?? source;
+  try {
+    const resolved = new URL(withoutCacheBust, window.location.href);
+    return resolved.origin === window.location.origin
+      ? resolved.pathname
+      : resolved.href;
+  } catch {
+    return withoutCacheBust;
+  }
 }
 
 export const Panel = memo(function Panel(props: { active?: boolean }) {
@@ -243,7 +258,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         : { ...prev, imageCount: screenshotCount },
     );
   }, [screenshotCount, setAddonState]);
-  const { steps: playSteps } = usePlaySteps(storyId || undefined);
+  const { steps: playSteps, selectedStepId: selectedStorybookInteractionId } =
+    usePlaySteps(storyId || undefined);
+  const interactionDiscoveryStoryRef = useRef<string | null>(null);
   const interactionSteps = useMemo(
     () => mergeInteractionRows(playSteps, interactions),
     [playSteps, interactions],
@@ -254,6 +271,22 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [selectedInteractionId, setSelectedInteractionId] = useState<
     string | null
   >(null);
+  const selectedInteractionStep = useMemo(
+    () =>
+      selectedInteractionId
+        ? interactionSteps.find((step) => step.stepId === selectedInteractionId)
+        : undefined,
+    [interactionSteps, selectedInteractionId],
+  );
+  const selectedVisualCaptureCallId = useMemo(
+    () =>
+      selectedInteractionStep?.captureCallId ??
+      (storyId && selectedInteractionId
+        ? (instrumenterCallIdForInteraction(storyId, selectedInteractionId) ??
+          undefined)
+        : undefined),
+    [selectedInteractionId, selectedInteractionStep?.captureCallId, storyId],
+  );
   /** Stem → last loaded compare; avoids blank flash when switching accordions. */
   const diffResultCacheRef = useRef(new Map<string, DiffResultData | null>());
   /** Play park currently targeted by accordion selection (`null` = Default). */
@@ -294,6 +327,33 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     clearPinTimers();
     diffResultCacheRef.current.clear();
   }, [currentStoryId, clearPinTimers]);
+
+  // Storybook's Interactions tab emits GOTO with the exact selected call. Keep
+  // that selection when the user switches back to Visual Delta so the matching
+  // capture point exposes Create/Update immediately.
+  useEffect(() => {
+    if (!selectedStorybookInteractionId) return;
+    const step = interactionSteps.find(
+      (item) => item.stepId === selectedStorybookInteractionId,
+    );
+    if (!step) return;
+    parkedStepRef.current = step.stepId;
+    setExpandedId(step.stepId);
+    setSelectedInteractionId(step.stepId);
+    const wired = interactions.find((item) => item.id === step.stepId);
+    if (wired) {
+      selectInteractionBaseline(wired.src);
+    } else {
+      // Keep a Storybook-selected capture point actionable even though the
+      // quieter default only lists interactions with existing baselines.
+      setShowAllInteractions(true);
+    }
+  }, [
+    interactionSteps,
+    interactions,
+    selectInteractionBaseline,
+    selectedStorybookInteractionId,
+  ]);
 
   // Preview INIT_IMAGE can be missed (panel mounts before iframe, Storybook
   // restart, park remount). Retry until ready; seed from the manager index if
@@ -390,6 +450,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
   const [showDistribution, setShowDistribution] = useState(false);
+  const [showAllInteractions, setShowAllInteractions] = useState(false);
   const [toolbarLightboxImage, setToolbarLightboxImage] =
     useState<LightboxImage | null>(null);
   const [historyTarget, setHistoryTarget] =
@@ -451,6 +512,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     setSelectedInteractionId(null);
     setExpandedId("default");
     setShowDistribution(false);
+    setShowAllInteractions(false);
     setHistoryTarget(null);
   }, [storyId, storyTagsKey]);
 
@@ -463,6 +525,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       stats: `${diffResult.diffPercent.toFixed(4)}% · ${diffResult.diffPixels}/${diffResult.totalPixels} px · <${threshold}%`,
     };
   }, [diffResult]);
+
+  const hiddenInteractionCount = useMemo(
+    () =>
+      interactionSteps.filter(
+        (step) => !interactions.some((item) => item.id === step.stepId),
+      ).length,
+    [interactionSteps, interactions],
+  );
 
   const baselineSections = useMemo((): BaselineSection[] => {
     const sections: BaselineSection[] = [];
@@ -496,6 +566,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     }
     for (const step of interactionSteps) {
       const wired = interactions.find((item) => item.id === step.stepId);
+      if (
+        !wired &&
+        !showAllInteractions &&
+        step.stepId !== selectedInteractionId
+      ) {
+        continue;
+      }
       const isActive = activeSectionId === step.stepId;
       const historyPath = baselinePathFromPublicUrl(wired?.src);
       sections.push({
@@ -527,7 +604,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     interactionSteps,
     interactions,
     primaryImages,
+    selectedInteractionId,
     selectedMode,
+    showAllInteractions,
     storyEntry?.importPath,
   ]);
 
@@ -567,7 +646,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       const callId =
         step.callId || lookupPlayStepCallId(storyId, step.stepId) || "";
       if (callId) {
-        setPlayParkTarget(storyId, step.stepId);
+        // Named runStep captures need the session park. Ordinary instrumenter
+        // calls are already paused by GOTO and have no runStep marker.
+        if (!step.captureCallId) {
+          setPlayParkTarget(storyId, step.stepId);
+        }
         gotoPlayStep(storyId, callId);
       } else {
         runUntilStep(storyId, step.stepId);
@@ -609,6 +692,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           storyId,
           stepLabel: step.label,
           stepId: step.stepId,
+          captureCallId: step.captureCallId,
           overwrite,
         });
         const bust = `t=${Date.now()}`;
@@ -878,8 +962,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
         if (engine === "chromium") {
           const result = await compareExactStory(api, storyId!, {
-            baselineUrl: baselineSrcForDiff,
+            baselineUrl: baselineUrlForComparison(baselineSrcForDiff),
             visualCaptureUntil: selectedInteractionId ?? undefined,
+            visualCaptureCallId: selectedVisualCaptureCallId,
             mode: selectedMode ?? undefined,
             signal: abort.signal,
             onProgress: (progress) => setDiffProgressLabel(progress.label),
@@ -1034,6 +1119,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       index,
       passThresholdPercent,
       selectedInteractionId,
+      selectedVisualCaptureCallId,
       selectedMode,
       showOverlay,
       storyId,
@@ -1381,8 +1467,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           if (scope === "story") {
             applyPendingVisualStatuses([storyId!]);
             const result = await compareExactStory(api, storyId!, {
-              baselineUrl: baselineSrc,
+              baselineUrl: baselineUrlForComparison(baselineSrc),
               visualCaptureUntil: selectedInteractionId ?? undefined,
+              visualCaptureCallId: selectedVisualCaptureCallId,
               mode: selectedMode ?? undefined,
               onProgress: (progress) => setDiffProgressLabel(progress.label),
             });
@@ -1465,7 +1552,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsRunningVisual(false);
       }
     },
-    [api, baselineSrc, selectedInteractionId, selectedMode, storyId],
+    [
+      api,
+      baselineSrc,
+      selectedInteractionId,
+      selectedVisualCaptureCallId,
+      selectedMode,
+      storyId,
+    ],
   );
 
   const handleRun = useCallback(
@@ -1956,12 +2050,19 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             />
           ) : !showConfiguration &&
             !loading &&
-            !(isEmpty && baselineSections.length === 0) ? (
+            !(
+              isEmpty &&
+              baselineSections.length === 0 &&
+              interactionSteps.length === 0
+            ) ? (
             <BaselineAccordion
               sections={baselineSections}
               expandedId={expandedId}
               busy={busy}
               showDistribution={showDistribution}
+              showAllInteractions={showAllInteractions}
+              hiddenInteractionCount={hiddenInteractionCount}
+              showInteractionFilter
               onExpand={selectSection}
               onCreate={(step) => void handleCreateInteraction(step, false)}
               onUpdate={(step) => void handleCreateInteraction(step, true)}
@@ -1970,6 +2071,23 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }
+              onToggleInteractions={() => {
+                const next = !showAllInteractions;
+                setShowAllInteractions(next);
+                if (
+                  next &&
+                  storyId &&
+                  playSteps.length === 0 &&
+                  interactionDiscoveryStoryRef.current !== storyId
+                ) {
+                  interactionDiscoveryStoryRef.current = storyId;
+                  // Storybook does not replay a completed instrumenter SYNC to
+                  // late-mounted panels. Discover on explicit request so the
+                  // initial Visual Delta view never remounts or mutates story
+                  // state behind the user's back.
+                  remountStory(storyId);
+                }
+              }}
               onOpenHistory={setHistoryTarget}
               renderBody={renderSectionBody}
             />

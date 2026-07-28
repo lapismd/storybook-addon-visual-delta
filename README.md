@@ -165,6 +165,15 @@ No host preview changes are required for Visual Delta. The addon’s `preview`
 annotation installs the overlay channel, `RUN_UNTIL_STEP` / `runStep`, and
 decorators. Keep theme / a11y / globals in your own `.storybook/preview.ts`.
 
+Selecting a top-level row in Storybook’s **Interactions** panel selects the
+same capture point in Visual Delta. Its accordion exposes **Create baseline**
+from both the add button and kebab menu; the capture replays through that exact
+deterministic instrumenter call. Named `step("…")` groups remain supported by
+the existing `visualCaptureUntil` park contract. Visual Delta initially shows
+only interaction accordions with baselines; use **Show all** to reveal new
+capture points. Discovered calls use Storybook-style resolved, syntax-highlighted
+titles, including the final `expect(target).matcher(…)` expression.
+
 ### What `viteFinal` registers
 
 1. **Baseline CSF inject** — adds `parameters.visualDelta` when matching PNGs exist under `snapshotDir`

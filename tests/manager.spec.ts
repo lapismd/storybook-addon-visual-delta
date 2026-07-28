@@ -158,6 +158,87 @@ test.describe("Visual Delta manager integration", () => {
     expect(staticRequests).toEqual([]);
   });
 
+  test("creates a baseline for the exact Storybook interaction selected by the user", async ({
+    page,
+  }) => {
+    const interactionBodies: unknown[] = [];
+    page.on("request", (request) => {
+      if (
+        new URL(request.url()).pathname.endsWith("/create-interaction-baseline")
+      ) {
+        interactionBodies.push(request.postDataJSON());
+      }
+    });
+    await mockVisualBackend(page);
+    await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("switch", { name: "Show all interactions" }),
+    ).toBeVisible();
+    await expect(panel.getByTitle(/toBeInTheDocument\(\)$/)).toHaveCount(0);
+    await panel.getByRole("switch", { name: "Show all interactions" }).click();
+    await expect(panel.getByTitle(/toBeInTheDocument\(\)$/)).toBeVisible();
+
+    await page.getByRole("tab", { name: /Interactions 2/ }).click();
+    await page
+      .getByRole("button", {
+        name: "Go to interaction row: findByTestId. Status: passed.",
+      })
+      .click();
+    await page.getByRole("tab", { name: /Visual Delta/ }).click();
+
+    await expect(
+      panel.getByRole("button", {
+        name: /findByTestId\("panel-shell"\) No baseline yet · interaction-1-findByTestId/,
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      panel.getByRole("switch", {
+        name: "Hide interactions without baselines",
+      }),
+    ).toBeVisible();
+    await panel
+      .getByRole("button", {
+        name: 'More findByTestId("panel-shell") baseline actions',
+      })
+      .click();
+    await page
+      .getByRole("button", {
+        name: 'Create findByTestId("panel-shell") baseline',
+      })
+      .click();
+
+    await expect.poll(() => interactionBodies.length).toBe(1);
+    expect(interactionBodies[0]).toEqual({
+      storyId: MANAGER_FIXTURE,
+      stepLabel: 'findByTestId("panel-shell")',
+      stepId: "interaction-1-findByTestId",
+      captureCallId: `${MANAGER_FIXTURE} [1] findByTestId`,
+      overwrite: false,
+    });
+  });
+
+  test("replays an ordinary interaction call to the requested capture point", async ({
+    page,
+  }) => {
+    const interactionId = "interaction-1-findByTestId";
+    const params = new URLSearchParams({
+      id: MANAGER_FIXTURE,
+      viewMode: "story",
+      instrument: "true",
+      visualCaptureUntil: interactionId,
+      visualCaptureCall: `${MANAGER_FIXTURE} [1] findByTestId`,
+    });
+
+    await page.goto(`${DEV_STORYBOOK}/iframe.html?${params.toString()}`);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-visual-capture-ready",
+      interactionId,
+    );
+    await expect(page.getByTestId("panel-shell")).toBeVisible();
+  });
+
   test("reloads once after the runtime identity changes and preserves manager URL state", async ({
     page,
   }) => {

@@ -53,6 +53,7 @@ export type BaselineCliOptions = {
   createOnly?: boolean;
   stepLabel?: string;
   stepId?: string;
+  captureCallId?: string;
 };
 
 function packageRootOf(options: BaselineCliOptions): string {
@@ -362,7 +363,12 @@ export async function runInteractionUpdate(
   const warmInteraction = await ensureWarmStaticStorybookServer(root, port);
   if (!warmInteraction.ok) await ensurePlaywrightWebServerPort(port);
 
-  const capture = JSON.stringify({ storyId, stepId, stepLabel });
+  const capture = JSON.stringify({
+    storyId,
+    stepId,
+    stepLabel,
+    captureCallId: options.captureCallId?.trim() || undefined,
+  });
   execFileSync("pnpm", ["exec", "playwright", "test"], {
     cwd: root,
     stdio: "inherit",

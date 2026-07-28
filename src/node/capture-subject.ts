@@ -1,6 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import {
+  VISUAL_CAPTURE_CALL_PARAM,
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
 } from "../shared/interaction-capture.js";
@@ -40,6 +41,8 @@ export type CaptureSubjectRequest = {
   storyId: string;
   /** Park play after this step id (interaction baselines). */
   visualCaptureUntil?: string;
+  /** Replay through this exact Storybook instrumenter call before capture. */
+  visualCaptureCallId?: string;
   viewport?: { width: number; height: number };
   deviceScaleFactor?: number;
   /** Extra settle delay (ms) after play (CSF `delay`). */
@@ -223,6 +226,10 @@ export async function captureSubjectWithChromium(
     if (request.visualCaptureUntil) {
       params.set(VISUAL_CAPTURE_UNTIL_PARAM, request.visualCaptureUntil);
     }
+    if (request.visualCaptureCallId) {
+      params.set(VISUAL_CAPTURE_CALL_PARAM, request.visualCaptureCallId);
+      params.set("instrument", "true");
+    }
     if (request.globals) params.set("globals", request.globals);
 
     onProgress?.({
@@ -241,12 +248,20 @@ export async function captureSubjectWithChromium(
     if (request.visualCaptureUntil) {
       await page
         .waitForFunction(
-          (attr) => document.documentElement.getAttribute(attr) === "1",
-          VISUAL_CAPTURE_READY_ATTR,
+          ({ attr, target }) =>
+            document.documentElement.getAttribute(attr) === target,
+          {
+            attr: VISUAL_CAPTURE_READY_ATTR,
+            target: request.visualCaptureUntil,
+          },
           { timeout: 30_000 },
         )
-        .catch(() => {
-          /* fall through to settle */
+        .catch((error) => {
+          throw new Error(
+            `Interaction capture did not reach ${request.visualCaptureUntil}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         });
     } else {
       await waitForVisualStoryFinished(page, request.storyId);

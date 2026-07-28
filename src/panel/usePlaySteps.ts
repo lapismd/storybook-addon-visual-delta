@@ -7,16 +7,44 @@ import {
 } from "storybook/internal/instrumenter";
 import { addons } from "storybook/manager-api";
 import { EVENTS, type VisualDeltaInteraction } from "../constants.js";
-import { slugifyStepLabel } from "../shared/interaction-capture.js";
+import {
+  interactionIdForInstrumenterCall,
+  slugifyStepLabel,
+} from "../shared/interaction-capture.js";
 
 export type PlayStepInfo = {
   /** Instrumenter call id when known; empty for CSF-only / preview-emitted rows. */
   callId: string;
   label: string;
+  /** Resolved Storybook-style call used for the syntax-highlighted row title. */
+  syntax?: InteractionCallSyntax;
   stepId: string;
   status?: Call["status"];
   /** True when sourced from `parameters.visualDelta.interactions`. */
   fromCsf?: boolean;
+  /** Exact deterministic Storybook call replayed for ordinary interactions. */
+  captureCallId?: string;
+};
+
+export type InteractionCallTokenKind =
+  | "base"
+  | "boolean"
+  | "method"
+  | "meta"
+  | "nullish"
+  | "number"
+  | "string"
+  | "tag"
+  | "tag-suffix";
+
+export type InteractionCallToken = {
+  kind: InteractionCallTokenKind;
+  text: string;
+};
+
+export type InteractionCallSyntax = {
+  text: string;
+  tokens: InteractionCallToken[];
 };
 
 type PlayStepsPayload = {
@@ -53,6 +81,8 @@ export function mergeInteractionRows(
       stepId: step.stepId,
       status: step.status,
       fromCsf: prev?.fromCsf,
+      captureCallId: step.captureCallId ?? prev?.captureCallId,
+      syntax: step.syntax ?? prev?.syntax,
     });
   }
 
@@ -71,6 +101,8 @@ export function mergeInteractionRows(
  */
 export function usePlaySteps(storyId: string | undefined): {
   steps: PlayStepInfo[];
+  /** Interaction row most recently selected in Storybook's Interactions tab. */
+  selectedStepId: string | null;
   clear: () => void;
 } {
   const [previewSteps, setPreviewSteps] = useState<PlayStepInfo[]>([]);
@@ -78,11 +110,13 @@ export function usePlaySteps(storyId: string | undefined): {
     () => new Map(),
   );
   const [logItems, setLogItems] = useState<SyncPayload["logItems"]>([]);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
 
   useEffect(() => {
     setPreviewSteps([]);
     setCallsById(new Map());
     setLogItems([]);
+    setSelectedCallId(null);
   }, [storyId]);
 
   useEffect(() => {
@@ -112,14 +146,20 @@ export function usePlaySteps(storyId: string | undefined): {
     const onSync = (payload: SyncPayload) => {
       setLogItems(payload.logItems ?? []);
     };
+    const onGoto = (payload: { storyId?: string; callId?: string }) => {
+      if (payload.storyId !== storyId || !payload.callId) return;
+      setSelectedCallId(payload.callId);
+    };
 
     channel.on(EVENTS.PLAY_STEPS, onPlaySteps);
     channel.on(INSTRUMENTER_EVENTS.CALL, onCall);
     channel.on(INSTRUMENTER_EVENTS.SYNC, onSync);
+    channel.on(INSTRUMENTER_EVENTS.GOTO, onGoto);
     return () => {
       channel.off(EVENTS.PLAY_STEPS, onPlaySteps);
       channel.off(INSTRUMENTER_EVENTS.CALL, onCall);
       channel.off(INSTRUMENTER_EVENTS.SYNC, onSync);
+      channel.off(INSTRUMENTER_EVENTS.GOTO, onGoto);
     };
   }, [storyId]);
 
@@ -131,17 +171,24 @@ export function usePlaySteps(storyId: string | undefined): {
       const call = callsById.get(item.callId);
       if (!call) continue;
       if (call.storyId !== storyId) continue;
-      if (call.method !== "step") continue;
-      const label = String(call.args?.[0] ?? "").trim();
+      if (!call.interceptable || call.ancestors.length > 0) continue;
+      const namedStep = call.method === "step";
+      const label = namedStep
+        ? String(call.args?.[0] ?? "").trim()
+        : instrumenterCallLabel(call);
       if (!label) continue;
-      const stepId = slugifyStepLabel(label);
+      const stepId = namedStep
+        ? slugifyStepLabel(label)
+        : interactionIdForInstrumenterCall(call.cursor, call.method);
       if (!stepId || seen.has(stepId)) continue;
       seen.add(stepId);
       out.push({
         callId: call.id,
         label,
+        syntax: instrumenterCallSyntax(call, callsById),
         stepId,
         status: call.status ?? item.status,
+        captureCallId: namedStep ? undefined : call.id,
       });
     }
     return out;
@@ -150,6 +197,10 @@ export function usePlaySteps(storyId: string | undefined): {
   const steps = useMemo(
     () => mergeInteractionRows([...previewSteps, ...instrumenterSteps], []),
     [instrumenterSteps, previewSteps],
+  );
+  const selectedStepId = useMemo(
+    () => steps.find((step) => step.callId === selectedCallId)?.stepId ?? null,
+    [selectedCallId, steps],
   );
 
   // Keep a sync lookup for GOTO even when React merge state is briefly stale.
@@ -165,12 +216,174 @@ export function usePlaySteps(storyId: string | undefined): {
     setPreviewSteps([]);
     setCallsById(new Map());
     setLogItems([]);
+    setSelectedCallId(null);
   }, []);
 
-  return { steps, clear };
+  return { steps, selectedStepId, clear };
 }
 
 const callIdByStoryStep = new Map<string, string>();
+
+/** Compact human label matching the source used by Storybook Interactions. */
+export function instrumenterCallLabel(
+  call: Pick<Call, "args" | "method" | "path">,
+) {
+  const path = call.path.filter(
+    (part): part is string =>
+      typeof part === "string" && part.trim().length > 0,
+  );
+  const prefix = path.join(".");
+  const base = prefix ? `${prefix}.${call.method}` : call.method;
+  const argumentsLabel = call.args
+    .filter(
+      (argument): argument is string | number | boolean =>
+        typeof argument === "string" ||
+        typeof argument === "number" ||
+        typeof argument === "boolean",
+    )
+    .slice(0, 2)
+    .map((argument) => JSON.stringify(argument))
+    .join(", ");
+  return argumentsLabel ? `${base}(${argumentsLabel})` : base;
+}
+
+function syntaxToken(
+  kind: InteractionCallTokenKind,
+  text: string,
+): InteractionCallToken {
+  return { kind, text };
+}
+
+function valueSyntax(
+  value: unknown,
+  callsById: ReadonlyMap<string, Call>,
+  visited: ReadonlySet<string>,
+): InteractionCallToken[] {
+  if (value === null) return [syntaxToken("nullish", "null")];
+  if (value === undefined) return [syntaxToken("nullish", "undefined")];
+  if (typeof value === "string") {
+    return [syntaxToken("string", JSON.stringify(value))];
+  }
+  if (typeof value === "number") {
+    return [syntaxToken("number", String(value))];
+  }
+  if (typeof value === "boolean") {
+    return [syntaxToken("boolean", String(value))];
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .slice(0, 3)
+      .flatMap((item, index) => [
+        ...(index > 0 ? [syntaxToken("base", ", ")] : []),
+        ...valueSyntax(item, callsById, visited),
+      ]);
+    return [
+      syntaxToken("base", "["),
+      ...items,
+      ...(value.length > 3 ? [syntaxToken("base", ", …")] : []),
+      syntaxToken("base", "]"),
+    ];
+  }
+  if (typeof value !== "object") {
+    return [syntaxToken("meta", String(value))];
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.__callId__ === "string") {
+    const referenced = callsById.get(record.__callId__);
+    if (referenced) return callSyntaxTokens(referenced, callsById, visited);
+  }
+  if (record.__element__ && typeof record.__element__ === "object") {
+    const element = record.__element__ as {
+      prefix?: string;
+      localName?: string;
+      id?: string;
+      classNames?: string[];
+      innerText?: string;
+    };
+    const tagName = [element.prefix, element.localName]
+      .filter(Boolean)
+      .join(":");
+    const suffix = element.id
+      ? `#${element.id}`
+      : (element.classNames ?? []).map((name) => `.${name}`).join("");
+    return [
+      syntaxToken("base", "<"),
+      syntaxToken("tag", tagName || "element"),
+      ...(suffix ? [syntaxToken("tag-suffix", suffix)] : []),
+      syntaxToken("base", ">"),
+    ];
+  }
+  if (record.__class__ && typeof record.__class__ === "object") {
+    const name = (record.__class__ as { name?: unknown }).name;
+    return [syntaxToken("meta", typeof name === "string" ? name : "Object")];
+  }
+  if (record.__function__ && typeof record.__function__ === "object") {
+    const name = (record.__function__ as { name?: unknown }).name;
+    return [syntaxToken("meta", typeof name === "string" ? name : "anonymous")];
+  }
+  if (record.__regexp__ && typeof record.__regexp__ === "object") {
+    const regexp = record.__regexp__ as {
+      flags?: unknown;
+      source?: unknown;
+    };
+    return [
+      syntaxToken(
+        "meta",
+        `/${String(regexp.source ?? "")}/${String(regexp.flags ?? "")}`,
+      ),
+    ];
+  }
+  return [syntaxToken("base", "{…}")];
+}
+
+function callSyntaxTokens(
+  call: Pick<Call, "args" | "id" | "method" | "path">,
+  callsById: ReadonlyMap<string, Call>,
+  visited: ReadonlySet<string>,
+): InteractionCallToken[] {
+  if (visited.has(call.id)) return [syntaxToken("meta", call.method)];
+  const nextVisited = new Set(visited);
+  nextVisited.add(call.id);
+
+  if (
+    call.method === "step" &&
+    call.path.length === 0 &&
+    typeof call.args[0] === "string"
+  ) {
+    return [syntaxToken("base", call.args[0])];
+  }
+
+  const path = call.path.flatMap((part) => [
+    ...(typeof part === "string"
+      ? [syntaxToken("base", part)]
+      : valueSyntax(part, callsById, nextVisited)),
+    syntaxToken("base", "."),
+  ]);
+  const args = call.args.flatMap((argument, index) => [
+    ...(index > 0 ? [syntaxToken("base", ", ")] : []),
+    ...valueSyntax(argument, callsById, nextVisited),
+  ]);
+  return [
+    ...path,
+    syntaxToken("method", call.method),
+    syntaxToken("base", "("),
+    ...args,
+    syntaxToken("base", ")"),
+  ];
+}
+
+/** Resolve nested Storybook call references into its final displayed syntax. */
+export function instrumenterCallSyntax(
+  call: Pick<Call, "args" | "id" | "method" | "path">,
+  callsById: ReadonlyMap<string, Call>,
+): InteractionCallSyntax {
+  const tokens = callSyntaxTokens(call, callsById, new Set());
+  return {
+    text: tokens.map((token) => token.text).join(""),
+    tokens,
+  };
+}
 
 /** Look up an instrumenter call id for GOTO after play has run. */
 export function lookupPlayStepCallId(

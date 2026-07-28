@@ -16,6 +16,7 @@ import {
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import type { VisualDeltaModeDef, VisualDeltaModes } from "../shared/modes.js";
 import {
+  VISUAL_CAPTURE_CALL_PARAM,
   VISUAL_CAPTURE_READY_ATTR,
   VISUAL_CAPTURE_UNTIL_PARAM,
   interactionScreenshotRelativePath,
@@ -79,6 +80,7 @@ type InteractionCaptureRequest = {
   storyId: string;
   stepId: string;
   stepLabel?: string;
+  captureCallId?: string;
 };
 
 function resolveRoot(options: VisualSuiteOptions): string {
@@ -189,6 +191,7 @@ async function prepareStoryPage(
   storyId: string,
   options?: {
     visualCaptureUntil?: string;
+    visualCaptureCallId?: string;
     globals?: Record<string, unknown>;
     projectDefaultDelay?: number;
   },
@@ -200,6 +203,10 @@ async function prepareStoryPage(
   });
   if (options?.visualCaptureUntil) {
     params.set(VISUAL_CAPTURE_UNTIL_PARAM, options.visualCaptureUntil);
+  }
+  if (options?.visualCaptureCallId) {
+    params.set(VISUAL_CAPTURE_CALL_PARAM, options.visualCaptureCallId);
+    params.set("instrument", "true");
   }
   if (options?.globals && Object.keys(options.globals).length > 0) {
     params.set("globals", serializeGlobals(options.globals));
@@ -414,6 +421,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
       }
       await prepareStoryPage(page, entry.id, {
         visualCaptureUntil: interactionRequest.stepId,
+        visualCaptureCallId: interactionRequest.captureCallId,
         projectDefaultDelay: projectDefaults.delay,
       });
       await page

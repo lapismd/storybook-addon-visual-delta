@@ -12,6 +12,7 @@ describe("BaselineAccordion", () => {
     const onOpenHistory = vi.fn();
     const onUpdateDefault = vi.fn();
     const onDelete = vi.fn();
+    const onCreate = vi.fn();
     renderWithTheme(
       <BaselineAccordion
         sections={[
@@ -38,7 +39,7 @@ describe("BaselineAccordion", () => {
         busy={false}
         showDistribution={false}
         onExpand={onExpand}
-        onCreate={vi.fn()}
+        onCreate={onCreate}
         onUpdate={vi.fn()}
         onUpdateDefault={onUpdateDefault}
         onDelete={onDelete}
@@ -84,7 +85,81 @@ describe("BaselineAccordion", () => {
       expect.objectContaining({ id: "default", label: "Default" }),
     );
 
-    await user.click(screen.getByRole("button", { name: /Opens chooser/i }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Opens chooserNo baseline yet · opens",
+      }),
+    );
     expect(onExpand).toHaveBeenCalledWith("opens");
+
+    const interactionMenu = screen.getByRole("button", {
+      name: "More Opens chooser baseline actions",
+    });
+    await user.click(interactionMenu);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Create Opens chooser baseline",
+      }),
+    );
+    expect(onCreate).toHaveBeenCalledWith({
+      callId: "c1",
+      label: "Opens chooser",
+      stepId: "opens",
+    });
+  });
+
+  it("renders resolved call syntax and toggles hidden interactions", async () => {
+    const user = userEvent.setup();
+    const onToggleInteractions = vi.fn();
+    renderWithTheme(
+      <BaselineAccordion
+        sections={[
+          {
+            id: "assertion",
+            label: "toBeInTheDocument",
+            hint: "No baseline yet · assertion",
+            step: {
+              callId: "c2",
+              label: "toBeInTheDocument",
+              stepId: "assertion",
+              syntax: {
+                text: "expect(<div.panel-shell>).toBeInTheDocument()",
+                tokens: [
+                  { kind: "method", text: "expect" },
+                  { kind: "base", text: "(" },
+                  { kind: "base", text: "<" },
+                  { kind: "tag", text: "div" },
+                  { kind: "tag-suffix", text: ".panel-shell" },
+                  { kind: "base", text: ">)." },
+                  { kind: "method", text: "toBeInTheDocument" },
+                  { kind: "base", text: "()" },
+                ],
+              },
+            },
+          },
+        ]}
+        expandedId={null}
+        busy={false}
+        showDistribution={false}
+        showAllInteractions={false}
+        hiddenInteractionCount={1}
+        onExpand={vi.fn()}
+        onCreate={vi.fn()}
+        onUpdate={vi.fn()}
+        onUpdateDefault={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleDistribution={vi.fn()}
+        onToggleInteractions={onToggleInteractions}
+        renderBody={() => null}
+      />,
+    );
+
+    expect(
+      screen.getByTitle("expect(<div.panel-shell>).toBeInTheDocument()"),
+    ).toHaveTextContent("expect(<div.panel-shell>).toBeInTheDocument()");
+    await user.click(
+      screen.getByRole("switch", { name: "Show all interactions" }),
+    );
+    expect(onToggleInteractions).toHaveBeenCalledOnce();
   });
 });
