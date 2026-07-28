@@ -10,11 +10,19 @@ import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaProjectDefaults,
   VisualDeltaResolvedConfig,
+  VisualDeltaWorkflowConfig,
 } from "../shared/config-types.js";
 import {
   BUILTIN_VISUAL_DELTA_DEFAULTS,
   validateVisualDeltaProjectDefaults,
 } from "../shared/project-defaults.js";
+import {
+  BUILTIN_VISUAL_DELTA_WORKFLOW,
+  renderVisualDeltaCommitMessage,
+  validateVisualDeltaWorkflowConfig,
+} from "../shared/workflow-config.js";
+import { announceVisualDeltaChanges } from "../shared/change-events.js";
+import type { VisualDeltaChangeSetMutation } from "../shared/change-sets.js";
 import {
   resolveVisualDeltaStoryConfig,
   VISUAL_DELTA_STORY_CONFIG_KEYS,
@@ -400,6 +408,26 @@ export function configurationSections(
       ],
     },
     {
+      title: "Workflow",
+      rows: [
+        {
+          label: "Auto-accept live stories",
+          value: config.workflow.autoAcceptLiveStoryComparisons
+            ? "Enabled"
+            : "Disabled",
+        },
+        { label: "VCS mode", value: config.workflow.vcs.mode },
+        {
+          label: "Detected VCS",
+          value: config.vcs.kind?.toUpperCase() ?? "None",
+        },
+        {
+          label: "VCS writes",
+          value: config.vcs.writeAllowed ? "Allowed" : "Disabled",
+        },
+      ],
+    },
+    {
       title: "Commands",
       rows: [
         {
@@ -439,8 +467,36 @@ async function saveDefaults(
     body: JSON.stringify({ projectDefaults: defaults }),
   });
   const payload = (await response.json()) as
-    | VisualDeltaResolvedConfig
-    | { error?: string };
+    | (VisualDeltaResolvedConfig & {
+        changes?: VisualDeltaChangeSetMutation;
+      })
+    | { error?: string; changes?: VisualDeltaChangeSetMutation };
+  announceVisualDeltaChanges(payload.changes);
+  if (!response.ok || !("projectDefaults" in payload)) {
+    throw new Error(
+      "error" in payload && payload.error
+        ? payload.error
+        : `Config update failed (${response.status})`,
+    );
+  }
+  return payload;
+}
+
+async function saveWorkflow(
+  defaults: VisualDeltaProjectDefaults,
+  workflow: VisualDeltaWorkflowConfig,
+): Promise<VisualDeltaResolvedConfig> {
+  const response = await fetch(VISUAL_DELTA_CONFIG_PATH, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectDefaults: defaults, workflow }),
+  });
+  const payload = (await response.json()) as
+    | (VisualDeltaResolvedConfig & {
+        changes?: VisualDeltaChangeSetMutation;
+      })
+    | { error?: string; changes?: VisualDeltaChangeSetMutation };
+  announceVisualDeltaChanges(payload.changes);
   if (!response.ok || !("projectDefaults" in payload)) {
     throw new Error(
       "error" in payload && payload.error
@@ -492,6 +548,9 @@ export type ConfigurationPanelProps = {
   onSaveProjectDefaults?: (
     defaults: VisualDeltaProjectDefaults,
   ) => Promise<VisualDeltaResolvedConfig>;
+  onSaveWorkflow?: (
+    workflow: VisualDeltaWorkflowConfig,
+  ) => Promise<VisualDeltaResolvedConfig>;
   onSaveStoryConfig?: (
     update: VisualDeltaStoryConfigUpdate,
   ) => Promise<VisualDeltaStoryConfigUpdateResponse>;
@@ -504,6 +563,7 @@ export function ConfigurationPanel({
   story,
   initialConfig,
   onSaveProjectDefaults,
+  onSaveWorkflow,
   onSaveStoryConfig,
   onStoryUpdated,
   onUpdated,
@@ -517,9 +577,17 @@ export function ConfigurationPanel({
       ...defaultsFor(initialConfig ?? null).baselineLabelOffset,
     },
   }));
-  const [tab, setTab] = useState<"story" | "defaults" | "resolved">(
-    story ? "story" : "defaults",
+  const [workflowDraft, setWorkflowDraft] = useState<VisualDeltaWorkflowConfig>(
+    () => ({
+      ...(initialConfig?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW),
+      vcs: {
+        ...(initialConfig?.workflow.vcs ?? BUILTIN_VISUAL_DELTA_WORKFLOW.vcs),
+      },
+    }),
   );
+  const [tab, setTab] = useState<
+    "story" | "defaults" | "workflow" | "resolved"
+  >(story ? "story" : "defaults");
   const [storyParameters, setStoryParameters] = useState<
     VisualDeltaParams | undefined
   >(story?.parameters);
@@ -544,6 +612,10 @@ export function ConfigurationPanel({
           ...defaultsFor(initialConfig).baselineLabelOffset,
         },
       });
+      setWorkflowDraft({
+        ...initialConfig.workflow,
+        vcs: { ...initialConfig.workflow.vcs },
+      });
       setLoading(false);
       setError(null);
       return;
@@ -565,6 +637,10 @@ export function ConfigurationPanel({
             baselineLabelOffset: {
               ...defaultsFor(data).baselineLabelOffset,
             },
+          });
+          setWorkflowDraft({
+            ...data.workflow,
+            vcs: { ...data.workflow.vcs },
           });
         }
       } catch (err) {
@@ -627,6 +703,22 @@ export function ConfigurationPanel({
     rejectUnknown: true,
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(defaultsFor(config));
+  const workflowValidation = validateVisualDeltaWorkflowConfig(workflowDraft, {
+    rejectUnknown: true,
+  });
+  const workflowDirty =
+    JSON.stringify(workflowDraft) !==
+    JSON.stringify(config?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW);
+  const workflowMessagePreview = renderVisualDeltaCommitMessage(
+    workflowDraft.vcs.commitMessageTemplate,
+    {
+      action: "update baseline",
+      scope: story?.name || "2 stories",
+      storyId: story?.id,
+      storyName: story?.name,
+      count: story ? 1 : 2,
+    },
+  );
   const source = (key: keyof VisualDeltaProjectDefaults) =>
     config?.projectDefaultSources?.[key] ?? "built-in";
   const setNumber = (
@@ -775,6 +867,35 @@ export function ConfigurationPanel({
     }
   };
 
+  const handleSaveWorkflow = async () => {
+    if (workflowValidation.errors.length || !config) return;
+    setSaving(true);
+    setError(null);
+    setSaved(null);
+    try {
+      const next = await (onSaveWorkflow
+        ? onSaveWorkflow(workflowDraft)
+        : saveWorkflow(config.projectDefaults, workflowDraft));
+      setConfig(next);
+      setWorkflowDraft({
+        ...next.workflow,
+        vcs: { ...next.workflow.vcs },
+      });
+      onUpdated?.(next);
+      setSaved(
+        "Workflow saved. This policy change remains available for manual review.",
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save Visual Delta workflow",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Root>
       <StickyHeader>
@@ -814,6 +935,15 @@ export function ConfigurationPanel({
           <Tab
             type="button"
             role="tab"
+            aria-selected={tab === "workflow"}
+            $selected={tab === "workflow"}
+            onClick={() => setTab("workflow")}
+          >
+            Workflow
+          </Tab>
+          <Tab
+            type="button"
+            role="tab"
             aria-selected={tab === "resolved"}
             $selected={tab === "resolved"}
             onClick={() => setTab("resolved")}
@@ -830,7 +960,9 @@ export function ConfigurationPanel({
             ? "Story"
             : tab === "defaults"
               ? "Defaults"
-              : "Resolved"
+              : tab === "workflow"
+                ? "Workflow"
+                : "Resolved"
         }
       >
         {loading ? <Hint role="status">Loading configuration…</Hint> : null}
@@ -1363,6 +1495,168 @@ export function ConfigurationPanel({
                 }}
               >
                 Restore built-ins
+              </Button>
+            </Actions>
+          </>
+        ) : tab === "workflow" ? (
+          <>
+            <DefaultsGrid>
+              <Field>
+                <FieldLabel>Live comparison review</FieldLabel>
+                <CheckboxRow>
+                  <Input
+                    aria-label="Automatically accept passing live story comparisons"
+                    type="checkbox"
+                    checked={workflowDraft.autoAcceptLiveStoryComparisons}
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
+                      setSaved(null);
+                      setWorkflowDraft((current) => ({
+                        ...current,
+                        autoAcceptLiveStoryComparisons: checked,
+                      }));
+                    }}
+                    style={{ width: 16 }}
+                  />
+                  Auto-accept passing Diff Chromium and Story runs
+                </CheckboxRow>
+                <FieldHint>
+                  Only fresh passed or within-tolerance authoritative
+                  comparisons mark the exact story visual-approved. Failures
+                  never change review state.
+                </FieldHint>
+              </Field>
+
+              <Field>
+                <FieldLabel>
+                  VCS workflow <Source>project opt-in</Source>
+                </FieldLabel>
+                <Select
+                  aria-label="Visual Delta VCS workflow mode"
+                  value={workflowDraft.vcs.mode}
+                  onChange={(event) => {
+                    const mode = event.currentTarget
+                      .value as VisualDeltaWorkflowConfig["vcs"]["mode"];
+                    setSaved(null);
+                    setWorkflowDraft((current) => ({
+                      ...current,
+                      vcs: { ...current.vcs, mode },
+                    }));
+                  }}
+                >
+                  <option value="off">Off</option>
+                  <option value="review">Review before commit</option>
+                  <option value="auto">Auto-commit safe changes</option>
+                </Select>
+                <FieldHint>
+                  Review opens the changed-files screen. Auto commits only a
+                  complete safe Visual Delta change set.
+                </FieldHint>
+              </Field>
+
+              <Field>
+                <FieldLabel>Commit message template</FieldLabel>
+                <Input
+                  aria-label="Visual Delta commit message template"
+                  value={workflowDraft.vcs.commitMessageTemplate}
+                  onChange={(event) => {
+                    const commitMessageTemplate = event.currentTarget.value;
+                    setSaved(null);
+                    setWorkflowDraft((current) => ({
+                      ...current,
+                      vcs: { ...current.vcs, commitMessageTemplate },
+                    }));
+                  }}
+                />
+                <FieldHint>
+                  Tokens: {"{action}"}, {"{scope}"}, {"{storyId}"},{" "}
+                  {"{storyName}"}, {"{count}"}.
+                </FieldHint>
+                <StoryId aria-label="Commit message preview">
+                  {workflowMessagePreview || "Commit message is empty"}
+                </StoryId>
+              </Field>
+
+              <Field>
+                <FieldLabel>
+                  Repository capability <Source>host gate</Source>
+                </FieldLabel>
+                <Rows>
+                  <Row>
+                    <Label>Detected VCS</Label>
+                    <Value>{config?.vcs.kind?.toUpperCase() ?? "None"}</Value>
+                  </Row>
+                  <Row>
+                    <Label>Commit writes</Label>
+                    <Value>
+                      {config?.vcs.writeAllowed ? "Allowed" : "Disabled"}
+                    </Value>
+                  </Row>
+                </Rows>
+                {config?.vcs.reason ? (
+                  <FieldHint role="status">{config.vcs.reason}</FieldHint>
+                ) : null}
+                <FieldHint>
+                  The Storybook host must explicitly set allowVcsWrites. Visual
+                  Delta never pushes or rewrites history.
+                </FieldHint>
+              </Field>
+            </DefaultsGrid>
+
+            {workflowValidation.errors.length ? (
+              <Validation aria-label="Workflow validation errors">
+                {workflowValidation.errors.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </Validation>
+            ) : null}
+
+            <Actions>
+              <Button
+                size="small"
+                variant="solid"
+                ariaLabel={false}
+                disabled={
+                  !workflowDirty ||
+                  saving ||
+                  workflowValidation.errors.length > 0
+                }
+                onClick={() => void handleSaveWorkflow()}
+              >
+                {saving ? "Saving…" : "Save workflow"}
+              </Button>
+              <Button
+                size="small"
+                ariaLabel={false}
+                disabled={!workflowDirty || saving}
+                onClick={() => {
+                  setWorkflowDraft({
+                    ...(config?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW),
+                    vcs: {
+                      ...(config?.workflow.vcs ??
+                        BUILTIN_VISUAL_DELTA_WORKFLOW.vcs),
+                    },
+                  });
+                  setError(null);
+                  setSaved(null);
+                }}
+              >
+                Revert unsaved changes
+              </Button>
+              <Button
+                size="small"
+                ariaLabel={false}
+                disabled={saving}
+                onClick={() => {
+                  setWorkflowDraft({
+                    ...BUILTIN_VISUAL_DELTA_WORKFLOW,
+                    vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
+                  });
+                  setError(null);
+                  setSaved(null);
+                }}
+              >
+                Restore safe defaults
               </Button>
             </Actions>
           </>

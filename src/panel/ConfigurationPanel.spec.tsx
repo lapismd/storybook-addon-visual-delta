@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -11,6 +11,7 @@ import {
   configurationSections,
 } from "./ConfigurationPanel.js";
 import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
+import { BUILTIN_VISUAL_DELTA_WORKFLOW } from "../shared/workflow-config.js";
 import { renderWithTheme } from "../test/render.js";
 
 const config: VisualDeltaResolvedConfig = {
@@ -21,6 +22,7 @@ const config: VisualDeltaResolvedConfig = {
     baselinePathMode: "nested-import",
     visualServerPort: 9010,
     allowRebuild: true,
+    allowVcsWrites: false,
     visualUpdateArgs: ["visual-delta", "update"],
     visualInteractionUpdateArgs: ["visual-delta", "interaction-update"],
     visualTestArgs: ["playwright", "test"],
@@ -28,6 +30,13 @@ const config: VisualDeltaResolvedConfig = {
   },
   playwrightPassThresholdPercent: 1,
   projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
+  workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,
+  vcs: {
+    kind: "jj",
+    available: true,
+    writeAllowed: false,
+    reason: "VCS commits are disabled.",
+  },
   projectDefaultSources: {
     passThresholdPercent: "built-in",
     diffThreshold: "built-in",
@@ -56,12 +65,13 @@ const config: VisualDeltaResolvedConfig = {
 afterEach(cleanup);
 
 describe("configurationSections", () => {
-  it("groups setup, baseline, capture, and command values", () => {
+  it("groups setup, baseline, capture, workflow, and command values", () => {
     const sections = configurationSections(config);
     expect(sections.map((section) => section.title)).toEqual([
       "Setup",
       "Baselines",
       "Capture",
+      "Workflow",
       "Commands",
     ]);
     expect(sections[1]?.rows).toContainEqual({
@@ -228,5 +238,52 @@ describe("ConfigurationPanel", () => {
     await user.click(screen.getByRole("tab", { name: "Resolved" }));
     expect(screen.getByRole("heading", { name: "Baselines" })).toBeVisible();
     expect(screen.getByText("/repo/.visual-delta/config.json")).toBeVisible();
+  });
+
+  it("edits opt-in live approval and VCS workflow independently from capture defaults", async () => {
+    const user = userEvent.setup();
+    const saveWorkflow = vi.fn(async (workflow) => ({
+      ...config,
+      workflow,
+      projectConfigExists: true,
+    }));
+    renderWithTheme(
+      <ConfigurationPanel
+        initialConfig={config}
+        onClose={() => {}}
+        onSaveWorkflow={saveWorkflow}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Workflow" }));
+    await user.click(
+      screen.getByLabelText(
+        "Automatically accept passing live story comparisons",
+      ),
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Visual Delta VCS workflow mode"),
+      "review",
+    );
+    const template = screen.getByLabelText(
+      "Visual Delta commit message template",
+    );
+    fireEvent.change(template, {
+      target: { value: "Visual review: {scope}" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save workflow" }));
+
+    expect(saveWorkflow).toHaveBeenCalledWith({
+      autoAcceptLiveStoryComparisons: true,
+      vcs: {
+        mode: "review",
+        commitMessageTemplate: "Visual review: {scope}",
+      },
+    });
+    expect(
+      await screen.findByText(
+        /policy change remains available for manual review/i,
+      ),
+    ).toBeVisible();
   });
 });

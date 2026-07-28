@@ -1,6 +1,7 @@
 import React, { memo, useLayoutEffect, useRef } from "react";
 import {
   CloseIcon,
+  CommitIcon,
   EllipsisIcon,
   ExpandIcon,
   EyeCloseIcon,
@@ -96,6 +97,8 @@ export type VisualDeltaHeaderProps = {
   acceptRunAvailable?: boolean;
   onToggleSkipVisual: () => void;
   onOpenConfiguration: () => void;
+  onOpenChanges?: () => void;
+  pendingChangesCount?: number;
   isRebuilding: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
@@ -133,6 +136,8 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   acceptRunAvailable = false,
   onToggleSkipVisual,
   onOpenConfiguration,
+  onOpenChanges = () => undefined,
+  pendingChangesCount = 0,
   isRebuilding,
   onHeightChange,
   reviewLayoutActive = false,
@@ -282,6 +287,25 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
             popover={() => (
               <div style={{ minWidth: 220 }}>
                 <ActionList>
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel="Changes"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onOpenChanges();
+                      }}
+                    >
+                      <ActionList.Icon>
+                        <CommitIcon />
+                      </ActionList.Icon>
+                      <ActionList.Text>
+                        Changes
+                        {pendingChangesCount > 0
+                          ? ` (${pendingChangesCount})`
+                          : ""}
+                      </ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
                   <ActionList.Item>
                     <ActionList.Action
                       ariaLabel="Rebuild storybook static"

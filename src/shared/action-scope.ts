@@ -1,5 +1,13 @@
 export type VisualActionContext = "story" | "component" | "global";
 
+/** Preserve the invoked sidebar node type even when a component has one leaf. */
+export function visualActionContextForSidebarEntry(
+  entryType: string | undefined,
+): Exclude<VisualActionContext, "global"> | undefined {
+  if (!entryType) return undefined;
+  return entryType === "story" ? "story" : "component";
+}
+
 function uniqueStoryIds(storyIds: readonly string[]): string[] {
   return [
     ...new Set(storyIds.map((storyId) => storyId.trim()).filter(Boolean)),

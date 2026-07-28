@@ -19,6 +19,7 @@ import {
   DEFAULT_DIFF_THRESHOLD,
   DEFAULT_PASS_THRESHOLD_PERCENT,
   EVENTS,
+  PANEL_ID,
   SKIP_VISUAL_TAG,
   TEST_PROVIDER_ID,
   deviceScaleFactorForImage,
@@ -108,6 +109,7 @@ import {
   BaselineGeometryWarning,
 } from "./BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "./ConfigurationPanel.js";
+import { ChangeSetOutcomeNotice, ChangeSetsView } from "./ChangeSetsView.js";
 import { ModeSelector } from "./ModeSelector.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
@@ -142,6 +144,11 @@ import {
   ToolbarRow,
   ToolbarSpacer,
 } from "./styled.js";
+import {
+  fetchVisualDeltaChangeSets,
+  type VisualDeltaChangeSetMutation,
+} from "../shared/change-sets.js";
+import { VISUAL_DELTA_CHANGES_EVENT } from "../shared/change-events.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 const IS_DEVELOPMENT =
@@ -236,6 +243,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     primaryImages,
   } = useStoryData();
   const [showConfiguration, setShowConfiguration] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
+  const [pendingChangesCount, setPendingChangesCount] = useState(0);
+  const [changeSetNotice, setChangeSetNotice] = useState<{
+    message: string;
+    error: boolean;
+  } | null>(null);
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
   const loading = !storyReady;
@@ -466,6 +479,60 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [baselineJob, setBaselineJob] = useState<VisualCreateProgress | null>(
     null,
   );
+
+  const refreshChangeSets = useCallback(async () => {
+    try {
+      const response = await fetchVisualDeltaChangeSets();
+      setPendingChangesCount(response.pendingCount);
+      return response;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const openChanges = useCallback(() => {
+    setChangeSetNotice(null);
+    setShowConfiguration(false);
+    setHistoryTarget(null);
+    setShowChanges(true);
+    api.setSelectedPanel(PANEL_ID);
+    api.togglePanel(true);
+  }, [api]);
+
+  useEffect(() => {
+    void refreshChangeSets();
+    const onChanges = (event: Event) => {
+      const mutation = (event as CustomEvent<VisualDeltaChangeSetMutation>)
+        .detail;
+      void refreshChangeSets();
+      const operation = mutation?.changeSet?.operations.at(-1);
+      if (operation?.action === "auto-accept") {
+        setOptimisticReview("approved");
+      }
+      if (mutation?.autoCommit) {
+        setChangeSetNotice({
+          message: `Committed Visual Delta changes as ${mutation.autoCommit.displayId}.`,
+          error: false,
+        });
+        setUpdateLog(
+          `Committed Visual Delta changes as ${mutation.autoCommit.displayId}.`,
+        );
+      } else if (mutation?.autoCommitError) {
+        setChangeSetNotice({
+          message: `Automatic commit failed: ${mutation.autoCommitError}`,
+          error: true,
+        });
+        setUpdateLog(
+          `Visual Delta changes are pending: ${mutation.autoCommitError}`,
+        );
+      } else if (mutation?.mode === "review" && mutation.changeSetId) {
+        openChanges();
+      }
+    };
+    window.addEventListener(VISUAL_DELTA_CHANGES_EVENT, onChanges);
+    return () =>
+      window.removeEventListener(VISUAL_DELTA_CHANGES_EVENT, onChanges);
+  }, [openChanges, refreshChangeSets]);
   const isCreating = Boolean(
     baselineJob?.running && baselineJob.kind === "create",
   );
@@ -971,6 +1038,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           });
           if (abort.signal.aborted) return;
           applyVisualStatuses([result]);
+          if (result.review?.autoAccepted) {
+            if (result.review.applied) {
+              setOptimisticReview("approved");
+              setUpdateLog(
+                result.review.changes?.autoCommit
+                  ? `Visual passed, accepted, and committed as ${result.review.changes.autoCommit.displayId}.`
+                  : "Visual passed and was automatically accepted.",
+              );
+            } else {
+              setCaptureError(
+                `Visual passed, but automatic acceptance failed: ${result.review.error ?? "review update failed"}`,
+              );
+            }
+          }
           const outcomePassed =
             result.outcome === "passed" ||
             result.outcome === "changed-within-tolerance";
@@ -1474,6 +1555,20 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               onProgress: (progress) => setDiffProgressLabel(progress.label),
             });
             applyVisualRunResults([storyId!], [result]);
+            if (result.review?.autoAccepted) {
+              if (result.review.applied) {
+                setOptimisticReview("approved");
+                setUpdateLog(
+                  result.review.changes?.autoCommit
+                    ? `Visual passed, accepted, and committed as ${result.review.changes.autoCommit.displayId}.`
+                    : "Visual passed and was automatically accepted.",
+                );
+              } else {
+                setCaptureError(
+                  `Visual passed, but automatic acceptance failed: ${result.review.error ?? "review update failed"}`,
+                );
+              }
+            }
             const outcomePassed =
               result.outcome === "passed" ||
               result.outcome === "changed-within-tolerance";
@@ -1896,7 +1991,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   );
 
   const emptyState: PanelViewEmptyState | null =
-    !showConfiguration && !loading && isEmpty && baselineSections.length === 0
+    !showConfiguration &&
+    !showChanges &&
+    !loading &&
+    isEmpty &&
+    baselineSections.length === 0
       ? {
           description: skipVisual
             ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
@@ -1970,12 +2069,24 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onUnaccept: (scope) => void handleUnacceptScope(scope),
           acceptRunAvailable: reviewableRunStoryIds.length > 0,
           onToggleSkipVisual: () => void handleToggleSkipVisual(),
-          onOpenConfiguration: () => setShowConfiguration(true),
+          onOpenConfiguration: () => {
+            setShowChanges(false);
+            setShowConfiguration(true);
+          },
+          onOpenChanges: openChanges,
+          pendingChangesCount,
           isRebuilding,
         }}
         loading={loading}
         configuration={
-          showConfiguration ? (
+          showChanges ? (
+            <ChangeSetsView
+              onClose={() => setShowChanges(false)}
+              onUpdated={(response) =>
+                setPendingChangesCount(response.pendingCount)
+              }
+            />
+          ) : showConfiguration ? (
             <ConfigurationPanel
               onClose={() => setShowConfiguration(false)}
               story={
@@ -2021,8 +2132,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         notice={
           baselineGeometryMismatch ||
           baselineAlignmentMismatch ||
-          baselineGeometryUnavailable ? (
+          baselineGeometryUnavailable ||
+          changeSetNotice ? (
             <>
+              {changeSetNotice ? (
+                <ChangeSetOutcomeNotice
+                  message={changeSetNotice.message}
+                  error={changeSetNotice.error}
+                  onOpen={openChanges}
+                />
+              ) : null}
               {baselineGeometryUnavailable ? (
                 <BaselineGeometryUnavailable
                   detail={baselineGeometryUnavailable}

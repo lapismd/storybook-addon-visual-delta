@@ -3,6 +3,7 @@ import {
   executeVisualActionSequence,
   resultsForFrozenVisualScope,
   resolveVisualActionStoryIds,
+  visualActionContextForSidebarEntry,
 } from "./action-scope.js";
 
 describe("resolveVisualActionStoryIds", () => {
@@ -31,6 +32,11 @@ describe("resolveVisualActionStoryIds", () => {
       "menu--checkboxes",
       "menu--radio-items",
     ]);
+  });
+
+  it("does not turn a one-story component invocation into a story run", () => {
+    expect(visualActionContextForSidebarEntry("component")).toBe("component");
+    expect(visualActionContextForSidebarEntry("story")).toBe("story");
   });
 
   it("uses exactly the globally visible stories", () => {

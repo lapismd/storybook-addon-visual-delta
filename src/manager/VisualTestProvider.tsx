@@ -68,6 +68,7 @@ import {
   executeVisualActionSequence,
   resultsForFrozenVisualScope,
   resolveVisualActionStoryIds,
+  visualActionContextForSidebarEntry,
 } from "../shared/action-scope.js";
 import {
   appendVisualRunLogLine,
@@ -409,6 +410,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
     if ("id" in entry) return api.findAllLeafStoryIds(entry.id);
     return undefined;
   }, [api, entry]);
+  const entryScope = visualActionContextForSidebarEntry(entry?.type);
 
   useEffect(() => {
     if (entry) return;
@@ -560,6 +562,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const latestResultsRef = useRef<VisualRunResultItem[] | undefined>(undefined);
   const entryStoryIdsRef = useRef(entryStoryIds);
   entryStoryIdsRef.current = entryStoryIds;
+  const entryScopeRef = useRef(entryScope);
+  entryScopeRef.current = entryScope;
   const sidebarStoryIdsRef = useRef(sidebarStoryIds);
   sidebarStoryIdsRef.current = sidebarStoryIds;
 
@@ -587,11 +591,14 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         let resolvedSummary: AffectedVisualSummary | undefined;
 
         if (contextIds) {
+          const contextScope =
+            entryScopeRef.current ??
+            (contextIds.length === 1 ? "story" : "component");
           frozenIds = resolveVisualActionStoryIds({
-            context: contextIds.length === 1 ? "story" : "component",
+            context: contextScope,
             contextStoryIds: contextIds,
           });
-          compareScope = frozenIds.length === 1 ? "story" : "component";
+          compareScope = contextScope;
         } else {
           const visibleStoryIds = resolveVisualActionStoryIds({
             context: "global",

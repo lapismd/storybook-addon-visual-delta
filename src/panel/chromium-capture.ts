@@ -12,6 +12,7 @@ import type {
   CompareStoryResult,
   CompareStoryStreamEvent,
 } from "../shared/compare-story-types.js";
+import { announceVisualDeltaChanges } from "../shared/change-events.js";
 
 export type { CaptureSubjectProgress, CaptureSubjectStreamEvent };
 
@@ -196,12 +197,14 @@ export async function postChromiumStoryCompare(
   consume(buffer);
 
   if (streamError) throw new Error(streamError);
-  if (!result) {
+  const finalResult = result as CompareStoryResult | null;
+  if (!finalResult) {
     throw new Error(
       response.ok
         ? "Chromium comparison ended without a result"
         : `Chromium comparison failed (${response.status})`,
     );
   }
-  return result;
+  announceVisualDeltaChanges(finalResult.review?.changes);
+  return finalResult;
 }

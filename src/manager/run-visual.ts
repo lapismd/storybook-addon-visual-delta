@@ -31,6 +31,12 @@ import type {
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import type { CompareStoryResult } from "../shared/compare-story-types.js";
+import {
+  announceVisualDeltaChanges,
+  parseVisualDeltaChangeMarker,
+} from "../shared/change-events.js";
+import type { VisualDeltaChangeSetMutation } from "../shared/change-sets.js";
 import type {
   VisualDeltaStoryConfigUpdate,
   VisualDeltaStoryConfigUpdateResponse,
@@ -56,6 +62,8 @@ export type VisualRunResultItem = {
   missingBaseline?: boolean;
   /** Normalized outcome when restored from Storybook's status store. */
   outcome?: VisualComparisonOutcome;
+  /** Optional review mutation produced by authoritative live auto-approval. */
+  review?: CompareStoryResult["review"];
 };
 
 /** Middleware / patcher message when refusing visual-failed without a PNG. */
@@ -582,6 +590,7 @@ export async function compareExactStory(
     status: compared.sidecar.status,
     sidecar: compared.sidecar,
     outcome: compared.sidecar.outcome,
+    ...(compared.review ? { review: compared.review } : {}),
     ...(compared.sidecar.error ? { error: compared.sidecar.error } : {}),
   };
 }
@@ -919,6 +928,7 @@ export type VisualReviewResponse = {
   storyId: string;
   status: VisualReviewStatus;
   error?: string;
+  changes?: VisualDeltaChangeSetMutation;
 };
 
 /** Read resolved host options + onboarding status. */
@@ -939,6 +949,7 @@ export type VisualInitResponse = {
   playwrightConfigReady: boolean;
   snapshotDir: string;
   onboarding: VisualDeltaResolvedConfig["onboarding"];
+  changes?: VisualDeltaChangeSetMutation;
 };
 
 /** Scaffold portable suite / Playwright config / snapshot dir via middleware. */
@@ -947,6 +958,7 @@ export async function postVisualInit(): Promise<VisualInitResponse> {
   const data = (await response.json()) as VisualInitResponse & {
     error?: string;
   };
+  announceVisualDeltaChanges(data.changes);
   if (!response.ok || !data.ok) {
     throw new Error(data.error || `Init failed (${response.status})`);
   }
@@ -964,6 +976,7 @@ export async function postVisualReviewStatus(body: {
     body: JSON.stringify(body),
   });
   const data = (await response.json()) as VisualReviewResponse;
+  announceVisualDeltaChanges(data.changes);
   if (!response.ok || !data.ok) {
     throw new Error(
       data.error || `Review status update failed (${response.status})`,
@@ -987,12 +1000,14 @@ export async function postVisualReviewStatuses(
     updated?: number;
     errors?: string[];
     error?: string;
+    changes?: VisualDeltaChangeSetMutation;
   };
   if (!response.ok && data.updated == null) {
     throw new Error(
       data.error || `Review status update failed (${response.status})`,
     );
   }
+  announceVisualDeltaChanges(data.changes);
   return {
     updated: data.updated ?? 0,
     errors: data.errors ?? [],
@@ -1061,7 +1076,9 @@ export async function resumePersistedVisualStatusJob(): Promise<{
       updated?: number;
       errors?: string[];
       error?: string;
+      changes?: VisualDeltaChangeSetMutation;
     };
+    announceVisualDeltaChanges(data.changes);
     if (!response.ok && data.updated == null) {
       throw new Error(
         data.error || `Review status update failed (${response.status})`,
@@ -1085,6 +1102,7 @@ export type VisualSkipVisualResponse = {
   storyId: string;
   skip: boolean;
   error?: string;
+  changes?: VisualDeltaChangeSetMutation;
 };
 
 /** Persist add/remove of `skip-visual` on the story CSF via middleware. */
@@ -1098,6 +1116,7 @@ export async function postVisualSkipVisual(body: {
     body: JSON.stringify(body),
   });
   const data = (await response.json()) as VisualSkipVisualResponse;
+  announceVisualDeltaChanges(data.changes);
   if (!response.ok || !data.ok) {
     throw new Error(
       data.error || `skip-visual update failed (${response.status})`,
@@ -1116,8 +1135,11 @@ export async function putVisualStoryConfig(
     body: JSON.stringify(update),
   });
   const data = (await response.json()) as
-    | VisualDeltaStoryConfigUpdateResponse
-    | { error?: string };
+    | (VisualDeltaStoryConfigUpdateResponse & {
+        changes?: VisualDeltaChangeSetMutation;
+      })
+    | { error?: string; changes?: VisualDeltaChangeSetMutation };
+  announceVisualDeltaChanges(data.changes);
   if (!response.ok || !("ok" in data) || data.ok !== true) {
     throw new Error(
       "error" in data && data.error
@@ -1172,6 +1194,7 @@ function emitVisualCreateProgress(progress: VisualCreateProgress | null) {
 export type VisualCreateResponse = {
   ok: boolean;
   log: string;
+  changes?: VisualDeltaChangeSetMutation;
 };
 
 async function postVisualBaselineWrite(
@@ -1236,6 +1259,8 @@ async function postVisualBaselineWrite(
       log = await response.text();
     }
     log = log.trim();
+    const changes = parseVisualDeltaChangeMarker(log);
+    announceVisualDeltaChanges(changes);
 
     if (!response.ok) {
       const error = log || `${failVerb} (${response.status})`;
@@ -1319,7 +1344,7 @@ async function postVisualBaselineWrite(
     invalidateVisualLastRun(
       body.storyIds ?? (body.storyId ? [body.storyId] : undefined),
     );
-    return { ok: true, log };
+    return { ok: true, log, ...(changes ? { changes } : {}) };
   } catch (error) {
     if (
       latestCreateProgress?.running === false &&
@@ -1435,6 +1460,7 @@ export async function postVisualDeleteBaseline(body: {
   baselineUrl: string;
   sourceUpdated: boolean;
   deletedFiles: string[];
+  changes?: VisualDeltaChangeSetMutation;
 }> {
   const response = await fetch(VISUAL_DELTA_DELETE_PATH, {
     method: "POST",
@@ -1448,7 +1474,9 @@ export async function postVisualDeleteBaseline(body: {
     sourceUpdated?: boolean;
     deletedFiles?: string[];
     error?: string;
+    changes?: VisualDeltaChangeSetMutation;
   };
+  announceVisualDeltaChanges(data.changes);
   if (!response.ok || !data.ok) {
     throw new Error(
       data.error || `Delete screenshot failed (${response.status})`,
@@ -1460,6 +1488,7 @@ export async function postVisualDeleteBaseline(body: {
     baselineUrl: data.baselineUrl ?? body.baselineUrl,
     sourceUpdated: data.sourceUpdated ?? false,
     deletedFiles: data.deletedFiles ?? [],
+    ...(data.changes ? { changes: data.changes } : {}),
   };
 }
 
@@ -1504,6 +1533,8 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
       log = await response.text();
     }
     log = log.trim();
+    const changes = parseVisualDeltaChangeMarker(log);
+    announceVisualDeltaChanges(changes);
 
     if (!response.ok) {
       const error = log || `${failedLabel} (${response.status})`;
@@ -1535,7 +1566,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
       kind,
       logTail: log || undefined,
     });
-    return { ok: true, log };
+    return { ok: true, log, ...(changes ? { changes } : {}) };
   } catch (error) {
     if (
       latestCreateProgress?.running === false &&
@@ -1604,6 +1635,8 @@ export async function postVisualInteractionBaseline(body: {
       log = await response.text();
     }
     log = log.trim();
+    const changes = parseVisualDeltaChangeMarker(log);
+    announceVisualDeltaChanges(changes);
 
     if (!response.ok) {
       const error = log || `Interaction baseline failed (${response.status})`;
@@ -1635,7 +1668,7 @@ export async function postVisualInteractionBaseline(body: {
       kind: "interaction",
       logTail: log || undefined,
     });
-    return { ok: true, log };
+    return { ok: true, log, ...(changes ? { changes } : {}) };
   } catch (error) {
     if (
       latestCreateProgress?.running === false &&
