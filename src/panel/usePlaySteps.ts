@@ -453,9 +453,13 @@ export function runUntilStep(storyId: string, stepId: string) {
 }
 
 /** Set/clear the preview session park without remounting. */
-export function setPlayParkTarget(storyId: string, stepId: string | null) {
+export function setPlayParkTarget(
+  storyId: string,
+  stepId: string | null,
+  callId?: string | null,
+) {
   const channel = addons.getChannel();
-  channel.emit(EVENTS.RUN_UNTIL_STEP, { storyId, stepId });
+  channel.emit(EVENTS.RUN_UNTIL_STEP, { storyId, stepId, callId });
 }
 
 /** Remount the story without parking (refresh instrumenter callIds). */

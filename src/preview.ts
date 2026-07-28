@@ -36,8 +36,15 @@ let activeCallCapture:
       interactionId: string;
       started: boolean;
       ready: boolean;
+      source: "panel" | "url";
     }
   | undefined;
+
+function ensureCallCaptureListener() {
+  if (callCaptureListenerInstalled) return;
+  callCaptureListenerInstalled = true;
+  addons.getChannel().on(INSTRUMENTER_EVENTS.CALL, publishCallCaptureReady);
+}
 
 function publishCallCaptureReady(call: Call) {
   const capture = activeCallCapture;
@@ -46,7 +53,7 @@ function publishCallCaptureReady(call: Call) {
     capture.ready ||
     call.storyId !== capture.storyId ||
     call.id !== capture.callId ||
-    (call.status !== "done" && call.status !== "error")
+    call.status !== "done"
   ) {
     return;
   }
@@ -71,17 +78,23 @@ function ensureCallCapture(storyId: string) {
   const callId = readVisualCaptureCall();
   const interactionId = readVisualCaptureUntil();
   if (!callId || !interactionId) {
+    if (
+      activeCallCapture?.source === "panel" &&
+      activeCallCapture.storyId === storyId &&
+      activeCallCapture.interactionId === interactionId
+    ) {
+      ensureCallCaptureListener();
+      return;
+    }
     activeCallCapture = undefined;
     return;
   }
-  if (!callCaptureListenerInstalled) {
-    callCaptureListenerInstalled = true;
-    addons.getChannel().on(INSTRUMENTER_EVENTS.CALL, publishCallCaptureReady);
-  }
+  ensureCallCaptureListener();
   if (
     activeCallCapture?.storyId !== storyId ||
     activeCallCapture.callId !== callId ||
-    activeCallCapture.interactionId !== interactionId
+    activeCallCapture.interactionId !== interactionId ||
+    activeCallCapture.source !== "url"
   ) {
     activeCallCapture = {
       storyId,
@@ -89,6 +102,7 @@ function ensureCallCapture(storyId: string) {
       interactionId,
       started: false,
       ready: false,
+      source: "url",
     };
   }
   if (activeCallCapture.started) return;
@@ -112,8 +126,26 @@ function ensureRunUntilListener() {
     .getChannel()
     .on(
       EVENTS.RUN_UNTIL_STEP,
-      (payload: { storyId?: string; stepId?: string | null }) => {
+      (payload: {
+        storyId?: string;
+        stepId?: string | null;
+        callId?: string | null;
+      }) => {
         setVisualCaptureUntilSession(payload.stepId ?? null);
+        if (payload.storyId && payload.stepId && payload.callId) {
+          ensureCallCaptureListener();
+          activeCallCapture = {
+            storyId: payload.storyId,
+            callId: payload.callId,
+            interactionId: payload.stepId,
+            // The manager follows this event with Storybook's GOTO.
+            started: true,
+            ready: false,
+            source: "panel",
+          };
+        } else if (activeCallCapture?.source === "panel") {
+          activeCallCapture = undefined;
+        }
       },
     );
 }

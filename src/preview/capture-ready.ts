@@ -3,6 +3,7 @@ import type { DecoratorFunction } from "storybook/internal/types";
 import { useChannel, useEffect } from "storybook/preview-api";
 import { EVENTS } from "../constants.js";
 import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs.js";
+import { VISUAL_CAPTURE_READY_ATTR } from "../shared/interaction-capture.js";
 import {
   beginPreviewRender,
   finishPreviewRender,
@@ -13,6 +14,10 @@ import {
 
 type StoryFinishedPayload = {
   storyId?: string;
+};
+
+type VisualCaptureParkedPayload = StoryFinishedPayload & {
+  stepId?: string;
 };
 
 type CaptureReadyRoot = Pick<
@@ -53,9 +58,25 @@ export function cleanupCaptureReadyRender(
   }
 }
 
+export function finishParkedCaptureReadyRender(
+  root: CaptureReadyRoot,
+  render: PreviewRenderLifecycle,
+  payload?: VisualCaptureParkedPayload,
+): PreviewRenderLifecycle | null {
+  if (
+    !payload?.stepId ||
+    (payload.storyId && payload.storyId !== render.storyId) ||
+    root.getAttribute(VISUAL_CAPTURE_READY_ATTR) !== payload.stepId
+  ) {
+    return null;
+  }
+  return finishCaptureReadyRender(root, render);
+}
+
 /**
  * Publish Storybook's real render/play completion as a DOM handshake that
- * Playwright can observe from an isolated preview iframe.
+ * Playwright can observe from an isolated preview iframe. An exact parked
+ * interaction is the completion boundary for an intentional mid-play render.
  */
 export const withCaptureReady: DecoratorFunction = (storyFn, context) => {
   const root = document.documentElement;
@@ -70,6 +91,13 @@ export const withCaptureReady: DecoratorFunction = (storyFn, context) => {
       [STORY_FINISHED]: (payload?: StoryFinishedPayload) => {
         if (payload?.storyId && payload.storyId !== context.id) return;
         const readiness = finishCaptureReadyRender(root, render);
+        if (!readiness) return;
+        emit(EVENTS.PREVIEW_READY, readiness);
+      },
+      [EVENTS.VISUAL_CAPTURE_PARKED]: (
+        payload?: VisualCaptureParkedPayload,
+      ) => {
+        const readiness = finishParkedCaptureReadyRender(root, render, payload);
         if (!readiness) return;
         emit(EVENTS.PREVIEW_READY, readiness);
       },
