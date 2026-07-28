@@ -95,6 +95,10 @@ import {
   loadSidecarForStoryId,
 } from "./visual-sidecars.js";
 import {
+  affectsAffectedPlan,
+  createInvalidatableCache,
+} from "./affected-plan-cache.js";
+import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
 } from "./init-scaffold.js";
@@ -1291,8 +1295,8 @@ function handleAffectedPlan(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  plan = affectedPlan(root, options),
 ): void {
-  const plan = affectedPlan(root, options);
   writeJson(res, 200, {
     enabled: Boolean(options.affectedTests),
     ...plan.summary,
@@ -2231,6 +2235,17 @@ export function visualDeltaMiddlewarePlugin(
           ? server.config.server.port
           : resolveStorybookPort();
       const visualPort = resolveVisualServerPort(options, storybookPort);
+      const managerAffectedPlan = createInvalidatableCache(() =>
+        affectedPlan(root, options),
+      );
+      server.watcher.on("all", (event, filePath) => {
+        if (
+          (event === "add" || event === "change" || event === "unlink") &&
+          affectsAffectedPlan(root, filePath)
+        ) {
+          managerAffectedPlan.invalidate();
+        }
+      });
       // Warm storybook-static (Storybook port + 1 by default) for Testing Module.
       void ensureWarmStaticStorybookServer(root, visualPort).catch(() => {
         /* non-fatal — Playwright can still start its own webServer */
@@ -2545,7 +2560,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          handleAffectedPlan(res, root, options);
+          handleAffectedPlan(res, root, options, managerAffectedPlan.get());
           return;
         }
 
