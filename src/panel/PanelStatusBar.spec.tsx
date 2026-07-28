@@ -153,7 +153,23 @@ describe("PanelStatusBar", () => {
     );
 
     expect(screen.queryByRole("progressbar")).toBeNull();
-    expect(screen.getByRole("status")).toHaveStyle({ width: "200px" });
+    expect(screen.getByRole("status")).toHaveStyle({
+      width: "200px",
+      pointerEvents: "auto",
+    });
+
+    view.rerender(
+      <PanelStatusBar
+        container={container}
+        running={false}
+        label={null}
+        log={null}
+        error={null}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveStyle({
+      pointerEvents: "none",
+    });
 
     view.rerender(
       <PanelStatusBar

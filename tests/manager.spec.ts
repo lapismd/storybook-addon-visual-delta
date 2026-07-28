@@ -16,6 +16,11 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
   process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ??
   Number(process.env.STORYBOOK_PORT ?? "9009") + 4
 }`;
+const DIALOG_INTERACTION_FIXTURE = "shadcn-overlays-dialog--opens-and-closes";
+const FIXTURE_BASELINE_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 
 test.describe("Visual Delta manager integration", () => {
   test("keeps a delayed missing baseline provisional until storyFinished", async ({
@@ -43,6 +48,91 @@ test.describe("Visual Delta manager integration", () => {
     });
     await expect(createButtons).toHaveCount(2);
     await expect(createButtons.first()).toBeEnabled();
+  });
+
+  test("treats a deleted baseline PNG as missing and offers create or skip", async ({
+    page,
+  }) => {
+    await page.route(
+      "**/visual-baselines/shadcn/button/default-chromium-darwin.png*",
+      async (route) => {
+        await route.fulfill({ status: 404, body: "baseline deleted" });
+      },
+    );
+    await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Create visual baseline" }),
+    ).toHaveCount(2);
+    await expect(
+      panel.getByRole("button", { name: "Skip visual tests" }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Open Default baseline full image" }),
+    ).toHaveCount(0);
+    await expect(
+      panel.locator('img[src*="default-chromium-darwin.png"]'),
+    ).toHaveCount(0);
+  });
+
+  test("requires an explicit target when a missing story has multiple interactions", async ({
+    page,
+  }) => {
+    const interactionBodies: unknown[] = [];
+    await page.route(
+      "**/visual-baselines/shadcn/dialog/*.png*",
+      async (route) => {
+        await route.fulfill({ status: 404, body: "baseline deleted" });
+      },
+    );
+    page.on("request", (request) => {
+      if (
+        new URL(request.url()).pathname.endsWith("/create-interaction-baseline")
+      ) {
+        interactionBodies.push(request.postDataJSON());
+      }
+    });
+    await mockVisualBackend(page);
+    await openManager(page, DIALOG_INTERACTION_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    const picker = panel.getByRole("group", {
+      name: "Choose baseline to create",
+    });
+    await expect(picker).toBeVisible({ timeout: 15_000 });
+    await expect(
+      panel.getByRole("button", { name: "Create visual baseline" }),
+    ).toHaveCount(0);
+    await expect(
+      picker.getByRole("button", { name: "Create Default baseline" }),
+    ).toBeVisible();
+    await expect(
+      picker.getByRole("button", {
+        name: /^Create userEvent\.click(?:\(.*)? baseline$/,
+      }),
+    ).toBeVisible();
+
+    await picker
+      .getByRole("button", {
+        name: /^Create userEvent\.click(?:\(.*)? baseline$/,
+      })
+      .click();
+
+    await expect.poll(() => interactionBodies.length).toBe(1);
+    expect(interactionBodies[0]).toMatchObject({
+      storyId: DIALOG_INTERACTION_FIXTURE,
+      stepLabel: "userEvent.click",
+      stepId: "interaction-1-click",
+      overwrite: false,
+    });
+    expect([undefined, `${DIALOG_INTERACTION_FIXTURE} [1] click`]).toContain(
+      (interactionBodies[0] as { captureCallId?: string }).captureCallId,
+    );
   });
 
   test("never exposes missing-baseline actions for an explicit AI baseline across refresh and remount", async ({
@@ -502,6 +592,16 @@ test.describe("Visual Delta manager integration", () => {
   test("opens VCS history for primary, mode, and interaction baselines", async ({
     page,
   }) => {
+    await page.route(
+      "**/visual-baselines/shadcn/button/*.png*",
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "image/png",
+          body: FIXTURE_BASELINE_PNG,
+        });
+      },
+    );
     const writes = await mockVisualBackend(page);
     await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
     const panel = page.getByTestId("visual-delta-panel");
