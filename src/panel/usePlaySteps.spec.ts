@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   instrumenterCallLabel,
   instrumenterCallSyntax,
+  instrumenterStepsFromCalls,
   mergeInteractionRows,
 } from "./usePlaySteps.js";
 
@@ -47,6 +48,30 @@ describe("Visual Delta interaction rows", () => {
       expect.objectContaining({
         stepId: "interaction-0-click",
         captureCallId: "story [0] click",
+      }),
+    ]);
+  });
+
+  it("recovers completed calls retained by Storybook before the panel mounts", () => {
+    const click = {
+      id: "filter-story [1] click",
+      cursor: 1,
+      storyId: "filter-story",
+      ancestors: [],
+      args: [],
+      method: "click",
+      path: ["userEvent"],
+      interceptable: true,
+      retain: false,
+      status: "done",
+    } as Call;
+
+    expect(instrumenterStepsFromCalls([click], "filter-story")).toEqual([
+      expect.objectContaining({
+        callId: click.id,
+        captureCallId: click.id,
+        label: "userEvent.click",
+        stepId: "interaction-1-click",
       }),
     ]);
   });

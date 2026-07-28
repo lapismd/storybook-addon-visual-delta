@@ -1,8 +1,7 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { Plugin } from "vite";
 import {
-  familyFromTitle,
   VISUAL_BASELINE_SUFFIX,
   visualBaselineVisualDeltaParameter,
 } from "./baseline-design.js";
@@ -158,6 +157,39 @@ export function injectVisualBaselineVisualDeltas(
   return result;
 }
 
+export function injectNestedImportVisualDeltas(
+  code: string,
+  title: string,
+  importPath: string,
+  baselineExists: BaselineExists = () => true,
+): string {
+  let result = "";
+  let cursor = 0;
+  while (cursor < code.length) {
+    const start = code.indexOf("<Story", cursor);
+    if (start < 0) return result + code.slice(cursor);
+    result += code.slice(cursor, start);
+    const end = findStoryOpenTagEnd(code, start);
+    if (end < 0) return result + code.slice(start);
+    const openTag = code.slice(start, end + 1);
+    const storyName = extractStoryName(openTag);
+    if (!storyName) {
+      result += openTag;
+    } else {
+      const id = `${sanitizeStoryName(title)}--${sanitizeStoryName(storyName)}`;
+      const url = baselinePublicUrl({ id, importPath }, "nested-import");
+      result += baselineExists(url)
+        ? injectVisualDeltaLiteralIntoStoryOpenTag(
+            openTag,
+            JSON.stringify(visualBaselineVisualDeltaParameter(url)),
+          )
+        : openTag;
+    }
+    cursor = end + 1;
+  }
+  return result;
+}
+
 function injectStoryIdVisualDeltas(
   code: string,
   title: string,
@@ -231,25 +263,14 @@ export function visualBaselineVisualDeltaPlugin(
         return { code: next, map: null };
       }
 
-      const formsDir = normalized.match(
-        /\/shared\/forms\/(.+)\/[^/]+\.stories\.\w+$/,
-      )?.[1];
-      const workspaceDir = normalized.match(
-        /\/packages\/workspace\/src\/lib\/(.+)\/[^/]+\.stories\.\w+$/,
-      )?.[1];
-      const directory =
-        normalized.includes("/shared/shadcn/") && title.startsWith("Shadcn/")
-          ? `shadcn/${familyFromTitle(title)}`
-          : formsDir && title.startsWith("UI Forms/")
-            ? `forms/${formsDir}`
-            : workspaceDir && title.startsWith("Workspace/")
-              ? `workspace/${workspaceDir}`
-              : undefined;
-      if (!directory) return null;
-
-      const next = injectVisualBaselineVisualDeltas(
+      const importPath = relative(root, normalized).replace(/\\/g, "/");
+      if (!importPath || importPath === ".." || importPath.startsWith("../")) {
+        return null;
+      }
+      const next = injectNestedImportVisualDeltas(
         code,
-        directory,
+        title,
+        `./${importPath}`,
         baselineExists,
       );
       if (next === code) return null;

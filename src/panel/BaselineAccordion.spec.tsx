@@ -98,7 +98,7 @@ describe("BaselineAccordion", () => {
     await user.click(interactionMenu);
     await user.click(
       screen.getByRole("button", {
-        name: "Create Opens chooser baseline",
+        name: "Create Opens chooser baseline (opens)",
       }),
     );
     expect(onCreate).toHaveBeenCalledWith({
@@ -161,5 +161,66 @@ describe("BaselineAccordion", () => {
       screen.getByRole("switch", { name: "Show all interactions" }),
     );
     expect(onToggleInteractions).toHaveBeenCalledOnce();
+  });
+
+  it("renders missing Default and interaction targets as accordion rows", async () => {
+    const user = userEvent.setup();
+    const onCreateDefault = vi.fn();
+    const onCreate = vi.fn();
+    const step = {
+      callId: "story [1] click",
+      captureCallId: "story [1] click",
+      label: "userEvent.click",
+      stepId: "interaction-1-click",
+      syntax: {
+        text: 'userEvent.click(getByRole("combobox"))',
+        tokens: [
+          { kind: "method" as const, text: "userEvent.click" },
+          { kind: "base" as const, text: '(getByRole("combobox"))' },
+        ],
+      },
+    };
+
+    renderWithTheme(
+      <BaselineAccordion
+        sections={[
+          {
+            id: "default",
+            label: "Default",
+            hint: "No baseline yet · end of play",
+          },
+          {
+            id: step.stepId,
+            label: step.label,
+            hint: `No baseline yet · ${step.stepId}`,
+            step,
+          },
+        ]}
+        expandedId={null}
+        busy={false}
+        showDistribution={false}
+        onExpand={vi.fn()}
+        onCreateDefault={onCreateDefault}
+        onCreate={onCreate}
+        onUpdate={vi.fn()}
+        onUpdateDefault={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleDistribution={vi.fn()}
+        renderBody={() => null}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Create Default baseline" }),
+    );
+    expect(onCreateDefault).toHaveBeenCalledOnce();
+    expect(onCreate).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: 'Create userEvent.click(getByRole("combobox")) baseline (interaction-1-click)',
+      }),
+    );
+    expect(onCreate).toHaveBeenCalledWith(step);
   });
 });

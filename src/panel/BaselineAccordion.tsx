@@ -280,6 +280,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   hiddenInteractionCount = 0,
   showInteractionFilter = false,
   onExpand,
+  onCreateDefault,
   onCreate,
   onUpdate,
   onUpdateDefault,
@@ -300,6 +301,8 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   /** Keep the filter available before Storybook has replayed its call log. */
   showInteractionFilter?: boolean;
   onExpand: (id: BaselineSectionId) => void;
+  /** Create the primary end-of-play baseline when the Default row is empty. */
+  onCreateDefault?: () => void;
   onCreate: (step: PlayStepInfo) => void;
   onUpdate: (step: PlayStepInfo) => void;
   /** Rewrite the story's primary (Default) baseline. */
@@ -360,6 +363,15 @@ export const BaselineAccordion = memo(function BaselineAccordion({
         const expanded = expandedId === section.id;
         const hasDiff = Boolean(section.status && section.stats);
         const hasBaseline = Boolean(section.thumbSrc || section.wired?.src);
+        const createLabel =
+          section.step?.syntax?.text ?? section.step?.label ?? section.label;
+        const createActionLabel = section.step
+          ? `Create ${createLabel} baseline (${section.step.stepId})`
+          : `Create ${createLabel} baseline`;
+        const canCreateDefault =
+          !hasBaseline && section.id === "default" && Boolean(onCreateDefault);
+        const canCreateInteraction = !hasBaseline && Boolean(section.step);
+        const canCreate = canCreateDefault || canCreateInteraction;
         const hasMenu =
           hasBaseline ||
           Boolean(section.history && onOpenHistory) ||
@@ -436,15 +448,21 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                     <GraphBarIcon />
                   </ToggleButton>
                 ) : null}
-                {!hasBaseline && section.step ? (
+                {canCreate ? (
                   <Button
                     size="small"
                     variant="ghost"
                     padding="small"
                     disabled={busy}
-                    ariaLabel="Create baseline"
-                    title="Create baseline"
-                    onClick={() => onCreate(section.step!)}
+                    ariaLabel={createActionLabel}
+                    title={createActionLabel}
+                    onClick={() => {
+                      if (canCreateDefault) {
+                        onCreateDefault?.();
+                        return;
+                      }
+                      if (section.step) onCreate(section.step);
+                    }}
                   >
                     <AddIcon />
                   </Button>
@@ -477,14 +495,18 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                               </ActionList.Action>
                             </ActionList.Item>
                           ) : null}
-                          {!hasBaseline && section.step ? (
+                          {canCreate ? (
                             <ActionList.Item>
                               <ActionList.Action
-                                ariaLabel={`Create ${section.label} baseline`}
+                                ariaLabel={createActionLabel}
                                 disabled={busy}
                                 onClick={() => {
                                   setOpenMenuId(null);
-                                  onCreate(section.step!);
+                                  if (canCreateDefault) {
+                                    onCreateDefault?.();
+                                    return;
+                                  }
+                                  if (section.step) onCreate(section.step);
                                 }}
                               >
                                 <ActionList.Icon>
@@ -496,7 +518,8 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                               </ActionList.Action>
                             </ActionList.Item>
                           ) : null}
-                          {section.id === "default" || section.wired ? (
+                          {hasBaseline &&
+                          (section.id === "default" || section.wired) ? (
                             <ActionList.Item>
                               <ActionList.Action
                                 ariaLabel={`Update ${section.label} baseline`}

@@ -17,6 +17,8 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
   Number(process.env.STORYBOOK_PORT ?? "9009") + 4
 }`;
 const DIALOG_INTERACTION_FIXTURE = "shadcn-overlays-dialog--opens-and-closes";
+const FILTER_INTERACTION_FIXTURE =
+  "filter-power-search--add-filter-via-combobox";
 const FIXTURE_BASELINE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -68,7 +70,10 @@ test.describe("Visual Delta manager integration", () => {
     ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Create visual baseline" }),
-    ).toHaveCount(2);
+    ).toHaveCount(0);
+    await expect(
+      panel.getByRole("button", { name: "Create Default baseline" }),
+    ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Skip visual tests" }),
     ).toBeVisible();
@@ -101,25 +106,23 @@ test.describe("Visual Delta manager integration", () => {
     await openManager(page, DIALOG_INTERACTION_FIXTURE, DEV_STORYBOOK);
 
     const panel = page.getByTestId("visual-delta-panel");
-    const picker = panel.getByRole("group", {
-      name: "Choose baseline to create",
-    });
-    await expect(picker).toBeVisible({ timeout: 15_000 });
     await expect(
       panel.getByRole("button", { name: "Create visual baseline" }),
     ).toHaveCount(0);
     await expect(
-      picker.getByRole("button", { name: "Create Default baseline" }),
+      panel.getByRole("button", { name: "Create Default baseline" }),
     ).toBeVisible();
     await expect(
-      picker.getByRole("button", {
-        name: /^Create userEvent\.click(?:\(.*)? baseline$/,
-      }),
+      panel
+        .getByRole("button", {
+          name: /Create userEvent\.click.*interaction-1-click/,
+        })
+        .first(),
     ).toBeVisible();
 
-    await picker
+    await panel
       .getByRole("button", {
-        name: /^Create userEvent\.click(?:\(.*)? baseline$/,
+        name: /Create userEvent\.click.*interaction-1-click/,
       })
       .click();
 
@@ -133,6 +136,75 @@ test.describe("Visual Delta manager integration", () => {
     expect([undefined, `${DIALOG_INTERACTION_FIXTURE} [1] click`]).toContain(
       (interactionBodies[0] as { captureCallId?: string }).captureCallId,
     );
+  });
+
+  test("hydrates a nested filter baseline after an explicit accordion choice", async ({
+    page,
+  }) => {
+    let baselineCreated = false;
+    const baselineUrl =
+      "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium-darwin.png";
+    await page.route(`**${baselineUrl}*`, async (route) => {
+      if (!baselineCreated) {
+        await route.fulfill({ status: 404, body: "baseline missing" });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: FIXTURE_BASELINE_PNG,
+      });
+    });
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.endsWith("/create-baseline")) {
+        baselineCreated = true;
+      }
+    });
+    await mockVisualBackend(page);
+
+    await page.goto(
+      `${DEV_STORYBOOK}/?path=/story/${FILTER_INTERACTION_FIXTURE}`,
+      { waitUntil: "networkidle" },
+    );
+    await expect(
+      page.getByRole("tab", { name: /^Interactions \d+$/ }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Visual Delta" }).click();
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Create visual baseline" }),
+    ).toHaveCount(0);
+    await expect(
+      panel.getByRole("button", { name: "Create Default baseline" }),
+    ).toBeVisible();
+    await expect(
+      panel
+        .getByRole("button", {
+          name: /Create userEvent\.click.*interaction-\d+-click/,
+        })
+        .first(),
+    ).toBeVisible();
+
+    await panel
+      .getByRole("button", { name: "Create Default baseline" })
+      .click();
+
+    await expect(
+      panel.getByRole("status", { name: /Baseline created|Baseline ready/i }),
+    ).toBeVisible();
+    await panel
+      .getByRole("button", {
+        name: /Default\s*End of play · primary baseline/,
+      })
+      .click();
+    await expect(panel.locator(`img[src*="${baselineUrl}"]`)).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Create visual baseline" }),
+    ).toHaveCount(0);
   });
 
   test("never exposes missing-baseline actions for an explicit AI baseline across refresh and remount", async ({
