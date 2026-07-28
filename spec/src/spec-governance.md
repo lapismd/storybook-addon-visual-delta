@@ -8,12 +8,13 @@ These requirements prevent implementation, tests, and generated documentation fr
 
 | ID         | Requirement                                                                                                                                                                                                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-GOV-001 | Markdown under `spec/src/` MUST be the canonical Visual Delta contract for humans and agents. The generated mdBook, implementation, tests, READMEs, plans, and compatibility pointers MUST NOT override it.                                                   |
+| VD-GOV-001 | Markdown under `spec/src/` MUST be the canonical Visual Delta contract for humans and agents. The generated mdBook, implementation, tests, READMEs, and other non-canonical documentation MUST NOT override it.                                               |
 | VD-GOV-002 | Visual Delta implementation MUST never be ahead of the specification. A protected behavior or integration change MUST update the relevant canonical requirement before or in the same logical slice; a code-only behavior change is prohibited.               |
 | VD-GOV-003 | An intentional contract change MUST update `verification.md` with focused evidence or a declared gap. Passing tests MUST NOT authorize behavior that the canonical specification does not define.                                                             |
 | VD-GOV-004 | The spec-first gate MUST cover portable production code and repository-owned Visual Delta host integration. Tests, fixture stories, ordinary catalog stories, visual baselines, derived artifacts, and generated output MUST NOT trigger or satisfy the gate. |
 | VD-GOV-005 | Local enforcement MUST inspect the current Jujutsu change, and pull-request enforcement MUST inspect the exact base-to-head change set. Failure to determine the change set MUST fail closed and report the unresolved scope.                                 |
 | VD-GOV-006 | A code-to-spec mismatch MUST be treated as an implementation defect unless an explicit specification change is accepted. Weakening a requirement requires rationale and MUST NOT be disguised by editing non-normative documentation.                         |
+| VD-GOV-007 | The package root MUST retain exactly `AGENTS.md`, `DEVELOPMENT.md`, and `README.md` as Markdown files. The obsolete `specs/` tree and package-root historical contract or plan files MUST NOT exist. Links to normative content MUST target `spec/src/`.      |
 
 ## Authority and timing
 
@@ -40,7 +41,7 @@ The gate protects:
 
 The gate ignores test-only changes, test fixtures, ordinary component stories, committed component baseline PNGs, build output, caches, reports, and the generated mdBook. An ignored change that reveals or introduces behavior still requires a deliberate specification update under `VD-GOV-002`.
 
-Only a canonical content page under `spec/src/` satisfies the gate. `SUMMARY.md`, generated HTML, a legacy `specs/` pointer, README text, or a historical plan does not.
+Only a canonical content page under `spec/src/` satisfies the gate. `SUMMARY.md`, generated HTML, package-root Markdown, or a document under the obsolete `specs/` path does not.
 
 ## Enforcement
 
@@ -63,6 +64,8 @@ The complete check also runs the checker test suite. It runs near the start of `
 On a pull request, the required **Visual Delta Spec First / Validate Visual Delta specification** check compares the exact base and head revisions. Repository settings MUST keep that check required before merge. The workflow pins Node 22, pnpm 10.32.1, and mdBook 0.5.4.
 
 The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
+
+Structural validation MUST reject a reintroduced `specs/` tree and any package-root Markdown set other than `AGENTS.md`, `DEVELOPMENT.md`, and `README.md`.
 
 ## Agent workflow
 

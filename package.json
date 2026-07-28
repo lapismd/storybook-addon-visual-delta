@@ -44,7 +44,6 @@
     "src/**/*",
     "dist/**/*",
     "README.md",
-    "VENDOR.md",
     "LICENSE"
   ],
   "scripts": {

@@ -12,7 +12,7 @@ These requirements keep interactive state recoverable and separate from durable 
 | VD-UI-002 | The first available baseline MUST auto-select after the active render becomes ready. Soft hide MUST preserve selection, while navigation away from Canvas MUST remove all preview comparison DOM.                                                                                                        |
 | VD-UI-003 | Split placements MUST provide equal live and baseline panes with synchronized two-dimensional navigation. Center placement MUST overlay only the baseline image above the live story.                                                                                                                    |
 | VD-UI-004 | Named modes MUST apply their exact Storybook globals. Interaction rows MUST represent `{ id, label, src }`, support deterministic replay, and distinguish discovered points from wired baselines. An unwired discovered point MUST expose creation for that exact point when the backend permits writes. |
-| VD-UI-005 | Diff result views MUST hydrate fresh Playwright sidecars and diagnostic images. Failed fetches and stale evidence MUST NOT poison current state.                                                                                                                                                         |
+| VD-UI-005 | Diff result views MUST hydrate fresh Playwright sidecars and diagnostic images and present 2-up, Swipe, Diff, Focus, and Blink over one aligned pixel coordinate system. Failed fetches and stale evidence MUST NOT poison current state.                                                                |
 | VD-UI-006 | Manager and preview remounts MUST recover selection and run state through events or middleware. Event listeners and injected DOM MUST be fully torn down when inactive.                                                                                                                                  |
 | VD-UI-007 | Local presentation settings MAY persist in browser storage. Durable configuration, review metadata, coverage, and mutation authorization MUST come from project or source state.                                                                                                                         |
 
@@ -54,6 +54,8 @@ Split panes use equal frame sizes derived from baseline CSS dimensions and settl
 
 Fit and `100%` zoom preserve the same pixel coordinate system in baseline and actual panes. Swipe, diff, focus, blink, and two-up result views MUST use an aspect-locked stage.
 
+Baseline and image-only labels are non-layout chrome inside the image frame. Configured label offsets MAY move the label, but the label MUST remain clamped to the visible frame and MUST NOT change pane geometry. Difference blend or inversion affects the baseline overlay only, never the live story.
+
 ## Modes
 
 A mode is a named set of Storybook globals. Selecting a mode applies those globals through the manager API and selects its corresponding baseline when one exists.
@@ -86,6 +88,8 @@ The panel MUST show:
 - Geometry or alignment warnings
 - Changed bounds and histogram when available
 - Capture or backend error without replacing the last trustworthy baseline
+
+The compare viewer provides 2-up, Swipe, Diff, Focus, and Blink presentations with shared Fit, custom, and native `100%` zoom. Numeric shortcuts `1`, `2`, and `3` select the primary compare modes; `F` selects Focus, `B` selects Blink, and left or right arrows nudge Swipe. Keyboard input MUST NOT activate while focus is in an editable control.
 
 ## Review and Testing Module state
 

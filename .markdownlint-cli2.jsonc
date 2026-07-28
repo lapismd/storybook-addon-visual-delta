@@ -1,5 +1,11 @@
 {
-  "globs": ["AGENTS.md", "spec/src/**/*.md", "specs/**/*.md", "#spec/book/**"],
+  "globs": [
+    "AGENTS.md",
+    "DEVELOPMENT.md",
+    "README.md",
+    "spec/src/**/*.md",
+    "#spec/book/**",
+  ],
   "config": {
     "default": true,
     "MD013": false,

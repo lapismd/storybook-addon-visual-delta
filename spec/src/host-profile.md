@@ -6,14 +6,15 @@ This reference defines how the `/Users/stevejuma/ui` catalog hosts the portable 
 
 These requirements bind the portable package to this repository without merging their responsibilities.
 
-| ID          | Requirement                                                                                                                                                                                                                                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| VD-HOST-001 | The catalog MUST load the local source preset for development and MUST register manager and preview entries exactly once. Packaged consumers MUST rely on package exports without duplicate entry registration.                            |
-| VD-HOST-002 | The catalog MUST use `nested-import` baseline paths and the committed snapshot root `tests/visual/storybook.spec.ts-snapshots`. Host writers and package readers MUST resolve identical paths.                                             |
-| VD-HOST-003 | Catalog baseline writes MUST use the `scripts/ui-generator` writers because they own Svelte CSF patches and repository layout. Compare runs MUST use the package CLI and Playwright without snapshot updates.                              |
-| VD-HOST-004 | One `STORYBOOK_PORT` MUST derive every secondary lane. A checkout MUST NOT stop or reuse another checkout’s listener.                                                                                                                      |
-| VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                    |
-| VD-HOST-006 | Portable behavior belongs in the package. Repository layout, Svelte source writers, generator approval gates, catalog fixtures, and port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
+| ID          | Requirement                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VD-HOST-001 | The catalog MUST load the local source preset for development and MUST register manager and preview entries exactly once. Packaged consumers MUST rely on package exports without duplicate entry registration.                                                                                                                                                      |
+| VD-HOST-002 | The catalog MUST use `nested-import` baseline paths and the committed snapshot root `tests/visual/storybook.spec.ts-snapshots`. Host writers and package readers MUST resolve identical paths.                                                                                                                                                                       |
+| VD-HOST-003 | Catalog baseline writes MUST use the `scripts/ui-generator` writers because they own Svelte CSF patches and repository layout. Compare runs MUST use the package CLI and Playwright without snapshot updates.                                                                                                                                                        |
+| VD-HOST-004 | One `STORYBOOK_PORT` MUST derive every secondary lane. At most one supervisor and one Storybook child MAY own a checkout-and-port lane. Duplicate start MUST reuse that owner; restart and stop MUST replace or terminate only the matching owner and descendants. A checkout MUST NOT stop or reuse another checkout’s listener.                                    |
+| VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                                                                                                                                              |
+| VD-HOST-006 | Portable behavior belongs in the package. Repository layout, Svelte source writers, generator approval gates, catalog fixtures, and port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers.                                                                                                                           |
+| VD-HOST-007 | Regular fullscreen catalog stories MUST retain the established `1.5rem` `#storybook-root` inset. Only explicitly classified Workspace and Shell application surfaces MAY use the full capture viewport. Capture and overlay code MUST measure the active layout instead of assuming either frame, and changing this host layout requires deliberate baseline review. |
 
 ## Local package registration
 
@@ -59,6 +60,14 @@ The repository derives lanes from `STORYBOOK_PORT`:
 The default checkout uses base port `9009`. Another Jujutsu workspace uses ignored `.env.storybook.local` with an unused base. Explicit shell environment values take precedence over the ignored file.
 
 `pnpm storybook:stop` operates only on the lane selected by the current checkout. Tests MUST use an unused explicit base rather than reclaiming an active listener.
+
+Supervisor ownership is keyed by checkout root and base port in ignored cache state. An ordinary duplicate start reports and reuses the live owner. Explicit restart replaces that owner, while stop terminates its descendants before the supervisor and releases ownership. Preview-only source changes use Vite HMR; manager, shared, and Node changes produce one debounced supervised restart.
+
+## Catalog preview layout
+
+The shared Storybook preview uses fullscreen layout with a `1.5rem` root inset for ordinary component stories. `src/storybook/catalog-layout.ts` marks Workspace and Shell application surfaces with `data-ui-catalog-full-viewport`; `src/storybook.css` removes the inset only for that explicit classification.
+
+This distinction is part of the host capture contract: ordinary component captures retain the established inset, while application surfaces remain edge-to-edge. Visual Delta still measures body, root, subject, and viewport geometry for every story and MUST NOT encode either layout as a portable fixed-padding assumption.
 
 ## Repository scripts
 

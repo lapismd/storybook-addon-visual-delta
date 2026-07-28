@@ -19,7 +19,6 @@ const IGNORED_PATTERNS = [
   /(^|\/)(?:coverage|test-results|playwright-report|blob-report)\//,
   /(^|\/)\.cache\//,
   new RegExp(`^${PACKAGE_PREFIX}/spec/book/`),
-  new RegExp(`^${PACKAGE_PREFIX}/specs/`),
   new RegExp(`^${PACKAGE_PREFIX}/tests/`),
   new RegExp(`^${PACKAGE_PREFIX}/src/test/`),
   new RegExp(`^${PACKAGE_PREFIX}/src/stories/`),

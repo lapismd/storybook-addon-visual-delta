@@ -55,11 +55,11 @@ test("ignores tests fixtures ordinary stories baselines and generated output", (
   assert.equal(result.requiresSpec, false);
 });
 
-test("does not accept SUMMARY or legacy pointer changes as specification", () => {
+test("does not accept SUMMARY or package documentation as specification", () => {
   const result = classifySpecFirstChanges([
     `${PACKAGE}/src/manager.tsx`,
     `${PACKAGE}/spec/src/SUMMARY.md`,
-    `${PACKAGE}/specs/index.md`,
+    `${PACKAGE}/DEVELOPMENT.md`,
   ]);
   assert.equal(result.ok, false);
   assert.deepEqual(result.specFiles, []);
