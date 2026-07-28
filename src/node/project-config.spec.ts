@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
+import { BUILTIN_VISUAL_DELTA_WORKFLOW } from "../shared/workflow-config.js";
 import {
   readVisualDeltaProjectConfig,
   visualDeltaProjectConfigPath,
@@ -46,6 +47,38 @@ describe("project configuration", () => {
       join(root, ".visual-delta/config.json"),
     );
     expect(readVisualDeltaProjectConfig(root).diagnostics).toEqual([]);
+    expect(readVisualDeltaProjectConfig(root).workflow).toEqual(
+      BUILTIN_VISUAL_DELTA_WORKFLOW,
+    );
+  });
+
+  it("reads legacy flat defaults and persists workflow without nesting defaults", () => {
+    const root = mkdtempSync(join(tmpdir(), "visual-delta-config-"));
+    writeVisualDeltaProjectConfig(root, {
+      projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
+      workflow: {
+        autoAcceptLiveStoryComparisons: true,
+        vcs: {
+          mode: "review",
+          commitMessageTemplate: "Visual: {action} {scope}",
+        },
+      },
+    });
+
+    const result = readVisualDeltaProjectConfig(root);
+    expect(result.defaults).toEqual(BUILTIN_VISUAL_DELTA_DEFAULTS);
+    expect(result.workflow).toEqual({
+      autoAcceptLiveStoryComparisons: true,
+      vcs: {
+        mode: "review",
+        commitMessageTemplate: "Visual: {action} {scope}",
+      },
+    });
+    const written = JSON.parse(
+      readFileSync(join(root, ".visual-delta/config.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(written).not.toHaveProperty("projectDefaults");
+    expect(written).toHaveProperty("workflow");
   });
 
   it("reports corrupt project files without using legacy values", () => {

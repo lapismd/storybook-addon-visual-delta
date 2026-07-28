@@ -1,5 +1,6 @@
 import type { CaptureSubjectProgress } from "./capture-subject-types.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import type { VisualDeltaChangeSetMutation } from "./change-sets.js";
 
 export type CompareStoryEntry = {
   id: string;
@@ -36,6 +37,13 @@ export type CompareStoryResult = {
   ok: true;
   storyId: string;
   sidecar: VisualDiffSidecar;
+  review?: {
+    autoAccepted: true;
+    applied: boolean;
+    status: "approved";
+    error?: string;
+    changes?: VisualDeltaChangeSetMutation;
+  };
 };
 
 export type CompareStoryStreamEvent =

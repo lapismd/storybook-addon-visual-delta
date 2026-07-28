@@ -284,6 +284,14 @@ export const VISUAL_DELTA_PLAYWRIGHT_THRESHOLD_PATH =
   "/__visual-delta/playwright-threshold";
 /** Storybook-dev middleware that scaffolds portable Playwright entrypoints. */
 export const VISUAL_DELTA_INIT_PATH = "/__visual-delta/init";
+/** Recent UI-driven file mutations and their commit state. */
+export const VISUAL_DELTA_CHANGE_SETS_PATH = "/__visual-delta/change-sets";
+/** Stable before/after bytes for one file in a Visual Delta change set. */
+export const VISUAL_DELTA_CHANGE_SET_FILE_PATH =
+  "/__visual-delta/change-set-file";
+/** Commit one complete, safe Visual Delta change set. */
+export const VISUAL_DELTA_CHANGE_SET_COMMIT_PATH =
+  "/__visual-delta/change-set-commit";
 
 /** CSF tag: exclude story from Playwright visual suite / Visual Delta runs. */
 export const SKIP_VISUAL_TAG = "skip-visual";

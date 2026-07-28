@@ -73,6 +73,11 @@ export type VisualDeltaHostOptions = {
   /** Whether `/__visual-delta/run-tests` may run `build-storybook` first. */
   allowRebuild?: boolean;
   /**
+   * Allow project workflow settings to create local Git/Jujutsu commits.
+   * Defaults to false. Visual Delta never pushes or rewrites history.
+   */
+  allowVcsWrites?: boolean;
+  /**
    * TurboSnap-style local affected selection. Disabled unless configured.
    * Full runs remain available and continue to seed this disposable cache.
    */

@@ -149,6 +149,8 @@ addons: [
           // optional: files that Storybook does not import but can change rendering
           externals: ["public/**"],
         },
+        // second safety gate for review/automatic VCS commits
+        allowVcsWrites: false,
       },
     },
   },
@@ -203,6 +205,9 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `GET`  | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG             |
 | `GET`  | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision           |
 | `GET`  | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions        |
+| `GET`  | `/__visual-delta/change-sets`                 | Pending and committed UI mutation groups                  |
+| `GET`  | `/__visual-delta/change-set-file`             | Stable before/after bytes for one changed file            |
+| `POST` | `/__visual-delta/change-set-commit`           | Commit one complete, revalidated change set               |
 
 Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
 
@@ -281,6 +286,7 @@ Pass under addon `options.visualDelta`. Types from
 | `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                                |
 | `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`)      |
 | `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                               |
+| `allowVcsWrites`              | `false`                                    | Second safety gate for plugin-managed Git/Jujutsu commits              |
 | `affectedTests`               | `false`                                    | Enable affected selection; accepts `cacheDir`, `externals`, `untraced` |
 
 The middleware, story-index reader, sidecar resolver, source patchers, and
@@ -470,6 +476,34 @@ Stories/components may override capture and overlay values through
 `parameters.visualDelta`; resolution order is story/component parameters →
 project defaults → built-ins.
 
+**Workflow** contains two opt-in policies. **Automatically accept successful
+live story comparisons** marks only the exact owning story
+`visual-approved` after a fresh authoritative Story or Diff Chromium pass
+(including a tolerance pass, selected mode, or selected interaction). It does
+not apply to Diff HTML, baseline writes, or component/global/affected runs.
+The VCS mode is `off`, `review`, or `auto`; legacy and new configurations
+default to off.
+
+The project file remains a backward-compatible flat capture configuration:
+
+```json
+{
+  "passThresholdPercent": 1,
+  "diffThreshold": 0.2,
+  "workflow": {
+    "autoAcceptLiveStoryComparisons": false,
+    "vcs": {
+      "mode": "off",
+      "commitMessageTemplate": "Visual Delta: {action} {scope}"
+    }
+  }
+}
+```
+
+Commit templates support `{action}`, `{scope}`, `{storyId}`, `{storyName}`, and
+`{count}`. Enabling VCS in project configuration is insufficient by itself:
+the Storybook host must also set `allowVcsWrites: true`.
+
 `GET /__visual-delta/config` returns both editable defaults and resolved host
 configuration. Validated `PUT` updates are written atomically, broadcast to the
 manager and preview, and invalidate the next static build. The legacy
@@ -522,7 +556,8 @@ to `visual-pending` and invalidate their prior comparison evidence. A baseline
 write is not a passing comparison. Run Story, Diff Chromium, or the static
 suite, then explicitly update status to map pass/tolerance → `visual-ready` and
 mismatch → `visual-failed`. Do **not** set `visual-approved` from agent work —
-leave Accept to a human.
+leave Accept to a human unless the project has explicitly enabled the
+user-triggered live-comparison auto-accept workflow described below.
 
 ### `skip-visual` from the panel
 
@@ -577,12 +612,42 @@ persist the same v2 sidecar. They stream NDJSON progress (`launching` →
 never build `storybook-static`. Diff Stop aborts a Diff-triggered fetch
 mid-capture.
 
+When workflow auto-accept is enabled, a fresh `passed` or
+`changed-within-tolerance` result triggers a separate exact-story review
+mutation. The comparison result remains authoritative even if that review or a
+subsequent VCS commit fails, and the panel reports the approval failure
+independently.
+
 `html-to-image` rasterizes through SVG `foreignObject`, so variable fonts
 (e.g. DM Sans Variable) can paint at different glyph widths than Playwright’s
 native screenshots. Prefer the authoritative Chromium actions when diagnosing
 baseline parity. Diff HTML cannot update an official result or review state.
 Chromium comparison requires `playwright` installed in the host (optional peer
 of this package).
+
+### Changes and VCS commits
+
+Visual Delta’s kebab opens a top-level **Changes** screen with a pending-count
+badge. It groups UI-driven baseline, interaction, review/status, skip/include,
+story/project configuration, threshold, and initialization mutations against
+one VCS base revision. Source/config/sidecar files render as unified text
+diffs; PNG additions, changes, and deletions render before/after/difference
+previews. History/config reads, comparisons themselves, affected preflight,
+and static rebuilds create no change set.
+
+In `review` mode, a completed mutation opens Changes with an editable rendered
+commit message. In `auto` mode, each safe successful group is committed and
+the result is reported without navigating away. Configuration policy changes
+are always review-only. Commits are atomic and exact-path: Visual Delta never
+pushes, amends, squashes, creates a branch, or partially selects files.
+
+Jujutsu is preferred when available, with Git as the fallback. Unrelated dirty
+or staged files remain untouched. A plugin-touched file that was already
+dirty, an unexpected changed path, a partial/failed mutation, a changed file
+hash, or a changed repository base revision blocks the whole commit. Pending
+change metadata and stable before/after bytes live under the ignored
+`.cache/visual-delta/change-sets/` directory and survive manager HMR or a dev
+server restart.
 
 Before Diff HTML rasterizes, Visual Delta hides its overlay and establishes the
 selected image’s CSS `viewport` (default 1280×900) in the preview iframe. The

@@ -10,18 +10,24 @@ import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaProjectDefaults,
   VisualDeltaProjectDefaultSource,
+  VisualDeltaWorkflowConfig,
 } from "../shared/config-types.js";
 import {
   BUILTIN_VISUAL_DELTA_DEFAULTS,
   VISUAL_DELTA_PROJECT_DEFAULT_KEYS,
   validateVisualDeltaProjectDefaults,
 } from "../shared/project-defaults.js";
+import {
+  BUILTIN_VISUAL_DELTA_WORKFLOW,
+  validateVisualDeltaWorkflowConfig,
+} from "../shared/workflow-config.js";
 
 export const VISUAL_DELTA_PROJECT_CONFIG_REL = ".visual-delta/config.json";
 const LEGACY_PLAYWRIGHT_CONFIG_REL = ".visual-delta/playwright.json";
 
 export type VisualDeltaProjectConfigResult = {
   defaults: VisualDeltaProjectDefaults;
+  workflow: VisualDeltaWorkflowConfig;
   sources: Record<
     keyof VisualDeltaProjectDefaults,
     VisualDeltaProjectDefaultSource
@@ -30,6 +36,38 @@ export type VisualDeltaProjectConfigResult = {
   exists: boolean;
   diagnostics: VisualDeltaConfigDiagnostic[];
 };
+
+function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
+  return {
+    autoAcceptLiveStoryComparisons:
+      BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
+    vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
+  };
+}
+
+function splitProjectConfig(input: unknown): {
+  defaults: unknown;
+  workflow: unknown;
+  workflowPresent: boolean;
+} {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { defaults: input, workflow: undefined, workflowPresent: false };
+  }
+  const record = input as Record<string, unknown>;
+  if ("projectDefaults" in record) {
+    return {
+      defaults: record.projectDefaults,
+      workflow: record.workflow,
+      workflowPresent: "workflow" in record,
+    };
+  }
+  const { workflow, ...defaults } = record;
+  return {
+    defaults,
+    workflow,
+    workflowPresent: "workflow" in record,
+  };
+}
 
 export function visualDeltaProjectConfigPath(root: string): string {
   return join(root, VISUAL_DELTA_PROJECT_CONFIG_REL);
@@ -66,21 +104,27 @@ export function readVisualDeltaProjectConfig(
   if (existsSync(path)) {
     try {
       const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
-      const result = validateVisualDeltaProjectDefaults(parsed, {
+      const split = splitProjectConfig(parsed);
+      const result = validateVisualDeltaProjectDefaults(split.defaults, {
         rejectUnknown: true,
       });
-      if (result.errors.length) {
+      const workflow = validateVisualDeltaWorkflowConfig(split.workflow, {
+        rejectUnknown: true,
+      });
+      const errors = [...result.errors, ...workflow.errors];
+      if (errors.length) {
         diagnostics.push({
           code: "project-config-invalid",
           severity: "error",
           setting: VISUAL_DELTA_PROJECT_CONFIG_REL,
-          message: result.errors.join(" "),
+          message: errors.join(" "),
           suggestion: "Fix or restore the editable defaults from the panel.",
         });
       }
       for (const key of result.present) sources[key] = "project";
       return {
         defaults: result.value,
+        workflow: workflow.value,
         sources,
         path,
         exists: true,
@@ -104,6 +148,7 @@ export function readVisualDeltaProjectConfig(
             ...BUILTIN_VISUAL_DELTA_DEFAULTS.baselineLabelOffset,
           },
         },
+        workflow: cloneBuiltInWorkflow(),
         sources,
         path,
         exists: true,
@@ -123,26 +168,44 @@ export function readVisualDeltaProjectConfig(
     defaults.passThresholdPercent = legacyPass;
     sources.passThresholdPercent = "legacy";
   }
-  return { defaults, sources, path, exists: false, diagnostics };
+  return {
+    defaults,
+    workflow: cloneBuiltInWorkflow(),
+    sources,
+    path,
+    exists: false,
+    diagnostics,
+  };
 }
 
 export function writeVisualDeltaProjectConfig(
   root: string,
   input: unknown,
 ): VisualDeltaProjectConfigResult {
-  const result = validateVisualDeltaProjectDefaults(input, {
+  const split = splitProjectConfig(input);
+  const result = validateVisualDeltaProjectDefaults(split.defaults, {
     requireAll: true,
     rejectUnknown: true,
   });
-  if (result.errors.length) {
-    throw new Error(result.errors.join(" "));
+  const current = readVisualDeltaProjectConfig(root);
+  const workflow = validateVisualDeltaWorkflowConfig(
+    split.workflowPresent ? split.workflow : current.workflow,
+    { rejectUnknown: true },
+  );
+  const errors = [...result.errors, ...workflow.errors];
+  if (errors.length) {
+    throw new Error(errors.join(" "));
   }
   const path = visualDeltaProjectConfigPath(root);
   mkdirSync(dirname(path), { recursive: true });
   const temporaryPath = `${path}.${process.pid}.tmp`;
   writeFileSync(
     temporaryPath,
-    `${JSON.stringify(result.value, null, 2)}\n`,
+    `${JSON.stringify(
+      { ...result.value, workflow: workflow.value },
+      null,
+      2,
+    )}\n`,
     "utf8",
   );
   renameSync(temporaryPath, path);

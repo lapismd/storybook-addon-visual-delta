@@ -8,6 +8,9 @@ import {
   VISUAL_DELTA_AFFECTED_PLAN_PATH,
   VISUAL_DELTA_CANCEL_PATH,
   VISUAL_DELTA_CAPTURE_PATH,
+  VISUAL_DELTA_CHANGE_SET_COMMIT_PATH,
+  VISUAL_DELTA_CHANGE_SET_FILE_PATH,
+  VISUAL_DELTA_CHANGE_SETS_PATH,
   VISUAL_DELTA_COMPARE_STORY_PATH,
   VISUAL_DELTA_CONFIG_PATH,
   VISUAL_DELTA_CREATE_INTERACTION_PATH,
@@ -40,6 +43,8 @@ import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaResolvedConfig,
 } from "../shared/config-types.js";
+import type { VisualDeltaChangeSetMutation } from "../shared/change-sets.js";
+import { classifyVisualRunResult } from "../shared/visual-result-classification.js";
 import {
   modeResultStatus,
   type VisualModeRunResult,
@@ -85,6 +90,7 @@ import {
 import {
   baselinePngExistsForStoryId,
   invalidateVisualResultArtifacts,
+  loadStoryIndex,
   loadModeSidecarsForStoryId,
   loadSidecarForStoryId,
 } from "./visual-sidecars.js";
@@ -100,9 +106,11 @@ import { playwrightStoryIdGrep } from "./story-id-grep.js";
 export { parseListReporterProgress, stripAnsi } from "./playwright-results.js";
 import { writePlaywrightPassThresholdPercent } from "./playwright-threshold.js";
 import {
+  VISUAL_DELTA_PROJECT_CONFIG_REL,
   readVisualDeltaProjectConfig,
   writeVisualDeltaProjectConfig,
 } from "./project-config.js";
+import { shouldAutoAcceptLiveStoryComparison } from "../shared/workflow-config.js";
 import {
   beginVisualRunHub,
   getVisualRunHubStatus,
@@ -120,6 +128,8 @@ import {
   invalidateWarmStaticStorybookServer,
 } from "./visual-server.js";
 import { createBaselineHistoryEndpoint } from "./baseline-history-endpoint.js";
+import { VisualDeltaChangeSetStore } from "./change-set-store.js";
+import { detectVisualDeltaVcsKind } from "./change-set-vcs.js";
 import { deleteVisualBaseline } from "./delete-baseline.js";
 import {
   planAffectedVisualTests,
@@ -223,6 +233,51 @@ function writeJson(res: ServerResponse, status: number, body: unknown) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(body));
+}
+
+function relativeToRoot(root: string, absolute: string): string | null {
+  const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
+  return relative &&
+    relative !== "." &&
+    !relative.startsWith("../") &&
+    !path.posix.isAbsolute(relative)
+    ? relative
+    : null;
+}
+
+function storySourcePaths(root: string, storyIds: readonly string[]): string[] {
+  const index = loadStoryIndex(root);
+  return [
+    ...new Set(
+      storyIds
+        .map((storyId) => index[storyId]?.importPath)
+        .filter((entry): entry is string => Boolean(entry))
+        .map((entry) => entry.replaceAll("\\", "/").replace(/^\.\//, "")),
+    ),
+  ];
+}
+
+function componentStoryIds(root: string, component: string): string[] {
+  const prefix = component.endsWith("--") ? component : `${component}--`;
+  return Object.keys(loadStoryIndex(root)).filter((storyId) =>
+    storyId.startsWith(prefix),
+  );
+}
+
+function snapshotPrefix(
+  root: string,
+  options: VisualDeltaHostOptions,
+): string[] {
+  const relative = relativeToRoot(root, resolveSnapshotDir(options, root));
+  return relative ? [relative] : [];
+}
+
+function workflowFor(root: string) {
+  return readVisualDeltaProjectConfig(root).workflow;
+}
+
+function mutationMarker(change: VisualDeltaChangeSetMutation): string {
+  return `[visual-delta-change ${JSON.stringify(change)}]`;
 }
 
 function validStoryDescriptors(value: unknown): VisualStoryDescriptor[] | null {
@@ -627,6 +682,7 @@ async function handleBaselineWrite(
   root: string,
   mode: "update" | "create",
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: UpdateBody;
   try {
@@ -661,6 +717,19 @@ async function handleBaselineWrite(
   }
 
   const createOnly = mode === "create";
+  const selectedStoryIds = component
+    ? componentStoryIds(root, component)
+    : storyIds;
+  const mutation = await changeSets.begin({
+    action: createOnly ? "baseline-create" : "baseline-update",
+    scope:
+      component ??
+      (storyIds.length === 1 ? storyIds[0]! : `${storyIds.length} stories`),
+    storyIds: selectedStoryIds,
+    expectedPaths: storySourcePaths(root, selectedStoryIds),
+    expectedPrefixes: snapshotPrefix(root, options),
+    workflow: workflowFor(root),
+  });
   const rebuild = Boolean(body.rebuild);
   const baseArgs = options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS];
   const args = [
@@ -700,11 +769,18 @@ async function handleBaselineWrite(
         res.write(chunk);
       },
     );
-    res.write(`\n[exit ${code}]\n`);
+    const changes = await mutation.finish({
+      success: code === 0,
+      ...(code === 0 ? {} : { error: `Baseline writer exited ${code}` }),
+    });
+    res.write(`\n[exit ${code}]\n${mutationMarker(changes)}\n`);
   } catch (error) {
-    res.write(
-      `\n[spawn error] ${error instanceof Error ? error.message : String(error)}\n`,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    const changes = await mutation.finish({
+      success: false,
+      error: message,
+    });
+    res.write(`\n[spawn error] ${message}\n${mutationMarker(changes)}\n`);
   }
   res.end();
 }
@@ -714,6 +790,7 @@ async function handleInteractionBaselineWrite(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: InteractionUpdateBody;
   try {
@@ -737,6 +814,14 @@ async function handleInteractionBaselineWrite(
   const baseArgs = options.visualInteractionUpdateArgs ?? [
     ...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   ];
+  const mutation = await changeSets.begin({
+    action: body.overwrite ? "interaction-update" : "interaction-create",
+    scope: storyId,
+    storyIds: [storyId],
+    expectedPaths: storySourcePaths(root, [storyId]),
+    expectedPrefixes: snapshotPrefix(root, options),
+    workflow: workflowFor(root),
+  });
   const args = [
     ...baseArgs,
     ...(body.overwrite ? [] : ["--create-only"]),
@@ -767,11 +852,18 @@ async function handleInteractionBaselineWrite(
         res.write(chunk);
       },
     );
-    res.write(`\n[exit ${code}]\n`);
+    const changes = await mutation.finish({
+      success: code === 0,
+      ...(code === 0 ? {} : { error: `Interaction writer exited ${code}` }),
+    });
+    res.write(`\n[exit ${code}]\n${mutationMarker(changes)}\n`);
   } catch (error) {
-    res.write(
-      `\n[spawn error] ${error instanceof Error ? error.message : String(error)}\n`,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    const changes = await mutation.finish({
+      success: false,
+      error: message,
+    });
+    res.write(`\n[spawn error] ${message}\n${mutationMarker(changes)}\n`);
   }
   res.end();
 }
@@ -1417,6 +1509,7 @@ async function handleReviewStatus(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions = {},
+  changeSets?: VisualDeltaChangeSetStore,
 ) {
   let body: ReviewBody;
   try {
@@ -1434,6 +1527,18 @@ async function handleReviewStatus(
       writeJson(res, 400, { ok: false, error: "updates must not be empty" });
       return;
     }
+    const requestedIds = body.updates
+      .map((item) => item.storyId?.trim())
+      .filter((item): item is string => Boolean(item));
+    const mutation = changeSets
+      ? await changeSets.begin({
+          action: "status-batch",
+          scope: `${requestedIds.length} ${requestedIds.length === 1 ? "story" : "stories"}`,
+          storyIds: requestedIds,
+          expectedPaths: storySourcePaths(root, requestedIds),
+          workflow: workflowFor(root),
+        })
+      : null;
     let updated = 0;
     const errors: string[] = [];
     for (const item of body.updates) {
@@ -1455,7 +1560,16 @@ async function handleReviewStatus(
       if (result.ok) updated += 1;
       else errors.push(`${storyId}: ${result.error ?? "update failed"}`);
     }
-    writeJson(res, 200, { ok: errors.length === 0, updated, errors });
+    const changes = await mutation?.finish({
+      success: errors.length === 0,
+      ...(errors.length ? { error: errors.join(" ") } : {}),
+    });
+    writeJson(res, 200, {
+      ok: errors.length === 0,
+      updated,
+      errors,
+      ...(changes ? { changes } : {}),
+    });
     return;
   }
 
@@ -1480,12 +1594,28 @@ async function handleReviewStatus(
     return;
   }
 
+  const mutation = changeSets
+    ? await changeSets.begin({
+        action: "review-status",
+        scope: storyId,
+        storyIds: [storyId],
+        expectedPaths: storySourcePaths(root, [storyId]),
+        workflow: workflowFor(root),
+      })
+    : null;
   const result = patchStoryVisualReviewStatus({
     packageRoot: root,
     storyId,
     status,
   });
-  writeJson(res, result.ok ? 200 : 400, result);
+  const changes = await mutation?.finish({
+    success: result.ok,
+    ...(result.error ? { error: result.error } : {}),
+  });
+  writeJson(res, result.ok ? 200 : 400, {
+    ...result,
+    ...(changes ? { changes } : {}),
+  });
 }
 
 type SkipVisualBody = {
@@ -1499,6 +1629,7 @@ async function handleSkipVisual(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: SkipVisualBody;
   try {
@@ -1520,6 +1651,13 @@ async function handleSkipVisual(
     return;
   }
 
+  const mutation = await changeSets.begin({
+    action: "skip-visual",
+    scope: storyId,
+    storyIds: [storyId],
+    expectedPaths: storySourcePaths(root, [storyId]),
+    workflow: workflowFor(root),
+  });
   const result = patchStorySkipVisual({
     packageRoot: root,
     storyId,
@@ -1535,7 +1673,11 @@ async function handleSkipVisual(
     staticStaleReason = "unskip";
     invalidateStorybookStaticFreshness(root);
   }
-  writeJson(res, result.ok ? 200 : 400, result);
+  const changes = await mutation.finish({
+    success: result.ok,
+    ...(result.error ? { error: result.error } : {}),
+  });
+  writeJson(res, result.ok ? 200 : 400, { ...result, changes });
 }
 
 async function handleDeleteBaseline(
@@ -1543,6 +1685,7 @@ async function handleDeleteBaseline(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: DeleteBaselineBody;
   try {
@@ -1555,18 +1698,32 @@ async function handleDeleteBaseline(
     return;
   }
 
+  const storyId = body.storyId?.trim() ?? "";
+  const mutation = await changeSets.begin({
+    action: "baseline-delete",
+    scope: storyId || "baseline",
+    storyIds: storyId ? [storyId] : [],
+    expectedPaths: storyId ? storySourcePaths(root, [storyId]) : [],
+    expectedPrefixes: snapshotPrefix(root, options),
+    workflow: workflowFor(root),
+  });
   try {
     const result = deleteVisualBaseline(root, options, {
       storyId: body.storyId ?? "",
       baselineUrl: body.baselineUrl ?? "",
       interactionId: body.interactionId,
     });
-    writeJson(res, 200, result);
+    writeJson(res, 200, {
+      ...result,
+      changes: await mutation.finish({ success: true }),
+    });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Delete screenshot failed";
     writeJson(res, 400, {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Delete screenshot failed",
+      error: message,
+      changes: await mutation.finish({ success: false, error: message }),
     });
   }
 }
@@ -1580,6 +1737,7 @@ function resolvedConfigPayload(
   const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
   const diagnostics: VisualDeltaConfigDiagnostic[] = [];
   const projectConfig = readVisualDeltaProjectConfig(root);
+  const vcsKind = detectVisualDeltaVcsKind(root);
   diagnostics.push(...projectConfig.diagnostics);
   if (!existsSync(snapshotDir)) {
     diagnostics.push({
@@ -1615,6 +1773,7 @@ function resolvedConfigPayload(
       baselinePathMode: resolveBaselinePathMode(options),
       visualServerPort: visualPort,
       allowRebuild: options.allowRebuild !== false,
+      allowVcsWrites: options.allowVcsWrites === true,
       visualUpdateArgs: [
         ...(options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS]),
       ],
@@ -1630,6 +1789,20 @@ function resolvedConfigPayload(
     },
     playwrightPassThresholdPercent: projectConfig.defaults.passThresholdPercent,
     projectDefaults: projectConfig.defaults,
+    workflow: projectConfig.workflow,
+    vcs: {
+      kind: vcsKind,
+      available: vcsKind != null,
+      writeAllowed: vcsKind != null && options.allowVcsWrites === true,
+      ...(!vcsKind
+        ? { reason: "No Git or Jujutsu repository was detected." }
+        : options.allowVcsWrites !== true
+          ? {
+              reason:
+                "VCS commits are disabled until allowVcsWrites is enabled in Storybook.",
+            }
+          : {}),
+    },
     projectDefaultSources: projectConfig.sources,
     projectConfigPath: projectConfig.path,
     projectConfigExists: projectConfig.exists,
@@ -1661,15 +1834,21 @@ async function handleConfigPut(
   root: string,
   options: VisualDeltaHostOptions,
   visualPort: number,
+  changeSets: VisualDeltaChangeSetStore,
 ): Promise<boolean> {
   let body: unknown;
+  let mutation: Awaited<ReturnType<VisualDeltaChangeSetStore["begin"]>> | null =
+    null;
   try {
     body = await readJsonBody(req);
-    const defaults =
-      typeof body === "object" && body != null && "projectDefaults" in body
-        ? (body as { projectDefaults: unknown }).projectDefaults
-        : body;
-    writeVisualDeltaProjectConfig(root, defaults);
+    mutation = await changeSets.begin({
+      action: "project-config",
+      scope: "project configuration",
+      expectedPaths: [VISUAL_DELTA_PROJECT_CONFIG_REL],
+      workflow: workflowFor(root),
+      forceReview: true,
+    });
+    writeVisualDeltaProjectConfig(root, body);
     invalidateVisualResultArtifacts({
       packageRoot: root,
       snapshotDir: resolveSnapshotDir(options, root),
@@ -1678,12 +1857,23 @@ async function handleConfigPut(
     staticStaleReason = "stale-config";
     invalidateStorybookStaticFreshness(root);
     invalidateWarmStaticStorybookServer();
-    writeJson(res, 200, resolvedConfigPayload(root, options, visualPort));
+    const changes = await mutation.finish({ success: true });
+    writeJson(res, 200, {
+      ...resolvedConfigPayload(root, options, visualPort),
+      changes,
+    });
     return true;
   } catch (error) {
+    const changes = await mutation
+      ?.finish({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      .catch(() => undefined);
     writeJson(res, 400, {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      ...(changes ? { changes } : {}),
     });
     return false;
   }
@@ -1694,6 +1884,7 @@ async function handleStoryConfigPut(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: unknown;
   try {
@@ -1715,6 +1906,13 @@ async function handleStoryConfigPut(
     return;
   }
   const { storyId, values = {}, unset = [] } = validation.value;
+  const mutation = await changeSets.begin({
+    action: "story-config",
+    scope: storyId,
+    storyIds: [storyId],
+    expectedPaths: storySourcePaths(root, [storyId]),
+    workflow: workflowFor(root),
+  });
   const result = patchStoryVisualDeltaConfig({
     packageRoot: root,
     storyId,
@@ -1722,7 +1920,11 @@ async function handleStoryConfigPut(
     unset,
   });
   if (!result.ok) {
-    writeJson(res, 400, result);
+    const changes = await mutation.finish({
+      success: false,
+      error: result.error,
+    });
+    writeJson(res, 400, { ...result, changes });
     return;
   }
   staticStaleReason = "stale-config";
@@ -1736,12 +1938,14 @@ async function handleStoryConfigPut(
   invalidateWarmStaticStorybookServer();
   const response: VisualDeltaStoryConfigUpdateResponse & {
     sourceUpdated?: boolean;
+    changes?: VisualDeltaChangeSetMutation;
   } = {
     ok: true,
     storyId,
     values,
     unset,
     sourceUpdated: result.sourceUpdated,
+    changes: await mutation.finish({ success: true }),
   };
   writeJson(res, 200, response);
 }
@@ -1750,6 +1954,7 @@ async function handlePlaywrightThreshold(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: { passThresholdPercent?: unknown };
   try {
@@ -1771,6 +1976,12 @@ async function handlePlaywrightThreshold(
     });
     return;
   }
+  const mutation = await changeSets.begin({
+    action: "playwright-threshold",
+    scope: "project threshold",
+    expectedPaths: [".visual-delta/playwright.json"],
+    workflow: workflowFor(root),
+  });
   try {
     const written = writePlaywrightPassThresholdPercent(
       root,
@@ -1780,32 +1991,70 @@ async function handlePlaywrightThreshold(
       ok: true,
       ...written,
       playwrightPassThresholdPercent: written.passThresholdPercent,
+      changes: await mutation.finish({ success: true }),
     });
   } catch (error) {
+    const changes = await mutation.finish({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
     writeJson(res, 500, {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      changes,
     });
   }
 }
 
-function handleInit(
+async function handleInit(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
   visualPort: number,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   void req;
-  const result = runVisualDeltaInit({
-    packageRoot: root,
-    port: visualPort,
-    force: false,
-  });
-  writeJson(res, 200, {
-    ...result,
-    onboarding: inspectVisualDeltaOnboarding(root, result.snapshotDir),
-  });
+  let mutation: Awaited<ReturnType<VisualDeltaChangeSetStore["begin"]>> | null =
+    null;
+  try {
+    mutation = await changeSets.begin({
+      action: "init",
+      scope: "Visual Delta setup",
+      expectedPaths: [
+        ".gitignore",
+        "package.json",
+        "playwright.config.ts",
+        "tests/visual/storybook.spec.ts",
+        `${relativeToRoot(root, resolveSnapshotDir(options, root)) ?? "tests/visual/storybook.spec.ts-snapshots"}/.gitkeep`,
+      ],
+      workflow: workflowFor(root),
+      forceReview: true,
+    });
+    const result = runVisualDeltaInit({
+      packageRoot: root,
+      port: visualPort,
+      force: false,
+    });
+    writeJson(res, 200, {
+      ...result,
+      onboarding: inspectVisualDeltaOnboarding(root, result.snapshotDir),
+      changes: await mutation.finish({ success: true }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const changes = await mutation
+      ?.finish({
+        success: false,
+        error: message,
+      })
+      .catch(() => undefined);
+    writeJson(res, 500, {
+      ok: false,
+      error: message,
+      ...(changes ? { changes } : {}),
+    });
+  }
 }
 
 async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
@@ -1855,6 +2104,7 @@ async function handleCompareStory(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
+  changeSets: VisualDeltaChangeSetStore,
 ) {
   let body: CompareStoryRequest;
   try {
@@ -1882,7 +2132,44 @@ async function handleCompareStory(
       request: body,
       onProgress: (progress) => write({ type: "progress", ...progress }),
     });
-    write({ type: "done", ...result });
+    const workflow = workflowFor(root);
+    const outcome = classifyVisualRunResult({
+      status: result.sidecar.status,
+      sidecar: result.sidecar,
+      outcome: result.sidecar.outcome,
+      error: result.sidecar.error,
+    });
+    if (shouldAutoAcceptLiveStoryComparison(workflow, outcome)) {
+      const mutation = await changeSets.begin({
+        action: "auto-accept",
+        scope: result.storyId,
+        storyIds: [result.storyId],
+        expectedPaths: storySourcePaths(root, [result.storyId]),
+        workflow,
+      });
+      const review = patchStoryVisualReviewStatus({
+        packageRoot: root,
+        storyId: result.storyId,
+        status: "approved",
+      });
+      const changes = await mutation.finish({
+        success: review.ok,
+        ...(review.error ? { error: review.error } : {}),
+      });
+      write({
+        type: "done",
+        ...result,
+        review: {
+          autoAccepted: true,
+          applied: review.ok,
+          status: "approved",
+          ...(review.error ? { error: review.error } : {}),
+          changes,
+        },
+      });
+    } else {
+      write({ type: "done", ...result });
+    }
   } catch (error) {
     write({
       type: "error",
@@ -1918,6 +2205,9 @@ async function handleCompareStory(
  * - POST /__visual-delta/story-facts — resolve primary-baseline coverage
  * - POST /__visual-delta/playwright-threshold — write host Playwright pass %
  * - POST /__visual-delta/init — scaffold portable Playwright suite/config
+ * - GET  /__visual-delta/change-sets — recent UI-driven mutations
+ * - GET  /__visual-delta/change-set-file — stable before/after file bytes
+ * - POST /__visual-delta/change-set-commit — commit one complete safe change set
  */
 export function visualDeltaMiddlewarePlugin(
   options: VisualDeltaHostOptions = {},
@@ -1928,6 +2218,10 @@ export function visualDeltaMiddlewarePlugin(
     name: "visual-delta-middleware",
     configureServer(server) {
       const root = resolveRoot(options, server.config.root);
+      const changeSets = new VisualDeltaChangeSetStore(
+        root,
+        options.allowVcsWrites === true,
+      );
       const baselineHistory = createBaselineHistoryEndpoint({
         root,
         hostOptions: options,
@@ -1947,6 +2241,84 @@ export function visualDeltaMiddlewarePlugin(
 
         if (url === VISUAL_DELTA_RUNTIME_PATH) {
           runtime.handle(req.method, res);
+          return;
+        }
+
+        if (url === VISUAL_DELTA_CHANGE_SETS_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          writeJson(res, 200, changeSets.list());
+          return;
+        }
+
+        if (url === VISUAL_DELTA_CHANGE_SET_FILE_PATH) {
+          if (req.method !== "GET") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "GET");
+            res.end("Method Not Allowed");
+            return;
+          }
+          const parsed = new URL(req.url ?? "/", "http://visual-delta.local");
+          const changeSetId = parsed.searchParams.get("changeSetId") ?? "";
+          const relativePath = parsed.searchParams.get("path") ?? "";
+          const phase = parsed.searchParams.get("phase");
+          if (phase !== "before" && phase !== "after") {
+            writeJson(res, 400, { ok: false, error: "Invalid file phase." });
+            return;
+          }
+          try {
+            const file = changeSets.file(changeSetId, relativePath, phase);
+            if (!file) {
+              writeJson(res, 404, {
+                ok: false,
+                error: "Change-set file was not found.",
+              });
+              return;
+            }
+            res.statusCode = 200;
+            res.setHeader("Content-Type", file.contentType);
+            res.setHeader("Cache-Control", "no-store");
+            res.end(file.bytes);
+          } catch (error) {
+            writeJson(res, 400, {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+          return;
+        }
+
+        if (url === VISUAL_DELTA_CHANGE_SET_COMMIT_PATH) {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("Allow", "POST");
+            res.end("Method Not Allowed");
+            return;
+          }
+          let changeSetId = "";
+          try {
+            const body = await readJsonBody<{
+              changeSetId?: string;
+              message?: string;
+            }>(req);
+            changeSetId = body.changeSetId?.trim() ?? "";
+            const changeSet = await changeSets.commit(
+              changeSetId,
+              body.message ?? "",
+            );
+            writeJson(res, 200, { ok: true, changeSet });
+          } catch (error) {
+            const changeSet = changeSets.get(changeSetId);
+            writeJson(res, 400, {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+              ...(changeSet ? { changeSet } : {}),
+            });
+          }
           return;
         }
 
@@ -1977,7 +2349,16 @@ export function visualDeltaMiddlewarePlugin(
             return;
           }
           if (req.method === "PUT") {
-            if (await handleConfigPut(req, res, root, options, visualPort)) {
+            if (
+              await handleConfigPut(
+                req,
+                res,
+                root,
+                options,
+                visualPort,
+                changeSets,
+              )
+            ) {
               server.ws.send({
                 type: "custom",
                 event: "visual-delta-config-updated",
@@ -2001,7 +2382,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleStoryConfigPut(req, res, root, options);
+          await handleStoryConfigPut(req, res, root, options, changeSets);
           return;
         }
 
@@ -2012,7 +2393,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handlePlaywrightThreshold(req, res, root);
+          await handlePlaywrightThreshold(req, res, root, changeSets);
           return;
         }
 
@@ -2023,7 +2404,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          handleInit(req, res, root, options, visualPort);
+          await handleInit(req, res, root, options, visualPort, changeSets);
           return;
         }
 
@@ -2045,7 +2426,14 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleBaselineWrite(req, res, root, "update", options);
+          await handleBaselineWrite(
+            req,
+            res,
+            root,
+            "update",
+            options,
+            changeSets,
+          );
           return;
         }
 
@@ -2056,7 +2444,14 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleBaselineWrite(req, res, root, "create", options);
+          await handleBaselineWrite(
+            req,
+            res,
+            root,
+            "create",
+            options,
+            changeSets,
+          );
           return;
         }
 
@@ -2067,7 +2462,13 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleInteractionBaselineWrite(req, res, root, options);
+          await handleInteractionBaselineWrite(
+            req,
+            res,
+            root,
+            options,
+            changeSets,
+          );
           return;
         }
 
@@ -2078,7 +2479,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleDeleteBaseline(req, res, root, options);
+          await handleDeleteBaseline(req, res, root, options, changeSets);
           return;
         }
 
@@ -2100,7 +2501,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleCompareStory(req, res, root, options);
+          await handleCompareStory(req, res, root, options, changeSets);
           return;
         }
 
@@ -2111,7 +2512,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleReviewStatus(req, res, root, options);
+          await handleReviewStatus(req, res, root, options, changeSets);
           return;
         }
 
@@ -2122,7 +2523,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleSkipVisual(req, res, root, options);
+          await handleSkipVisual(req, res, root, options, changeSets);
           return;
         }
 

@@ -135,6 +135,13 @@ changes story metadata only; it does not rewrite the baseline PNG or review
 status. The normal comparison surface also shows the mismatch in the geometry
 warning area, with a direct link to that Story tab.
 
+The Configuration **Workflow** tab adds two default-off local workflows:
+successful authoritative single-story Chromium comparisons may auto-approve
+their exact owning story, and UI-driven mutations may be grouped for VCS
+review or automatic commit. The latter requires both project opt-in and the
+host `allowVcsWrites` gate; changing this policy is itself always review-only.
+Legacy flat `.visual-delta/config.json` files remain valid.
+
 ## Local behavior (vs upstream 0.1.5)
 
 - **Placement** — Five-way pad (↑ ↓ ← → ·): left/right/above/below put live +
@@ -312,7 +319,25 @@ warning area, with a direct link to that Story tab.
   both post the same request to `/__visual-delta/compare-story`, wait for play,
   publish the same official result, and never build static Storybook. Diff HTML
   remains a preview-only approximation and cannot update result or review
-  state.
+  state. With workflow auto-accept enabled, only a fresh pass or tolerance pass
+  adds `visual-approved` to the exact story (modes and interactions retain their
+  owning story’s review scope). The comparison outcome is returned independently
+  if the review or its VCS commit fails.
+- **Change review + VCS writes** — UI-driven baseline, interaction, review,
+  batch-status, skip/include, story/project configuration, Playwright-threshold,
+  and initialization mutations pass through one change-set transaction layer.
+  **Changes** is available from the panel kebab with a pending badge and shows
+  operations, safety diagnostics, unified text diffs, and PNG before/after/diff
+  previews. `review` mode opens it after mutation; `auto` commits safe groups
+  without navigation. Diff/capture, history reads, affected preflight, and
+  static rebuilds are excluded.
+- **Commit safety** — Jujutsu is preferred, Git is the fallback, and both use
+  argument-array exact pathspecs. Change sets are atomic; pre-existing edits on
+  touched paths, unexpected mutations, failures, post-capture file drift, or a
+  changed base revision block the whole commit. Unrelated working-copy/staged
+  changes are preserved. The addon never pushes, amends, squashes, creates
+  branches, signs, discards, reverts, or performs partial commits. Bounded
+  review data persists under ignored `.cache/visual-delta/change-sets/`.
 - **Warning lifecycle** — Geometry/alignment diagnostics are keyed by baseline
   revision plus effective config. Baseline/config changes clear them first,
   cache-bust the image, and remeasure after story/fonts/layout settle. Failure

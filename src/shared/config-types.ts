@@ -17,6 +17,24 @@ export type VisualDeltaConfigDiagnostic = {
 
 export type VisualDeltaZoomDefault = "fit" | "100%";
 
+export type VisualDeltaVcsMode = "off" | "review" | "auto";
+
+export type VisualDeltaWorkflowConfig = {
+  /** Approve the exact story after a fresh authoritative live pass. */
+  autoAcceptLiveStoryComparisons: boolean;
+  vcs: {
+    mode: VisualDeltaVcsMode;
+    commitMessageTemplate: string;
+  };
+};
+
+export type VisualDeltaVcsCapability = {
+  kind: "jj" | "git" | null;
+  available: boolean;
+  writeAllowed: boolean;
+  reason?: string;
+};
+
 export type VisualDeltaProjectDefaults = {
   passThresholdPercent: number;
   diffThreshold: number;
@@ -41,6 +59,7 @@ export type VisualDeltaResolvedConfig = {
     baselinePathMode: "nested-import" | "story-id";
     visualServerPort: number;
     allowRebuild: boolean;
+    allowVcsWrites: boolean;
     visualUpdateArgs: string[];
     visualInteractionUpdateArgs: string[];
     visualTestArgs: string[];
@@ -53,6 +72,10 @@ export type VisualDeltaResolvedConfig = {
   playwrightPassThresholdPercent: number;
   /** Editable values resolved from project file → legacy fallback → built-ins. */
   projectDefaults: VisualDeltaProjectDefaults;
+  /** Project workflow policy. All mutation/commit automation defaults off. */
+  workflow: VisualDeltaWorkflowConfig;
+  /** Detected repository and effective host write capability. */
+  vcs: VisualDeltaVcsCapability;
   projectDefaultSources: Record<
     keyof VisualDeltaProjectDefaults,
     VisualDeltaProjectDefaultSource

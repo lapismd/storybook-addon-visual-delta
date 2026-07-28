@@ -78,7 +78,25 @@ export {
   BUILTIN_IGNORE_SELECTORS,
   resolveIgnoreSelectors,
 } from "../shared/ignore.js";
-export type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+export type {
+  VisualDeltaResolvedConfig,
+  VisualDeltaVcsCapability,
+  VisualDeltaVcsMode,
+  VisualDeltaWorkflowConfig,
+} from "../shared/config-types.js";
+export {
+  BUILTIN_VISUAL_DELTA_WORKFLOW,
+  DEFAULT_VISUAL_DELTA_COMMIT_MESSAGE_TEMPLATE,
+  renderVisualDeltaCommitMessage,
+  validateVisualDeltaWorkflowConfig,
+} from "../shared/workflow-config.js";
+export type {
+  VisualDeltaChangeFile,
+  VisualDeltaChangeOperation,
+  VisualDeltaChangeSet,
+  VisualDeltaChangeSetMutation,
+  VisualDeltaChangeSetsResponse,
+} from "../shared/change-sets.js";
 export {
   PLAYWRIGHT_THRESHOLD_REL,
   readPlaywrightPassThresholdPercent,
@@ -144,6 +162,13 @@ export {
   type VcsFileRevision,
   type VcsRevisionPage,
 } from "./baseline-history-vcs.js";
+export {
+  detectVisualDeltaChangeVcs,
+  detectVisualDeltaVcsKind,
+  GitVisualDeltaChangeVcs,
+  JjVisualDeltaChangeVcs,
+  type VisualDeltaChangeVcs,
+} from "./change-set-vcs.js";
 export {
   captureSubjectWithChromium,
   type CaptureSubjectError,

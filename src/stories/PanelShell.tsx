@@ -29,6 +29,7 @@ import {
 } from "../panel/styled.js";
 import { placementToggleAction } from "../shared/overlay-session.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import { BUILTIN_VISUAL_DELTA_WORKFLOW } from "../shared/workflow-config.js";
 import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
 import type { VisualModeResultStatus } from "../shared/mode-results.js";
 import { FormPlaceholder } from "./FormPlaceholder.js";
@@ -72,12 +73,20 @@ const SAMPLE_CONFIG: VisualDeltaResolvedConfig = {
     baselinePathMode: "nested-import",
     visualServerPort: 9010,
     allowRebuild: true,
+    allowVcsWrites: false,
     visualUpdateArgs: ["visual-delta", "update"],
     visualInteractionUpdateArgs: ["visual-delta", "interaction-update"],
     visualTestArgs: ["playwright", "test"],
     addonSrcDir: "packages/storybook-addon-visual-delta/src",
   },
   playwrightPassThresholdPercent: 1,
+  workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,
+  vcs: {
+    kind: "jj",
+    available: true,
+    writeAllowed: false,
+    reason: "VCS commits are disabled.",
+  },
   projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
   projectDefaultSources: {
     passThresholdPercent: "project",
