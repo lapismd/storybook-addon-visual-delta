@@ -149,6 +149,7 @@ import {
   type VisualDeltaChangeSetMutation,
 } from "../shared/change-sets.js";
 import { VISUAL_DELTA_CHANGES_EVENT } from "../shared/change-events.js";
+import { baselineAvailability as resolveBaselineAvailability } from "../shared/baseline-readiness.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 const IS_DEVELOPMENT =
@@ -205,6 +206,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     overlayOn,
     storyId,
     storyName,
+    renderGeneration,
+    storyFinished,
     opacity,
     colorInversion,
     placement,
@@ -241,7 +244,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     selectInteractionBaseline,
     restorePrimaryBaselines,
     primaryImages,
-  } = useStoryData();
+  } = useStoryData(currentStoryId);
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
@@ -251,7 +254,18 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   } | null>(null);
   /** Preview decorator hasn't sent INIT_IMAGE for this story yet. */
   const storyReady = Boolean(storyId) && storyId === currentStoryId;
-  const loading = !storyReady;
+  const baselineAvailability = resolveBaselineAvailability({
+    currentStoryId,
+    preview: {
+      storyId,
+      renderGeneration,
+      storyFinished,
+    },
+    baselineCount: primaryImages.length + images.length,
+  });
+  const previewReady = storyReady && storyFinished;
+  const previewBusy = !previewReady;
+  const loading = baselineAvailability === "unknown";
   const [, setAddonState] = useAddonState<VisualDeltaAddonState>(
     ADDON_ID,
     DEFAULT_ADDON_STATE,
@@ -368,11 +382,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     selectedStorybookInteractionId,
   ]);
 
-  // Preview INIT_IMAGE can be missed (panel mounts before iframe, Storybook
-  // restart, park remount). Retry until ready; seed from the manager index if
-  // the preview channel never answers so we don't spin on Loading forever.
+  // Preview INIT_IMAGE or storyFinished can be missed (panel mounts before
+  // iframe, Storybook restart, park remount). Keep requesting until the exact
+  // current generation is ready. Manager data may prove a baseline is present,
+  // but missing parameters are only a provisional seed.
   useEffect(() => {
-    if (storyReady || !currentStoryId) return;
+    if (previewReady || !currentStoryId) return;
     let attempts = 0;
     const requestOrSeed = () => {
       emit(EVENTS.REQUEST_INIT_IMAGE, { storyId: currentStoryId });
@@ -435,7 +450,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     emit,
     hydrateInteractions,
     seedStoryFromManager,
-    storyReady,
+    previewReady,
   ]);
 
   const { getOverlayInfo } = useOverlayInfo();
@@ -548,6 +563,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const createProgress = baselineJob?.kind === "create" ? baselineJob : null;
   const isSplit = isSplitPlacement(placement);
   const busy =
+    previewBusy ||
     isDiffing ||
     isUpdating ||
     isCreating ||
@@ -823,7 +839,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     ? formatVisualProgressLabel(runProgress)
     : null;
   const statusRunning =
-    loading ||
+    previewBusy ||
     isCreating ||
     isUpdating ||
     isRebuilding ||
@@ -831,8 +847,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     isDeletingBaseline ||
     runInFlight ||
     isDiffing;
-  const statusLabel = loading
-    ? "Loading…"
+  const statusLabel = previewBusy
+    ? "Loading story…"
     : isDeletingBaseline
       ? "Deleting screenshot…"
       : isDiffing
@@ -2042,19 +2058,19 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       <PanelView
         active={props.active ?? false}
         header={{
-          badgeStatus: loading ? null : badgeStatus,
-          empty: loading ? false : isEmpty,
-          busy: busy || loading,
+          badgeStatus: previewBusy ? null : badgeStatus,
+          empty: baselineAvailability === "absent",
+          busy,
           storyMissing: !storyId || loading,
-          isDiffing: !loading && isDiffing,
-          isRunning: !loading && runInFlight,
-          diffProgressLabel: loading ? null : diffProgressLabel,
-          runProgressLabel: loading ? null : runProgressLabel,
+          isDiffing: !previewBusy && isDiffing,
+          isRunning: !previewBusy && runInFlight,
+          diffProgressLabel: previewBusy ? null : diffProgressLabel,
+          runProgressLabel: previewBusy ? null : runProgressLabel,
           createLabel: isCreating
             ? (createProgress?.label ?? "Creating…")
             : "Create visual",
-          reviewStatus: loading ? null : reviewStatus,
-          skipVisual: loading ? false : skipVisual,
+          reviewStatus: previewBusy ? null : reviewStatus,
+          skipVisual: previewBusy ? false : skipVisual,
           onDiff: (engine) => void handleDiff(engine),
           onRun: handleRun,
           diffEngine,

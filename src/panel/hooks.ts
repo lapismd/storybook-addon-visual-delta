@@ -46,6 +46,11 @@ import {
   type PassThresholdByEngine,
   type VisualDeltaSettings,
 } from "./settings.js";
+import {
+  mergeInitReadiness,
+  mergeStoryFinished,
+  type PreviewReadiness,
+} from "../shared/baseline-readiness.js";
 
 const PINNED_INTERACTION_SRC_KEY = "visual-delta/pinned-interaction-src";
 
@@ -91,6 +96,8 @@ type StoryData = {
   layout: StorybookLayoutMode | null;
   /** Preview-owned generation; globals/remounts receive a fresh snapshot. */
   renderGeneration: number;
+  /** Exact Storybook storyFinished state for this render generation. */
+  storyFinished: boolean;
   index: number;
   /**
    * Whether the baseline overlay / split chrome is visible. Distinct from
@@ -195,7 +202,7 @@ function withPlacement(
   return images.map((img) => ({ ...img, placement }));
 }
 
-export function useStoryData() {
+export function useStoryData(currentStoryId?: string) {
   const prefsRef = useRef<VisualDeltaSettings>(loadSettings());
   /** Compare prefs to restore when leaving image-only. */
   const placementBeforeImageOnlyRef = useRef<PlacementMode | null>(null);
@@ -223,6 +230,7 @@ export function useStoryData() {
       storyName: "",
       layout: null,
       renderGeneration: 0,
+      storyFinished: false,
       index: -1,
       overlayOn: false,
       opacity: prefs.opacity,
@@ -433,6 +441,7 @@ export function useStoryData() {
       storyName: string;
       layout?: StorybookLayoutMode | null;
       renderGeneration?: number;
+      storyFinished?: boolean;
       opacity?: number;
       baselineLabelOffset?: { x: number; y: number };
       colorInversion?: boolean;
@@ -448,6 +457,18 @@ export function useStoryData() {
       diffResultZoomDefault?: VisualDeltaZoomDefault;
       configUpdated?: boolean;
     }) => {
+      if (currentStoryId && data.storyId !== currentStoryId) return;
+      const incomingReadiness: PreviewReadiness = {
+        storyId: data.storyId,
+        renderGeneration: data.renderGeneration ?? 0,
+        storyFinished: data.storyFinished === true,
+      };
+      const currentReadiness: PreviewReadiness = {
+        storyId: storyDataRef.current.storyId,
+        renderGeneration: storyDataRef.current.renderGeneration,
+        storyFinished: storyDataRef.current.storyFinished,
+      };
+      if (!mergeInitReadiness(currentReadiness, incomingReadiness)) return;
       selectionContextRef.current = {
         storyId: data.storyId,
         layout: data.layout ?? null,
@@ -473,6 +494,15 @@ export function useStoryData() {
         };
       }
       setStoryData((prev) => {
+        const readiness = mergeInitReadiness(
+          {
+            storyId: prev.storyId,
+            renderGeneration: prev.renderGeneration,
+            storyFinished: prev.storyFinished,
+          },
+          incomingReadiness,
+        );
+        if (!readiness) return prev;
         const resetDefaults =
           !prev.storyId ||
           prev.storyId !== data.storyId ||
@@ -504,6 +534,9 @@ export function useStoryData() {
           return {
             ...prev,
             storyName: data.storyName,
+            layout: data.layout ?? null,
+            renderGeneration: readiness.renderGeneration,
+            storyFinished: readiness.storyFinished,
             interactions:
               interactions.length > 0 ? interactions : prev.interactions,
           };
@@ -556,7 +589,8 @@ export function useStoryData() {
           storyId: data.storyId,
           storyName: data.storyName,
           layout: data.layout ?? null,
-          renderGeneration: data.renderGeneration ?? 0,
+          renderGeneration: readiness.renderGeneration,
+          storyFinished: readiness.storyFinished,
           index: selection.index,
           overlayOn: selection.overlayOn,
           opacity: resolvedOpacity,
@@ -611,6 +645,22 @@ export function useStoryData() {
         });
         void selectImage(selection.previewIndex, images);
         return next;
+      });
+    },
+    [EVENTS.PREVIEW_READY]: (data: PreviewReadiness) => {
+      if (currentStoryId && data.storyId !== currentStoryId) return;
+      setStoryData((prev) => {
+        const readiness = mergeStoryFinished(
+          {
+            storyId: prev.storyId,
+            renderGeneration: prev.renderGeneration,
+            storyFinished: prev.storyFinished,
+          },
+          data,
+        );
+        return readiness
+          ? { ...prev, storyFinished: readiness.storyFinished }
+          : prev;
       });
     },
     [EVENTS.OVERLAY_LISTENER_READY]: (payload?: { storyId?: string }) => {
@@ -1237,6 +1287,9 @@ export function useStoryData() {
           ...(patch ?? {}),
           storyId,
           storyName,
+          renderGeneration:
+            prev.storyId === storyId ? prev.renderGeneration : 0,
+          storyFinished: prev.storyId === storyId ? prev.storyFinished : false,
           images,
           effectiveAlign: align ?? prev.effectiveAlign,
           placement: hasImages ? "center" : prev.placement,

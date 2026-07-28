@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
+  AI_SEND_BUTTON_STATES,
   COMPONENT_OVERLAY_FIXTURE,
   CUSTOM_VIEWPORT_MANAGER_FIXTURE,
+  DELAYED_MISSING_BASELINE_FIXTURE,
   MANAGER_FIXTURE,
   NATURAL_WIDTH_COMPONENT_FIXTURE,
   OVERVIEW,
@@ -16,6 +18,121 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
 }`;
 
 test.describe("Visual Delta manager integration", () => {
+  test("keeps a delayed missing baseline provisional until storyFinished", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, DELAYED_MISSING_BASELINE_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("status", { name: "Loading Visual Delta" }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Create visual baseline" }),
+    ).toHaveCount(0);
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toHaveCount(0);
+
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    const createButtons = panel.getByRole("button", {
+      name: "Create visual baseline",
+    });
+    await expect(createButtons).toHaveCount(2);
+    await expect(createButtons.first()).toBeEnabled();
+  });
+
+  test("never exposes missing-baseline actions for an explicit AI baseline across refresh and remount", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ storyId }) => {
+        if (window !== window.top) return;
+        const storageKey = "visual-delta-readiness-flashes";
+        sessionStorage.setItem(storageKey, "[]");
+        const recordFalseState = () => {
+          if (!location.search.includes(storyId)) return;
+          const text = document.body?.innerText ?? "";
+          const create = document.querySelector(
+            'button[aria-label="Create visual baseline"]',
+          );
+          if (!text.includes("Baseline missing") && !create) return;
+          const flashes = JSON.parse(
+            sessionStorage.getItem(storageKey) ?? "[]",
+          ) as number[];
+          flashes.push(Date.now());
+          sessionStorage.setItem(storageKey, JSON.stringify(flashes));
+        };
+        const observe = () => {
+          if (!document.body) return;
+          new MutationObserver(recordFalseState).observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
+          recordFalseState();
+        };
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", observe, {
+            once: true,
+          });
+        } else {
+          observe();
+        }
+      },
+      { storyId: AI_SEND_BUTTON_STATES },
+    );
+    await mockVisualBackend(page);
+    await openManager(page, AI_SEND_BUTTON_STATES, DEV_STORYBOOK);
+
+    const baselineButton = page.getByRole("button", {
+      name: "Open Default baseline full image",
+    });
+    await expect(baselineButton).toBeVisible({ timeout: 45_000 });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const visualDeltaTab = page.getByRole("tab", { name: "Visual Delta" });
+    await expect(visualDeltaTab).toBeVisible();
+    if ((await visualDeltaTab.getAttribute("aria-selected")) !== "true") {
+      await visualDeltaTab.click();
+    }
+    await expect(baselineButton).toBeVisible({ timeout: 45_000 });
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(
+          sessionStorage.getItem("visual-delta-readiness-flashes") ?? "[]",
+        ),
+      ),
+    ).toEqual([]);
+
+    await page.evaluate(() => {
+      sessionStorage.setItem("visual-delta-readiness-flashes", "[]");
+      const iframe = document.querySelector(
+        'iframe[title="storybook-preview-iframe"]',
+      );
+      if (!(iframe instanceof HTMLIFrameElement) || !iframe.contentWindow) {
+        throw new Error("Storybook preview iframe is unavailable");
+      }
+      iframe.contentWindow.location.reload();
+    });
+    await expect(baselineButton).toBeVisible({ timeout: 45_000 });
+    await expect(previewFrame(page).locator("html")).toHaveAttribute(
+      "data-visual-delta-story-finished",
+      AI_SEND_BUTTON_STATES,
+      { timeout: 45_000 },
+    );
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(
+          sessionStorage.getItem("visual-delta-readiness-flashes") ?? "[]",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
   test("panel review actions ignore Testing Module preferences and baseline updates stay story-scoped", async ({
     page,
   }) => {
