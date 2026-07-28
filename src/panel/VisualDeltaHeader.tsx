@@ -77,6 +77,8 @@ export type VisualDeltaHeaderProps = {
   diffProgressLabel: string | null;
   runProgressLabel: string | null;
   createLabel: string;
+  /** Hide the direct Default action when the empty state requires a choice. */
+  showCreate?: boolean;
   reviewStatus: VisualReviewStatus | null;
   /** Story CSF currently has `skip-visual`. */
   skipVisual: boolean;
@@ -119,6 +121,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   diffProgressLabel,
   runProgressLabel,
   createLabel,
+  showCreate = true,
   reviewStatus,
   skipVisual,
   onDiff,
@@ -218,7 +221,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
           ) : null}
         </ControlsGroup>
         <RightGroup>
-          {empty && !skipVisual ? (
+          {empty && !skipVisual && showCreate ? (
             <Button
               size="small"
               ariaLabel="Create visual baseline"

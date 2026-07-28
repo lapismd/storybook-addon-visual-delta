@@ -193,6 +193,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
         bottom: pos.bottom,
         width: pos.width,
         maxWidth: pos.width,
+        pointerEvents: running || hasLog ? "auto" : "none",
       }}
     >
       {running ? (

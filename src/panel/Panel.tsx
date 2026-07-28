@@ -150,6 +150,11 @@ import {
 } from "../shared/change-sets.js";
 import { VISUAL_DELTA_CHANGES_EVENT } from "../shared/change-events.js";
 import { baselineAvailability as resolveBaselineAvailability } from "../shared/baseline-readiness.js";
+import {
+  baselineSourceStem,
+  verifyBaselineSources,
+} from "./baseline-source-availability.js";
+import { BaselineCreatePicker } from "./BaselineCreatePicker.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 const IS_DEVELOPMENT =
@@ -197,8 +202,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const { storyId: currentStoryId } = useStorybookState();
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
-    images,
-    interactions,
+    images: configuredImages,
+    interactions: configuredInteractions,
     modes,
     modeNames,
     selectedMode,
@@ -243,8 +248,35 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     hydrateInteractions,
     selectInteractionBaseline,
     restorePrimaryBaselines,
-    primaryImages,
+    primaryImages: configuredPrimaryImages,
   } = useStoryData(currentStoryId);
+  const [unavailableBaselineSources, setUnavailableBaselineSources] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const images = useMemo(
+    () =>
+      configuredImages.filter(
+        (image) =>
+          !unavailableBaselineSources.has(baselineSourceStem(image.src)),
+      ),
+    [configuredImages, unavailableBaselineSources],
+  );
+  const primaryImages = useMemo(
+    () =>
+      configuredPrimaryImages.filter(
+        (image) =>
+          !unavailableBaselineSources.has(baselineSourceStem(image.src)),
+      ),
+    [configuredPrimaryImages, unavailableBaselineSources],
+  );
+  const interactions = useMemo(
+    () =>
+      configuredInteractions.filter(
+        (interaction) =>
+          !unavailableBaselineSources.has(baselineSourceStem(interaction.src)),
+      ),
+    [configuredInteractions, unavailableBaselineSources],
+  );
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
@@ -266,6 +298,57 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const previewReady = storyReady && storyFinished;
   const previewBusy = !previewReady;
   const loading = baselineAvailability === "unknown";
+  const baselineSources = useMemo(
+    () => [
+      ...new Set([
+        ...configuredPrimaryImages.map((image) => image.src),
+        ...configuredInteractions.map((interaction) => interaction.src),
+      ]),
+    ],
+    [configuredInteractions, configuredPrimaryImages],
+  );
+  const baselineSourcesKey = baselineSources.join("\0");
+  useEffect(() => {
+    setUnavailableBaselineSources(new Set());
+  }, [currentStoryId]);
+  useEffect(() => {
+    if (!previewReady || baselineSources.length === 0) return;
+    const controller = new AbortController();
+    void verifyBaselineSources(baselineSources, {
+      signal: controller.signal,
+    }).then((availability) => {
+      if (controller.signal.aborted) return;
+      const missing = new Set(
+        [...availability]
+          .filter(([, status]) => status === "absent")
+          .map(([source]) => source),
+      );
+      const present = new Set(
+        [...availability]
+          .filter(([, status]) => status === "present")
+          .map(([source]) => source),
+      );
+      setUnavailableBaselineSources((previous) => {
+        const next = new Set(previous);
+        for (const source of present) next.delete(source);
+        for (const source of missing) next.add(source);
+        return next;
+      });
+      for (const image of configuredPrimaryImages) {
+        if (missing.has(baselineSourceStem(image.src))) {
+          removeBaselineImage(image.src);
+        }
+      }
+    });
+    return () => controller.abort();
+  }, [
+    baselineSourcesKey,
+    configuredInteractions,
+    configuredPrimaryImages,
+    previewReady,
+    removeBaselineImage,
+    renderGeneration,
+  ]);
   const [, setAddonState] = useAddonState<VisualDeltaAddonState>(
     ADDON_ID,
     DEFAULT_ADDON_STATE,
@@ -289,8 +372,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     usePlaySteps(storyId || undefined);
   const interactionDiscoveryStoryRef = useRef<string | null>(null);
   const interactionSteps = useMemo(
-    () => mergeInteractionRows(playSteps, interactions),
-    [playSteps, interactions],
+    () => mergeInteractionRows(playSteps, configuredInteractions),
+    [configuredInteractions, playSteps],
   );
   const [expandedId, setExpandedId] = useState<BaselineSectionId | null>(
     "default",
@@ -1681,6 +1764,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   );
 
   const isEmpty = primaryImages.length === 0 && images.length === 0;
+  const hasAvailableInteractionBaseline = interactions.some((item) =>
+    Boolean(item.src),
+  );
+  const requiresBaselineChoice =
+    isEmpty &&
+    !hasAvailableInteractionBaseline &&
+    interactionSteps.length > 1 &&
+    !skipVisual;
   const needsScaffold = onboardingReady === false;
 
   useEffect(() => {
@@ -2018,7 +2109,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             : needsScaffold
               ? (onboardingHint ??
                 "Set up the Playwright suite and config, then create a baseline for this story.")
-              : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
+              : requiresBaselineChoice
+                ? "Choose the exact capture point to baseline, or Skip visual tests from the header if this story should stay out of the suite."
+                : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
           footer:
             needsScaffold && !skipVisual ? (
               <Button
@@ -2038,6 +2131,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               >
                 Include in visual tests
               </Button>
+            ) : requiresBaselineChoice ? (
+              <BaselineCreatePicker
+                steps={interactionSteps}
+                busy={busy}
+                onCreateDefault={() => void handleCreateBaselines()}
+                onCreateInteraction={(step) =>
+                  void handleCreateInteraction(step, false)
+                }
+              />
             ) : (
               <Button
                 size="small"
@@ -2069,6 +2171,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           createLabel: isCreating
             ? (createProgress?.label ?? "Creating…")
             : "Create visual",
+          showCreate: !requiresBaselineChoice,
           reviewStatus: previewBusy ? null : reviewStatus,
           skipVisual: previewBusy ? false : skipVisual,
           onDiff: (engine) => void handleDiff(engine),

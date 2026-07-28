@@ -24,9 +24,11 @@ const CONFIG = {
     baselinePathMode: "nested-import",
     visualServerPort: 9010,
     allowRebuild: true,
+    allowVcsWrites: false,
     visualUpdateArgs: ["visual-delta", "update"],
     visualInteractionUpdateArgs: ["visual-delta", "interaction-update"],
     visualTestArgs: ["playwright", "test"],
+    addonSrcDir: null,
   },
   playwrightPassThresholdPercent: 1,
   projectDefaults: {
@@ -40,6 +42,19 @@ const CONFIG = {
     baselineLabelOffset: { x: 0, y: 0 },
     previewSplitZoomDefault: "fit",
     diffResultZoomDefault: "100%",
+  },
+  workflow: {
+    autoAcceptLiveStoryComparisons: false,
+    vcs: {
+      mode: "off",
+      commitMessageTemplate: "Visual Delta: {action} {scope}",
+    },
+  },
+  vcs: {
+    kind: "jj",
+    available: true,
+    writeAllowed: false,
+    reason: "VCS commits are disabled in browser tests.",
   },
   projectDefaultSources: {
     passThresholdPercent: "built-in",
