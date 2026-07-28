@@ -37,7 +37,7 @@ Hosts MAY add deterministic setup, but they MUST not change these values without
 
 ## Readiness handshake
 
-The preview assigns a monotonically increasing generation to each render. It marks readiness only after Storybook’s exact `storyFinished` event for the active story and generation. A same-story rerender that retains the active Storybook hook instance retains its generation and completion state. A true remount starts a new unfinished generation. Delayed completion or cleanup from an older generation MUST NOT finish or clear a newer generation.
+The preview assigns a monotonically increasing generation to each render, including same-story rerenders and remounts. Every generation starts unfinished. The preview marks readiness only after Storybook’s exact `storyFinished` event for the active story and generation. Delayed completion or cleanup from an older generation MUST NOT finish or clear a newer generation.
 
 Capture then waits for:
 
