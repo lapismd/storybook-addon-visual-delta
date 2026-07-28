@@ -127,26 +127,35 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
           readPreviewRender(context.id, render.renderGeneration)
             ?.storyFinished ?? false,
       },
-      context.parameters?.visualDelta as VisualDeltaParams | undefined,
+      visualDeltaParams,
       projectDefaults,
       configUpdated,
     );
-  const emit = useChannel({
-    [EVENTS.REQUEST_INIT_IMAGE]: (payload?: { storyId?: string }) => {
-      if (payload?.storyId && payload.storyId !== context.id) return;
-      void loadProjectDefaults().then((projectDefaults) => {
-        emit(EVENTS.INIT_IMAGE, buildCurrentPayload(projectDefaults));
-      });
+  const emit = useChannel(
+    {
+      [EVENTS.REQUEST_INIT_IMAGE]: (payload?: { storyId?: string }) => {
+        if (payload?.storyId && payload.storyId !== context.id) return;
+        void loadProjectDefaults().then((projectDefaults) => {
+          emit(EVENTS.INIT_IMAGE, buildCurrentPayload(projectDefaults));
+        });
+      },
+      [EVENTS.CONFIG_UPDATED]: (payload?: {
+        projectDefaults?: VisualDeltaProjectDefaults;
+      }) => {
+        const projectDefaults =
+          payload?.projectDefaults ?? BUILTIN_VISUAL_DELTA_DEFAULTS;
+        lastProjectDefaults = projectDefaults;
+        emit(EVENTS.INIT_IMAGE, buildCurrentPayload(projectDefaults, true));
+      },
     },
-    [EVENTS.CONFIG_UPDATED]: (payload?: {
-      projectDefaults?: VisualDeltaProjectDefaults;
-    }) => {
-      const projectDefaults =
-        payload?.projectDefaults ?? BUILTIN_VISUAL_DELTA_DEFAULTS;
-      lastProjectDefaults = projectDefaults;
-      emit(EVENTS.INIT_IMAGE, buildCurrentPayload(projectDefaults, true));
-    },
-  });
+    [
+      context.id,
+      context.name,
+      layout,
+      render.renderGeneration,
+      visualDeltaParams,
+    ],
+  );
 
   useEffect(() => {
     emit(EVENTS.INIT_IMAGE, buildCurrentPayload(lastProjectDefaults));

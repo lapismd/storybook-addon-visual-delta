@@ -53,6 +53,40 @@ test.describe("Visual Delta manager integration", () => {
     await expect(createButtons.first()).toBeEnabled();
   });
 
+  test("restores exact readiness after a same-story controls rerender", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, FILTER_MISSING_FIXTURE, DEV_STORYBOOK);
+
+    const previewRoot = previewFrame(page).locator("html");
+    await expect(previewRoot).toHaveAttribute(
+      "data-visual-delta-story-finished",
+      FILTER_MISSING_FIXTURE,
+      { timeout: 45_000 },
+    );
+
+    await page.getByRole("tab", { name: /Controls/ }).click();
+    const placeholderRow = page.getByRole("row", { name: /placeholder/i });
+    await placeholderRow.getByRole("button", { name: "Set string" }).click();
+    const placeholderInput = placeholderRow.getByRole("textbox");
+    await placeholderInput.fill("Filter fields");
+    await placeholderInput.press("Enter");
+
+    await expect(previewRoot).toHaveAttribute(
+      "data-visual-delta-story-finished",
+      FILTER_MISSING_FIXTURE,
+      { timeout: 10_000 },
+    );
+
+    await page.getByRole("tab", { name: "Visual Delta" }).click();
+    await expect(
+      page
+        .getByTestId("visual-delta-panel")
+        .getByText("Loading story…", { exact: true }),
+    ).toHaveCount(0);
+  });
+
   test("treats a deleted baseline PNG as missing and offers create or skip", async ({
     page,
   }) => {

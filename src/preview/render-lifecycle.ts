@@ -52,11 +52,26 @@ export function readPreviewRender(
   return { ...current };
 }
 
-export function finishPreviewRender(
+export function readCurrentPreviewRender(
   storyId: string,
 ): PreviewRenderLifecycle | null {
+  const current = lifecycleStore().current;
+  if (!current || current.storyId !== storyId) return null;
+  return { ...current };
+}
+
+export function finishPreviewRender(
+  storyId: string,
+  renderGeneration: number,
+): PreviewRenderLifecycle | null {
   const store = lifecycleStore();
-  if (!store.current || store.current.storyId !== storyId) return null;
+  if (
+    !store.current ||
+    store.current.storyId !== storyId ||
+    store.current.renderGeneration !== renderGeneration
+  ) {
+    return null;
+  }
   store.current = { ...store.current, storyFinished: true };
   return { ...store.current };
 }

@@ -16,8 +16,16 @@ describe("preview render lifecycle", () => {
       readPreviewRender("hmr-story", second.renderGeneration),
     ).toMatchObject({ storyFinished: false });
 
-    expect(finishPreviewRender("other-story")).toBeNull();
-    expect(finishPreviewRender("hmr-story")).toMatchObject({
+    expect(
+      finishPreviewRender("other-story", second.renderGeneration),
+    ).toBeNull();
+    expect(finishPreviewRender("hmr-story", first.renderGeneration)).toBeNull();
+    expect(
+      readPreviewRender("hmr-story", second.renderGeneration),
+    ).toMatchObject({ storyFinished: false });
+    expect(
+      finishPreviewRender("hmr-story", second.renderGeneration),
+    ).toMatchObject({
       renderGeneration: second.renderGeneration,
       storyFinished: true,
     });

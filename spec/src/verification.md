@@ -88,16 +88,17 @@ The injected catalog threshold of `0.1%` and the project built-in of `1%` are re
 
 The 2026-07-28 audit began from the current package source and excluded unrelated working-copy story, host-policy, and baseline changes.
 
-| Check                                                    | Result                               | Scope                                                                      |
-| -------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------- |
-| `pnpm --filter storybook-addon-visual-delta typecheck`   | Passed                               | Package TypeScript                                                         |
-| `pnpm exec vitest run --project visual-delta`            | Passed: 84 files, 334 tests          | Package unit and component behavior                                        |
-| Focused host baseline, middleware, and interaction tests | Passed: 3 files, 59 tests            | Catalog adapters and exact mutation behavior                               |
-| Specification link and requirement validation            | Passed: 13 pages, 68 requirements    | Markdown links, index coverage, IDs, traceability, and package-root policy |
-| Specification structure and spec-first checker tests     | Passed: 19 tests                     | Governance classifier and structural failure modes                         |
-| Canonical Markdown lint and mdBook build                 | Passed                               | Source formatting and generated-book integrity                             |
-| `pnpm visual-delta test --affected --dry-run --explain`  | Passed: conservative 358-story scope | Read-only full-suite fallback after configuration change                   |
-| `pnpm test:visual-delta-panel` on an isolated lane       | Failed: 41 passed, 10 failed         | Two behavioral gaps and eight existing snapshot mismatches                 |
+| Check                                                    | Result                               | Scope                                                                           |
+| -------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
+| `pnpm --filter storybook-addon-visual-delta typecheck`   | Passed                               | Package TypeScript                                                              |
+| `pnpm exec vitest run --project visual-delta`            | Passed: 85 files, 341 tests          | Package unit and component behavior                                             |
+| Focused host baseline, middleware, and interaction tests | Passed: 3 files, 59 tests            | Catalog adapters and exact mutation behavior                                    |
+| Same-story preview readiness browser regression          | Passed                               | Exact marker, manager readiness, and stopped progress after a controls rerender |
+| Specification link and requirement validation            | Passed: 13 pages, 68 requirements    | Markdown links, index coverage, IDs, traceability, and package-root policy      |
+| Specification structure and spec-first checker tests     | Passed: 19 tests                     | Governance classifier and structural failure modes                              |
+| Canonical Markdown lint and mdBook build                 | Passed                               | Source formatting and generated-book integrity                                  |
+| `pnpm visual-delta test --affected --dry-run --explain`  | Passed: conservative 358-story scope | Read-only full-suite fallback after configuration change                        |
+| `pnpm test:visual-delta-panel` on an isolated lane       | Failed: 41 passed, 10 failed         | Two behavioral gaps and eight existing snapshot mismatches                      |
 
 The panel run used the isolated `12009` lane and left no listener running. The eight screenshot mismatches affect four states in both wide-bottom and narrow-right layouts. Visual inspection localizes the drift to baseline-row action icons; the run did not update any snapshot.
 
