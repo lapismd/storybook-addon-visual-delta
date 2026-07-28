@@ -29,7 +29,7 @@ The following table names the primary evidence. Related tests can add confidence
 | `VD-MUT-001`, `VD-MUT-002`, `VD-MUT-003`, `VD-MUT-004`, `VD-MUT-005`, `VD-MUT-006`        | `src/node/baseline-cli.ts`, `src/node/middleware.ts`, `src/node/delete-baseline.ts`, `src/node/story-source.ts`, `src/node/project-config.ts`                               | `src/node/delete-baseline.spec.ts`, `src/node/story-source.spec.ts`, `src/node/init-scaffold.spec.ts`, host middleware and writer tests                            | Partial: gap VD-GAP-006                 |
 | `VD-VCS-001`, `VD-VCS-002`, `VD-VCS-003`, `VD-VCS-004`, `VD-VCS-005`, `VD-VCS-006`        | `src/node/baseline-history-vcs.ts`, `src/node/change-set-store.ts`, `src/node/change-set-vcs.ts`, `src/shared/workflow-config.ts`                                           | Baseline history, change-set store, and change-set VCS specifications                                                                                              | Conforming                              |
 | `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`  | `.storybook/main.ts`, `.storybook/visual-delta-preset.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json`                                     | Storybook process tests, host path tests, middleware tests, interaction tests, panel browser tests                                                                 | Partial: gap VD-GAP-002                 |
-| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`        | `spec/book.toml`, `AGENTS.md`, root `package.json`, spec validation and spec-first scripts, pull-request workflow                                                           | Specification structure and spec-first checker tests                                                                                                               | Gap: VD-GAP-007                         |
+| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`        | `spec/book.toml`, `AGENTS.md`, root `package.json`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/visual-delta-spec-first.yml`     | `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, mdBook build, Markdown lint, and aggregate-check wiring                              | Conforming                              |
 
 ## Current conformance gaps
 
@@ -71,12 +71,6 @@ Browser acceptance can discover and select an unwired `findByTestId("panel-shell
 
 This violates `VD-UI-004` and leaves `VD-MUT-001` partial. The selected discovery must remain addressable after the manager switches back to Visual Delta, and creation must freeze that interaction’s ID, label, and capture call.
 
-### VD-GAP-007: spec-first enforcement
-
-The canonical mdBook and scoped agent policy define spec-before-code behavior, but automated structural validation, protected-path classification, aggregate-check wiring, and pull-request enforcement are not yet present.
-
-This violates `VD-GOV-004` and `VD-GOV-005`. The enforcement slice must fail code-only Visual Delta changes locally and in pull requests while excluding tests, fixtures, visual baselines, derived artifacts, and generated book output.
-
 ## Documentation drift found by the audit
 
 These files are non-normative, but their current text can mislead implementers:
@@ -98,7 +92,9 @@ The 2026-07-28 audit began from the current package source and excluded unrelate
 | `pnpm --filter storybook-addon-visual-delta typecheck`   | Passed                               | Package TypeScript                                         |
 | `pnpm exec vitest run --project visual-delta`            | Passed: 84 files, 334 tests          | Package unit and component behavior                        |
 | Focused host baseline, middleware, and interaction tests | Passed: 3 files, 59 tests            | Catalog adapters and exact mutation behavior               |
-| Specification link and requirement validation            | Passed: 12 pages, 60 requirements    | Markdown links, index coverage, IDs, and traceability      |
+| Specification link and requirement validation            | Passed: 13 pages, 66 requirements    | Markdown links, index coverage, IDs, and traceability      |
+| Specification structure and spec-first checker tests     | Passed: 19 tests                     | Governance classifier and structural failure modes         |
+| Canonical Markdown lint and mdBook build                 | Passed                               | Source formatting and generated-book integrity             |
 | `pnpm visual-delta test --affected --dry-run --explain`  | Passed: conservative 358-story scope | Read-only full-suite fallback after configuration change   |
 | `pnpm test:visual-delta-panel` on an isolated lane       | Failed: 41 passed, 10 failed         | Two behavioral gaps and eight existing snapshot mismatches |
 
