@@ -1,7 +1,7 @@
 # Visual Delta action scopes
 
 > Historical implementation record. Use the
-> [`Visual Delta system specification`](./specs/index.md) for the normative
+> [`Visual Delta system specification`](./spec/src/index.md) for the normative
 > contract.
 
 This file tracks the correction of Visual Delta Testing Module and panel action
