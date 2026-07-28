@@ -1,7 +1,7 @@
 # Affected visual tests
 
 > Historical implementation record. Use the
-> [`Visual Delta system specification`](./specs/index.md) for the normative
+> [`Visual Delta system specification`](./spec/src/index.md) for the normative
 > contract.
 
 This file tracks the TurboSnap-style affected-run implementation for Visual

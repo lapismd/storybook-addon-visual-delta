@@ -1,7 +1,7 @@
 # Storybook layout-aware Visual Delta alignment
 
 > Historical implementation record. Use the
-> [`Visual Delta system specification`](./specs/index.md) for the normative
+> [`Visual Delta system specification`](./spec/src/index.md) for the normative
 > contract.
 
 Status: implemented; addon validation complete, with unrelated aggregate shell

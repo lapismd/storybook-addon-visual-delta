@@ -1,7 +1,7 @@
 # Visual Delta consistency plan
 
 > Historical implementation record. Use the
-> [`Visual Delta system specification`](./specs/index.md) for the normative
+> [`Visual Delta system specification`](./spec/src/index.md) for the normative
 > contract.
 
 This document tracks the consistency audit for Visual Delta. It separates

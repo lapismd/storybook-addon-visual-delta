@@ -1,7 +1,7 @@
 # Storybook Reload and Visual Delta Readiness
 
 > Historical implementation record. Use the
-> [`Visual Delta system specification`](./specs/index.md) for the normative
+> [`Visual Delta system specification`](./spec/src/index.md) for the normative
 > contract.
 
 ## Goal

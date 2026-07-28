@@ -1,0 +1,12 @@
+[book]
+title = "Visual Delta System Specification"
+authors = ["Visual Delta contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"

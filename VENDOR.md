@@ -1,7 +1,7 @@
 # Visual Delta (local package)
 
 This file records provenance and implementation history. The
-[`Visual Delta system specification`](./specs/index.md) is the normative
+[`Visual Delta system specification`](./spec/src/index.md) is the normative
 behavioral contract.
 
 Reimplemented from **`storybook-addon-visual-delta@0.1.5`** (npm tarball).
