@@ -2243,7 +2243,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onResetSettings: resetSettings,
           onStopDiff: handleStopDiff,
           onStopRun: () => {
-            void abortVisualWork();
+            void abortVisualWork().finally(() => {
+              testProviderStore.setState("test-provider-state:pending");
+            });
             setIsRunningVisual(false);
             setRunProgress(null);
             setBaselineJob(null);

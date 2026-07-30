@@ -48,6 +48,7 @@ import {
   formatVisualProgressLabel,
   loadPersistedVisualLastRun,
   loadPersistedVisualStatusJob,
+  peekVisualCreateProgress,
   postVisualCreateBaselinesForStoryIds,
   postVisualActionScope,
   postVisualReviewStatusesFromResults,
@@ -591,182 +592,193 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
 
       await testProviderStore.runWithState(async () => {
-        setIsComparing(false);
-        setScopeMessage(null);
-        setStatusLog(null);
-        setStatusProgress(null);
-        const contextIds =
-          scopedIds ??
-          (entryStoryIdsRef.current?.length
-            ? entryStoryIdsRef.current
-            : undefined);
-        let frozenIds: string[];
-        let compareScope: VisualRunScope;
-        let resolvedSummary: AffectedVisualSummary | undefined;
+        try {
+          setIsComparing(false);
+          setScopeMessage(null);
+          setStatusLog(null);
+          setStatusProgress(null);
+          const contextIds =
+            scopedIds ??
+            (entryStoryIdsRef.current?.length
+              ? entryStoryIdsRef.current
+              : undefined);
+          let frozenIds: string[];
+          let compareScope: VisualRunScope;
+          let resolvedSummary: AffectedVisualSummary | undefined;
 
-        if (contextIds) {
-          const contextScope =
-            entryScopeRef.current ??
-            (contextIds.length === 1 ? "story" : "component");
-          frozenIds = resolveVisualActionStoryIds({
-            context: contextScope,
-            contextStoryIds: contextIds,
-          });
-          compareScope = contextScope;
-        } else {
-          const visibleStoryIds = resolveVisualActionStoryIds({
-            context: "global",
-            visibleStoryIds: sidebarStoryIdsRef.current,
-          });
-          if (!visibleStoryIds.length) {
-            setScopeMessage("No visible stories");
-            return;
-          }
-          setStatusLog(
-            affectedOnlyEnabled
-              ? "Resolving affected scope…"
-              : "Resolving visible scope…",
-          );
-          const resolved = await postVisualActionScope(
-            {
-              visibleStoryIds,
-              affectedOnly: affectedOnlyEnabled,
-            },
-            {
-              onProgress: (next) => {
-                setStatusLog(next.message);
-              },
-            },
-          );
-          frozenIds = [...resolved.storyIds];
-          compareScope = affectedOnlyEnabled ? "affected" : "all";
-          resolvedSummary = resolved.summary;
-          setAffectedSummary(resolved.summary);
-          if (!frozenIds.length) {
-            setScopeMessage(
-              affectedOnlyEnabled ? "Up to date" : "No visible stories",
+          if (contextIds) {
+            const contextScope =
+              entryScopeRef.current ??
+              (contextIds.length === 1 ? "story" : "component");
+            frozenIds = resolveVisualActionStoryIds({
+              context: contextScope,
+              contextStoryIds: contextIds,
+            });
+            compareScope = contextScope;
+          } else {
+            const visibleStoryIds = resolveVisualActionStoryIds({
+              context: "global",
+              visibleStoryIds: sidebarStoryIdsRef.current,
+            });
+            if (!visibleStoryIds.length) {
+              setScopeMessage("No visible stories");
+              return;
+            }
+            setStatusLog(
+              affectedOnlyEnabled
+                ? "Resolving affected scope…"
+                : "Resolving visible scope…",
             );
-            return;
+            const resolved = await postVisualActionScope(
+              {
+                visibleStoryIds,
+                affectedOnly: affectedOnlyEnabled,
+              },
+              {
+                onProgress: (next) => {
+                  setStatusLog(next.message);
+                },
+              },
+            );
+            frozenIds = [...resolved.storyIds];
+            compareScope = affectedOnlyEnabled ? "affected" : "all";
+            resolvedSummary = resolved.summary;
+            setAffectedSummary(resolved.summary);
+            if (!frozenIds.length) {
+              setScopeMessage(
+                affectedOnlyEnabled ? "Up to date" : "No visible stories",
+              );
+              return;
+            }
           }
-        }
 
-        await executeVisualActionSequence<VisualRunResultItem[]>({
-          writeBaselines: writeBaselines
-            ? async () => {
-                const mode = loadBaselineWriteMode();
-                if (mode === "rewrite") {
-                  await postVisualUpdateBaselinesForStoryIds(api, frozenIds);
-                } else {
-                  await postVisualCreateBaselinesForStoryIds(api, frozenIds);
+          await executeVisualActionSequence<VisualRunResultItem[]>({
+            writeBaselines: writeBaselines
+              ? async () => {
+                  const mode = loadBaselineWriteMode();
+                  if (mode === "rewrite") {
+                    await postVisualUpdateBaselinesForStoryIds(api, frozenIds);
+                  } else {
+                    await postVisualCreateBaselinesForStoryIds(api, frozenIds);
+                  }
                 }
-              }
-            : undefined,
-          runVisualTests: runVisual
-            ? async () => {
-                setIsComparing(true);
-                try {
-                  return await runCompareRef.current(
-                    compareScope,
-                    frozenIds,
-                    resolvedSummary,
-                  );
-                } finally {
-                  setIsComparing(false);
-                }
-              }
-            : undefined,
-          updateStatus: updateStatus
-            ? async (results) => {
-                setIsUpdatingStatus(true);
-                try {
-                  const priorResults = latestResultsRef.current?.filter(
-                    (item) => frozenIds.includes(item.storyId),
-                  );
-                  let freshPriorResults: VisualRunResultItem[] | undefined;
-                  if (priorResults?.length) {
-                    const requested = new Set(frozenIds);
-                    const evidenceResponse = await fetch(
-                      VISUAL_DELTA_STORY_FACTS_PATH,
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          stories: storyDescriptors.filter((story) =>
-                            requested.has(story.id),
-                          ),
-                        }),
-                      },
+              : undefined,
+            runVisualTests: runVisual
+              ? async () => {
+                  setIsComparing(true);
+                  try {
+                    return await runCompareRef.current(
+                      compareScope,
+                      frozenIds,
+                      resolvedSummary,
                     );
-                    const evidence =
-                      (await evidenceResponse.json()) as VisualStoryFactsResponse;
-                    if (evidenceResponse.ok && evidence.ok) {
-                      const facts = new Map(
-                        evidence.stories.map((fact) => [fact.storyId, fact]),
+                  } finally {
+                    setIsComparing(false);
+                  }
+                }
+              : undefined,
+            updateStatus: updateStatus
+              ? async (results) => {
+                  setIsUpdatingStatus(true);
+                  try {
+                    const priorResults = latestResultsRef.current?.filter(
+                      (item) => frozenIds.includes(item.storyId),
+                    );
+                    let freshPriorResults: VisualRunResultItem[] | undefined;
+                    if (priorResults?.length) {
+                      const requested = new Set(frozenIds);
+                      const evidenceResponse = await fetch(
+                        VISUAL_DELTA_STORY_FACTS_PATH,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            stories: storyDescriptors.filter((story) =>
+                              requested.has(story.id),
+                            ),
+                          }),
+                        },
                       );
-                      const matchingResults = priorResults.filter((item) => {
-                        const sidecar = item.sidecar;
-                        const fact = facts.get(item.storyId);
-                        return Boolean(
-                          sidecar?.baselineHash &&
-                            sidecar.captureConfigHash &&
-                            fact?.baselineHash === sidecar.baselineHash &&
-                            fact.resultBaselineHash === sidecar.baselineHash &&
-                            fact.resultCaptureConfigHash ===
-                              sidecar.captureConfigHash,
+                      const evidence =
+                        (await evidenceResponse.json()) as VisualStoryFactsResponse;
+                      if (evidenceResponse.ok && evidence.ok) {
+                        const facts = new Map(
+                          evidence.stories.map((fact) => [fact.storyId, fact]),
                         );
-                      });
-                      freshPriorResults = resultsForFrozenVisualScope(
-                        frozenIds,
-                        matchingResults,
+                        const matchingResults = priorResults.filter((item) => {
+                          const sidecar = item.sidecar;
+                          const fact = facts.get(item.storyId);
+                          return Boolean(
+                            sidecar?.baselineHash &&
+                              sidecar.captureConfigHash &&
+                              fact?.baselineHash === sidecar.baselineHash &&
+                              fact.resultBaselineHash ===
+                                sidecar.baselineHash &&
+                              fact.resultCaptureConfigHash ===
+                                sidecar.captureConfigHash,
+                          );
+                        });
+                        freshPriorResults = resultsForFrozenVisualScope(
+                          frozenIds,
+                          matchingResults,
+                        );
+                      }
+                    }
+                    const source =
+                      results ??
+                      (freshPriorResults?.length
+                        ? freshPriorResults
+                        : undefined) ??
+                      [];
+                    if (!source.length) {
+                      throw new Error(
+                        "No visual results to update status from — run visual tests first",
                       );
                     }
-                  }
-                  const source =
-                    results ??
-                    (freshPriorResults?.length
-                      ? freshPriorResults
-                      : undefined) ??
-                    [];
-                  if (!source.length) {
-                    throw new Error(
-                      "No visual results to update status from — run visual tests first",
-                    );
-                  }
-                  setStatusProgress({ completed: 0, total: source.length });
-                  setStatusLog(`Updating review status… 0/${source.length}`);
-                  const { updated, errors, skippedMissingBaseline } =
-                    await postVisualReviewStatusesFromResults(source, {
-                      currentReviewStatus: (storyId) =>
-                        visualReviewStatusFromTags(
-                          api.getData(storyId)?.tags,
-                        ),
+                    setStatusProgress({ completed: 0, total: source.length });
+                    setStatusLog(`Updating review status… 0/${source.length}`);
+                    const { updated, errors, skippedMissingBaseline } =
+                      await postVisualReviewStatusesFromResults(source, {
+                        currentReviewStatus: (storyId) =>
+                          visualReviewStatusFromTags(
+                            api.getData(storyId)?.tags,
+                          ),
+                      });
+                    setStatusProgress({
+                      completed: source.length,
+                      total: source.length,
                     });
-                  setStatusProgress({
-                    completed: source.length,
-                    total: source.length,
-                  });
-                  const parts = [`Updated ${updated} review tags`];
-                  if (skippedMissingBaseline) {
-                    parts.push(
-                      `${skippedMissingBaseline} skipped (no baseline)`,
-                    );
+                    const parts = [`Updated ${updated} review tags`];
+                    if (skippedMissingBaseline) {
+                      parts.push(
+                        `${skippedMissingBaseline} skipped (no baseline)`,
+                      );
+                    }
+                    if (errors.length) {
+                      parts.push(`${errors.length} failed`);
+                    }
+                    const doneLabel = parts.join(" · ");
+                    setStatusUpdateLabel(doneLabel);
+                    setStatusLog(doneLabel);
+                    if (errors.length && updated === 0) {
+                      throw new Error(errors[0] ?? "Update status failed");
+                    }
+                  } finally {
+                    setIsUpdatingStatus(false);
+                    setStatusProgress(null);
                   }
-                  if (errors.length) {
-                    parts.push(`${errors.length} failed`);
-                  }
-                  const doneLabel = parts.join(" · ");
-                  setStatusUpdateLabel(doneLabel);
-                  setStatusLog(doneLabel);
-                  if (errors.length && updated === 0) {
-                    throw new Error(errors[0] ?? "Update status failed");
-                  }
-                } finally {
-                  setIsUpdatingStatus(false);
-                  setStatusProgress(null);
                 }
-              }
-            : undefined,
-        });
+              : undefined,
+          });
+        } catch (error) {
+          if (
+            (error instanceof DOMException && error.name === "AbortError") ||
+            (error instanceof Error && error.name === "AbortError")
+          ) {
+            return;
+          }
+          throw error;
+        }
       });
     },
     [affectedOnlyEnabled, api, storyDescriptors],
@@ -918,6 +930,15 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       }
       if (hub.phase !== "running" && !hub.childActive) {
         clearStaleVisualCreateProgress();
+        // Hub idle with no writer/status job: drop orphan Testing Module
+        // "Running…" left by a hung/aborted runWithState after HMR.
+        if (
+          !peekVisualCreateProgress()?.running &&
+          !loadPersistedVisualStatusJob() &&
+          testProviderStore.getState() === "test-provider-state:running"
+        ) {
+          testProviderStore.setState("test-provider-state:pending");
+        }
       }
 
       if (hub.phase === "running") {
@@ -1183,7 +1204,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         void runSelectedRef.current();
       }}
       onStop={() => {
-        void abortVisualWork();
+        void abortVisualWork().finally(() => {
+          testProviderStore.setState("test-provider-state:pending");
+        });
         setProgress(null);
         setIsComparing(false);
         setIsUpdatingStatus(false);
