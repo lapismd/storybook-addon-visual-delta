@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hardClearStoryGallerySession,
   initImageSelection,
   opacityForPlacementChange,
   placementToggleAction,
@@ -145,5 +146,42 @@ describe("revealCenteredOverlayPatch", () => {
         opacity: 1,
       }),
     ).toMatchObject({ index: 0, placement: "center", overlayOn: true });
+  });
+});
+
+describe("hardClearStoryGallerySession", () => {
+  it("drops prior gallery, selection, and story identity while keeping prefs", () => {
+    const prev = {
+      images: [{ src: "/visual-baselines/old.png" }],
+      interactions: [{ id: "step-1", label: "Step" }],
+      modes: { dark: {} },
+      modeNames: ["dark"],
+      selectedMode: "dark",
+      storyId: "ai-chat--old",
+      storyName: "Old",
+      layout: "padded" as const,
+      renderGeneration: 4,
+      storyFinished: true,
+      index: 0,
+      overlayOn: true,
+      opacity: 0.5,
+      placement: "right" as const,
+      baselineGeometryMismatch: { kind: "scale" },
+      baselineAlignmentMismatch: { kind: "align" },
+      baselineGeometryUnavailable: "timeout",
+    };
+    const next = hardClearStoryGallerySession(prev);
+    expect(next.images).toEqual([]);
+    expect(next.interactions).toEqual([]);
+    expect(next.modes).toEqual({});
+    expect(next.modeNames).toEqual([]);
+    expect(next.selectedMode).toBeNull();
+    expect(next.storyId).toBe("");
+    expect(next.storyName).toBe("");
+    expect(next.index).toBe(-1);
+    expect(next.overlayOn).toBe(false);
+    expect(next.baselineGeometryMismatch).toBeNull();
+    expect(next.opacity).toBe(0.5);
+    expect(next.placement).toBe("right");
   });
 });

@@ -13,7 +13,7 @@ These requirements keep every run conservative, reconnectable, and compare-only 
 | VD-RUN-003 | Enabled Testing Module actions MUST run in this order: baseline writes, visual comparisons, then result-to-review updates. A failed earlier action MUST prevent unsafe dependent actions.                                                                                                                                                                                  |
 | VD-RUN-004 | Static Playwright MUST run only against a complete, current, and trustworthy static Storybook. Missing or invalid `index.json`, `iframe.html`, graph, or cache evidence, or newer selected story, transitive preview, or static configuration input MUST trigger rebuild or conservative fallback. Primary and interaction writers MUST apply the same freshness decision. |
 | VD-RUN-005 | Affected selection MUST choose all eligible stories when dependency tracing is incomplete or a global-risk input changes. Passing cache entries MAY reduce scope only with matching fingerprints.                                                                                                                                                                          |
-| VD-RUN-006 | Every run MUST have a stable job ID, reconnectable progress, one terminal state, and cooperative cancellation. Run and baseline-write progress MUST identify its frozen target scope, and terminal effects MUST NOT follow navigation outside that scope. Compare runs MUST force snapshot updates off.                                                                    |
+| VD-RUN-006 | Every run MUST have a stable job ID, reconnectable progress, one terminal state, and cooperative cancellation. Run and baseline-write progress MUST identify its frozen target scope, and terminal effects MUST NOT follow navigation outside that scope. Compare runs MUST force snapshot updates off. Cancellation MUST transition the hub and manager presentation (run progress, baseline-write progress, and in-flight result-to-review presentation) to a terminal cancelled or idle state even when no child process is alive. After remount, when the hub is idle the manager MUST NOT leave a running presentation.                                                                    |
 
 ## Scope resolution
 
@@ -103,7 +103,9 @@ After remount, the manager:
 3. Subscribes to continuation events
 4. Avoids a second `/run-tests` request for the same job
 
-Cancellation sends one abort request and transitions the job to cancelling, then cancelled when the child exits. Completed results remain available, while unexecuted stories remain without a new outcome.
+Cancellation sends one abort request and transitions the job to cancelling, then cancelled when the child exits. Middleware MUST publish a terminal cancelled event before resetting the hub so reconnecting clients clear progress. The manager abort path MUST clear run progress, baseline-write progress, and any in-flight result-to-review presentation job even when no child process is alive. Completed results remain available, while unexecuted stories remain without a new outcome.
+
+After remount, the manager MUST clear orphan presentation progress when `/run-status` reports idle and no baseline writer is active. It MUST NOT leave Testing Module or panel controls in a running state solely because in-memory progress survived a prior hot reload.
 
 If a child process exits without a structured terminal event, middleware MUST synthesize an error terminal state. Reconnection failure MAY expose a retry action, but it MUST NOT label the prior run as passing.
 

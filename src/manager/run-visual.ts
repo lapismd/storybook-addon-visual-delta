@@ -103,6 +103,8 @@ export type VisualRunResponse = {
   exitCode: number;
   crashed?: boolean;
   error?: string;
+  /** True when the run was aborted via cancel before a natural terminal result. */
+  cancelled?: boolean;
   rebuild: boolean;
   grep?: string;
   summary: {
@@ -138,6 +140,7 @@ export type VisualRunStreamEvent =
 
 const LAST_RUN_STORAGE_KEY = "visual-delta:last-run";
 const STATUS_JOB_STORAGE_KEY = "visual-delta:status-job";
+const CREATE_PROGRESS_STORAGE_KEY = "visual-delta:create-progress";
 
 /** Survives manager HMR so Update status / remounts can restore the summary. */
 function persistVisualLastRun(lastRun: VisualLastRunSummary | null) {
@@ -188,6 +191,11 @@ export function loadPersistedVisualStatusJob(): VisualStatusJob | null {
 
 export function clearPersistedVisualStatusJob() {
   persistVisualStatusJob(null);
+}
+
+/** Test helper — seed a persisted status job. */
+export function persistVisualStatusJobForTests(job: VisualStatusJob | null) {
+  persistVisualStatusJob(job);
 }
 
 type LogListener = (line: string) => void;
@@ -263,6 +271,13 @@ function emitVisualRunProgress(progress: VisualRunProgress | null) {
   for (const listener of progressListeners) {
     listener(progress);
   }
+}
+
+/** Test helper — seed run progress without opening an NDJSON stream. */
+export function emitVisualRunProgressForTests(
+  progress: VisualRunProgress | null,
+) {
+  emitVisualRunProgress(progress);
 }
 
 /** Subscribe to finished-run summaries shared across panel / Testing Module. */
@@ -749,6 +764,8 @@ export type VisualRunHubStatus = {
   completed: number;
   passed: number;
   failed: number;
+  /** True while middleware still owns a compare or baseline-write child. */
+  childActive?: boolean;
 };
 
 /** Lightweight phase check used before opening a reconnect stream. */
@@ -756,11 +773,25 @@ export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
   try {
     const response = await fetch(VISUAL_DELTA_RUN_STATUS_PATH);
     if (!response.ok) {
-      return { phase: "idle", total: 0, completed: 0, passed: 0, failed: 0 };
+      return {
+        phase: "idle",
+        total: 0,
+        completed: 0,
+        passed: 0,
+        failed: 0,
+        childActive: false,
+      };
     }
     return (await response.json()) as VisualRunHubStatus;
   } catch {
-    return { phase: "idle", total: 0, completed: 0, passed: 0, failed: 0 };
+    return {
+      phase: "idle",
+      total: 0,
+      completed: 0,
+      passed: 0,
+      failed: 0,
+      childActive: false,
+    };
   }
 }
 
@@ -919,8 +950,36 @@ export async function postVisualActionScope(
   return data;
 }
 
+/**
+ * Abort in-flight visual work and clear all manager presentation buses.
+ * Safe when no child is alive — still clears orphan run/create/status UI.
+ */
+export async function abortVisualWork(): Promise<{
+  ok: boolean;
+  cancelled: boolean;
+}> {
+  ndjsonStreamGeneration += 1;
+  emitVisualRunProgress(null);
+  emitVisualCreateProgress(null);
+  clearPersistedVisualStatusJob();
+  try {
+    const response = await fetch(VISUAL_DELTA_CANCEL_PATH, { method: "POST" });
+    if (!response.ok) {
+      return { ok: false, cancelled: false };
+    }
+    const data = (await response.json()) as {
+      ok?: boolean;
+      cancelled?: boolean;
+    };
+    return { ok: Boolean(data.ok), cancelled: Boolean(data.cancelled) };
+  } catch {
+    return { ok: false, cancelled: false };
+  }
+}
+
+/** @deprecated Prefer `abortVisualWork` — kept for call-site compatibility. */
 export async function cancelVisualRun() {
-  await fetch(VISUAL_DELTA_CANCEL_PATH, { method: "POST" });
+  await abortVisualWork();
 }
 
 export type VisualReviewResponse = {
@@ -1183,7 +1242,18 @@ export function visualCreateProgressAppliesToStory(
 
 type CreateProgressListener = (progress: VisualCreateProgress | null) => void;
 const createProgressListeners = new Set<CreateProgressListener>();
-let latestCreateProgress: VisualCreateProgress | null = null;
+let latestCreateProgress: VisualCreateProgress | null =
+  typeof sessionStorage !== "undefined"
+    ? (() => {
+        try {
+          const raw = sessionStorage.getItem(CREATE_PROGRESS_STORAGE_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw) as VisualCreateProgress;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
 /** Subscribe to create/update baseline progress from panel or sidebar. */
 export function subscribeVisualCreateProgress(
@@ -1196,11 +1266,66 @@ export function subscribeVisualCreateProgress(
   };
 }
 
+function persistCreateProgress(progress: VisualCreateProgress | null) {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (!progress?.running) {
+      sessionStorage.removeItem(CREATE_PROGRESS_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(
+      CREATE_PROGRESS_STORAGE_KEY,
+      JSON.stringify(progress),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 function emitVisualCreateProgress(progress: VisualCreateProgress | null) {
   latestCreateProgress = progress;
+  persistCreateProgress(progress);
   for (const listener of createProgressListeners) {
     listener(progress);
   }
+}
+
+export function loadPersistedCreateProgress(): VisualCreateProgress | null {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(CREATE_PROGRESS_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as VisualCreateProgress;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop orphan baseline-write presentation when no writer is active. */
+export function clearStaleVisualCreateProgress() {
+  if (latestCreateProgress?.running || latestCreateProgress) {
+    emitVisualCreateProgress(null);
+    return;
+  }
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(CREATE_PROGRESS_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Test helper — inspect create progress without mutating. */
+export function peekVisualCreateProgressForTests(): VisualCreateProgress | null {
+  return latestCreateProgress;
+}
+
+/** Test helper — seed create/update baseline progress. */
+export function emitVisualCreateProgressForTests(
+  progress: VisualCreateProgress | null,
+) {
+  emitVisualCreateProgress(progress);
 }
 
 export type VisualCreateResponse = {

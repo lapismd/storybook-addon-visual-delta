@@ -39,6 +39,7 @@ import {
   type BaselineAlignmentMismatch,
 } from "../shared/story-config.js";
 import {
+  OVERLAY_CHIP_ID,
   ensureOverlayChip,
   positionOverlayChip,
   syncModeBadge,
@@ -1633,7 +1634,6 @@ function applySelection(attempt: number, generation = selectionGeneration) {
 
   currentPlacement = effectivePlacement(selectedImageItem);
   const overlay = ensureOverlayElement();
-  syncOverlayChip(overlay);
   styleOverlayForMode(overlay, currentPlacement);
   updateOverlayStyle(overlay);
   overlay.style.visibility = "";
@@ -1644,11 +1644,30 @@ function applySelection(attempt: number, generation = selectionGeneration) {
   if (baselinePane instanceof HTMLElement) {
     baselinePane.style.visibility = "";
   }
+  // Hide Baseline chrome until the PNG loads so story switches never show a
+  // chip without a bitmap.
+  const pendingChip = overlay.querySelector(
+    `:scope > #${CSS.escape(OVERLAY_CHIP_ID)}`,
+  );
+  if (pendingChip instanceof HTMLElement) {
+    pendingChip.style.visibility = "hidden";
+  }
 
   const img = overlay.querySelector("img");
   if (img) {
+    const onFailed = () => {
+      if (!selectionStillCurrent(generation, selectedImageItem)) return;
+      // Failed/404 URL must not leave Baseline chrome without a bitmap.
+      clearOverlay();
+    };
     const onReady = () => {
       if (!selectionStillCurrent(generation, selectedImageItem)) return;
+      if (img.naturalWidth === 0) {
+        onFailed();
+        return;
+      }
+      const chip = syncOverlayChip(overlay);
+      chip.style.visibility = "";
       sizeOverlayImageToCss(img, selectedImageItem);
       const sizes = baselineCompareSizesFromNatural(
         img.naturalWidth,
@@ -1659,6 +1678,7 @@ function applySelection(attempt: number, generation = selectionGeneration) {
       scheduleOverlayPosition(overlay, selectedImageItem, sizes, generation);
       watchLayout(overlay);
     };
+    img.addEventListener("error", onFailed, { once: true });
     if (img.getAttribute("src") === selectedImageItem.src && img.complete) {
       onReady();
     } else {

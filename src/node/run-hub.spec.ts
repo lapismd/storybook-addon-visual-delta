@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   beginVisualRunHub,
+  cancelVisualRunHub,
   getVisualRunHubStatus,
   peekVisualRunHubForTests,
   publishVisualRunEvent,
@@ -49,5 +50,14 @@ describe("visual run hub", () => {
     });
     expect(getVisualRunHubStatus().phase).toBe("done");
     expect(RUN_HUB_DONE_TTL_MS).toBeGreaterThan(0);
+  });
+
+  it("cancel publishes a terminal event then returns the hub to idle", () => {
+    beginVisualRunHub();
+    publishVisualRunEvent({ type: "start", total: 2 });
+    expect(getVisualRunHubStatus().phase).toBe("running");
+    cancelVisualRunHub({ hadChild: true });
+    expect(getVisualRunHubStatus().phase).toBe("idle");
+    expect(peekVisualRunHubForTests().eventCount).toBe(0);
   });
 });

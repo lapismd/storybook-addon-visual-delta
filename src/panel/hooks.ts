@@ -14,6 +14,7 @@ import {
   type VisualDeltaModes,
 } from "../constants.js";
 import {
+  hardClearStoryGallerySession,
   initImageSelection,
   opacityForPlacementChange,
   placementToggleAction,
@@ -679,18 +680,25 @@ export function useStoryData(currentStoryId?: string) {
       // Decorator remounted after GOTO / FORCE_REMOUNT — push current selection
       // again now that the preview listener is subscribed.
       setStoryData((prev) => {
-        // Preview moved to a different story than panel state — clear the stale
-        // overlay and ask for INIT instead of re-painting the previous baseline.
+        // Preview moved to a different story than panel state — hard-clear the
+        // prior gallery/tag/pins, then ask for INIT for the new story.
         if (
           payload?.storyId &&
           prev.storyId &&
           payload.storyId !== prev.storyId
         ) {
+          pinInteractionSrc(activeInteractionSrcRef, null);
+          primaryImagesRef.current = [];
+          selectionContextRef.current = {
+            storyId: "",
+            layout: null,
+            renderGeneration: 0,
+          };
           emitRef.current?.(EVENTS.REQUEST_INIT_IMAGE, {
             storyId: payload.storyId,
           });
           void selectImage(-1, []);
-          return prev;
+          return hardClearStoryGallerySession(prev);
         }
         // Preview just came up without INIT reaching us — ask again.
         if (
