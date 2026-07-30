@@ -131,7 +131,8 @@ export type PanelShellProps = {
   /** Deterministic configuration persistence failure for regression stories. */
   configurationSaveError?: string;
   captureError?: string;
-  runAvailable?: boolean;
+  runAcceptAvailable?: boolean;
+  runRejectAvailable?: boolean;
   modeNames?: string[];
   modeResults?: Record<string, VisualModeResultStatus>;
   /** Deterministic in-flight counts for progress-chrome stories. */
@@ -154,7 +155,8 @@ export function PanelShell({
   configurationOpen = false,
   configurationSaveError,
   captureError = "",
-  runAvailable = true,
+  runAcceptAvailable = true,
+  runRejectAvailable = true,
   modeNames = [],
   modeResults = {},
   initialProgress,
@@ -507,7 +509,8 @@ export function PanelShell({
           setAcceptScope(scope);
           void handleReview("pending");
         },
-        acceptRunAvailable: runAvailable,
+        acceptRunAcceptAvailable: runAcceptAvailable,
+        acceptRunRejectAvailable: runRejectAvailable,
         onToggleSkipVisual: () => void handleToggleSkipVisual(),
         onOpenConfiguration: () => setShowConfiguration(true),
         isRebuilding,

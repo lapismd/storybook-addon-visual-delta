@@ -96,7 +96,8 @@ export type VisualDeltaHeaderProps = {
   onReviewStatus: (status: VisualReviewStatus) => void;
   onAccept: (scope: AcceptScope) => void;
   onUnaccept: (scope: AcceptScope) => void;
-  acceptRunAvailable?: boolean;
+  acceptRunAcceptAvailable?: boolean;
+  acceptRunRejectAvailable?: boolean;
   onToggleSkipVisual: () => void;
   onOpenConfiguration: () => void;
   onOpenChanges?: () => void;
@@ -136,7 +137,8 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   onReviewStatus,
   onAccept,
   onUnaccept,
-  acceptRunAvailable = false,
+  acceptRunAcceptAvailable = false,
+  acceptRunRejectAvailable = false,
   onToggleSkipVisual,
   onOpenConfiguration,
   onOpenChanges = () => undefined,
@@ -249,7 +251,8 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
               <AcceptSplitButton
                 busy={busy}
                 disabled={storyMissing || skipVisual}
-                runAvailable={acceptRunAvailable}
+                runAcceptAvailable={acceptRunAcceptAvailable}
+                runRejectAvailable={acceptRunRejectAvailable}
                 onAccept={onAccept}
                 onUnaccept={onUnaccept}
               />

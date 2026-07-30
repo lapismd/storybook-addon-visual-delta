@@ -574,14 +574,16 @@ independent and preserves the review tag. **Update status** / middleware refuse
 | ----------------- | ------------------------------------------------------ | ---------------------------------------------- |
 | `visual-pending`  | Baseline exists; awaiting review                       | Baseline write or **Unaccept**                 |
 | `visual-ready`    | Agent/dev finished visual work; ready for human review | Explicit status update or panel **Ready** pad  |
-| `visual-approved` | Human accepted the baseline                            | **Accept** (story or component scope)          |
-| `visual-failed`   | Review rejected / known bad                            | Explicit status update or panel **Failed** pad |
+| `visual-approved` | Human accepted the baseline                            | **Accept** (story/component, or current-run passes) |
+| `visual-failed`   | Review rejected / known bad                            | Explicit status update, **Failed** pad, or current-run Unaccept on mismatches |
 
 #### Panel controls
 
-- **Accept / Unaccept** — human sign-off. Accept → `visual-approved`; Unaccept →
-  `visual-pending`. Scope menu: story, entire component, or current run. These
-  actions and the Ready / Failed pad do not read Testing Module preferences.
+- **Accept / Unaccept** — human sign-off. Story/component: Accept →
+  `visual-approved`; Unaccept → `visual-pending`. Current run: Accept approves
+  only last-run passes (and within-tolerance); Unaccept stamps `visual-failed`
+  only on last-run mismatches. These actions and the Ready / Failed pad do not
+  read Testing Module preferences.
 - **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
   on this pad; use Accept/Unaccept for those).
 

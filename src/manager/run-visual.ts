@@ -232,22 +232,49 @@ export type VisualLastRunSummary = {
   affected?: AffectedVisualSummary;
 };
 
-/** Distinct, reviewable story ids from the most recent completed visual run. */
-export function reviewableStoryIdsFromLastRun(
+/**
+ * Distinct story ids from the last run that Accept current run may approve:
+ * passed or within tolerance only (not mismatches).
+ */
+export function acceptableStoryIdsFromLastRun(
   lastRun: VisualLastRunSummary | null,
 ): string[] {
   const ids = new Set<string>();
   for (const result of lastRun?.results ?? []) {
     const outcome = classifyVisualRunResult(result);
-    if (
-      outcome !== "passed" &&
-      outcome !== "changed-within-tolerance" &&
-      outcome !== "mismatch"
-    )
-      continue;
-    ids.add(result.storyId);
+    if (outcome === "passed" || outcome === "changed-within-tolerance") {
+      ids.add(result.storyId);
+    }
   }
   return [...ids];
+}
+
+/**
+ * Distinct story ids from the last run that Unaccept current run may reject:
+ * pixel mismatches only.
+ */
+export function rejectableStoryIdsFromLastRun(
+  lastRun: VisualLastRunSummary | null,
+): string[] {
+  const ids = new Set<string>();
+  for (const result of lastRun?.results ?? []) {
+    if (classifyVisualRunResult(result) === "mismatch") {
+      ids.add(result.storyId);
+    }
+  }
+  return [...ids];
+}
+
+/** Union of Accept/Unaccept current-run targets (passes + mismatches). */
+export function reviewableStoryIdsFromLastRun(
+  lastRun: VisualLastRunSummary | null,
+): string[] {
+  return [
+    ...new Set([
+      ...acceptableStoryIdsFromLastRun(lastRun),
+      ...rejectableStoryIdsFromLastRun(lastRun),
+    ]),
+  ];
 }
 
 const statusStore = experimental_getStatusStore(STATUS_TYPE_ID_VISUAL);
