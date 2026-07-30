@@ -120,7 +120,7 @@ import {
   getVisualRunHubStatus,
   isVisualRunActive,
   publishVisualRunEvent,
-  resetVisualRunHub,
+  cancelVisualRunHub,
   subscribeVisualRunHub,
   type VisualRunResponse,
   type VisualRunResultItem,
@@ -1280,15 +1280,13 @@ async function handleRun(
 }
 
 function handleCancel(res: ServerResponse) {
-  if (!activeRun) {
-    resetVisualRunHub();
-    writeJson(res, 200, { ok: true, cancelled: false });
-    return;
+  const hadChild = Boolean(activeRun);
+  if (activeRun) {
+    activeRun.kill("SIGTERM");
+    activeRun = null;
   }
-  activeRun.kill("SIGTERM");
-  activeRun = null;
-  resetVisualRunHub();
-  writeJson(res, 200, { ok: true, cancelled: true });
+  cancelVisualRunHub({ hadChild });
+  writeJson(res, 200, { ok: true, cancelled: hadChild });
 }
 
 function handleAffectedPlan(
@@ -1498,7 +1496,11 @@ function handleRunEvents(res: ServerResponse) {
 }
 
 function handleRunStatus(res: ServerResponse) {
-  writeJson(res, 200, getVisualRunHubStatus());
+  writeJson(res, 200, {
+    ...getVisualRunHubStatus(),
+    /** True while any middleware-spawned child (compare or baseline write) is alive. */
+    childActive: Boolean(activeRun),
+  });
 }
 
 type ReviewBody = {

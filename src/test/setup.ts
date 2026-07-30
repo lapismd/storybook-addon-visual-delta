@@ -2,29 +2,38 @@ import "@testing-library/jest-dom/vitest";
 
 // Node 26 exposes an unavailable experimental global unless
 // `--localstorage-file` is configured. Prefer jsdom's per-test storage.
-const storageValues = new Map<string, string>();
-Object.defineProperty(globalThis, "localStorage", {
-  configurable: true,
-  value: {
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
     get length() {
-      return storageValues.size;
+      return values.size;
     },
     clear() {
-      storageValues.clear();
+      values.clear();
     },
     getItem(key: string) {
-      return storageValues.get(String(key)) ?? null;
+      return values.get(String(key)) ?? null;
     },
     key(index: number) {
-      return [...storageValues.keys()][index] ?? null;
+      return [...values.keys()][index] ?? null;
     },
     removeItem(key: string) {
-      storageValues.delete(String(key));
+      values.delete(String(key));
     },
     setItem(key: string, value: string) {
-      storageValues.set(String(key), String(value));
+      values.set(String(key), String(value));
     },
-  } satisfies Storage,
+  } satisfies Storage;
+}
+
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: createMemoryStorage(),
+});
+
+Object.defineProperty(globalThis, "sessionStorage", {
+  configurable: true,
+  value: createMemoryStorage(),
 });
 
 /**

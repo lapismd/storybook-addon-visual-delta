@@ -18,6 +18,8 @@ export type VisualRunResponse = {
   exitCode: number;
   crashed?: boolean;
   error?: string;
+  /** True when the run was aborted via cancel before a natural terminal result. */
+  cancelled?: boolean;
   rebuild: boolean;
   grep?: string;
   summary: {
@@ -241,6 +243,31 @@ export function resetVisualRunHub(): void {
   hub.phase = "idle";
   hub.events = [];
   hub.doneAt = null;
+}
+
+/**
+ * Publish a terminal cancelled `done` for live subscribers, then reset the hub
+ * to idle. Callers use this from cancel so reconnect clients never stay on a
+ * stuck `running` phase.
+ */
+export function cancelVisualRunHub(options?: {
+  /** True when a child process was killed. */
+  hadChild?: boolean;
+}): void {
+  if (hub.phase === "running" || hub.subscribers.size > 0) {
+    publishVisualRunEvent({
+      type: "done",
+      ok: true,
+      cancelled: true,
+      exitCode: options?.hadChild ? 130 : 0,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      results: [],
+      logTail: "",
+      error: "Cancelled",
+    });
+  }
+  resetVisualRunHub();
 }
 
 /** Test helper — inspect hub without mutating. */

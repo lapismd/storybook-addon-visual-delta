@@ -38,10 +38,10 @@ import {
   type VisualDeltaAddonState,
 } from "../manager/PanelTitle.js";
 import {
+  abortVisualWork,
   applyPendingVisualStatuses,
   applyVisualRunResults,
   applyVisualStatuses,
-  cancelVisualRun,
   clearVisualStatuses,
   compareExactStory,
   componentStoryIdsFor,
@@ -2228,7 +2228,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onRebuildStatic: () => void handleRebuildStatic(),
           onResetSettings: resetSettings,
           onStopDiff: handleStopDiff,
-          onStopRun: () => void cancelVisualRun(),
+          onStopRun: () => {
+            void abortVisualWork();
+            setIsRunningVisual(false);
+            setRunProgress(null);
+            setBaselineJob(null);
+          },
           onReviewStatus: (status) => void handleSetReviewStatus(status),
           onAccept: (scope) => void handleAcceptScope(scope),
           onUnaccept: (scope) => void handleUnacceptScope(scope),

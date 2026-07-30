@@ -129,3 +129,28 @@ export function revealCenteredOverlayPatch(prev: {
     opacity: opacityForPlacementChange(prev.placement, "center", prev.opacity),
   };
 }
+
+/**
+ * Hard-clear gallery/selection fields when preview reports a different storyId
+ * than the panel session. Presentation prefs (opacity, placement, …) stay.
+ */
+export function hardClearStoryGallerySession<T extends object>(prev: T): T {
+  return {
+    ...prev,
+    images: [],
+    interactions: [],
+    modes: {},
+    modeNames: [],
+    selectedMode: null,
+    storyId: "",
+    storyName: "",
+    layout: null,
+    renderGeneration: 0,
+    storyFinished: false,
+    index: -1,
+    overlayOn: false,
+    baselineGeometryMismatch: null,
+    baselineAlignmentMismatch: null,
+    baselineGeometryUnavailable: null,
+  };
+}

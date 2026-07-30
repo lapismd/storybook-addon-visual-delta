@@ -35,10 +35,11 @@ import {
 } from "./VisualBaselineSplitButton.js";
 import { VisualTestModuleUI } from "./VisualTestModuleUI.js";
 import {
+  abortVisualWork,
   applyPendingVisualStatuses,
   applyVisualRunResults,
   applyVisualStatuses,
-  cancelVisualRun,
+  clearStaleVisualCreateProgress,
   clearVisualStatuses,
   compareExactStory,
   fetchAffectedVisualPlan,
@@ -889,15 +890,29 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   // Playwright run and restore / resume review-status work.
   useEffect(() => {
     if (entry) return;
-    if (visualRecoveryInFlight) return;
-
     let cancelled = false;
-    visualRecoveryInFlight = (async () => {
+    const prior = visualRecoveryInFlight;
+    const work = (async () => {
+      try {
+        if (prior) await prior;
+      } catch {
+        /* prior recovery failure must not block the next remount */
+      }
+      if (cancelled) return;
+
       const persisted = loadPersistedVisualLastRun();
       if (persisted) publishVisualLastRun(persisted);
 
       const hub = await fetchVisualRunStatus();
       if (cancelled) return;
+
+      if (hub.phase !== "running") {
+        setProgress(null);
+        setIsComparing(false);
+      }
+      if (hub.phase !== "running" && !hub.childActive) {
+        clearStaleVisualCreateProgress();
+      }
 
       if (hub.phase === "running") {
         setIsComparing(true);
@@ -912,7 +927,14 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         try {
           await testProviderStore.runWithState(async () => {
             const data = await reconnectVisualRun();
-            if (cancelled || data.idle) return;
+            if (cancelled) {
+              setProgress(null);
+              return;
+            }
+            if (data.idle || data.cancelled) {
+              setProgress(null);
+              return;
+            }
             applyVisualRunResults(undefined, data.results);
             publishVisualLastRun({
               finishedAt: Date.now(),
@@ -933,10 +955,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           });
         } finally {
           setIsComparing(false);
+          setProgress(null);
         }
       } else if (hub.phase === "done") {
         const data = await reconnectVisualRun();
-        if (!cancelled && !data.idle) {
+        if (!cancelled && !data.idle && !data.cancelled) {
           applyVisualRunResults(undefined, data.results);
           publishVisualLastRun({
             finishedAt: Date.now(),
@@ -952,6 +975,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
             affected: data.affected,
           });
         }
+        if (!cancelled) setProgress(null);
       }
 
       if (cancelled || !loadPersistedVisualStatusJob()) return;
@@ -983,8 +1007,9 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           setStatusProgress(null);
         }
       });
-    })().finally(() => {
-      visualRecoveryInFlight = null;
+    })();
+    visualRecoveryInFlight = work.finally(() => {
+      if (visualRecoveryInFlight === work) visualRecoveryInFlight = null;
     });
 
     return () => {
@@ -1151,7 +1176,13 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         }
         void runSelectedRef.current();
       }}
-      onStop={() => void cancelVisualRun()}
+      onStop={() => {
+        void abortVisualWork();
+        setProgress(null);
+        setIsComparing(false);
+        setIsUpdatingStatus(false);
+        setStatusProgress(null);
+      }}
       onOpenCompareResults={openResults}
       onOpenBaselineStatus={openResults}
       onOpenStatusResults={openResults}
