@@ -77,7 +77,7 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: "AI Chat Dock Skip visual: Excluded from Visual Delta tests",
+        name: "Select Skip visual: Excluded from Visual Delta tests",
         exact: true,
       }),
     ).toHaveCount(0);
