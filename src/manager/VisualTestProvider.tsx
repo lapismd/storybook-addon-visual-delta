@@ -46,11 +46,14 @@ import {
   fetchAffectedVisualPlan,
   fetchVisualRunStatus,
   formatVisualProgressLabel,
+  acceptableStoryIdsFromLastRun,
+  fetchVisualConfig,
   loadPersistedVisualLastRun,
   loadPersistedVisualStatusJob,
   peekVisualCreateProgress,
   postVisualCreateBaselinesForStoryIds,
   postVisualActionScope,
+  postVisualReviewStatuses,
   postVisualReviewStatusesFromResults,
   postVisualRun,
   postVisualUpdateBaselinesForStoryIds,
@@ -82,12 +85,14 @@ import {
 import {
   AFFECTED_ONLY_KEY,
   CREATE_BASELINES_KEY,
+  RUN_DIFF_KEY,
   RUN_VISUAL_KEY,
   UPDATE_STATUS_KEY,
   anyModuleActionSelected,
   loadCreateBaselinesEnabled,
   loadAffectedOnlyEnabled,
   loadModuleBaselineWriteMode,
+  loadRunDiffEnabled,
   loadRunVisualEnabled,
   loadUpdateStatusEnabled,
   writeBoolFlag,
@@ -349,6 +354,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   );
   const [runVisualEnabled, setRunVisualEnabled] =
     useState(loadRunVisualEnabled);
+  const [runDiffEnabled, setRunDiffEnabled] = useState(loadRunDiffEnabled);
   const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState(
     loadCreateBaselinesEnabled,
   );
@@ -406,6 +412,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
 
   const anyActionSelected = anyModuleActionSelected({
     runVisualEnabled,
+    runDiffEnabled,
     createBaselinesEnabled,
     updateStatusEnabled,
   });
@@ -585,9 +592,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   const runSelectedActions = useCallback(
     async (scopedIds?: string[]) => {
       const runVisual = loadRunVisualEnabled();
+      const runDiff = loadRunDiffEnabled();
       const writeBaselines = loadCreateBaselinesEnabled();
       const updateStatus = loadUpdateStatusEnabled();
-      if (!runVisual && !writeBaselines && !updateStatus) {
+      const shouldCompare = runVisual || runDiff;
+      if (!shouldCompare && !writeBaselines && !updateStatus) {
         return;
       }
 
@@ -663,7 +672,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                   }
                 }
               : undefined,
-            runVisualTests: runVisual
+            runVisualTests: shouldCompare
               ? async () => {
                   setIsComparing(true);
                   try {
@@ -766,6 +775,58 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                   } finally {
                     setIsUpdatingStatus(false);
                     setStatusProgress(null);
+                  }
+                }
+              : undefined,
+            acceptPasses: runDiff
+              ? async (results) => {
+                  const config = await fetchVisualConfig();
+                  if (!config.workflow.autoAcceptLiveStoryComparisons) {
+                    return;
+                  }
+                  const source =
+                    results ??
+                    latestResultsRef.current?.filter((item) =>
+                      frozenIds.includes(item.storyId),
+                    ) ??
+                    [];
+                  const acceptIds = acceptableStoryIdsFromLastRun({
+                    finishedAt: Date.now(),
+                    summary: {
+                      total: source.length,
+                      passed: 0,
+                      failed: 0,
+                      skipped: 0,
+                    },
+                    completed: true,
+                    results: source,
+                  });
+                  if (!acceptIds.length) return;
+                  setIsUpdatingStatus(true);
+                  try {
+                    setStatusLog(
+                      `Accepting ${acceptIds.length} passing stor${
+                        acceptIds.length === 1 ? "y" : "ies"
+                      }…`,
+                    );
+                    const { updated, errors } = await postVisualReviewStatuses(
+                      acceptIds.map((storyId) => ({
+                        storyId,
+                        status: "approved",
+                      })),
+                    );
+                    const parts = [`Accepted ${updated}`];
+                    if (errors.length) {
+                      parts.push(`${errors.length} failed`);
+                    }
+                    const doneLabel = parts.join(" · ");
+                    setStatusUpdateLabel(doneLabel);
+                    setStatusLog(doneLabel);
+                    if (errors.length && updated === 0) {
+                      throw new Error(errors[0] ?? "Accept passes failed");
+                    }
+                  } finally {
+                    setIsUpdatingStatus(false);
                   }
                 }
               : undefined,
@@ -1154,6 +1215,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       variant={entry ? "context" : "global"}
       statusLine={statusLine}
       runVisualEnabled={runVisualEnabled}
+      runDiffEnabled={runDiffEnabled}
       createBaselinesEnabled={createBaselinesEnabled}
       updateStatusEnabled={updateStatusEnabled}
       affectedOnlyEnabled={!entry && affectedOnlyEnabled}
@@ -1178,6 +1240,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       onRunVisualChange={(next) => {
         setRunVisualEnabled(next);
         writeBoolFlag(RUN_VISUAL_KEY, next);
+      }}
+      onRunDiffChange={(next) => {
+        setRunDiffEnabled(next);
+        writeBoolFlag(RUN_DIFF_KEY, next);
       }}
       onCreateBaselinesChange={(next) => {
         setCreateBaselinesEnabled(next);

@@ -1505,7 +1505,7 @@ export function ConfigurationPanel({
                 <FieldLabel>Live comparison review</FieldLabel>
                 <CheckboxRow>
                   <Input
-                    aria-label="Automatically accept passing live story comparisons"
+                    aria-label="Automatically accept passing Diff Chromium, Story, and Run Diff"
                     type="checkbox"
                     checked={workflowDraft.autoAcceptLiveStoryComparisons}
                     onChange={(event) => {
@@ -1518,12 +1518,12 @@ export function ConfigurationPanel({
                     }}
                     style={{ width: 16 }}
                   />
-                  Auto-accept passing Diff Chromium and Story runs
+                  Auto-accept passing Diff Chromium, Story, and Run Diff
                 </CheckboxRow>
                 <FieldHint>
-                  Only fresh passed or within-tolerance authoritative
-                  comparisons mark the exact story visual-approved. Failures
-                  never change review state.
+                  Fresh passed or within-tolerance Chromium comparisons mark
+                  stories visual-approved for Diff Chromium, Story, and Testing
+                  Module Run Diff. Failures never change review state.
                 </FieldHint>
               </Field>
 

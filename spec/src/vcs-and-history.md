@@ -79,7 +79,12 @@ Visual Delta MUST account for working-tree, index, and untracked changes when de
 
 ## Automation boundaries
 
-`workflow.autoAcceptLiveStoryComparisons` applies only to a fresh exact-story Chromium result classified as passed or changed within tolerance. It does not apply to HTML comparison, scoped runs, baseline writes, stale sidecars, missing baselines, or errors.
+`workflow.autoAcceptLiveStoryComparisons` applies when a fresh authoritative Chromium comparison outcome is `passed` or `changed-within-tolerance` for:
+
+- Exact-story Diff Chromium / Story live compares
+- Testing Module **Run Diff** on a frozen selected scope (including multi-story Playwright Chromium suite results)
+
+It does not apply to HTML comparison, ordinary **Run visual tests** without Run Diff, baseline writes, Update status, stale sidecars, missing baselines, or errors. Auto-accept remains separate from automatic commit (`VD-VCS-006`).
 
 Changing workflow configuration is always review-only. It cannot cause the configuration mutation itself to auto-commit.
 

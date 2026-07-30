@@ -53,7 +53,7 @@ The workflow defaults are:
 
 | Setting                                   | Built-in value                   | Meaning                                             |
 | ----------------------------------------- | -------------------------------- | --------------------------------------------------- |
-| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not change review status after a live comparison |
+| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not Accept after Diff Chromium / Story / Testing Module Run Diff |
 | `workflow.vcs.mode`                       | `off`                            | Do not prepare or create repository commits         |
 | `workflow.vcs.commitMessageTemplate`      | `Visual Delta: {action} {scope}` | Template for an allowed local commit                |
 

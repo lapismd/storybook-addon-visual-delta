@@ -122,7 +122,7 @@ describe("resolveVisualActionStoryIds", () => {
     expect(resolved).toEqual(["menu--checkboxes"]);
   });
 
-  it("executes baseline, comparison, and status actions in order", async () => {
+  it("executes baseline, comparison, status, and accept actions in order", async () => {
     const calls: string[] = [];
     const results = [{ storyId: "menu--checkboxes", status: "passed" }];
 
@@ -139,9 +139,24 @@ describe("resolveVisualActionStoryIds", () => {
           calls.push("status");
           expect(received).toBe(results);
         },
+        acceptPasses: async (received) => {
+          calls.push("accept");
+          expect(received).toBe(results);
+        },
       }),
     ).resolves.toBe(results);
-    expect(calls).toEqual(["baseline", "compare", "status"]);
+    expect(calls).toEqual(["baseline", "compare", "status", "accept"]);
+  });
+
+  it("skips accept when the step is omitted", async () => {
+    const calls: string[] = [];
+    await executeVisualActionSequence({
+      runVisualTests: async () => {
+        calls.push("compare");
+        return [];
+      },
+    });
+    expect(calls).toEqual(["compare"]);
   });
 
   it("reuses prior results only when they cover the frozen scope", () => {

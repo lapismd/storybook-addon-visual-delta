@@ -50,10 +50,13 @@ export async function executeVisualActionSequence<Result>(actions: {
   writeBaselines?: () => Promise<void>;
   runVisualTests?: () => Promise<Result>;
   updateStatus?: (results: Result | undefined) => Promise<void>;
+  /** Run Diff Accept of last-run passes when project auto-accept is enabled. */
+  acceptPasses?: (results: Result | undefined) => Promise<void>;
 }): Promise<Result | undefined> {
   await actions.writeBaselines?.();
   const results = await actions.runVisualTests?.();
   await actions.updateStatus?.(results);
+  await actions.acceptPasses?.(results);
   return results;
 }
 
