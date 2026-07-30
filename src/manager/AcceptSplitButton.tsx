@@ -100,20 +100,24 @@ const MenuButton = styled(Button)(({ theme }) => ({
 }));
 
 /**
- * Chromatic-style Accept / Unaccept with story vs component batch scope.
- * Accept → `visual-approved`; Unaccept → `visual-pending`.
+ * Chromatic-style Accept / Unaccept with story vs component vs current-run scope.
+ * Story/component: Accept → approved; Unaccept → pending.
+ * Current run: Accept → passes only; Unaccept → mismatches → failed.
  */
 export function AcceptSplitButton({
   busy = false,
   disabled = false,
-  runAvailable = false,
+  runAcceptAvailable = false,
+  runRejectAvailable = false,
   onAccept,
   onUnaccept,
 }: {
   busy?: boolean;
   disabled?: boolean;
-  /** Latest completed run contains at least one reviewable result. */
-  runAvailable?: boolean;
+  /** Last run has at least one passed / within-tolerance result. */
+  runAcceptAvailable?: boolean;
+  /** Last run has at least one mismatch result. */
+  runRejectAvailable?: boolean;
   onAccept: (scope: AcceptScope) => void;
   onUnaccept: (scope: AcceptScope) => void;
 }) {
@@ -126,19 +130,23 @@ export function AcceptSplitButton({
     setMenuOpen(false);
   }, []);
 
+  const runScopeSelectable = runAcceptAvailable || runRejectAvailable;
   const acceptLabel =
     scope === "component"
       ? "Accept component"
       : scope === "run"
-        ? "Accept current run"
+        ? "Accept current run (passes only)"
         : "Accept story";
   const unacceptLabel =
     scope === "component"
       ? "Unaccept component"
       : scope === "run"
-        ? "Unaccept current run"
+        ? "Unaccept current run (fail mismatches)"
         : "Unaccept story";
-  const scopeDisabled = disabled || (scope === "run" && !runAvailable);
+  const acceptDisabled =
+    disabled || busy || (scope === "run" && !runAcceptAvailable);
+  const unacceptDisabled =
+    disabled || busy || (scope === "run" && !runRejectAvailable);
 
   return (
     <Split role="group" aria-label="Accept or unaccept baselines">
@@ -146,7 +154,7 @@ export function AcceptSplitButton({
         size="small"
         variant="ghost"
         padding="small"
-        disabled={scopeDisabled || busy}
+        disabled={acceptDisabled}
         ariaLabel={acceptLabel}
         title={acceptLabel}
         onClick={() => onAccept(scope)}
@@ -158,7 +166,7 @@ export function AcceptSplitButton({
         size="small"
         variant="ghost"
         padding="small"
-        disabled={scopeDisabled || busy}
+        disabled={unacceptDisabled}
         ariaLabel={unacceptLabel}
         title={unacceptLabel}
         onClick={() => onUnaccept(scope)}
@@ -179,7 +187,7 @@ export function AcceptSplitButton({
                 <ActionList.Item key={item} active={scope === item}>
                   <ActionList.Action
                     ariaLabel={scopeLabel(item)}
-                    disabled={item === "run" && !runAvailable}
+                    disabled={item === "run" && !runScopeSelectable}
                     onClick={() => chooseScope(item)}
                   >
                     <ActionList.Icon>

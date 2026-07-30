@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  acceptableStoryIdsFromLastRun,
   isMissingBaselineFailure,
+  rejectableStoryIdsFromLastRun,
   reviewableStoryIdsFromLastRun,
   reviewUpdatesFromRunResults,
   type VisualRunResultItem,
@@ -76,35 +78,57 @@ describe("reviewUpdatesFromRunResults", () => {
   });
 });
 
+const lastRunFixture = {
+  finishedAt: 1,
+  summary: { total: 4, passed: 2, failed: 2, skipped: 0 },
+  results: [
+    { storyId: "a", title: "A", status: "passed" as const },
+    { storyId: "a", title: "A mode", status: "passed" as const },
+    {
+      storyId: "b",
+      title: "B",
+      status: "failed" as const,
+      missingBaseline: true,
+    },
+    {
+      storyId: "c",
+      title: "C",
+      status: "failed" as const,
+      outcome: "mismatch" as const,
+    },
+    {
+      storyId: "d",
+      title: "D",
+      status: "failed" as const,
+      error: "Browser crashed",
+    },
+    {
+      storyId: "e",
+      title: "E",
+      status: "passed" as const,
+      outcome: "changed-within-tolerance" as const,
+    },
+  ],
+};
+
+describe("acceptableStoryIdsFromLastRun", () => {
+  it("includes only passes and within-tolerance, deduped", () => {
+    expect(acceptableStoryIdsFromLastRun(lastRunFixture)).toEqual(["a", "e"]);
+  });
+});
+
+describe("rejectableStoryIdsFromLastRun", () => {
+  it("includes only mismatches", () => {
+    expect(rejectableStoryIdsFromLastRun(lastRunFixture)).toEqual(["c"]);
+  });
+});
+
 describe("reviewableStoryIdsFromLastRun", () => {
-  it("deduplicates completed results and excludes missing baselines", () => {
-    expect(
-      reviewableStoryIdsFromLastRun({
-        finishedAt: 1,
-        summary: { total: 4, passed: 2, failed: 2, skipped: 0 },
-        results: [
-          { storyId: "a", title: "A", status: "passed" },
-          { storyId: "a", title: "A mode", status: "passed" },
-          {
-            storyId: "b",
-            title: "B",
-            status: "failed",
-            missingBaseline: true,
-          },
-          {
-            storyId: "c",
-            title: "C",
-            status: "failed",
-            outcome: "mismatch",
-          },
-          {
-            storyId: "d",
-            title: "D",
-            status: "failed",
-            error: "Browser crashed",
-          },
-        ],
-      }),
-    ).toEqual(["a", "c"]);
+  it("unions acceptables and rejectables, excluding missing and crashes", () => {
+    expect(reviewableStoryIdsFromLastRun(lastRunFixture)).toEqual([
+      "a",
+      "e",
+      "c",
+    ]);
   });
 });

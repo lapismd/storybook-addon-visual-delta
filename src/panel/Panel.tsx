@@ -59,8 +59,9 @@ import {
   postVisualRun,
   postVisualSkipVisual,
   postVisualUpdateBaseline,
+  acceptableStoryIdsFromLastRun,
   publishVisualLastRun,
-  reviewableStoryIdsFromLastRun,
+  rejectableStoryIdsFromLastRun,
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
@@ -1061,8 +1062,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     });
   }, []);
 
-  const reviewableRunStoryIds = useMemo(
-    () => reviewableStoryIdsFromLastRun(lastRun),
+  const acceptableRunStoryIds = useMemo(
+    () => acceptableStoryIdsFromLastRun(lastRun),
+    [lastRun],
+  );
+  const rejectableRunStoryIds = useMemo(
+    () => rejectableStoryIdsFromLastRun(lastRun),
     [lastRun],
   );
 
@@ -1548,10 +1553,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           scope === "component"
             ? componentStoryIdsFor(api, storyId)
             : scope === "run"
-              ? reviewableRunStoryIds
+              ? acceptableRunStoryIds
               : [storyId];
         if (!ids.length) {
-          throw new Error("The current visual run has no reviewable results");
+          throw new Error(
+            scope === "run"
+              ? "The current visual run has no passed results"
+              : "No stories to accept",
+          );
         }
         const result = await postVisualReviewStatuses(
           ids.map((id) => ({ storyId: id, status: "approved" })),
@@ -1573,7 +1582,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsReviewing(false);
       }
     },
-    [api, reviewableRunStoryIds, storyId],
+    [acceptableRunStoryIds, api, storyId],
   );
 
   const handleUnacceptScope = useCallback(
@@ -1589,21 +1598,26 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           scope === "component"
             ? componentStoryIdsFor(api, storyId)
             : scope === "run"
-              ? reviewableRunStoryIds
+              ? rejectableRunStoryIds
               : [storyId];
         if (!ids.length) {
-          throw new Error("The current visual run has no reviewable results");
+          throw new Error(
+            scope === "run"
+              ? "The current visual run has no failed results"
+              : "No stories to unaccept",
+          );
         }
+        const status = scope === "run" ? "failed" : "pending";
         const result = await postVisualReviewStatuses(
-          ids.map((id) => ({ storyId: id, status: "pending" })),
+          ids.map((id) => ({ storyId: id, status })),
         );
         if (result.errors.length) throw new Error(result.errors[0]);
-        if (ids.includes(storyId)) setOptimisticReview("pending");
+        if (ids.includes(storyId)) setOptimisticReview(status);
         setUpdateLog(
           scope === "component"
             ? `Unaccepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} (visual-pending).`
             : scope === "run"
-              ? `Unaccepted ${ids.length} stor${ids.length === 1 ? "y" : "ies"} from the current run.`
+              ? `Marked ${ids.length} stor${ids.length === 1 ? "y" : "ies"} failed from the current run.`
               : "Unaccepted story baseline (visual-pending).",
         );
       } catch (error) {
@@ -1614,7 +1628,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setIsReviewing(false);
       }
     },
-    [api, reviewableRunStoryIds, storyId],
+    [api, rejectableRunStoryIds, storyId],
   );
 
   const handleModeChange = useCallback(
@@ -2237,7 +2251,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onReviewStatus: (status) => void handleSetReviewStatus(status),
           onAccept: (scope) => void handleAcceptScope(scope),
           onUnaccept: (scope) => void handleUnacceptScope(scope),
-          acceptRunAvailable: reviewableRunStoryIds.length > 0,
+          acceptRunAcceptAvailable: acceptableRunStoryIds.length > 0,
+          acceptRunRejectAvailable: rejectableRunStoryIds.length > 0,
           onToggleSkipVisual: () => void handleToggleSkipVisual(),
           onOpenConfiguration: () => {
             setShowChanges(false);

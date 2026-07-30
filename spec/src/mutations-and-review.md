@@ -12,7 +12,7 @@ These requirements make every durable change explicit, scoped, and reviewable.
 | VD-MUT-002 | Every mutation MUST declare exact story IDs and expected file paths or safe prefixes before it starts. Empty targets, traversal, target mismatch, and unexpected changed paths MUST fail closed. A create-only interaction writer MUST NOT overwrite an existing target and MUST verify a newly written missing snapshot with updates disabled before reporting success. |
 | VD-MUT-003 | A successful baseline write MUST invalidate prior comparison evidence for written stories and set only those stories to pending review. It MUST NOT change unrelated stories or preserve stale approval.                                                                                                                                                                 |
 | VD-MUT-004 | Deletion MUST remove one verified baseline, its derived sidecars, and only its matching story wiring. It MUST reject a baseline that does not belong to the requested story.                                                                                                                                                                                             |
-| VD-MUT-005 | Review status, skip eligibility, coverage, and comparison outcome MUST remain independent. Review actions MUST mutate only review tags, and comparison actions MUST NOT imply review changes without explicit opt-in.                                                                                                                                                    |
+| VD-MUT-005 | Review status, skip eligibility, coverage, and comparison outcome MUST remain independent. Review actions MUST mutate only review tags, and comparison actions MUST NOT imply review changes without explicit opt-in. Accept current run MUST approve only last-run stories whose outcome is passed or changed within tolerance. Unaccept current run MUST stamp `visual-failed` only for last-run mismatches and MUST NOT alter passed stories. Story and component Accept/Unaccept scopes remain approve-all / pending-all for their exact targets.                                                                                                                                                    |
 | VD-MUT-006 | Project configuration, story configuration, skip or include, initialization, and static rebuild MUST each apply only their documented side effects and MUST report exact changed files.                                                                                                                                                                                  |
 
 ## Mutation matrix
@@ -87,6 +87,16 @@ Visual review tags are mutually exclusive:
 Review status does not determine Playwright expectations. `visual-failed` still compares against its baseline, and `visual-approved` can have a fresh mismatch.
 
 Auto-accept MAY set approved only after a fresh authoritative exact-story outcome of `passed` or `changed-within-tolerance`. It requires project opt-in and remains separate from baseline writes.
+
+Panel Accept / Unaccept scopes:
+
+| Scope | Accept | Unaccept |
+| ----- | ------ | -------- |
+| Story | Active story → `visual-approved` | Active story → `visual-pending` |
+| Component | Every story under the component → `visual-approved` | Every story under the component → `visual-pending` |
+| Current run | Last-run stories with outcome `passed` or `changed-within-tolerance` → `visual-approved` | Last-run stories with outcome `mismatch` → `visual-failed` (passes unchanged) |
+
+Missing baselines, skips, and infrastructure failures are never included in Current run Accept or Unaccept scopes.
 
 ## Configuration and source writes
 
