@@ -65,6 +65,32 @@ describe("reviewUpdatesFromRunResults", () => {
     ).toEqual([]);
   });
 
+  it("does not demote approved stories to ready when they still pass", () => {
+    const results: VisualRunResultItem[] = [
+      { storyId: "a--approved", status: "passed", title: "a--approved" },
+      { storyId: "a--pending", status: "passed", title: "a--pending" },
+      {
+        storyId: "a--approved-diff",
+        status: "failed",
+        title: "a--approved-diff",
+        outcome: "mismatch",
+      },
+    ];
+    const current = new Map([
+      ["a--approved", "approved" as const],
+      ["a--pending", "pending" as const],
+      ["a--approved-diff", "approved" as const],
+    ]);
+    expect(
+      reviewUpdatesFromRunResults(results, {
+        currentReviewStatus: (id) => current.get(id),
+      }),
+    ).toEqual([
+      { storyId: "a--pending", status: "ready" },
+      { storyId: "a--approved-diff", status: "failed" },
+    ]);
+  });
+
   it("detects Playwright missing-snapshot error text", () => {
     expect(
       isMissingBaselineFailure({

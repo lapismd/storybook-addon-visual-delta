@@ -74,17 +74,32 @@ export function isMissingBaselineFailure(item: VisualRunResultItem): boolean {
   return classifyVisualRunResult(item) === "missing-baseline";
 }
 
+export type ReviewUpdatesFromRunResultsOptions = {
+  /**
+   * Current CSF review status for a story. When a story is already approved,
+   * pass / within-tolerance must not demote it to ready.
+   */
+  currentReviewStatus?: (
+    storyId: string,
+  ) => VisualReviewStatus | null | undefined;
+};
+
 /**
  * Map completed comparisons to review tags.
  * Runner errors, missing baselines, and skips never change review state.
+ * Already-approved stories stay approved when they still pass.
  */
 export function reviewUpdatesFromRunResults(
   results: VisualRunResultItem[],
+  options?: ReviewUpdatesFromRunResultsOptions,
 ): Array<{ storyId: string; status: VisualReviewStatus }> {
   const updates: Array<{ storyId: string; status: VisualReviewStatus }> = [];
   for (const item of results) {
     const outcome = classifyVisualRunResult(item);
     if (outcome === "passed" || outcome === "changed-within-tolerance") {
+      if (options?.currentReviewStatus?.(item.storyId) === "approved") {
+        continue;
+      }
       updates.push({ storyId: item.storyId, status: "ready" });
     }
     if (outcome === "mismatch") {
@@ -1102,12 +1117,14 @@ export async function postVisualReviewStatuses(
 
 /**
  * Stamp CSF review tags from visual run outcomes:
- * passed → ready, failed → failed. Skips skipped / timedOut and failures
- * with no committed baseline (those must not become `visual-failed`).
+ * passed → ready (unless already approved), mismatch → failed.
+ * Skips skipped / timedOut and failures with no committed baseline
+ * (those must not become `visual-failed`).
  * Uses one batched middleware call so HMR lands after the write finishes.
  */
 export async function postVisualReviewStatusesFromResults(
   results: VisualRunResultItem[],
+  options?: ReviewUpdatesFromRunResultsOptions,
 ): Promise<{
   updated: number;
   errors: string[];
@@ -1116,7 +1133,7 @@ export async function postVisualReviewStatusesFromResults(
   const skippedMissingBaseline = results.filter(
     (item) => item.status === "failed" && isMissingBaselineFailure(item),
   ).length;
-  const updates = reviewUpdatesFromRunResults(results);
+  const updates = reviewUpdatesFromRunResults(results, options);
   if (!updates.length) {
     return { updated: 0, errors: [], skippedMissingBaseline };
   }

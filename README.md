@@ -547,7 +547,8 @@ Testing Module **Run tests** (global runner and sidebar story/component
 context menu) freezes one scope and runs checked actions in order:
 create/update baselines (**Create missing** mode default; baselines row off by
 default), compare (on by default), then **Update status** (off by default;
-pass → `visual-ready`, fail → `visual-failed`). A story context is exactly that
+pass → `visual-ready`, fail → `visual-failed`; existing `visual-approved` is
+kept on pass / within-tolerance). A story context is exactly that
 story, a component context is every descendant story, and the global runner is
 the leaf stories currently visible in the filtered sidebar. **Affected only**
 uses the intersection of those visible IDs and the refreshed affected plan.
@@ -591,9 +592,11 @@ independent and preserves the review tag. **Update status** / middleware refuse
 to `visual-pending` and invalidate their prior comparison evidence. A baseline
 write is not a passing comparison. Run Story, Diff Chromium, or the static
 suite, then explicitly update status to map pass/tolerance → `visual-ready` and
-mismatch → `visual-failed`. Do **not** set `visual-approved` from agent work —
-leave Accept to a human unless the project has explicitly enabled the
-user-triggered live-comparison auto-accept workflow described below.
+mismatch → `visual-failed` (Update status does not demote an existing
+`visual-approved` when the story still passes). Do **not** set
+`visual-approved` from agent work — leave Accept to a human unless the project
+has explicitly enabled the user-triggered live-comparison auto-accept workflow
+described below.
 
 ### `skip-visual` from the panel
 
