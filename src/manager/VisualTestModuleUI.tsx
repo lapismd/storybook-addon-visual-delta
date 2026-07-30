@@ -135,6 +135,8 @@ export type VisualTestModuleUIProps = {
   variant: "global" | "context";
   statusLine: React.ReactNode;
   runVisualEnabled: boolean;
+  /** Chromium compare; Accepts passes when project auto-accept is on. */
+  runDiffEnabled: boolean;
   createBaselinesEnabled: boolean;
   updateStatusEnabled: boolean;
   /** Global visual compares use dependency-traced affected selection. */
@@ -162,6 +164,7 @@ export type VisualTestModuleUIProps = {
   isUpdatingStatus: boolean;
   isCompareRunning: boolean;
   onRunVisualChange: (enabled: boolean) => void;
+  onRunDiffChange: (enabled: boolean) => void;
   onCreateBaselinesChange: (enabled: boolean) => void;
   onUpdateStatusChange: (enabled: boolean) => void;
   onAffectedOnlyChange: (enabled: boolean) => void;
@@ -187,6 +190,7 @@ export function VisualTestModuleUI({
   variant,
   statusLine,
   runVisualEnabled,
+  runDiffEnabled,
   createBaselinesEnabled,
   updateStatusEnabled,
   affectedOnlyEnabled,
@@ -209,6 +213,7 @@ export function VisualTestModuleUI({
   isUpdatingStatus,
   isCompareRunning,
   onRunVisualChange,
+  onRunDiffChange,
   onCreateBaselinesChange,
   onUpdateStatusChange,
   onAffectedOnlyChange,
@@ -330,7 +335,7 @@ export function VisualTestModuleUI({
             <ActionList.Text>
               <RowLabel>
                 <span>Run visual tests</span>
-                {compareRowProgress ? (
+                {compareRowProgress && runVisualEnabled ? (
                   <RowProgress data-testid="compare-row-progress">
                     {compareRowProgress}
                   </RowProgress>
@@ -355,7 +360,53 @@ export function VisualTestModuleUI({
             ) : null}
             <TestStatusIcon
               status={compareChipStatus}
-              isRunning={isCompareRunning}
+              isRunning={isCompareRunning && runVisualEnabled}
+            />
+          </ActionList.Button>
+        </ActionList.Item>
+        <ActionList.Item>
+          <ActionList.Action as="label" ariaLabel={false}>
+            <ActionList.Icon>
+              <Form.Checkbox
+                name="Run Diff"
+                checked={runDiffEnabled}
+                disabled={runnerBusy}
+                onChange={(event) => {
+                  onRunDiffChange(event.currentTarget.checked);
+                }}
+              />
+            </ActionList.Icon>
+            <ActionList.Text>
+              <RowLabel>
+                <span>Run Diff</span>
+                {compareRowProgress && runDiffEnabled ? (
+                  <RowProgress data-testid="run-diff-row-progress">
+                    {compareRowProgress}
+                  </RowProgress>
+                ) : (
+                  <RowProgress>
+                    Chromium compare; Accepts passes when auto-accept is on
+                  </RowProgress>
+                )}
+              </RowLabel>
+            </ActionList.Text>
+          </ActionList.Action>
+          <ActionList.Button
+            ariaLabel={
+              compareRowProgress && runDiffEnabled
+                ? `Run Diff (${compareRowProgress})`
+                : "Run Diff results"
+            }
+            tooltip="Chromium compare results (Accepts passes when auto-accept is on)"
+            disabled={compareChipDisabled}
+            onClick={onOpenCompareResults}
+          >
+            {compareChipValue != null && runDiffEnabled ? (
+              <ChipProgress>{compareChipValue}</ChipProgress>
+            ) : null}
+            <TestStatusIcon
+              status={compareChipStatus}
+              isRunning={isCompareRunning && runDiffEnabled}
             />
           </ActionList.Button>
         </ActionList.Item>

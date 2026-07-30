@@ -258,7 +258,7 @@ describe("ConfigurationPanel", () => {
     await user.click(screen.getByRole("tab", { name: "Workflow" }));
     await user.click(
       screen.getByLabelText(
-        "Automatically accept passing live story comparisons",
+        "Automatically accept passing Diff Chromium, Story, and Run Diff",
       ),
     );
     await user.selectOptions(

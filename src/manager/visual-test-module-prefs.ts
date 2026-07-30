@@ -5,6 +5,7 @@ import {
 
 export const RUN_VISUAL_KEY =
   "storybook-addon-visual-delta/run-visual-enabled-v1";
+export const RUN_DIFF_KEY = "storybook-addon-visual-delta/run-diff-enabled-v1";
 export const CREATE_BASELINES_KEY =
   "storybook-addon-visual-delta/create-baselines-enabled-v1";
 export const UPDATE_STATUS_KEY =
@@ -15,6 +16,8 @@ export const AFFECTED_ONLY_KEY =
 /** Defaults for Testing Module checkboxes / baseline write mode. */
 export const VISUAL_TEST_MODULE_DEFAULTS = {
   runVisualEnabled: true,
+  /** Chromium compare + optional Accept when project auto-accept is on. */
+  runDiffEnabled: false,
   /** Create/Update baselines row — off until explicitly enabled. */
   createBaselinesEnabled: false,
   updateStatusEnabled: false,
@@ -50,6 +53,10 @@ export function loadRunVisualEnabled(): boolean {
   );
 }
 
+export function loadRunDiffEnabled(): boolean {
+  return readBoolFlag(RUN_DIFF_KEY, VISUAL_TEST_MODULE_DEFAULTS.runDiffEnabled);
+}
+
 export function loadCreateBaselinesEnabled(): boolean {
   return readBoolFlag(
     CREATE_BASELINES_KEY,
@@ -79,11 +86,13 @@ export function loadModuleBaselineWriteMode(): BaselineWriteMode {
 
 export function anyModuleActionSelected(flags: {
   runVisualEnabled: boolean;
+  runDiffEnabled?: boolean;
   createBaselinesEnabled: boolean;
   updateStatusEnabled: boolean;
 }): boolean {
   return (
     flags.runVisualEnabled ||
+    Boolean(flags.runDiffEnabled) ||
     flags.createBaselinesEnabled ||
     flags.updateStatusEnabled
   );

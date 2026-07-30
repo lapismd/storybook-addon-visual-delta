@@ -38,6 +38,7 @@ vi.mock("storybook/internal/components", async (importOriginal) => {
 const baseProps = {
   statusLine: "Not run",
   runVisualEnabled: true,
+  runDiffEnabled: false,
   createBaselinesEnabled: false,
   updateStatusEnabled: false,
   affectedOnlyEnabled: true,
@@ -57,6 +58,7 @@ const baseProps = {
   isUpdatingStatus: false,
   isCompareRunning: false,
   onRunVisualChange: vi.fn(),
+  onRunDiffChange: vi.fn(),
   onCreateBaselinesChange: vi.fn(),
   onUpdateStatusChange: vi.fn(),
   onAffectedOnlyChange: vi.fn(),
@@ -76,6 +78,7 @@ describe("VisualTestModuleUI", () => {
       root.querySelector("#visual-testing-module-description-global"),
     ).toHaveTextContent("Not run");
     expect(root.querySelector('input[name="Run visual tests"]')).toBeChecked();
+    expect(root.querySelector('input[name="Run Diff"]')).not.toBeChecked();
     expect(
       root.querySelector('input[name="Create missing Baselines"]'),
     ).not.toBeChecked();
@@ -92,6 +95,7 @@ describe("VisualTestModuleUI", () => {
     ).toEqual([
       "Create missing Baselines",
       "Run visual tests",
+      "Run Diff",
       "Affected only",
       "Update status",
     ]);
@@ -114,7 +118,12 @@ describe("VisualTestModuleUI", () => {
       Array.from(root.querySelectorAll('input[type="checkbox"]')).map((input) =>
         input.getAttribute("name"),
       ),
-    ).toEqual(["Update baselines", "Run visual tests", "Update status"]);
+    ).toEqual([
+      "Update baselines",
+      "Run visual tests",
+      "Run Diff",
+      "Update status",
+    ]);
     expect(root.querySelector('input[name="Rebuild static"]')).toBeNull();
   });
 

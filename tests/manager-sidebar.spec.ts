@@ -118,12 +118,21 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     await expect(
       globalModule.getByRole("button", { name: "Run tests" }),
     ).toBeVisible();
+    await expect(
+      globalModule.getByRole("checkbox", { name: "Run Diff" }),
+    ).toBeVisible();
+    await expect(
+      globalModule.getByRole("checkbox", { name: "Run Diff" }),
+    ).not.toBeChecked();
 
     const contextMenu = await openStoryContextMenu(page);
     await expect(
       contextMenu.getByRole("button", {
         name: "Choose Create missing or Rewrite existing",
       }),
+    ).toBeVisible();
+    await expect(
+      contextMenu.getByRole("checkbox", { name: "Run Diff" }),
     ).toBeVisible();
     expect(writes).toEqual([]);
   });

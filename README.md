@@ -509,13 +509,13 @@ Stories/components may override capture and overlay values through
 `parameters.visualDelta`; resolution order is story/component parameters →
 project defaults → built-ins.
 
-**Workflow** contains two opt-in policies. **Automatically accept successful
-live story comparisons** marks only the exact owning story
-`visual-approved` after a fresh authoritative Story or Diff Chromium pass
-(including a tolerance pass, selected mode, or selected interaction). It does
-not apply to Diff HTML, baseline writes, or component/global/affected runs.
-The VCS mode is `off`, `review`, or `auto`; legacy and new configurations
-default to off.
+**Workflow** contains two opt-in policies. **Auto-accept passing Diff Chromium,
+Story, and Run Diff** marks stories `visual-approved` after a fresh
+authoritative Chromium pass (including a tolerance pass), for exact-story Diff
+Chromium / Story and for Testing Module **Run Diff** last-run passes. It does
+not apply to Diff HTML, ordinary Run visual tests without Run Diff, baseline
+writes, or Update status. The VCS mode is `off`, `review`, or `auto`; legacy
+and new configurations default to off.
 
 The project file remains a backward-compatible flat capture configuration:
 

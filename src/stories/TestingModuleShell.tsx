@@ -32,6 +32,9 @@ export function TestingModuleShell({
   const [runVisualEnabled, setRunVisualEnabled] = useState<boolean>(
     VISUAL_TEST_MODULE_DEFAULTS.runVisualEnabled,
   );
+  const [runDiffEnabled, setRunDiffEnabled] = useState<boolean>(
+    VISUAL_TEST_MODULE_DEFAULTS.runDiffEnabled,
+  );
   const [createBaselinesEnabled, setCreateBaselinesEnabled] = useState<boolean>(
     seedRunningProgress
       ? true
@@ -60,6 +63,7 @@ export function TestingModuleShell({
 
   const anyActionSelected = anyModuleActionSelected({
     runVisualEnabled,
+    runDiffEnabled,
     createBaselinesEnabled,
     updateStatusEnabled,
   });
@@ -68,6 +72,7 @@ export function TestingModuleShell({
   const selectedSummary = useMemo(() => {
     const parts: string[] = [];
     if (runVisualEnabled) parts.push("compare");
+    if (runDiffEnabled) parts.push("run-diff");
     if (createBaselinesEnabled) {
       parts.push(
         baselineMode === "rewrite" ? "update-baselines" : "create-missing",
@@ -78,6 +83,7 @@ export function TestingModuleShell({
   }, [
     baselineMode,
     createBaselinesEnabled,
+    runDiffEnabled,
     runVisualEnabled,
     updateStatusEnabled,
   ]);
@@ -90,6 +96,7 @@ export function TestingModuleShell({
           anyActionSelected ? statusLine : "Select at least one action"
         }
         runVisualEnabled={runVisualEnabled}
+        runDiffEnabled={runDiffEnabled}
         createBaselinesEnabled={createBaselinesEnabled}
         updateStatusEnabled={updateStatusEnabled}
         affectedOnlyEnabled={affectedOnlyEnabled}
@@ -120,6 +127,7 @@ export function TestingModuleShell({
         isUpdatingStatus={seedRunningProgress}
         isCompareRunning={seedRunningProgress}
         onRunVisualChange={setRunVisualEnabled}
+        onRunDiffChange={setRunDiffEnabled}
         onCreateBaselinesChange={setCreateBaselinesEnabled}
         onUpdateStatusChange={setUpdateStatusEnabled}
         onAffectedOnlyChange={setAffectedOnlyEnabled}
