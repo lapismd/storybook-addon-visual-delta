@@ -681,9 +681,39 @@ function notifyProgress(
 /** Bumped per stream so an aborted HMR fetch does not clear a newer reconnect. */
 let ndjsonStreamGeneration = 0;
 
+/** Shared abort for in-flight run / reconnect / action-scope fetches. */
+let visualFetchAbort: AbortController | null = null;
+
+function armVisualFetchAbort(): AbortSignal {
+  visualFetchAbort?.abort();
+  visualFetchAbort = new AbortController();
+  return visualFetchAbort.signal;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+function cancelledVisualRunResponse(): VisualRunResponse {
+  return {
+    ok: true,
+    idle: true,
+    cancelled: true,
+    exitCode: 0,
+    rebuild: false,
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+    results: [],
+    logTail: "",
+  };
+}
+
 async function readNdjsonRun(
   response: Response,
   onProgress?: (progress: VisualRunProgress) => void,
+  signal?: AbortSignal,
 ): Promise<VisualRunResponse> {
   const body = response.body;
   if (!body) {
@@ -697,9 +727,20 @@ async function readNdjsonRun(
   let final: VisualRunResponse | null = null;
   let streamError: string | undefined;
   let idle = false;
+  const onAbort = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  if (signal) {
+    if (signal.aborted) {
+      onAbort();
+      return cancelledVisualRunResponse();
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
 
   try {
     while (true) {
+      if (signal?.aborted) return cancelledVisualRunResponse();
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -768,11 +809,19 @@ async function readNdjsonRun(
         }
       }
     }
+  } catch (error) {
+    if (isAbortError(error) || signal?.aborted) {
+      return cancelledVisualRunResponse();
+    }
+    throw error;
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     if (generation === ndjsonStreamGeneration) {
       emitVisualRunProgress(null);
     }
   }
+
+  if (signal?.aborted) return cancelledVisualRunResponse();
 
   if (idle && !final) {
     return {
@@ -844,33 +893,41 @@ export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
 export async function reconnectVisualRun(options?: {
   onProgress?: (progress: VisualRunProgress) => void;
 }): Promise<VisualRunResponse> {
-  const response = await fetch(VISUAL_DELTA_RUN_EVENTS_PATH);
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!response.ok) {
+  const signal = armVisualFetchAbort();
+  try {
+    const response = await fetch(VISUAL_DELTA_RUN_EVENTS_PATH, { signal });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok) {
+      return {
+        ok: false,
+        crashed: true,
+        idle: true,
+        error: `Reconnect failed (${response.status})`,
+        exitCode: 1,
+        rebuild: false,
+        summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+        results: [],
+        logTail: "",
+      };
+    }
+    if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
+      return readNdjsonRun(response, options?.onProgress, signal);
+    }
     return {
-      ok: false,
-      crashed: true,
+      ok: true,
       idle: true,
-      error: `Reconnect failed (${response.status})`,
-      exitCode: 1,
+      exitCode: 0,
       rebuild: false,
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
       results: [],
       logTail: "",
     };
+  } catch (error) {
+    if (isAbortError(error) || signal.aborted) {
+      return cancelledVisualRunResponse();
+    }
+    throw error;
   }
-  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
-    return readNdjsonRun(response, options?.onProgress);
-  }
-  return {
-    ok: true,
-    idle: true,
-    exitCode: 0,
-    rebuild: false,
-    summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-    results: [],
-    logTail: "",
-  };
 }
 
 export async function postVisualRun(
@@ -883,22 +940,31 @@ export async function postVisualRun(
     onProgress?: (progress: VisualRunProgress) => void;
   },
 ): Promise<VisualRunResponse> {
-  const response = await fetch(VISUAL_DELTA_RUN_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const signal = armVisualFetchAbort();
+  try {
+    const response = await fetch(VISUAL_DELTA_RUN_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
 
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
-    return readNdjsonRun(response, options?.onProgress);
-  }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
+      return readNdjsonRun(response, options?.onProgress, signal);
+    }
 
-  const data = (await response.json()) as VisualRunResponse;
-  if (!response.ok && data == null) {
-    throw new Error(`Visual run failed (${response.status})`);
+    const data = (await response.json()) as VisualRunResponse;
+    if (!response.ok && data == null) {
+      throw new Error(`Visual run failed (${response.status})`);
+    }
+    return data;
+  } catch (error) {
+    if (isAbortError(error) || signal.aborted) {
+      return cancelledVisualRunResponse();
+    }
+    throw error;
   }
-  return data;
 }
 
 export async function fetchAffectedVisualPlan(): Promise<
@@ -923,73 +989,95 @@ export async function postVisualActionScope(
     onProgress?: (progress: VisualActionScopeProgress) => void;
   },
 ): Promise<VisualActionScopeResponse> {
-  const response = await fetch(VISUAL_DELTA_ACTION_SCOPE_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const signal = armVisualFetchAbort();
+  try {
+    const response = await fetch(VISUAL_DELTA_ACTION_SCOPE_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
 
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("Visual action scope response had no body");
-    }
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let final: VisualActionScopeResponse | null = null;
-    let streamError: string | undefined;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("ndjson") || contentType.includes("x-ndjson")) {
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Visual action scope response had no body");
+      }
+      const onAbort = () => {
+        void reader.cancel().catch(() => undefined);
+      };
+      if (signal.aborted) {
+        onAbort();
+        throw new DOMException("Aborted", "AbortError");
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let final: VisualActionScopeResponse | null = null;
+      let streamError: string | undefined;
 
-    const consumeLine = (line: string) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      let event: VisualActionScopeStreamEvent;
+      const consumeLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let event: VisualActionScopeStreamEvent;
+        try {
+          event = JSON.parse(trimmed) as VisualActionScopeStreamEvent;
+        } catch {
+          return;
+        }
+        if (event.type === "progress") {
+          const { type: _type, ...progress } = event;
+          void _type;
+          options?.onProgress?.(progress);
+        } else if (event.type === "error") {
+          streamError = event.error;
+        } else if (event.type === "done") {
+          const { type: _type, ...result } = event;
+          void _type;
+          final = result;
+        }
+      };
+
       try {
-        event = JSON.parse(trimmed) as VisualActionScopeStreamEvent;
-      } catch {
-        return;
+        while (true) {
+          if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) consumeLine(line);
+        }
+        buffer += decoder.decode();
+        consumeLine(buffer);
+      } finally {
+        signal.removeEventListener("abort", onAbort);
       }
-      if (event.type === "progress") {
-        const { type: _type, ...progress } = event;
-        void _type;
-        options?.onProgress?.(progress);
-      } else if (event.type === "error") {
-        streamError = event.error;
-      } else if (event.type === "done") {
-        const { type: _type, ...result } = event;
-        void _type;
-        final = result;
-      }
-    };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) consumeLine(line);
+      if (final) return final;
+      throw new Error(
+        streamError ?? "Visual action scope ended without a result",
+      );
     }
-    buffer += decoder.decode();
-    consumeLine(buffer);
 
-    if (final) return final;
-    throw new Error(
-      streamError ?? "Visual action scope ended without a result",
-    );
+    const data = (await response.json()) as
+      | VisualActionScopeResponse
+      | { ok?: false; error?: string };
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        "error" in data && data.error
+          ? data.error
+          : `Visual action scope request failed (${response.status})`,
+      );
+    }
+    return data;
+  } catch (error) {
+    if (isAbortError(error) || signal.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    throw error;
   }
-
-  const data = (await response.json()) as
-    | VisualActionScopeResponse
-    | { ok?: false; error?: string };
-  if (!response.ok || !data.ok) {
-    throw new Error(
-      "error" in data && data.error
-        ? data.error
-        : `Visual action scope request failed (${response.status})`,
-    );
-  }
-  return data;
 }
 
 /**
@@ -1000,6 +1088,8 @@ export async function abortVisualWork(): Promise<{
   ok: boolean;
   cancelled: boolean;
 }> {
+  visualFetchAbort?.abort();
+  visualFetchAbort = null;
   ndjsonStreamGeneration += 1;
   emitVisualRunProgress(null);
   emitVisualCreateProgress(null);
@@ -1361,8 +1451,14 @@ export function clearStaleVisualCreateProgress() {
 }
 
 /** Test helper — inspect create progress without mutating. */
-export function peekVisualCreateProgressForTests(): VisualCreateProgress | null {
+/** Current baseline-write presentation, if any. */
+export function peekVisualCreateProgress(): VisualCreateProgress | null {
   return latestCreateProgress;
+}
+
+/** @deprecated Prefer `peekVisualCreateProgress`. */
+export function peekVisualCreateProgressForTests(): VisualCreateProgress | null {
+  return peekVisualCreateProgress();
 }
 
 /** Test helper — seed create/update baseline progress. */
