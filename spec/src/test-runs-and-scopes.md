@@ -39,7 +39,7 @@ The Testing Module can enable:
 2. Run compare-only visual tests
 3. Update review status from the complete result set
 
-Result-to-review updates require evidence for every story in the frozen scope. Partial or stale manager results MUST NOT update the subset that happens to remain in memory.
+Result-to-review updates require evidence for every story in the frozen scope. Partial or stale manager results MUST NOT update the subset that happens to remain in memory. Pass and within-tolerance outcomes MUST NOT overwrite `visual-approved` with `visual-ready` (see [Mutations and review](./mutations-and-review.md)).
 
 Create-missing MAY continue wiring successfully created PNGs if unrelated existing baselines fail comparison. It MUST report the non-zero comparison separately.
 

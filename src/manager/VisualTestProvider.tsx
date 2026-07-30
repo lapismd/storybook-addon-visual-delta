@@ -20,6 +20,7 @@ import {
   STATUS_TYPE_ID_VISUAL,
   TEST_PROVIDER_ID,
   VISUAL_DELTA_STORY_FACTS_PATH,
+  visualReviewStatusFromTags,
 } from "../constants.js";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
 import type {
@@ -734,7 +735,12 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                   setStatusProgress({ completed: 0, total: source.length });
                   setStatusLog(`Updating review status… 0/${source.length}`);
                   const { updated, errors, skippedMissingBaseline } =
-                    await postVisualReviewStatusesFromResults(source);
+                    await postVisualReviewStatusesFromResults(source, {
+                      currentReviewStatus: (storyId) =>
+                        visualReviewStatusFromTags(
+                          api.getData(storyId)?.tags,
+                        ),
+                    });
                   setStatusProgress({
                     completed: source.length,
                     total: source.length,
