@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../test/render.js";
@@ -89,7 +89,7 @@ describe("VisualFiltersMenu", () => {
     expect(readyRow).not.toBeNull();
     await user.hover(readyRow!);
     await user.click(
-      screen.getByRole("button", { name: "Exclude Ready for review" }),
+      within(readyRow!).getByRole("button", { name: "Exclude" }),
     );
     expect(onChange).toHaveBeenLastCalledWith(["!review.ready"]);
 

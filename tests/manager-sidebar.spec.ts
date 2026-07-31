@@ -120,9 +120,7 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
       .getByRole("checkbox", { name: "Ready for review" })
       .locator("xpath=ancestor::li[1]");
     await readyRow.hover();
-    await page
-      .getByRole("button", { name: "Exclude Ready for review" })
-      .click();
+    await readyRow.getByRole("button", { name: "Exclude" }).click();
     await expect(page).toHaveURL(/visualFilter=!review\.ready/);
     await expect(
       page.getByText(/Ready for review \(excluded\)/),

@@ -280,7 +280,7 @@ export function VisualFiltersMenu({
                             data-target-id={targetId}
                             size="small"
                             disabled={disabled}
-                            ariaLabel={`${invertLabel} ${LABELS[id]}`}
+                            ariaLabel={false}
                             onClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
