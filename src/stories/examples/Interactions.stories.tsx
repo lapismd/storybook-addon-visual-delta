@@ -28,15 +28,15 @@ const meta = {
     docs: {
       description: {
         component: `
-Interaction baselines: primary **idle** image, plus a mid-play **Opened details** image after the play function parks.
+Interaction baselines: primary image is **end of play** (details open). The same PNG is wired as the mid-play **Opened details** interaction so parking that step stays geometry-aligned.
 
-Stage height grows when details open so the opened baseline’s CSS size matches the live subject (no geometry warning when that interaction baseline is selected). Uses Story canvas alignment for component-sized captures.
+A closed **idle** capture remains on disk for the capture script; Default must not use it after play opens the stage. Uses Story canvas alignment for component-sized captures.
 `,
       },
     },
     visualDelta: exampleVisualDelta({
       images: [
-        exampleBaseline("/visual-baselines/examples/interactions/idle.png"),
+        exampleBaseline("/visual-baselines/examples/interactions/opened.png"),
       ],
       interactions: [
         {
@@ -60,7 +60,7 @@ export const WithInteractionBaseline: Story = {
     docs: {
       description: {
         story:
-          "Play opens the disclosure. Use Visual Delta’s interaction step control to compare the opened baseline against the parked live UI. Idle primary image matches the closed stage; after open, select the interaction baseline (not the idle primary) to avoid a geometry warning.",
+          "Play opens the disclosure. Default (end of play) and the Opened details interaction both use the opened-stage baseline so geometry stays aligned at 300×168.",
       },
     },
   },
