@@ -1,4 +1,5 @@
 import { defineVisualPlaywrightConfig } from "./src/playwright/config.js";
+import { panelScreenshotExpect } from "./src/playwright/panel-snapshot-path.js";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL(".", import.meta.url));
@@ -52,12 +53,7 @@ export function visualDeltaPackageStorybookOverride(
       },
     ],
     expect: {
-      toHaveScreenshot: {
-        animations: "disabled" as const,
-        caret: "hide" as const,
-        maxDiffPixelRatio: 0,
-        scale: "device" as const,
-      },
+      toHaveScreenshot: panelScreenshotExpect(),
     },
   };
 }
