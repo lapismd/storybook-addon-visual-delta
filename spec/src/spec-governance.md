@@ -18,6 +18,7 @@ These requirements prevent implementation, tests, and generated documentation fr
 | VD-GOV-008 | A dependency-audit remediation that changes the Visual Delta package manifest or resolved dependency graph MUST upgrade each reported vulnerable package to a patched release and verify a clean `pnpm audit` result. It MUST NOT create, replace, or delete visual baselines. |
 | VD-GOV-009 | A public npm release MUST originate only from an exact stable `vX.Y.Z` tag matching the package version, pass the release validation gates, and wait for protected GitHub Environment approval. Normal publication MUST use npm trusted publishing with GitHub OIDC and provenance, never a registry token. The release MUST install the published package on a clean runner and verify its Sigstore provenance with `npm audit signatures`. Only `v0.0.1` MAY use a one-time bootstrap token, isolated to a separate protected Environment; it MUST still publish provenance and MUST be revoked before the next release. |
 | VD-GOV-010 | The Linux panel-baseline capture workflow MUST run only through manual dispatch from the default branch and capture only missing platform-qualified Linux panel references. It MAY grant its capture job only `contents: write` and `pull-requests: write`, and MUST use those permissions only to commit the exact verified Linux PNGs to a new automation branch and open a review pull request; it MUST NOT write directly to the selected revision. After a compare-only verification pass, it MUST upload the exact Linux PNGs and their checksums as a review artifact. |
+| VD-GOV-011 | Every repository-owned GitHub Actions workflow that executes package tooling MUST configure Node.js `24.15.0`. Repository-owned JavaScript actions used by those workflows MUST use a Node.js 24 runtime. |
 
 ## Authority and timing
 
@@ -64,7 +65,7 @@ The component commands are:
 
 The complete check also runs the checker test suite. It runs near the start of `pnpm checks`, before implementation typechecking and browser validation.
 
-On a pull request, the required **Visual Delta Spec First / Validate Visual Delta specification** check compares the exact base and head revisions. Repository settings MUST keep that check required before merge. The workflow pins Node 22, pnpm 10.32.1, and mdBook 0.5.4.
+On a pull request, the required **Visual Delta Spec First / Validate Visual Delta specification** check compares the exact base and head revisions. Repository settings MUST keep that check required before merge. The workflow pins Node 24.15.0, pnpm 10.32.1, and mdBook 0.5.4.
 
 Path-filtered **Visual Delta CI** (`.github/workflows/visual-delta-ci.yml`) runs package typecheck and Vitest, panel browser acceptance, and host catalog visual compare when Visual Delta or catalog paths change. Spec First remains the contract merge gate; repository settings SHOULD enable the Visual Delta CI checks as required once they are stable on the default branch.
 
