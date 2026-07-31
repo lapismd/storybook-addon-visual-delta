@@ -19,7 +19,16 @@ async function mockFixtureTags(page: Page, tags: string[]) {
       entries?: Record<string, { tags?: string[]; title?: string }>;
     };
     for (const fixture of Object.values(index.entries ?? {})) {
-      if (fixture.title?.startsWith("Shadcn/Feedback/")) fixture.tags = tags;
+      if (!fixture.title?.startsWith("Shadcn/Feedback/")) continue;
+      // Keep Storybook built-ins (dev/test/manifest/…). Replacing the whole
+      // tag list drops them and the static/tag filters hide the story.
+      const preserved = (fixture.tags ?? []).filter(
+        (tag) =>
+          !tag.startsWith("visual-") &&
+          tag !== "skip-visual" &&
+          !tags.includes(tag),
+      );
+      fixture.tags = [...preserved, ...tags];
     }
     await route.fulfill({ response, json: index });
   });
@@ -88,6 +97,9 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
         name: "Filter visual stories, 1 active",
       }),
     ).toBeVisible();
+    await expect(
+      page.getByTestId("visual-filter-match-summary"),
+    ).toBeVisible();
 
     await page.reload({ waitUntil: "networkidle" });
     await expect(page).toHaveURL(/visualFilter=review\.ready/);
@@ -104,6 +116,20 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
         name: "Filter visual stories, 1 active",
       })
       .click();
+    await page
+      .getByRole("button", { name: "Exclude Ready for review" })
+      .click();
+    await expect(page).toHaveURL(/visualFilter=!review\.ready/);
+    await expect(
+      page.getByText(/Ready for review \(excluded\)/),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Empty Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+
     await page.getByRole("button", { name: "Clear", exact: true }).click();
     await expect(page).not.toHaveURL(/visualFilter=/);
     expect(writes).toEqual([]);

@@ -44,6 +44,8 @@ export type VisualStoryFilterFact = {
   inclusion: VisualInclusionFilterValue;
 };
 
+export type VisualFilterSelectionState = "off" | "included" | "excluded";
+
 export const VISUAL_FILTER_GROUPS = {
   review: [
     "review.ready",
@@ -75,6 +77,10 @@ const KNOWN_FILTER_IDS = new Set<string>([
   ...VISUAL_QUICK_FILTER_IDS,
   ...Object.values(VISUAL_FILTER_GROUPS).flat(),
 ]);
+
+const KNOWN_FACET_IDS = new Set<string>(
+  Object.values(VISUAL_FILTER_GROUPS).flat(),
+);
 
 function reviewFromTags(tags: readonly string[]): VisualReviewFilterValue {
   if (tags.includes(VISUAL_REVIEW_FAILED_TAG)) return "failed";
@@ -130,20 +136,110 @@ export function buildVisualStoryFilterFacts(
   );
 }
 
+/** Bare filter id from an include (`review.ready`) or exclude (`!review.ready`) token. */
+export function filterIdFromToken(token: string): string {
+  return token.startsWith("!") ? token.slice(1) : token;
+}
+
+export function isExcludeToken(token: string): boolean {
+  return token.startsWith("!");
+}
+
+export function excludeFilterToken(id: string): string {
+  return `!${id}`;
+}
+
+export function isKnownFilterToken(token: string): boolean {
+  const id = filterIdFromToken(token);
+  if (isExcludeToken(token)) {
+    // Quick views are include-only presets.
+    return KNOWN_FACET_IDS.has(id);
+  }
+  return KNOWN_FILTER_IDS.has(id);
+}
+
 export function parseVisualFilterIds(value: unknown): string[] {
   if (typeof value !== "string") return [];
-  return [
-    ...new Set(
-      value
-        .split(",")
-        .map((part) => part.trim())
-        .filter((part) => KNOWN_FILTER_IDS.has(part)),
-    ),
-  ];
+  // Last token wins when both include and exclude appear for the same id.
+  const byId = new Map<string, string>();
+  for (const part of value.split(",")) {
+    const token = part.trim();
+    if (!token || !isKnownFilterToken(token)) continue;
+    byId.set(filterIdFromToken(token), token);
+  }
+  return [...byId.values()];
 }
 
 export function serializeVisualFilterIds(ids: readonly string[]): string {
-  return ids.filter((id) => KNOWN_FILTER_IDS.has(id)).join(",");
+  return ids.filter((token) => isKnownFilterToken(token)).join(",");
+}
+
+export function filterSelectionState(
+  activeIds: readonly string[],
+  id: string,
+): VisualFilterSelectionState {
+  if (activeIds.includes(id)) return "included";
+  if (activeIds.includes(excludeFilterToken(id))) return "excluded";
+  return "off";
+}
+
+/** Checkbox: off → include; included/excluded → clear. Clears quick views. */
+export function toggleFilterCheckbox(
+  activeIds: readonly string[],
+  id: string,
+): string[] {
+  const state = filterSelectionState(activeIds, id);
+  if (state === "off") return setFilterInclude(activeIds, id);
+  return clearFilterId(activeIds, id);
+}
+
+/** Invert polarity (Storybook Include/Exclude). Off or included → exclude; excluded → include. */
+export function invertFilterPolarity(
+  activeIds: readonly string[],
+  id: string,
+): string[] {
+  if (!KNOWN_FACET_IDS.has(id)) {
+    return setFilterInclude(activeIds, id);
+  }
+  return filterSelectionState(activeIds, id) === "excluded"
+    ? setFilterInclude(activeIds, id)
+    : setFilterExclude(activeIds, id);
+}
+
+export function setFilterInclude(
+  activeIds: readonly string[],
+  id: string,
+): string[] {
+  if (!KNOWN_FILTER_IDS.has(id)) return [...activeIds];
+  if (id.startsWith("quick.")) return [id];
+  const next = activeIds.filter(
+    (token) =>
+      !token.startsWith("quick.") &&
+      filterIdFromToken(token) !== id,
+  );
+  next.push(id);
+  return next;
+}
+
+export function setFilterExclude(
+  activeIds: readonly string[],
+  id: string,
+): string[] {
+  if (!KNOWN_FACET_IDS.has(id)) return [...activeIds];
+  const next = activeIds.filter(
+    (token) =>
+      !token.startsWith("quick.") &&
+      filterIdFromToken(token) !== id,
+  );
+  next.push(excludeFilterToken(id));
+  return next;
+}
+
+export function clearFilterId(
+  activeIds: readonly string[],
+  id: string,
+): string[] {
+  return activeIds.filter((token) => filterIdFromToken(token) !== id);
 }
 
 function matchesQuickView(
@@ -172,10 +268,39 @@ function matchesQuickView(
   );
 }
 
-function selectedValues(ids: ReadonlySet<string>, prefix: string): string[] {
-  return [...ids]
-    .filter((id) => id.startsWith(`${prefix}.`))
-    .map((id) => id.slice(prefix.length + 1));
+function factValueForPrefix(
+  fact: VisualStoryFilterFact,
+  prefix: string,
+): string | null {
+  if (prefix === "review") return fact.review;
+  if (prefix === "result") return fact.result;
+  if (prefix === "coverage") return fact.baseline;
+  if (prefix === "inclusion") return fact.inclusion;
+  return null;
+}
+
+function groupValues(
+  tokens: ReadonlySet<string>,
+  prefix: string,
+  polarity: "include" | "exclude",
+): string[] {
+  return [...tokens]
+    .filter((token) => {
+      const excluded = isExcludeToken(token);
+      if ((polarity === "exclude") !== excluded) return false;
+      return filterIdFromToken(token).startsWith(`${prefix}.`);
+    })
+    .map((token) => filterIdFromToken(token).slice(prefix.length + 1));
+}
+
+function groupMatches(
+  factValue: string,
+  includes: readonly string[],
+  excludes: readonly string[],
+): boolean {
+  if (includes.length > 0 && !includes.includes(factValue)) return false;
+  if (excludes.length > 0 && excludes.includes(factValue)) return false;
+  return true;
 }
 
 export function visualStoryMatchesFilters(
@@ -183,20 +308,83 @@ export function visualStoryMatchesFilters(
   activeIds: readonly string[],
   hasCompletedRun: boolean,
 ): boolean {
-  const ids = new Set(activeIds.filter((id) => KNOWN_FILTER_IDS.has(id)));
-  const quick = VISUAL_QUICK_FILTER_IDS.find((id) => ids.has(id));
+  const tokens = new Set(activeIds.filter((token) => isKnownFilterToken(token)));
+  const quick = VISUAL_QUICK_FILTER_IDS.find((id) => tokens.has(id));
   if (quick) return matchesQuickView(fact, quick);
 
-  const review = selectedValues(ids, "review");
-  const result = hasCompletedRun ? selectedValues(ids, "result") : [];
-  const coverage = selectedValues(ids, "coverage");
-  const inclusion = selectedValues(ids, "inclusion");
+  const reviewIncludes = groupValues(tokens, "review", "include");
+  const reviewExcludes = groupValues(tokens, "review", "exclude");
+  const resultIncludes = hasCompletedRun
+    ? groupValues(tokens, "result", "include")
+    : [];
+  const resultExcludes = hasCompletedRun
+    ? groupValues(tokens, "result", "exclude")
+    : [];
+  const coverageIncludes = groupValues(tokens, "coverage", "include");
+  const coverageExcludes = groupValues(tokens, "coverage", "exclude");
+  const inclusionIncludes = groupValues(tokens, "inclusion", "include");
+  const inclusionExcludes = groupValues(tokens, "inclusion", "exclude");
+
   return (
-    (!review.length || review.includes(fact.review)) &&
-    (!result.length || result.includes(fact.result)) &&
-    (!coverage.length || coverage.includes(fact.baseline)) &&
-    (!inclusion.length || inclusion.includes(fact.inclusion))
+    groupMatches(fact.review, reviewIncludes, reviewExcludes) &&
+    groupMatches(fact.result, resultIncludes, resultExcludes) &&
+    groupMatches(fact.baseline, coverageIncludes, coverageExcludes) &&
+    groupMatches(fact.inclusion, inclusionIncludes, inclusionExcludes)
   );
+}
+
+export function storyMatchesFilterOption(
+  fact: VisualStoryFilterFact,
+  id: string,
+  hasCompletedRun: boolean,
+): boolean {
+  if (VISUAL_QUICK_FILTER_IDS.includes(id as VisualQuickFilterId)) {
+    return matchesQuickView(fact, id as VisualQuickFilterId);
+  }
+  if (id.startsWith("result.") && !hasCompletedRun) return false;
+  const prefix = id.split(".")[0] ?? "";
+  const value = id.slice(prefix.length + 1);
+  const factValue = factValueForPrefix(fact, prefix);
+  return factValue === value;
+}
+
+/** Per-option population counts (Storybook-style; not “remaining after other filters”). */
+export function buildVisualFilterOptionCounts(
+  facts: ReadonlyMap<string, VisualStoryFilterFact> | Iterable<VisualStoryFilterFact>,
+  hasCompletedRun: boolean,
+): Record<string, number> {
+  const list =
+    facts instanceof Map ? [...facts.values()] : [...facts];
+  const counts: Record<string, number> = {};
+  for (const id of KNOWN_FILTER_IDS) {
+    counts[id] = 0;
+  }
+  for (const fact of list) {
+    for (const id of KNOWN_FILTER_IDS) {
+      if (storyMatchesFilterOption(fact, id, hasCompletedRun)) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+    }
+  }
+  return counts;
+}
+
+export function countStoriesMatchingFilters(
+  facts: ReadonlyMap<string, VisualStoryFilterFact> | Iterable<VisualStoryFilterFact>,
+  activeIds: readonly string[],
+  hasCompletedRun: boolean,
+): { matching: number; total: number } {
+  const list =
+    facts instanceof Map ? [...facts.values()] : [...facts];
+  const total = list.length;
+  if (!activeIds.length) return { matching: total, total };
+  let matching = 0;
+  for (const fact of list) {
+    if (visualStoryMatchesFilters(fact, activeIds, hasCompletedRun)) {
+      matching += 1;
+    }
+  }
+  return { matching, total };
 }
 
 export function createVisualStoryFilter(
