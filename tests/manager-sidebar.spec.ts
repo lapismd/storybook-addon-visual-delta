@@ -116,6 +116,10 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
         name: "Filter visual stories, 1 active",
       })
       .click();
+    const readyRow = page
+      .getByRole("checkbox", { name: "Ready for review" })
+      .locator("xpath=ancestor::li[1]");
+    await readyRow.hover();
     await page
       .getByRole("button", { name: "Exclude Ready for review" })
       .click();
