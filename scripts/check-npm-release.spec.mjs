@@ -24,6 +24,14 @@ function manifest(overrides = {}) {
   };
 }
 
+test("uses the public Lapis package and GitHub repository identities", () => {
+  assert.equal(PACKAGE_NAME, "@lapismd/storybook-addon-visual-delta");
+  assert.equal(
+    REPOSITORY_URL,
+    "https://github.com/lapismd/storybook-addon-visual-delta.git",
+  );
+});
+
 test("accepts the exact public stable release", () => {
   const result = validateNpmRelease(manifest(), { tag: "v0.0.1" });
   assert.equal(result.ok, true);

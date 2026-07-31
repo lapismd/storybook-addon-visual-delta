@@ -8,7 +8,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PACKAGE_JSON = path.resolve(SCRIPT_DIR, "..", "package.json");
 export const PACKAGE_NAME = "@lapismd/storybook-addon-visual-delta";
 export const REPOSITORY_URL =
-  "https://github.com/stevejuma/storybook-addon-visual-delta.git";
+  "https://github.com/lapismd/storybook-addon-visual-delta.git";
 export const NPM_REGISTRY = "https://registry.npmjs.org";
 
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;

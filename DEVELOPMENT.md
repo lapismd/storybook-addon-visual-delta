@@ -101,7 +101,7 @@ Publisher and confirm it before deleting and revoking the bootstrap token:
 ```bash
 npm trust github @lapismd/storybook-addon-visual-delta \
   --file npm-publish.yml \
-  --repo stevejuma/storybook-addon-visual-delta \
+  --repo lapismd/storybook-addon-visual-delta \
   --env npm \
   --allow-publish -y
 npm trust list
