@@ -82,6 +82,12 @@ describe("VisualFiltersMenu", () => {
         name: "Filter visual stories, 1 active",
       }),
     );
+    const readyCheckbox = screen.getByRole("checkbox", {
+      name: "Ready for review",
+    });
+    const readyRow = readyCheckbox.closest("li");
+    expect(readyRow).not.toBeNull();
+    await user.hover(readyRow!);
     await user.click(
       screen.getByRole("button", { name: "Exclude Ready for review" }),
     );
@@ -96,13 +102,16 @@ describe("VisualFiltersMenu", () => {
         onChange={onChange}
       />,
     );
-    expect(screen.getByText(/Ready for review \(excluded\)/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Ready for review (excluded)" }),
+    ).toBeChecked();
     expect(
       screen.getByTestId("visual-filter-option-count-review.ready"),
     ).toHaveTextContent("1");
     expect(
       screen.getByTestId("visual-filter-option-count-review.ready").querySelector("s"),
     ).not.toBeNull();
+    expect(screen.getByText("(excluded)", { exact: false })).toBeInTheDocument();
     expect(screen.getByTestId("visual-filter-match-summary")).toHaveTextContent(
       "Showing 3 of 4 stories",
     );

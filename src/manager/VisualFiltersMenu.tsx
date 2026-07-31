@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { DeleteIcon, FilterIcon } from "@storybook/icons";
 import {
+  ActionList,
   Button,
   Form,
   PopoverProvider,
@@ -74,80 +75,21 @@ const Legend = styled.legend(({ theme }) => ({
   color: theme.textMutedColor,
 }));
 
-const InvertButton = styled.button(({ theme }) => ({
-  appearance: "none",
-  border: 0,
-  background: "transparent",
-  color: theme.color.secondary,
-  fontSize: theme.typography.size.s1 - 2,
-  fontWeight: theme.typography.weight.bold,
-  padding: "2px 4px",
-  borderRadius: 4,
-  cursor: "pointer",
-  opacity: 0,
-  flexShrink: 0,
-  "&:hover, &:focus-visible": {
-    opacity: 1,
-    background: theme.background.hoverable,
+const FilterActionList = styled(ActionList)({
+  padding: 0,
+  margin: 0,
+  "& + *": {
+    borderTop: "none",
   },
-  "&:disabled": {
-    cursor: "not-allowed",
-    opacity: 0.4,
-  },
-}));
-
-const CheckRow = styled.div<{ disabled?: boolean; excluded?: boolean }>(
-  ({ disabled, excluded, theme }) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 28,
-    padding: "2px 4px",
-    borderRadius: 4,
-    color: disabled
-      ? theme.textMutedColor
-      : excluded
-        ? theme.textMutedColor
-        : theme.color.defaultText,
-    opacity: disabled ? 0.65 : 1,
-    "& svg": { width: 12, height: 12, flexShrink: 0 },
-    "&:hover": disabled
-      ? {}
-      : {
-          background: theme.background.hoverable,
-          [`& ${InvertButton}`]: { opacity: 1 },
-        },
-    "&:focus-within": {
-      [`& ${InvertButton}`]: { opacity: 1 },
-    },
-  }),
-);
-
-const CheckLabel = styled.label<{ disabled?: boolean }>(
-  ({ disabled }) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-    minWidth: 0,
-    cursor: disabled ? "not-allowed" : "pointer",
-  }),
-);
-
-const RowLabel = styled.span({
-  flex: 1,
-  minWidth: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
 });
 
+const MutedText = styled.span(({ theme }) => ({
+  color: theme.textMutedColor,
+}));
+
 const OptionCount = styled.span(({ theme }) => ({
-  fontSize: theme.typography.size.s1 - 1,
   fontVariantNumeric: "tabular-nums",
   color: theme.textMutedColor,
-  minWidth: 18,
-  textAlign: "right",
 }));
 
 const QuickViews = styled.div({
@@ -278,55 +220,69 @@ export function VisualFiltersMenu({
               return (
                 <Section key={group}>
                   <Legend>{GROUP_LABELS[group]}</Legend>
-                  {ids.map((id) => {
-                    const state = filterSelectionState(activeIds, id);
-                    const excluded = state === "excluded";
-                    const checked = state !== "off";
-                    const count = optionCounts[id] ?? 0;
-                    const invertLabel = excluded ? "Include" : "Exclude";
-                    return (
-                      <CheckRow
-                        key={id}
-                        disabled={disabled}
-                        excluded={excluded}
-                      >
-                        <CheckLabel disabled={disabled}>
-                          <Form.Checkbox
-                            name={LABELS[id]}
-                            checked={checked}
+                  <FilterActionList aria-label={GROUP_LABELS[group]}>
+                    {ids.map((id) => {
+                      const state = filterSelectionState(activeIds, id);
+                      const excluded = state === "excluded";
+                      const checked = state !== "off";
+                      const count = optionCounts[id] ?? 0;
+                      const invertLabel = excluded ? "Include" : "Exclude";
+                      const targetId = `visual-filter-${id}`;
+                      return (
+                        <ActionList.HoverItem key={id} targetId={targetId}>
+                          <ActionList.Action
+                            as="label"
+                            ariaLabel={false}
+                            tabIndex={-1}
+                          >
+                            <ActionList.Icon>
+                              {excluded ? <DeleteIcon aria-hidden /> : null}
+                              <Form.Checkbox
+                                name={LABELS[id]}
+                                aria-label={
+                                  excluded
+                                    ? `${LABELS[id]} (excluded)`
+                                    : LABELS[id]
+                                }
+                                checked={checked}
+                                disabled={disabled}
+                                onChange={() =>
+                                  onChange(toggleFilterCheckbox(activeIds, id))
+                                }
+                              />
+                            </ActionList.Icon>
+                            <ActionList.Text>
+                              <span>
+                                {LABELS[id]}
+                                {excluded ? (
+                                  <MutedText> (excluded)</MutedText>
+                                ) : null}
+                              </span>
+                              <OptionCount
+                                data-testid={`visual-filter-option-count-${id}`}
+                                aria-hidden="true"
+                              >
+                                {excluded ? <s>{count}</s> : count}
+                              </OptionCount>
+                            </ActionList.Text>
+                          </ActionList.Action>
+                          <ActionList.Button
+                            data-target-id={targetId}
+                            size="small"
                             disabled={disabled}
-                            onChange={() =>
-                              onChange(toggleFilterCheckbox(activeIds, id))
-                            }
-                          />
-                          <RowLabel>
-                            {excluded ? <DeleteIcon aria-hidden /> : null}
-                            <span>
-                              {LABELS[id]}
-                              {excluded ? " (excluded)" : ""}
-                            </span>
-                          </RowLabel>
-                        </CheckLabel>
-                        <OptionCount
-                          data-testid={`visual-filter-option-count-${id}`}
-                        >
-                          {excluded ? <s>{count}</s> : count}
-                        </OptionCount>
-                        <InvertButton
-                          type="button"
-                          disabled={disabled}
-                          aria-label={`${invertLabel} ${LABELS[id]}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onChange(invertFilterPolarity(activeIds, id));
-                          }}
-                        >
-                          {invertLabel}
-                        </InvertButton>
-                      </CheckRow>
-                    );
-                  })}
+                            ariaLabel={`${invertLabel} ${LABELS[id]}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onChange(invertFilterPolarity(activeIds, id));
+                            }}
+                          >
+                            <span style={{ minWidth: 45 }}>{invertLabel}</span>
+                          </ActionList.Button>
+                        </ActionList.HoverItem>
+                      );
+                    })}
+                  </FilterActionList>
                   {disabled ? (
                     <Note>Run visual tests once to enable result filters.</Note>
                   ) : null}
