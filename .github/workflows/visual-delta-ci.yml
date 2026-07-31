@@ -14,12 +14,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out the pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24.15.0
 
       - name: Set up pnpm
         run: |
@@ -44,12 +44,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out the pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24.15.0
 
       - name: Set up pnpm
         run: |
@@ -71,12 +71,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Check out the pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24.15.0
 
       - name: Set up pnpm
         run: |

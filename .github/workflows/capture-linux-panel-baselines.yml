@@ -24,12 +24,12 @@ jobs:
         run: test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
 
       - name: Check out the selected revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24.15.0
 
@@ -74,7 +74,7 @@ jobs:
           pnpm test:panel
 
       - name: Upload Linux panel references for review
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-panel-baselines-${{ github.sha }}
           path: |
@@ -85,7 +85,7 @@ jobs:
 
       - name: Open a baseline-review pull request
         id: baseline_pull_request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: ${{ github.event.repository.default_branch }}
