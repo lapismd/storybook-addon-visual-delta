@@ -33,7 +33,7 @@ export const Match: Story = {
     docs: {
       description: {
         story:
-          "Happy path: wired baseline matches the live card’s CSS size with Story canvas alignment. Open Visual Delta — you should **not** see geometry or alignment warnings. Placeholder PNG art is approximate; small pixel noise is fine.",
+          "Happy path: wired baseline matches the live card at 1× with Story canvas alignment. Open Visual Delta — you should **not** see geometry or alignment warnings, and Diff HTML should pass.",
       },
     },
     visualDelta: exampleVisualDelta({
