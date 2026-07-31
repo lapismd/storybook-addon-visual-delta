@@ -87,9 +87,19 @@ const MutedText = styled.span(({ theme }) => ({
   color: theme.textMutedColor,
 }));
 
+const FilterRowText = styled(ActionList.Text)({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+});
+
 const OptionCount = styled.span(({ theme }) => ({
   fontVariantNumeric: "tabular-nums",
   color: theme.textMutedColor,
+  flexShrink: 0,
+  minWidth: 18,
+  textAlign: "right",
 }));
 
 const QuickViews = styled.div({
@@ -251,7 +261,7 @@ export function VisualFiltersMenu({
                                 }
                               />
                             </ActionList.Icon>
-                            <ActionList.Text>
+                            <FilterRowText>
                               <span>
                                 {LABELS[id]}
                                 {excluded ? (
@@ -264,7 +274,7 @@ export function VisualFiltersMenu({
                               >
                                 {excluded ? <s>{count}</s> : count}
                               </OptionCount>
-                            </ActionList.Text>
+                            </FilterRowText>
                           </ActionList.Action>
                           <ActionList.Button
                             data-target-id={targetId}
