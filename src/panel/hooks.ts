@@ -3,6 +3,7 @@ import { useChannel } from "storybook/manager-api";
 import {
   DEFAULT_DIFF_THRESHOLD,
   EVENTS,
+  VISUAL_DEVICE_SCALE_FACTOR,
   deviceScaleFactorForImage,
   isSplitPlacement,
   viewportForImage,
@@ -118,6 +119,8 @@ type StoryData = {
   diffIncludeAntiAliasing: boolean;
   delay: number;
   ignoreSelectors: string[];
+  /** Effective density when image entries omit deviceScaleFactor. */
+  deviceScaleFactor: number;
   cropToViewport: boolean;
   /** Effective capture alignment for hydrated or interaction images. */
   effectiveAlign: AlignMode;
@@ -246,6 +249,7 @@ export function useStoryData(currentStoryId?: string) {
       diffIncludeAntiAliasing: false,
       delay: 0,
       ignoreSelectors: [],
+      deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
       cropToViewport: false,
       effectiveAlign: "viewport",
       previewSplitZoomDefault: "fit",
@@ -454,6 +458,7 @@ export function useStoryData(currentStoryId?: string) {
       diffIncludeAntiAliasing?: boolean;
       delay?: number;
       ignoreSelectors?: string[];
+      deviceScaleFactor?: number;
       cropToViewport?: boolean;
       align?: AlignMode;
       previewSplitZoomDefault?: VisualDeltaZoomDefault;
@@ -562,6 +567,12 @@ export function useStoryData(currentStoryId?: string) {
               (item) => (item.src.split("?")[0] ?? item.src) === interactionSrc,
             )
           : undefined;
+        const effectiveDeviceScale =
+          typeof data.deviceScaleFactor === "number" &&
+          Number.isFinite(data.deviceScaleFactor) &&
+          data.deviceScaleFactor > 0
+            ? data.deviceScaleFactor
+            : VISUAL_DEVICE_SCALE_FACTOR;
         const images =
           interactionSrc != null
             ? withPlacement(
@@ -572,6 +583,7 @@ export function useStoryData(currentStoryId?: string) {
                     offsetY: 0,
                     align: data.align ?? prev.effectiveAlign,
                     placement: resolvedPlacement,
+                    deviceScaleFactor: effectiveDeviceScale,
                   },
                 ],
                 resolvedPlacement,
@@ -621,6 +633,7 @@ export function useStoryData(currentStoryId?: string) {
           diffIncludeAntiAliasing: data.diffIncludeAntiAliasing ?? false,
           delay: typeof data.delay === "number" ? data.delay : 0,
           ignoreSelectors: data.ignoreSelectors ?? [],
+          deviceScaleFactor: effectiveDeviceScale,
           cropToViewport: data.cropToViewport ?? false,
           effectiveAlign:
             data.align ?? primaryImages[0]?.align ?? prev.effectiveAlign,
@@ -1375,6 +1388,7 @@ export function useStoryData(currentStoryId?: string) {
           offsetY: 0,
           align: prev.effectiveAlign,
           placement,
+          deviceScaleFactor: prev.deviceScaleFactor,
         };
         const images = withPlacement([image], placement);
         const next: StoryData = {

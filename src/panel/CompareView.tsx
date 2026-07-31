@@ -9,6 +9,7 @@ import React, {
 import { CollapseIcon, ExpandAltIcon } from "@storybook/icons";
 import { ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
+import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
 import type { ChangeBounds } from "../types.js";
 import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import {
@@ -344,7 +345,7 @@ export function CompareView({
   imageHeight,
   cssWidth,
   cssHeight,
-  deviceScaleFactor = 3,
+  deviceScaleFactor = VISUAL_DEVICE_SCALE_FACTOR,
   defaultZoom = "100%",
   resultKey,
 }: {

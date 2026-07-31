@@ -33,9 +33,9 @@ describe("visualUpdateSnapshotsMode", () => {
 });
 
 describe("visual capture constants", () => {
-  it("exports the v1 viewport matrix", () => {
+  it("exports the v1 viewport matrix and built-in scale default", () => {
     expect(VISUAL_VIEWPORT).toEqual({ width: 1280, height: 900 });
-    expect(VISUAL_DEVICE_SCALE_FACTOR).toBe(3);
+    expect(VISUAL_DEVICE_SCALE_FACTOR).toBe(1);
   });
 });
 
@@ -44,7 +44,9 @@ describe("defineVisualPlaywrightConfig", () => {
     const config = defineVisualPlaywrightConfig({ port: 6010 });
     expect(config.testDir).toBe("./tests/visual");
     expect(config.use?.viewport).toEqual({ width: 1280, height: 900 });
-    expect(config.use?.deviceScaleFactor).toBe(3);
+    // Effective scale comes from cwd project config when present (UI host: 3).
+    expect(config.use?.deviceScaleFactor).toBeGreaterThanOrEqual(1);
+    expect(config.use?.deviceScaleFactor).toBeLessThanOrEqual(8);
     expect(config.use?.baseURL).toBe("http://127.0.0.1:6010");
     expect(config.projects?.[0]?.name).toBe("chromium");
     expect(config.webServer).toMatchObject({

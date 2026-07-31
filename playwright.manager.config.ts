@@ -13,6 +13,8 @@ const staticPort = Number(
 export default defineVisualPlaywrightConfig({
   port: staticPort,
   testDir: "./tests",
+  // Manager / overlay acceptance shares 3× panel snapshot density.
+  deviceScaleFactor: 3,
   override: visualDeltaPackageStorybookOverride({
     includeHostStubs: true,
     testMatch: [

@@ -2,6 +2,7 @@ import pixelmatch from "pixelmatch";
 import {
   DEFAULT_DIFF_THRESHOLD,
   DEFAULT_PASS_THRESHOLD_PERCENT,
+  VISUAL_DEVICE_SCALE_FACTOR,
 } from "../constants.js";
 import type { DiffResultData } from "../types.js";
 import { fitImageData, loadImage, maskTransparentRegions } from "./capture.js";
@@ -100,7 +101,8 @@ export function compareLoadedImages(
   const diffPercent = totalPixels > 0 ? (diffPixels / totalPixels) * 100 : 0;
   const passThresholdPercent =
     options.passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
-  const deviceScaleFactor = options.deviceScaleFactor ?? 3;
+  const deviceScaleFactor =
+    options.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
 
   return {
     actualImage: actualMaskedCanvas.toDataURL("image/png"),

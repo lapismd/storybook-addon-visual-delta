@@ -4,10 +4,22 @@ import type * as PlaywrightTest from "@playwright/test";
 import type { PlaywrightTestConfig } from "@playwright/test";
 import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
 import { resolveVisualServerPort } from "../node/options.js";
+import { readVisualDeltaProjectConfig } from "../node/project-config.js";
 import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
 
 export { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT };
+
+/** Effective Playwright deviceScaleFactor from project config → built-in. */
+export function resolveVisualDeviceScaleFactor(root = process.cwd()): number {
+  const value = readVisualDeltaProjectConfig(root).defaults.deviceScaleFactor;
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 1 &&
+    value <= 8
+    ? value
+    : VISUAL_DEVICE_SCALE_FACTOR;
+}
 
 const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
@@ -41,7 +53,10 @@ export function visualScreenshotExpect(root = process.cwd()) {
 /**
  * Suggested Playwright `use` block for Visual Delta compare / update runs.
  */
-export function visualPlaywrightUse(port = resolveVisualServerPort()) {
+export function visualPlaywrightUse(
+  port = resolveVisualServerPort(),
+  root = process.cwd(),
+) {
   return {
     baseURL: `http://127.0.0.1:${port}`,
     locale: "en-GB",
@@ -49,7 +64,7 @@ export function visualPlaywrightUse(port = resolveVisualServerPort()) {
     colorScheme: "light" as const,
     reducedMotion: "reduce" as const,
     viewport: { ...VISUAL_VIEWPORT },
-    deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
+    deviceScaleFactor: resolveVisualDeviceScaleFactor(root),
     trace: "off" as const,
   };
 }
@@ -77,6 +92,11 @@ export type DefineVisualPlaywrightConfigOptions = {
   port?: number;
   /** Playwright testDir (default `./tests/visual`). */
   testDir?: string;
+  /**
+   * Explicit capture density. Defaults to project `deviceScaleFactor`, then
+   * the built-in default (`1`).
+   */
+  deviceScaleFactor?: number;
   /** Extra fields merged over the Visual Delta defaults. */
   override?: PlaywrightTestConfig;
 };
@@ -96,6 +116,8 @@ export function defineVisualPlaywrightConfig(
   const { defineConfig, devices } = loadHostPlaywrightTest();
   const port = options.port ?? resolveVisualServerPort();
   const testDir = options.testDir ?? "./tests/visual";
+  const deviceScaleFactor =
+    options.deviceScaleFactor ?? resolveVisualDeviceScaleFactor();
   return defineConfig({
     testDir,
     fullyParallel: true,
@@ -108,14 +130,17 @@ export function defineVisualPlaywrightConfig(
     expect: {
       toHaveScreenshot: { ...visualScreenshotExpect() },
     },
-    use: visualPlaywrightUse(port),
+    use: {
+      ...visualPlaywrightUse(port),
+      deviceScaleFactor,
+    },
     projects: [
       {
         name: "chromium",
         use: {
           ...devices["Desktop Chrome"],
           viewport: { ...VISUAL_VIEWPORT },
-          deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
+          deviceScaleFactor,
         },
       },
     ],

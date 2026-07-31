@@ -61,6 +61,7 @@ const CONFIG = {
     diffThreshold: "built-in",
     diffIncludeAntiAliasing: "built-in",
     delay: "built-in",
+    deviceScaleFactor: "built-in",
     cropToViewport: "built-in",
     placement: "built-in",
     opacity: "built-in",

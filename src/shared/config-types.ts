@@ -40,6 +40,8 @@ export type VisualDeltaProjectDefaults = {
   diffThreshold: number;
   diffIncludeAntiAliasing: boolean;
   delay: number;
+  /** Capture / display density when image entries omit deviceScaleFactor. */
+  deviceScaleFactor: number;
   cropToViewport: boolean;
   placement: "left" | "right" | "above" | "below" | "center";
   opacity: number;

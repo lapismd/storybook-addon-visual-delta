@@ -1,6 +1,6 @@
 /**
- * Example stage sizes in CSS pixels. Baseline PNGs are captured at
- * `VISUAL_DEVICE_SCALE_FACTOR` (3×): PNG width = CSS width × 3.
+ * Example stage sizes in CSS pixels. Baseline PNGs match these sizes at the
+ * built-in `deviceScaleFactor` of 1 (PNG width = CSS width).
  * Keep `#storybook-root > *` (ExampleStage) at these CSS sizes so geometry matches.
  */
 export const EXAMPLE_SIZES = {
@@ -17,7 +17,7 @@ export const EXAMPLE_SIZES = {
   missing: { width: 400, height: 120 },
 } as const;
 
-/** Example baseline URL (PNG is 3× CSS; default deviceScaleFactor applies). */
+/** Example baseline URL (PNG is 1× CSS; built-in deviceScaleFactor applies). */
 export function exampleBaseline(src: string): string {
   return src;
 }

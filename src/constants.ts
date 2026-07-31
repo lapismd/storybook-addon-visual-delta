@@ -161,6 +161,11 @@ export type VisualDeltaParams = {
   /** Extra settle delay (ms) before Live Diff / Chromium subject capture. */
   delay?: number;
   /**
+   * Capture / display density when image entries omit `deviceScaleFactor`.
+   * Resolves story → project → built-in `1`.
+   */
+  deviceScaleFactor?: number;
+  /**
    * CSS selectors whose painted regions are ignored during Live Diff capture
    * (plus built-in `data-visual-delta-ignore` / Chromatic ignore markers).
    */
@@ -181,11 +186,13 @@ export const DEFAULT_PLACEMENT: PlacementMode = "right";
 export const BESIDE_GAP_PX = 24;
 
 /**
- * Must match `scripts/ui-generator/visual/capture-config.ts`.
+ * Built-in device scale factor when project / story / image omit one.
+ * Hosts with existing device-pixel baselines typically set project
+ * `deviceScaleFactor` (for example `3`) in `.visual-delta/config.json`.
  * Baseline PNGs are device pixels; overlay/diff display at CSS size
  * (naturalWidth / this factor).
  */
-export const VISUAL_DEVICE_SCALE_FACTOR = 3;
+export const VISUAL_DEVICE_SCALE_FACTOR = 1;
 
 /**
  * Must match `scripts/ui-generator/visual/capture-config.ts`.

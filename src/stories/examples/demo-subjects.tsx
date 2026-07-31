@@ -10,7 +10,7 @@ const shell: CSSProperties = {
 
 /**
  * Sole `#storybook-root` child for Examples. Fixed CSS size must match the
- * wired baseline CSS box (PNG natural size ÷ deviceScaleFactor, default 3).
+ * wired baseline CSS box (PNG natural size ÷ deviceScaleFactor, built-in 1).
  */
 export function ExampleStage({
   width,

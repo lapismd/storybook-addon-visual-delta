@@ -19,6 +19,7 @@ export type VisualDeltaStoryConfig = {
   diffThreshold: number;
   diffIncludeAntiAliasing: boolean;
   delay: number;
+  deviceScaleFactor: number;
   cropToViewport: boolean;
   baselineLabelOffset: { x: number; y: number };
 };
@@ -32,6 +33,7 @@ export const VISUAL_DELTA_STORY_CONFIG_KEYS = [
   "diffThreshold",
   "diffIncludeAntiAliasing",
   "delay",
+  "deviceScaleFactor",
   "cropToViewport",
   "baselineLabelOffset",
 ] as const satisfies readonly (keyof VisualDeltaStoryConfig)[];
@@ -131,6 +133,8 @@ function validStoryConfigValue(
       return finiteInRange(value, 0, 1);
     case "delay":
       return finiteInRange(value, 0, 60_000) && Number.isInteger(value);
+    case "deviceScaleFactor":
+      return finiteInRange(value, 1, 8) && Number.isInteger(value);
     case "baselineLabelOffset":
       return validOffset(value);
   }
@@ -249,6 +253,8 @@ export function resolveVisualDeltaStoryConfig(
       overrides.diffIncludeAntiAliasing ??
       projectDefaults.diffIncludeAntiAliasing,
     delay: overrides.delay ?? projectDefaults.delay,
+    deviceScaleFactor:
+      overrides.deviceScaleFactor ?? projectDefaults.deviceScaleFactor,
     cropToViewport: overrides.cropToViewport ?? projectDefaults.cropToViewport,
     baselineLabelOffset:
       overrides.baselineLabelOffset ?? projectDefaults.baselineLabelOffset,

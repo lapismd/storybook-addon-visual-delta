@@ -42,6 +42,7 @@ const config: VisualDeltaResolvedConfig = {
     diffThreshold: "built-in",
     diffIncludeAntiAliasing: "built-in",
     delay: "built-in",
+    deviceScaleFactor: "built-in",
     cropToViewport: "built-in",
     placement: "built-in",
     opacity: "built-in",
@@ -77,6 +78,10 @@ describe("configurationSections", () => {
     expect(sections[1]?.rows).toContainEqual({
       label: "Pass threshold",
       value: "1%",
+    });
+    expect(sections[2]?.rows).toContainEqual({
+      label: "Device scale factor",
+      value: "1",
     });
   });
 });
@@ -200,7 +205,7 @@ describe("ConfigurationPanel", () => {
     expect(
       screen.getByRole("tab", { name: "Defaults", selected: true }),
     ).toBeVisible();
-    expect(screen.getAllByRole("slider")).toHaveLength(6);
+    expect(screen.getAllByRole("slider")).toHaveLength(7);
     const threshold = screen.getByLabelText("Pass threshold percentage");
     await user.clear(threshold);
     await user.type(threshold, "2.5");
@@ -211,6 +216,16 @@ describe("ConfigurationPanel", () => {
       expect.objectContaining({ passThresholdPercent: 2.5 }),
     );
     expect(await screen.findByText(/Project defaults saved/)).toBeVisible();
+
+    const scale = screen.getByLabelText("Device scale factor");
+    expect(scale).toHaveValue(1);
+    await user.clear(scale);
+    await user.type(scale, "3");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceScaleFactor: 3 }),
+    );
   });
 
   it("preserves edits when persistence fails and exposes resolved details", async () => {
