@@ -46,6 +46,9 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Capture only missing Linux panel references
+        # Playwright exits 1 after writing an absent expected snapshot.
+        # The exact-set and compare-only steps below remain required gates.
+        continue-on-error: true
         run: >-
           pnpm exec playwright test -c playwright.panel.config.ts
           --update-snapshots=missing
@@ -69,9 +72,9 @@ jobs:
           actual_paths="$(find "$snapshot_root" -type f -name '*-chromium-linux.png' -print | sort)"
           expected_paths_text="$(printf '%s\n' "${expected_paths[@]}")"
           test "$actual_paths" = "$expected_paths_text"
+          pnpm test:panel
           manifest_path="$RUNNER_TEMP/panel-linux-snapshot-checksums.txt"
           printf '%s\n' "$actual_paths" | xargs sha256sum > "$manifest_path"
-          pnpm test:panel
 
       - name: Upload Linux panel references for review
         uses: actions/upload-artifact@v6
