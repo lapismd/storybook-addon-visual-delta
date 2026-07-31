@@ -79,6 +79,37 @@ pnpm spec:check      # lint + validate + mdBook + gates
 
 Monorepo `pnpm checks` runs the panel suite via the root alias.
 
+## npm release administration
+
+The release contract is canonical in
+[Specification governance](./spec/src/spec-governance.md#package-releases).
+The repository and npm package must be public before the first release.
+
+Before tagging `v0.0.1`:
+
+1. Protect `v*` tags and create reviewer-gated GitHub Environments named
+   `npm-bootstrap` and `npm`.
+2. Store the one-time npm automation token only as
+   `NPM_BOOTSTRAP_TOKEN` in `npm-bootstrap`; never add it as a repository
+   secret or to `npm`.
+3. Merge `.github/workflows/npm-publish.yml`, then push the exact `v0.0.1` tag
+   and approve the bootstrap Environment.
+
+After that release succeeds, register the normal tokenless npm Trusted
+Publisher and confirm it before deleting and revoking the bootstrap token:
+
+```bash
+npm trust github @lapismd/storybook-addon-visual-delta \
+  --file npm-publish.yml \
+  --repo stevejuma/storybook-addon-visual-delta \
+  --env npm \
+  --allow-publish -y
+npm trust list
+```
+
+The next exact stable tag, `v0.0.2`, exercises the OIDC-only release path. Do
+not publish from a workstation or recreate the bootstrap token.
+
 ## UI catalog host
 
 The `/Users/stevejuma/ui` Storybook still loads the addon via

@@ -1,7 +1,6 @@
 {
   "name": "@lapismd/storybook-addon-visual-delta",
-  "version": "0.1.5",
-  "private": true,
+  "version": "0.0.1",
   "description": "Local Visual Delta Storybook addon (reimplemented from npm storybook-addon-visual-delta@0.1.5). Overlay / heatmap diff against baseline images.",
   "keywords": [
     "storybook-addon",
@@ -11,6 +10,14 @@
   ],
   "license": "MIT",
   "author": "houjinlong <1844041598@qq.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stevejuma/storybook-addon-visual-delta.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "type": "module",
   "bin": {
     "visual-delta": "./dist/node/cli.js"
@@ -66,7 +73,9 @@
     "spec:serve": "mdbook serve ./spec --open",
     "spec:test": "node --test ./scripts/*.spec.mjs",
     "spec:first": "node ./scripts/check-spec-first.mjs",
-    "spec:check": "pnpm spec:lint && pnpm spec:validate && pnpm spec:build && pnpm spec:test && pnpm spec:first"
+    "spec:check": "pnpm spec:lint && pnpm spec:validate && pnpm spec:build && pnpm spec:test && pnpm spec:first",
+    "release:check": "node ./scripts/check-npm-release.mjs",
+    "release:verify-provenance": "node ./scripts/verify-npm-provenance.mjs"
   },
   "dependencies": {
     "@storybook/icons": "^2.1.0",
