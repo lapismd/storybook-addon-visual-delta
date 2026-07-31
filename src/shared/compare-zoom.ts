@@ -91,6 +91,26 @@ export function resolvedCompareZoomScale(
     : clampCompareZoom(state.scale);
 }
 
+/**
+ * Fit means “shrink only when the baseline exceeds the available split slot”.
+ * When the fitted scale is already 1, resolve to native `100%` so the control
+ * and scroll behavior match — small subjects with spare host space should not
+ * stay parked on Fit.
+ */
+export function resolveFitZoomState(
+  state: CompareZoomState,
+  fitInput: CompareFitInput,
+): CompareZoomState {
+  if (state.mode !== "fit") {
+    return { mode: "custom", scale: clampCompareZoom(state.scale) };
+  }
+  const scale = fitCompareScale(fitInput);
+  if (scale >= 1 - 1e-6) {
+    return { mode: "custom", scale: 1 };
+  }
+  return { mode: "fit", scale };
+}
+
 export function compareZoomPercent(scale: number): number {
   if (!Number.isFinite(scale)) return 100;
   return Math.round(Math.min(COMPARE_ZOOM_MAX, Math.max(0.01, scale)) * 100);
