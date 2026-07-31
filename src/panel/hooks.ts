@@ -4,7 +4,6 @@ import {
   DEFAULT_DIFF_THRESHOLD,
   EVENTS,
   VISUAL_DEVICE_SCALE_FACTOR,
-  deviceScaleFactorForImage,
   isSplitPlacement,
   viewportForImage,
   type BaselineGeometryMismatch,
@@ -30,9 +29,8 @@ import {
 } from "../shared/compare-zoom.js";
 import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
 import {
-  measureCurrentPreviewLayout,
+  measureSettledOverlayLayout,
   previewContainsVisualDeltaDom,
-  withVerifiedPreviewViewport,
 } from "./capture.js";
 import {
   previewLayoutCacheKey,
@@ -359,20 +357,13 @@ export function useStoryData(currentStoryId?: string) {
           if (requestGeneration !== selectionRequestGenerationRef.current) {
             return;
           }
-          const transaction = await withVerifiedPreviewViewport(
-            async () =>
-              measureCurrentPreviewLayout({
-                storyId: context.storyId,
-                viewport,
-                layout: context.layout,
-              }),
-            {
-              storyId: context.storyId,
-              viewport,
-              deviceScaleFactor: deviceScaleFactorForImage(image),
-            },
-          );
-          layoutSnapshot = transaction.result;
+          // Overlay geometry uses the current manager preview size. Do not
+          // run the Diff HTML capture viewport resize (1280×900) — that
+          // stalls SELECT_IMAGE for seconds after reload.
+          layoutSnapshot = await measureSettledOverlayLayout({
+            storyId: context.storyId,
+            layout: context.layout,
+          });
           layoutCacheRef.current.set(cacheKey, layoutSnapshot);
         } catch (error) {
           measurementAttempts += 1;
@@ -664,7 +655,12 @@ export function useStoryData(currentStoryId?: string) {
           splitZoom: next.splitZoom,
           cropToViewport: next.cropToViewport,
         });
-        void selectImage(selection.previewIndex, images);
+        // Defer SELECT until storyFinished so early INIT (decorator mount)
+        // does not burn 5s settlement timeouts / cancel loops while the
+        // REQUEST_INIT interval is still polling.
+        if (readiness.storyFinished || selection.previewIndex < 0) {
+          void selectImage(selection.previewIndex, images);
+        }
         return next;
       });
     },
@@ -684,9 +680,17 @@ export function useStoryData(currentStoryId?: string) {
           },
           data,
         );
-        return readiness
-          ? { ...prev, storyFinished: readiness.storyFinished }
-          : prev;
+        if (!readiness) return prev;
+        const next = { ...prev, storyFinished: readiness.storyFinished };
+        if (
+          readiness.storyFinished &&
+          next.overlayOn &&
+          next.index >= 0 &&
+          next.images.length > 0
+        ) {
+          void selectImage(next.index, next.images);
+        }
+        return next;
       });
     },
     [EVENTS.OVERLAY_LISTENER_READY]: (payload?: { storyId?: string }) => {
