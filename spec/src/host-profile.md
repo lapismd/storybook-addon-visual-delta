@@ -22,7 +22,7 @@ These requirements bind the portable package to this repository without merging 
 
 `.storybook/main.ts` resolves a local preset so Vite loads package source without a committed manager or preview build. The local preset must append the package manager and preview entries because file-path addon registration does not automatically resolve package export entries.
 
-Packaged registration through `storybook-addon-visual-delta` already resolves `manager` and `preview`. The packaged preset MUST NOT append them again.
+Packaged registration through `@lapismd/storybook-addon-visual-delta` already resolves `manager` and `preview`. The packaged preset MUST NOT append them again.
 
 The host aliases the package name to the local package root and excludes it from dependency optimization. `addonSrcDir` or equivalent local watching MAY trigger preview reloads, but it MUST avoid restart loops with the Storybook supervisor.
 

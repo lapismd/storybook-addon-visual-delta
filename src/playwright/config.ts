@@ -106,7 +106,7 @@ export type DefineVisualPlaywrightConfigOptions = {
  *
  * ```ts
  * // playwright.config.ts
- * import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
+ * import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
  * export default defineVisualPlaywrightConfig();
  * ```
  */

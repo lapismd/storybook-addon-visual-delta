@@ -36,13 +36,13 @@ export type VisualDeltaOnboardingStatus = {
 const SUITE_REL = path.join("tests", "visual", "storybook.spec.ts");
 const PLAYWRIGHT_CONFIG_REL = "playwright.config.ts";
 
-const SUITE_SOURCE = `import { defineVisualSuite } from "storybook-addon-visual-delta/playwright";
+const SUITE_SOURCE = `import { defineVisualSuite } from "@lapismd/storybook-addon-visual-delta/playwright";
 
 defineVisualSuite();
 `;
 
 function playwrightConfigSource(port: number): string {
-  return `import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
+  return `import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
 
 export default defineVisualPlaywrightConfig({ port: ${port} });
 `;

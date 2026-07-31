@@ -20,7 +20,7 @@ export type { VisualDeltaHostOptions } from "./node/options.js";
  * Packaged preset ownership (Storybook 10+):
  * - `staticDirs` + `viteFinal` live here
  * - `manager` / `preview` come from bare package registration
- *   (`storybook-addon-visual-delta/{manager,preview}` via Storybook's
+ *   (`@lapismd/storybook-addon-visual-delta/{manager,preview}` via Storybook's
  *   virtual addon resolution). Do **not** re-append them here — that
  *   duplicates the module and breaks the build.
  *

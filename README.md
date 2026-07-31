@@ -1,4 +1,4 @@
-# storybook-addon-visual-delta
+# @lapismd/storybook-addon-visual-delta
 
 Storybook addon for comparing stories to committed baseline PNGs: placement pad,
 overlay / heatmap Live Diff, Create / Update baselines, Run visual tests, and
@@ -64,7 +64,7 @@ the [canonical specification](./spec/src/index.md).
 
 ```bash
 # From a Vite Storybook project that already has react
-npx storybook add storybook-addon-visual-delta
+npx storybook add @lapismd/storybook-addon-visual-delta
 pnpm add -D playwright
 pnpm exec playwright install chromium
 pnpm exec visual-delta init
@@ -83,24 +83,24 @@ If the panel empty state says the suite is missing, click **Set up Visual Delta*
 ### Option B — Manual three files
 
 ```bash
-pnpm add -D storybook-addon-visual-delta playwright react
+pnpm add -D @lapismd/storybook-addon-visual-delta playwright react
 pnpm exec playwright install chromium
 ```
 
 ```ts
 // .storybook/main.ts
-addons: ["storybook-addon-visual-delta"],
+addons: ["@lapismd/storybook-addon-visual-delta"],
 ```
 
 ```ts
 // tests/visual/storybook.spec.ts
-import { defineVisualSuite } from "storybook-addon-visual-delta/playwright";
+import { defineVisualSuite } from "@lapismd/storybook-addon-visual-delta/playwright";
 defineVisualSuite();
 ```
 
 ```ts
 // playwright.config.ts
-import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
+import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
 export default defineVisualPlaywrightConfig();
 ```
 
@@ -124,7 +124,7 @@ What bare package registration + the preset wire for you:
 | Preset `viteFinal`                | `/__visual-delta/*` middleware + CSF baseline inject                     |
 
 The packaged preset does **not** re-append `managerEntries` /
-`previewAnnotations` — Storybook already resolves `storybook-addon-visual-delta/manager`
+`previewAnnotations` — Storybook already resolves `@lapismd/storybook-addon-visual-delta/manager`
 and `…/preview` when the package is listed in `addons`.
 
 Defaults (override via `options.visualDelta`):
@@ -154,20 +154,20 @@ You still commit PNGs under the snapshot dir and keep a thin Playwright entry
 ## Install
 
 ```bash
-pnpm add -D storybook-addon-visual-delta
+pnpm add -D @lapismd/storybook-addon-visual-delta
 ```
 
 ### Package exports
 
 | Import                                        | Purpose                                                         |
 | --------------------------------------------- | --------------------------------------------------------------- |
-| `storybook-addon-visual-delta`                | Package root                                                    |
-| `storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports) |
-| `storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                      |
-| `storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                     |
-| `storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                 |
-| `storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                  |
-| `storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                         |
+| `@lapismd/storybook-addon-visual-delta`                | Package root                                                    |
+| `@lapismd/storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports) |
+| `@lapismd/storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                      |
+| `@lapismd/storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                     |
+| `@lapismd/storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                 |
+| `@lapismd/storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                  |
+| `@lapismd/storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                         |
 
 Bin: `visual-delta` → `init` / `test` / `update` /
 `interaction-update`.
@@ -180,7 +180,7 @@ Bare registration (recommended for new projects):
 
 ```ts
 // .storybook/main.ts
-addons: ["storybook-addon-visual-delta"],
+addons: ["@lapismd/storybook-addon-visual-delta"],
 ```
 
 With options:
@@ -188,7 +188,7 @@ With options:
 ```ts
 addons: [
   {
-    name: "storybook-addon-visual-delta",
+    name: "@lapismd/storybook-addon-visual-delta",
     options: {
       visualDelta: {
         // optional — see Options
@@ -328,7 +328,7 @@ does not change baselines or visual review status.
 ## Options (`VisualDeltaHostOptions`)
 
 Pass under addon `options.visualDelta`. Types from
-`storybook-addon-visual-delta/preset` or `…/node`.
+`@lapismd/storybook-addon-visual-delta/preset` or `…/node`.
 
 | Option                        | Default                                    | Purpose                                                                |
 | ----------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
@@ -754,7 +754,7 @@ Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
 | Preset `staticDirs` → `/visual-baselines`         | Thin Playwright entry (`defineVisualSuite`)      |
 | `viteFinal` middleware + CSF inject               | Project capture/compare defaults                 |
 | Packaged `visual-delta` CLI (create / update / …) | Custom suites (reference captures, extra masks)  |
-| `storybook-addon-visual-delta/playwright` helpers | Approval policy is `--approved` / env (built-in) |
+| `@lapismd/storybook-addon-visual-delta/playwright` helpers | Approval policy is `--approved` / env (built-in) |
 
 ---
 
@@ -769,7 +769,7 @@ The UI catalog uses the packaged Playwright config helper and preset
 
 ```ts
 // playwright.config.ts
-import { defineVisualPlaywrightConfig } from "storybook-addon-visual-delta/playwright";
+import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
 export default defineVisualPlaywrightConfig();
 // Optional: defineVisualPlaywrightConfig({ port: 9010 }) to pin the static port.
 ```
