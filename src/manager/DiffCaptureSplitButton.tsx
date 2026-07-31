@@ -124,6 +124,7 @@ export function DiffCaptureSplitButton({
   progressLabel,
   engine: engineProp,
   onEngineChange,
+  engines = ENGINES,
 }: {
   isRunning: boolean;
   disabled?: boolean;
@@ -135,12 +136,18 @@ export function DiffCaptureSplitButton({
   /** Controlled engine; omit to manage selection internally. */
   engine?: DiffCaptureEngine;
   onEngineChange?: (engine: DiffCaptureEngine) => void;
+  /** Available engines; single-engine mode hides the picker (read-only static). */
+  engines?: readonly DiffCaptureEngine[];
 }) {
-  const [internalEngine, setInternalEngine] = useState<DiffCaptureEngine>(() =>
-    loadDiffCaptureEngine(),
-  );
+  const allowedEngines =
+    engines.length > 0 ? engines : (["html"] as const satisfies readonly DiffCaptureEngine[]);
+  const [internalEngine, setInternalEngine] = useState<DiffCaptureEngine>(() => {
+    const loaded = loadDiffCaptureEngine();
+    return allowedEngines.includes(loaded) ? loaded : allowedEngines[0]!;
+  });
   const engine = engineProp ?? internalEngine;
   const [menuOpen, setMenuOpen] = useState(false);
+  const showEngineMenu = allowedEngines.length > 1;
 
   useEffect(() => {
     if (engineProp !== undefined) return;
@@ -199,6 +206,7 @@ export function DiffCaptureSplitButton({
         <PlayHollowIcon />
         <ActionLabel>{label}</ActionLabel>
       </MainButton>
+      {showEngineMenu ? (
       <PopoverProvider
         ariaLabel="Choose Diff capture engine"
         placement="bottom-end"
@@ -208,7 +216,7 @@ export function DiffCaptureSplitButton({
         popover={() => (
           <div style={{ minWidth: 200 }}>
             <ActionList>
-              {ENGINES.map((item) => (
+              {allowedEngines.map((item) => (
                 <ActionList.Item key={item} active={engine === item}>
                   <ActionList.Action
                     ariaLabel={diffEngineLabel(item)}
@@ -238,6 +246,7 @@ export function DiffCaptureSplitButton({
           <ChevronSmallDownIcon />
         </MenuButton>
       </PopoverProvider>
+      ) : null}
     </Split>
   );
 }

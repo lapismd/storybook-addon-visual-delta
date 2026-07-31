@@ -14,6 +14,7 @@ export default defineVisualPlaywrightConfig({
   port: staticPort,
   testDir: "./tests",
   override: visualDeltaPackageStorybookOverride({
+    includeHostStubs: true,
     testMatch: [
       "**/manager*.spec.ts",
       "**/overlay-placement.spec.ts",

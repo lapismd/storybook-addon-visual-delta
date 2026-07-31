@@ -38,6 +38,8 @@ import {
   VisualStatusBadge,
   type VisualBadgeStatus,
 } from "./VisualStatusBadge.js";
+import type { VisualDeltaCapabilities } from "../shared/capabilities.js";
+import { READ_ONLY_REQUIRES_DEV } from "../shared/capabilities.js";
 
 const HeaderWrap = styled.div(({ theme }) => ({
   boxShadow: `${theme.appBorderColor} 0 -1px 0 0 inset`,
@@ -105,6 +107,8 @@ export type VisualDeltaHeaderProps = {
   isRebuilding: boolean;
   /** Reports sticky Pass/Diff toolbar height for accordion offset. */
   onHeightChange?: (height: number) => void;
+  /** Middleware / write surfaces; omit for full development capabilities. */
+  capabilities?: VisualDeltaCapabilities;
 };
 
 export type VisualDeltaHeaderViewProps = VisualDeltaHeaderProps & {
@@ -145,6 +149,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   pendingChangesCount = 0,
   isRebuilding,
   onHeightChange,
+  capabilities,
   reviewLayoutActive = false,
   onToggleReviewLayout = () => undefined,
 }: VisualDeltaHeaderViewProps) {
@@ -156,6 +161,12 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   const reviewLayoutLabel = reviewLayoutActive
     ? "Exit review layout"
     : "Review layout";
+  const allowWrites = capabilities?.writes !== false;
+  const allowChromium = capabilities?.chromiumCompare !== false;
+  const allowRuns = capabilities?.runs !== false;
+  const allowConfiguration = capabilities?.configuration !== false;
+  const allowChanges = capabilities?.changes !== false;
+  const readOnly = capabilities?.readOnly === true;
 
   useLayoutEffect(() => {
     const el = headerRef.current;
@@ -177,7 +188,9 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
     ? "Remove skip-visual so Playwright and Visual Delta run this story"
     : "Add skip-visual to exclude this story from Playwright visual runs";
   /** Prominent header control when there is no baseline, or skip is already on. */
-  const showSkipHeaderButton = empty || skipVisual;
+  const showSkipHeaderButton = allowWrites && (empty || skipVisual);
+  const effectiveDiffEngine =
+    !allowChromium && diffEngine === "chromium" ? "html" : diffEngine;
 
   return (
     <HeaderWrap ref={headerRef} data-vd-header="controls">
@@ -199,31 +212,42 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
             progressLabel={diffProgressLabel}
             disabled={busy && !isDiffing}
             storyMissing={storyMissing}
-            engine={diffEngine}
-            onEngineChange={onDiffEngineChange}
+            engine={effectiveDiffEngine}
+            onEngineChange={allowChromium ? onDiffEngineChange : undefined}
             onDiff={onDiff}
             onStop={onStopDiff}
+            engines={allowChromium ? undefined : ["html"]}
           />
-          <VisualRunSplitButton
-            panel
-            compact
-            isRunning={isRunning}
-            progressLabel={runProgressLabel}
-            disabled={busy && !isRunning}
-            storyMissing={storyMissing}
-            allowStory
-            onRun={onRun}
-            onStop={onStopRun}
-          />
+          {allowRuns ? (
+            <VisualRunSplitButton
+              panel
+              compact
+              isRunning={isRunning}
+              progressLabel={runProgressLabel}
+              disabled={busy && !isRunning}
+              storyMissing={storyMissing}
+              allowStory
+              onRun={onRun}
+              onStop={onStopRun}
+            />
+          ) : null}
           {badgeStatus ? (
             <>
               <Separator />
               <VisualStatusBadge status={badgeStatus} />
             </>
           ) : null}
+          {readOnly ? (
+            <span
+              title={READ_ONLY_REQUIRES_DEV}
+              style={{ fontSize: 11, opacity: 0.75, whiteSpace: "nowrap" }}
+            >
+              Read-only
+            </span>
+          ) : null}
         </ControlsGroup>
         <RightGroup>
-          {empty && !skipVisual && showCreate ? (
+          {allowWrites && empty && !skipVisual && showCreate ? (
             <Button
               size="small"
               ariaLabel="Create visual baseline"
@@ -246,7 +270,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
               {skipActionLabel}
             </Button>
           ) : null}
-          {!empty && !skipVisual ? (
+          {allowWrites && !empty && !skipVisual ? (
             <>
               <AcceptSplitButton
                 busy={busy}
@@ -293,46 +317,50 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
             popover={() => (
               <div style={{ minWidth: 220 }}>
                 <ActionList>
-                  <ActionList.Item>
-                    <ActionList.Action
-                      ariaLabel="Changes"
-                      onClick={() => {
-                        setMoreOpen(false);
-                        onOpenChanges();
-                      }}
-                    >
-                      <ActionList.Icon>
-                        <CommitIcon />
-                      </ActionList.Icon>
-                      <ActionList.Text>
-                        Changes
-                        {pendingChangesCount > 0
-                          ? ` (${pendingChangesCount})`
-                          : ""}
-                      </ActionList.Text>
-                    </ActionList.Action>
-                  </ActionList.Item>
-                  <ActionList.Item>
-                    <ActionList.Action
-                      ariaLabel="Rebuild storybook static"
-                      title="Run build-storybook so Playwright captures pick up live CSS/markup edits"
-                      disabled={busy}
-                      onClick={() => {
-                        setMoreOpen(false);
-                        onRebuildStatic();
-                      }}
-                    >
-                      <ActionList.Icon>
-                        <RefreshIcon />
-                      </ActionList.Icon>
-                      <ActionList.Text>
-                        {isRebuilding
-                          ? "Rebuilding static…"
-                          : "Rebuild storybook static"}
-                      </ActionList.Text>
-                    </ActionList.Action>
-                  </ActionList.Item>
-                  {!showSkipHeaderButton ? (
+                  {allowChanges ? (
+                    <ActionList.Item>
+                      <ActionList.Action
+                        ariaLabel="Changes"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onOpenChanges();
+                        }}
+                      >
+                        <ActionList.Icon>
+                          <CommitIcon />
+                        </ActionList.Icon>
+                        <ActionList.Text>
+                          Changes
+                          {pendingChangesCount > 0
+                            ? ` (${pendingChangesCount})`
+                            : ""}
+                        </ActionList.Text>
+                      </ActionList.Action>
+                    </ActionList.Item>
+                  ) : null}
+                  {allowRuns ? (
+                    <ActionList.Item>
+                      <ActionList.Action
+                        ariaLabel="Rebuild storybook static"
+                        title="Run build-storybook so Playwright captures pick up live CSS/markup edits"
+                        disabled={busy}
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onRebuildStatic();
+                        }}
+                      >
+                        <ActionList.Icon>
+                          <RefreshIcon />
+                        </ActionList.Icon>
+                        <ActionList.Text>
+                          {isRebuilding
+                            ? "Rebuilding static…"
+                            : "Rebuild storybook static"}
+                        </ActionList.Text>
+                      </ActionList.Action>
+                    </ActionList.Item>
+                  ) : null}
+                  {allowWrites && !showSkipHeaderButton ? (
                     <ActionList.Item>
                       <ActionList.Action
                         ariaLabel={skipActionLabel}
@@ -369,20 +397,22 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
                       <ActionList.Text>{reviewLayoutLabel}</ActionList.Text>
                     </ActionList.Action>
                   </ActionList.Item>
-                  <ActionList.Item>
-                    <ActionList.Action
-                      ariaLabel="Configuration"
-                      onClick={() => {
-                        setMoreOpen(false);
-                        onOpenConfiguration();
-                      }}
-                    >
-                      <ActionList.Icon>
-                        <EllipsisIcon />
-                      </ActionList.Icon>
-                      <ActionList.Text>Configuration</ActionList.Text>
-                    </ActionList.Action>
-                  </ActionList.Item>
+                  {allowConfiguration ? (
+                    <ActionList.Item>
+                      <ActionList.Action
+                        ariaLabel="Configuration"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onOpenConfiguration();
+                        }}
+                      >
+                        <ActionList.Icon>
+                          <EllipsisIcon />
+                        </ActionList.Icon>
+                        <ActionList.Text>Configuration</ActionList.Text>
+                      </ActionList.Action>
+                    </ActionList.Item>
+                  ) : null}
                   <ActionList.Item>
                     <ActionList.Action
                       ariaLabel="Reset settings"

@@ -78,6 +78,12 @@ export type VisualDeltaHostOptions = {
    */
   allowVcsWrites?: boolean;
   /**
+   * Force static read-only preview capabilities in the manager/panel even when
+   * Storybook is in DEVELOPMENT. Static (`PRODUCTION`) builds are read-only
+   * regardless of this flag (`VD-CONF-007`).
+   */
+  readOnly?: boolean;
+  /**
    * TurboSnap-style local affected selection. Disabled unless configured.
    * Full runs remain available and continue to seed this disposable cache.
    */

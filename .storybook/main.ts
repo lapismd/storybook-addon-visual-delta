@@ -10,9 +10,36 @@ const hostSnapshots = path.join(
   repoRoot,
   "tests/visual/storybook.spec.ts-snapshots",
 );
+const exampleSnapshots = path.join(
+  packageRoot,
+  "tests/examples-snapshots/examples",
+);
+
+/** Manager Playwright sets this so acceptance story IDs stay in index.json. */
+const includeHostStubs = process.env.VISUAL_DELTA_INCLUDE_HOST_STUBS === "1";
+
+const stories: StorybookConfig["stories"] = [
+  "../src/stories/docs/**/*.mdx",
+  "../src/stories/examples/**/*.mdx",
+  "../src/stories/*.mdx",
+  "../src/stories/*.stories.@(ts|tsx)",
+  "../src/stories/examples/**/*.stories.@(ts|tsx)",
+  ...(includeHostStubs
+    ? ([
+        "../src/stories/host-stubs/**/*.mdx",
+        "../src/stories/host-stubs/**/*.stories.@(ts|tsx)",
+      ] as const)
+    : []),
+];
 
 const config: StorybookConfig = {
-  stories: ["../src/**/*.mdx", "../src/**/*.stories.@(ts|tsx)"],
+  stories,
+  staticDirs: [
+    {
+      from: exampleSnapshots,
+      to: "/visual-baselines/examples",
+    },
+  ],
   addons: [
     "@storybook/addon-docs",
     "@storybook/addon-a11y",
@@ -35,6 +62,7 @@ const config: StorybookConfig = {
     options: {},
   },
   // `/visual-baselines` comes from the Visual Delta preset `staticDirs`.
+  // Package Examples PNGs mount at `/visual-baselines/examples` above.
   async viteFinal(viteConfig) {
     return mergeConfig(viteConfig, {
       plugins: [svelte()],

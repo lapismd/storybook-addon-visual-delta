@@ -1,0 +1,66 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Examples/Guidance" parameters={{ layout: "padded" }} />
+
+# Examples
+
+Realistic Visual Delta demos for the package Storybook. Use these to explore
+baselines, overlays, Diff HTML, galleries, interactions, and modes — including
+in a **static read-only** build where middleware writes are unavailable.
+
+## What you will see
+
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>Demonstrates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="?path=/story/examples-card--match">Card</a></td>
+<td>Match + intentional difference stories</td>
+</tr>
+<tr>
+<td><a href="?path=/story/examples-gallery--multiple-images">Gallery</a></td>
+<td>Multiple images in one gallery; separate compact story</td>
+</tr>
+<tr>
+<td><a href="?path=/story/examples-interactions--with-interaction-baseline">Interactions</a></td>
+<td>Primary + mid-play interaction baseline</td>
+</tr>
+<tr>
+<td><a href="?path=/story/examples-modes--default-and-compact">Modes</a></td>
+<td>Named mode baseline wiring</td>
+</tr>
+<tr>
+<td>Filter Chip / AI Reply / Form Field</td>
+<td>Lightweight layer-flavored subjects</td>
+</tr>
+<tr>
+<td><a href="?path=/story/examples-form-field--missing-baseline">Missing baseline</a></td>
+<td>Empty-state copy (read-only safe)</td>
+</tr>
+</tbody>
+</table>
+
+## Static vs development
+
+- **Static / production Storybook** — Visual Delta is read-only: gallery,
+  overlay, Diff HTML, and Diff Result hydrate when sidecars exist. No Create /
+  Update / Diff Chromium / Run / Accept.
+- **Development** — full middleware surfaces when the Vite host provides
+  `/__visual-delta/*`.
+
+Spec: <a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview</a>
+(<code>VD-UI-008</code>),
+<a href="?path=/docs/visual-delta-specification-configuration--docs">Configuration</a>
+(<code>VD-CONF-007</code>).
+
+## Host stubs (hidden)
+
+Thin Shadcn / Filter / AI / Forms stubs under <code>src/stories/host-stubs/</code>
+keep manager Playwright story IDs stable. They are **excluded from the default
+Storybook UI** and static deploy. Manager acceptance sets
+<code>VISUAL_DELTA_INCLUDE_HOST_STUBS=1</code> to load them.

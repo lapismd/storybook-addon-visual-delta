@@ -156,14 +156,10 @@ import {
   baselineSourceStem,
   verifyBaselineSources,
 } from "./baseline-source-availability.js";
+import { resolveCapabilitiesFromEnvironment } from "../shared/capabilities.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
-const IS_DEVELOPMENT =
-  (
-    globalThis as typeof globalThis & {
-      CONFIG_TYPE?: string;
-    }
-  ).CONFIG_TYPE === "DEVELOPMENT";
+const panelCapabilities = resolveCapabilitiesFromEnvironment();
 
 function baselineLightboxCssSize(
   source: VisualDeltaImage | undefined,
@@ -741,7 +737,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         thumbSrc: selectedPrimary?.src,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
-        ...(IS_DEVELOPMENT && historyPath
+        ...(panelCapabilities.history && historyPath
           ? {
               history: {
                 path: historyPath,
@@ -775,7 +771,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         wired,
         status: isActive ? activeDiffMeta?.status : null,
         stats: isActive ? activeDiffMeta?.stats : null,
-        ...(IS_DEVELOPMENT && historyPath
+        ...(panelCapabilities.history && historyPath
           ? {
               history: {
                 path: historyPath,
@@ -2174,45 +2170,50 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     !loading &&
     isEmpty &&
     baselineSections.length === 0
-      ? {
-          description: skipVisual
-            ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
-            : needsScaffold
-              ? (onboardingHint ??
-                "Set up the Playwright suite and config, then create a baseline for this story.")
-              : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
-          footer:
-            needsScaffold && !skipVisual ? (
-              <Button
-                size="small"
-                ariaLabel="Set up Visual Delta Playwright suite"
-                disabled={busy}
-                onClick={() => void handleInitScaffold()}
-              >
-                {isIniting ? "Setting up…" : "Set up Visual Delta"}
-              </Button>
-            ) : skipVisual ? (
-              <Button
-                size="small"
-                ariaLabel="Include in visual tests"
-                disabled={!storyId || busy}
-                onClick={() => void handleToggleSkipVisual()}
-              >
-                Include in visual tests
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                ariaLabel="Create visual baseline"
-                disabled={!storyId || busy}
-                onClick={() => void handleCreateBaselines()}
-              >
-                {isCreating
-                  ? (createProgress?.label ?? "Creating…")
-                  : "Create visual"}
-              </Button>
-            ),
-        }
+      ? panelCapabilities.readOnly
+        ? {
+            description:
+              "No baseline is wired for this story. In a static read-only Storybook, open a story with parameters.visualDelta.images (see Examples). Creating baselines requires Storybook development with Visual Delta middleware.",
+          }
+        : {
+            description: skipVisual
+              ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
+              : needsScaffold
+                ? (onboardingHint ??
+                  "Set up the Playwright suite and config, then create a baseline for this story.")
+                : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
+            footer:
+              needsScaffold && !skipVisual ? (
+                <Button
+                  size="small"
+                  ariaLabel="Set up Visual Delta Playwright suite"
+                  disabled={busy}
+                  onClick={() => void handleInitScaffold()}
+                >
+                  {isIniting ? "Setting up…" : "Set up Visual Delta"}
+                </Button>
+              ) : skipVisual ? (
+                <Button
+                  size="small"
+                  ariaLabel="Include in visual tests"
+                  disabled={!storyId || busy}
+                  onClick={() => void handleToggleSkipVisual()}
+                >
+                  Include in visual tests
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  ariaLabel="Create visual baseline"
+                  disabled={!storyId || busy}
+                  onClick={() => void handleCreateBaselines()}
+                >
+                  {isCreating
+                    ? (createProgress?.label ?? "Creating…")
+                    : "Create visual"}
+                </Button>
+              ),
+          }
       : null;
 
   return (
@@ -2263,6 +2264,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onOpenChanges: openChanges,
           pendingChangesCount,
           isRebuilding,
+          capabilities: panelCapabilities,
         }}
         loading={loading}
         configuration={
@@ -2370,11 +2372,32 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               hiddenInteractionCount={hiddenInteractionCount}
               showInteractionFilter
               onExpand={selectSection}
-              onCreateDefault={() => void handleCreateBaselines()}
-              onCreate={(step) => void handleCreateInteraction(step, false)}
-              onUpdate={(step) => void handleCreateInteraction(step, true)}
-              onUpdateDefault={() => void handleUpdateBaselines()}
-              onDelete={(section) => void handleDeleteBaseline(section)}
+              onCreateDefault={
+                panelCapabilities.writes
+                  ? () => void handleCreateBaselines()
+                  : undefined
+              }
+              onCreate={
+                panelCapabilities.writes
+                  ? (step) => void handleCreateInteraction(step, false)
+                  : () => undefined
+              }
+              onUpdate={
+                panelCapabilities.writes
+                  ? (step) => void handleCreateInteraction(step, true)
+                  : () => undefined
+              }
+              onUpdateDefault={
+                panelCapabilities.writes
+                  ? () => void handleUpdateBaselines()
+                  : () => undefined
+              }
+              onDelete={
+                panelCapabilities.writes
+                  ? (section) => void handleDeleteBaseline(section)
+                  : () => undefined
+              }
+              allowMutations={panelCapabilities.writes}
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }

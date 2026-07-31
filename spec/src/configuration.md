@@ -14,6 +14,7 @@ These requirements keep configuration precedence explicit and preserve safe defa
 | VD-CONF-004 | `parameters.visualDelta` MUST contain story-owned baseline wiring and story-specific overrides. Interaction entries MUST use `{ id, label, src }`.                                              |
 | VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.              |
 | VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                   |
+| VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Chromium, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired. |
 
 ## Configuration precedence
 
@@ -101,6 +102,7 @@ Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`
 | `visualServerPort`            | Static Storybook server port                   | Storybook port plus one                    |
 | `allowRebuild`                | Permit middleware-triggered static builds      | `true`                                     |
 | `allowVcsWrites`              | Second gate for plugin-managed commits         | `false`                                    |
+| `readOnly`                    | Force static read-only preview capabilities    | unset (`false`); static builds imply read-only via `CONFIG_TYPE` |
 | `affectedTests`               | Affected cache, external, and untraced policy  | disabled unless configured                 |
 
 `affectedTests.untraced` reduces coverage and MUST remain opt-in. Invalid affected configuration MUST fall back to a full eligible-story selection.

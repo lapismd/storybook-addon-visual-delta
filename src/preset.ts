@@ -8,6 +8,7 @@ import {
   type VisualDeltaHostOptions,
 } from "./node/options.js";
 import {
+  renderReadOnlyManagerHead,
   renderToolbarStatusManagerHead,
   resolveToolbarStatusEnabled,
 } from "./shared/manager-options.js";
@@ -57,10 +58,9 @@ export function managerHead(
   existing = "",
   options: PresetOptions = {},
 ): string {
-  const enabled = resolveToolbarStatusEnabled(
-    resolveHostOptions(options).showToolbarStatusLabels,
-  );
-  return `${existing}${renderToolbarStatusManagerHead(enabled)}`;
+  const host = resolveHostOptions(options);
+  const enabled = resolveToolbarStatusEnabled(host.showToolbarStatusLabels);
+  return `${existing}${renderToolbarStatusManagerHead(enabled)}${renderReadOnlyManagerHead(host.readOnly === true)}`;
 }
 
 function resolveSnapshotDirFromOptions(options: PresetOptions = {}): string {
