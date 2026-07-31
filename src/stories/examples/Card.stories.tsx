@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoCard, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Card",
@@ -12,7 +16,7 @@ const meta = {
         component: `
 Card demos for the Visual Delta panel.
 
-- **Match** — live subject and baseline share the same CSS box (no geometry warning).
+- **Match** — live subject and baseline share the same CSS box (no geometry or alignment warning).
 - **Intentional difference** — same box size, deliberate pixel drift so overlay / Diff HTML show a delta. The red banner marks this as a teaching story, not a product bug.
 `,
       },
@@ -29,14 +33,12 @@ export const Match: Story = {
     docs: {
       description: {
         story:
-          "Happy path: wired baseline matches the live card’s CSS size. Open Visual Delta — you should **not** see a baseline geometry warning. Placeholder PNG art is approximate; small pixel noise is fine.",
+          "Happy path: wired baseline matches the live card’s CSS size with Story canvas alignment. Open Visual Delta — you should **not** see geometry or alignment warnings. Placeholder PNG art is approximate; small pixel noise is fine.",
       },
     },
-    visualDelta: {
-      images: [
-        exampleBaseline("/visual-baselines/examples/card/match.png"),
-      ],
-    },
+    visualDelta: exampleVisualDelta({
+      images: [exampleBaseline("/visual-baselines/examples/card/match.png")],
+    }),
   },
   render: () => (
     <ExampleStage {...EXAMPLE_SIZES.card}>
@@ -55,17 +57,15 @@ export const IntentionalDifference: Story = {
 
 - Live UI uses a drifted card (accent / bar widths) under a red “INTENTIONAL” banner.
 - Baseline PNG includes the same banner and stage size, with the **non-drifted** card.
-- Expect overlay / Diff HTML pixel deltas. Geometry should still agree (same CSS box).
+- Expect overlay / Diff HTML pixel deltas. Geometry and alignment should still agree.
 
 Do not treat the red banner or heatmap as a regression in the Examples suite.
 `,
       },
     },
-    visualDelta: {
-      images: [
-        exampleBaseline("/visual-baselines/examples/card/drift.png"),
-      ],
-    },
+    visualDelta: exampleVisualDelta({
+      images: [exampleBaseline("/visual-baselines/examples/card/drift.png")],
+    }),
   },
   render: () => (
     <ExampleStage

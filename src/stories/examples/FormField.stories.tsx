@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoFormField, DemoMissing, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Form Field",
@@ -12,7 +16,7 @@ const meta = {
         component: `
 Form-flavored Examples.
 
-- **Default** — wired baseline with matching stage geometry.
+- **Default** — wired baseline with matching stage geometry and Story canvas alignment.
 - **Missing baseline** — **intentional** empty state (no \`visualDelta.images\`). Use it to read empty-state copy in the panel; it is not a broken story.
 `,
       },
@@ -29,14 +33,14 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          "Due-date field subject with a matching baseline box. Open Visual Delta for overlay / Diff HTML.",
+          "Due-date field subject with a matching baseline box. Open Visual Delta for overlay / Diff HTML — no geometry or alignment warnings.",
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/form-field/default.png"),
       ],
-    },
+    }),
   },
   render: () => (
     <ExampleStage {...EXAMPLE_SIZES.formField}>

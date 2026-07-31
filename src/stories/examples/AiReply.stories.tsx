@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoAiReply, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/AI Reply",
@@ -10,14 +14,14 @@ const meta = {
     docs: {
       description: {
         component:
-          "Lightweight AI-flavored reply block. Fixed stage size matches the wired baseline CSS box (PNG at 1× device scale).",
+          "Lightweight AI-flavored reply block. Fixed stage size matches the wired baseline CSS box (PNG at 1× device scale). Uses Story canvas alignment.",
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/ai-reply/default.png"),
       ],
-    },
+    }),
   },
 } satisfies Meta;
 
@@ -30,7 +34,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          "Reply skeleton for panel exploration. Expect aligned geometry; placeholder bars approximate the live layout.",
+          "Reply skeleton for panel exploration. Expect clean geometry and alignment; placeholder bars approximate the live layout.",
       },
     },
   },

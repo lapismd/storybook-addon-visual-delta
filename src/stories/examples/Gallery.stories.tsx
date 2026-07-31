@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoGalleryCard, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Gallery",
@@ -29,15 +33,15 @@ export const MultipleImages: Story = {
     docs: {
       description: {
         story:
-          "Primary subject is the Default gallery card. Gallery lists Default and Accent baselines (same CSS size). Selecting Accent while viewing Default shows intentional accent-color drift — geometry stays aligned.",
+          "Primary subject is the Default gallery card. Gallery lists Default and Accent baselines (same CSS size). Selecting Accent while viewing Default shows intentional accent-color drift — geometry and alignment stay clean.",
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/gallery/default.png"),
         exampleBaseline("/visual-baselines/examples/gallery/accent.png"),
       ],
-    },
+    }),
   },
   render: () => (
     <ExampleStage {...EXAMPLE_SIZES.gallery}>
@@ -55,11 +59,11 @@ export const CompactVariant: Story = {
           "Compact stage size matches the compact baseline PNG. Prefer this story over selecting a compact image against a Default-sized subject.",
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/gallery/compact.png"),
       ],
-    },
+    }),
   },
   render: () => (
     <ExampleStage {...EXAMPLE_SIZES.galleryCompact}>

@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoFilterChip, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Filter Chip",
@@ -10,14 +14,14 @@ const meta = {
     docs: {
       description: {
         component:
-          "Lightweight filter-flavored subject. Fixed stage size matches the wired baseline CSS box (PNG at 1× device scale).",
+          "Lightweight filter-flavored subject. Fixed stage size matches the wired baseline CSS box (PNG at 1× device scale). Uses Story canvas alignment.",
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/filter-chip/default.png"),
       ],
-    },
+    }),
   },
 } satisfies Meta;
 
@@ -30,7 +34,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          "Chip subject for overlay / Diff HTML exploration. Geometry should match; PNG art is a simplified stand-in for the live chip.",
+          "Chip subject for overlay / Diff HTML exploration. Geometry and alignment should be clean; PNG art is a simplified stand-in for the live chip.",
       },
     },
   },
