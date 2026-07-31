@@ -23,13 +23,13 @@ import {
   type BaselineCompareSizes,
 } from "../shared/compare-viewport.js";
 import {
+  resolveFitZoomState,
+  type CompareZoomState,
+} from "../shared/compare-zoom.js";
+import {
   VISUAL_CAPTURE_SURFACE_SELECTORS,
   measureVisualCaptureClip,
 } from "../shared/capture-target.js";
-import {
-  resolvedCompareZoomScale,
-  type CompareZoomState,
-} from "../shared/compare-zoom.js";
 import {
   baselineGeometryMismatch,
   isViewportSizedBaseline,
@@ -979,13 +979,21 @@ function applyEqualPaneViewports(
     (split instanceof HTMLElement ? split.parentElement : null) ??
     canvasElement.parentElement;
   const horizontal = placement === "left" || placement === "right";
+  // Prefer the preview window viewport over the split host box. Short stories
+  // leave `body` collapsed to the subject height (~96px) while the iframe is
+  // still tall — Fit must use that spare viewport, not the collapsed host.
+  const view = document.defaultView;
   const availW = Math.max(
     0,
-    (hostEl?.clientWidth ?? sizes.viewport.width * 2) - RAIL_THICKNESS_PX,
+    (view?.innerWidth ||
+      hostEl?.clientWidth ||
+      sizes.viewport.width * 2) - RAIL_THICKNESS_PX,
   );
   const availH = Math.max(
     0,
-    (hostEl?.clientHeight ?? sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
+    (view?.innerHeight ||
+      hostEl?.clientHeight ||
+      sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
   );
   const selectedImage = lastSelection?.images[lastSelection.index];
   const snapshot = lastSelection?.layoutSnapshot;
@@ -999,22 +1007,37 @@ function applyEqualPaneViewports(
   );
   const minPaneW = Math.ceil(sizes.content.width + insets.x);
   const minPaneH = Math.ceil(sizes.content.height + insets.y);
+  // Fit against the host split slot (half the preview), not a content-sized
+  // pane — otherwise spare space is ignored and small subjects stay on Fit.
+  const hostPaneW = horizontal
+    ? Math.max(1, Math.floor((availW - 1) / 2))
+    : Math.max(1, availW);
+  const hostPaneH = horizontal
+    ? Math.max(1, availH)
+    : Math.max(1, Math.floor((availH - 1) / 2));
+  const resolvedZoom = resolveFitZoomState(currentSplitZoom, {
+    availableWidth: Math.max(1, hostPaneW - insets.x),
+    availableHeight: Math.max(1, hostPaneH - insets.y),
+    contentWidth: sizes.content.width,
+    contentHeight: sizes.content.height,
+  });
+  const zoomScale = resolvedZoom.scale;
 
   let paneW: number;
   let paneH: number;
   if (horizontal) {
     paneW = Math.min(
       Math.max(minPaneW, sizes.viewport.width),
-      Math.max(1, Math.floor((availW - 1) / 2)),
+      hostPaneW,
     );
     // Use the iframe height — short baseline-sized panes left empty space below
     // while `#storybook-root { min-height: 100vh }` still scrolled inside.
-    paneH = Math.max(1, availH);
+    paneH = hostPaneH;
   } else {
-    paneW = Math.max(1, availW);
+    paneW = hostPaneW;
     paneH = Math.min(
       Math.max(minPaneH, sizes.viewport.height),
-      Math.max(1, Math.floor((availH - 1) / 2)),
+      hostPaneH,
     );
   }
 
@@ -1022,7 +1045,7 @@ function applyEqualPaneViewports(
     pane.style.width = `${paneW}px`;
     pane.style.height = `${paneH}px`;
     pane.style.flex = "0 0 auto";
-    pane.style.overflow = currentSplitZoom.mode === "fit" ? "hidden" : "auto";
+    pane.style.overflow = resolvedZoom.mode === "fit" ? "hidden" : "auto";
   }
 
   panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
@@ -1032,12 +1055,6 @@ function applyEqualPaneViewports(
   reportBaselineGeometry(canvasElement, selectedImage, sizes);
   const subject = canvasElement.querySelector(":scope > *");
   const baselineImage = baselinePane.querySelector(`#${OVERLAY_ID} > img`);
-  const zoomScale = resolvedCompareZoomScale(currentSplitZoom, {
-    availableWidth: Math.max(1, paneW - insets.x),
-    availableHeight: Math.max(1, paneH - insets.y),
-    contentWidth: sizes.content.width,
-    contentHeight: sizes.content.height,
-  });
   if (subject instanceof HTMLElement) {
     if (viewportCapture) {
       // The PNG already contains the root padding and border, so scale the
@@ -1056,7 +1073,7 @@ function applyEqualPaneViewports(
   if (baselineImage instanceof HTMLImageElement) {
     baselineImage.style.zoom = String(zoomScale);
   }
-  currentSplitZoom = { ...currentSplitZoom, scale: zoomScale };
+  currentSplitZoom = resolvedZoom;
   addons.getChannel().emit(EVENTS.SPLIT_ZOOM_STATUS, currentSplitZoom);
   sharedScrollRefreshRef?.();
 }
@@ -1179,11 +1196,14 @@ function ensureSplit(
   if (!snapshot) {
     throw new Error("Visual Delta: measured preview layout missing");
   }
-  // The split is absolutely positioned, so keep its host at the measured
-  // preview height while the root is reparented. This is measured geometry,
-  // not an addon-owned `100vh` assumption, and teardown restores the inline
-  // value captured above.
-  host.style.minHeight = `${snapshot.body.rect.height}px`;
+  // The split is absolutely positioned inside the host. Short stories leave
+  // body collapsed to the subject height; stretch to the preview viewport so
+  // above/below Fit can use the spare iframe space.
+  const previewHeight = Math.max(
+    snapshot.body.rect.height,
+    document.defaultView?.innerHeight ?? 0,
+  );
+  host.style.minHeight = `${previewHeight}px`;
   split.style.cssText = `
     display: grid;
     grid-template-columns: 1fr ${RAIL_THICKNESS_PX}px;

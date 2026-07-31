@@ -4,6 +4,7 @@ import {
   compareZoomFromDefault,
   compareZoomMatchesDefault,
   fitCompareScale,
+  resolveFitZoomState,
   resolveSplitZoomOnInit,
   resolvedCompareZoomScale,
   stepCompareZoom,
@@ -86,5 +87,30 @@ describe("shared compare zoom", () => {
         current: { mode: "fit", scale: 0.5 },
       }),
     ).toEqual({ mode: "fit", scale: 0.5 });
+  });
+
+  it("promotes Fit to 100% when the subject already fits the host slot", () => {
+    expect(
+      resolveFitZoomState(
+        { mode: "fit", scale: 1 },
+        {
+          availableWidth: 640,
+          availableHeight: 450,
+          contentWidth: 280,
+          contentHeight: 96,
+        },
+      ),
+    ).toEqual({ mode: "custom", scale: 1 });
+    expect(
+      resolveFitZoomState(
+        { mode: "fit", scale: 1 },
+        {
+          availableWidth: 200,
+          availableHeight: 450,
+          contentWidth: 280,
+          contentHeight: 96,
+        },
+      ),
+    ).toEqual({ mode: "fit", scale: 200 / 280 });
   });
 });
