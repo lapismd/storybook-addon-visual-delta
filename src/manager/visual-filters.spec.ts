@@ -79,6 +79,18 @@ describe("visual filters", () => {
     ).toEqual(["skipped-missing", "unreviewed-new"]);
   });
 
+  it("treats inclusion as skipped-only (exclude hides skipped)", () => {
+    expect(matchingIds(facts, ["inclusion.skipped"])).toEqual([
+      "skipped-missing",
+    ]);
+    expect(matchingIds(facts, ["!inclusion.skipped"])).toEqual([
+      "ready-mismatch",
+      "approved-pass",
+      "unreviewed-new",
+    ]);
+    expect(parseVisualFilterIds("inclusion.included")).toEqual([]);
+  });
+
   it("provides attention, review-queue, and coverage-gap quick views", () => {
     expect(matchingIds(facts, ["quick.needs-attention"])).toEqual([
       "ready-mismatch",
