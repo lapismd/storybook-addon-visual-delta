@@ -66,6 +66,8 @@ test.describe("Visual Delta manager overlay placement", () => {
           );
           const baselineChip = frame.getByTestId("baseline-overlay-chip");
           await expect(split).toBeVisible();
+          const divider = frame.locator("#visual-delta-split-divider");
+          await expect(divider).toBeVisible();
           await expect(baselineImage).toBeVisible();
           await expect
             .poll(() =>
@@ -85,15 +87,21 @@ test.describe("Visual Delta manager overlay placement", () => {
           await expect
             .poll(() =>
               panes.evaluate((element) =>
-                Array.from(element.children)
-                  .slice(0, 2)
-                  .map((child) => child.id),
+                Array.from(element.children).map((child) => child.id),
               ),
             )
             .toEqual(
               placement.baselineFirst
-                ? ["visual-delta-baseline-pane", "visual-delta-live-pane"]
-                : ["visual-delta-live-pane", "visual-delta-baseline-pane"],
+                ? [
+                    "visual-delta-baseline-pane",
+                    "visual-delta-split-divider",
+                    "visual-delta-live-pane",
+                  ]
+                : [
+                    "visual-delta-live-pane",
+                    "visual-delta-split-divider",
+                    "visual-delta-baseline-pane",
+                  ],
             );
 
           const fit = panel.getByRole("switch", {
@@ -280,6 +288,9 @@ test.describe("Visual Delta manager overlay placement", () => {
         const chip = overlay.getByTestId("baseline-overlay-chip");
         await expect(overlay).toBeVisible();
         await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
+        await expect(frame.locator("#visual-delta-split-divider")).toHaveCount(
+          0,
+        );
         await expect
           .poll(() =>
             overlay.evaluate((element) => {
@@ -439,6 +450,7 @@ test.describe("Visual Delta manager overlay placement", () => {
       .click();
     await expect(frame.locator("#visual-delta-overlay")).toHaveCount(0);
     await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
+    await expect(frame.locator("#visual-delta-split-divider")).toHaveCount(0);
 
     expect(
       await frame.locator("#storybook-root").evaluate((root) => ({

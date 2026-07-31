@@ -64,9 +64,14 @@ const SCROLL_SPACER_V_ID = "visual-delta-scroll-spacer-v";
 const SCROLL_RAIL_H_ID = "visual-delta-scroll-rail-h";
 const SCROLL_SPACER_H_ID = "visual-delta-scroll-spacer-h";
 const SCROLL_CORNER_ID = "visual-delta-scroll-corner";
+/** Centered dashed rule between equal live/baseline split panes. */
+const SPLIT_DIVIDER_ID = "visual-delta-split-divider";
 /** Invisible box that forces equal scrollWidth/scrollHeight on both panes. */
 const SCROLL_EXTENT_ATTR = "data-visual-delta-scroll-extent";
 const RAIL_THICKNESS_PX = 12;
+const SPLIT_DIVIDER_THICKNESS_PX = 1;
+/** Storybook coral — readable mid-line on light and dark story canvases. */
+const SPLIT_DIVIDER_COLOR = "#FF4785";
 
 /**
  * Prefer the live `#storybook-root` over a decorator-closed `canvasElement`.
@@ -1035,8 +1040,12 @@ function applyEqualPaneViewports(
     pane.style.overflow = resolvedZoom.mode === "fit" ? "hidden" : "auto";
   }
 
-  panesWrap.style.width = horizontal ? `${paneW * 2 + 1}px` : `${paneW}px`;
-  panesWrap.style.height = horizontal ? `${paneH}px` : `${paneH * 2 + 1}px`;
+  panesWrap.style.width = horizontal
+    ? `${paneW * 2 + SPLIT_DIVIDER_THICKNESS_PX}px`
+    : `${paneW}px`;
+  panesWrap.style.height = horizontal
+    ? `${paneH}px`
+    : `${paneH * 2 + SPLIT_DIVIDER_THICKNESS_PX}px`;
 
   lockLiveViewportWidth(canvasElement, snapshot.root.rect.width);
   reportBaselineGeometry(canvasElement, selectedImage, sizes);
@@ -1088,6 +1097,7 @@ function ensureSplit(
   let livePane = document.getElementById(LIVE_PANE_ID);
   let baselinePane = document.getElementById(BASELINE_PANE_ID);
   let baselineFrame = document.getElementById(BASELINE_LAYOUT_FRAME_ID);
+  let divider = document.getElementById(SPLIT_DIVIDER_ID);
   let vRail = document.getElementById(SCROLL_RAIL_V_ID);
   let vSpacer = document.getElementById(SCROLL_SPACER_V_ID);
   let hRail = document.getElementById(SCROLL_RAIL_H_ID);
@@ -1100,6 +1110,7 @@ function ensureSplit(
     !(livePane instanceof HTMLElement) ||
     !(baselinePane instanceof HTMLElement) ||
     !(baselineFrame instanceof HTMLElement) ||
+    !(divider instanceof HTMLElement) ||
     !(vRail instanceof HTMLElement) ||
     !(vSpacer instanceof HTMLElement) ||
     !(hRail instanceof HTMLElement) ||
@@ -1127,6 +1138,9 @@ function ensureSplit(
     baselinePane.id = BASELINE_PANE_ID;
     baselineFrame = document.createElement("div");
     baselineFrame.id = BASELINE_LAYOUT_FRAME_ID;
+    divider = document.createElement("div");
+    divider.id = SPLIT_DIVIDER_ID;
+    divider.setAttribute("aria-hidden", "true");
     vRail = document.createElement("div");
     vRail.id = SCROLL_RAIL_V_ID;
     vSpacer = document.createElement("div");
@@ -1152,6 +1166,7 @@ function ensureSplit(
     livePane.appendChild(canvasElement);
     baselinePane.appendChild(baselineFrame);
     panesWrap.appendChild(livePane);
+    panesWrap.appendChild(divider);
     panesWrap.appendChild(baselinePane);
     vRail.appendChild(vSpacer);
     hRail.appendChild(hSpacer);
@@ -1167,6 +1182,7 @@ function ensureSplit(
     !(livePane instanceof HTMLElement) ||
     !(baselinePane instanceof HTMLElement) ||
     !(baselineFrame instanceof HTMLElement) ||
+    !(divider instanceof HTMLElement) ||
     !(vRail instanceof HTMLElement) ||
     !(vSpacer instanceof HTMLElement) ||
     !(hRail instanceof HTMLElement) ||
@@ -1209,14 +1225,36 @@ function ensureSplit(
     grid-row: 1;
     display: flex;
     flex-direction: ${horizontal ? "row" : "column"};
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: flex-start;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    gap: 1px;
-    background: rgba(0, 0, 0, 0.12);
+    gap: 0;
+    background: transparent;
   `;
+  divider.style.cssText = horizontal
+    ? `
+      flex: 0 0 ${SPLIT_DIVIDER_THICKNESS_PX}px;
+      width: ${SPLIT_DIVIDER_THICKNESS_PX}px;
+      align-self: stretch;
+      box-sizing: border-box;
+      pointer-events: none;
+      border: none;
+      border-left: ${SPLIT_DIVIDER_THICKNESS_PX}px dashed ${SPLIT_DIVIDER_COLOR};
+      background: transparent;
+    `
+    : `
+      flex: 0 0 ${SPLIT_DIVIDER_THICKNESS_PX}px;
+      height: ${SPLIT_DIVIDER_THICKNESS_PX}px;
+      align-self: stretch;
+      width: 100%;
+      box-sizing: border-box;
+      pointer-events: none;
+      border: none;
+      border-top: ${SPLIT_DIVIDER_THICKNESS_PX}px dashed ${SPLIT_DIVIDER_COLOR};
+      background: transparent;
+    `;
   vRail.style.cssText = `
     grid-column: 2;
     grid-row: 1;
@@ -1253,9 +1291,15 @@ function ensureSplit(
   const baselineFirst = placement === "left" || placement === "above";
   const first = baselineFirst ? baselinePane : livePane;
   const second = baselineFirst ? livePane : baselinePane;
-  if (panesWrap.firstElementChild !== first) {
-    panesWrap.appendChild(first);
-    panesWrap.appendChild(second);
+  const ordered = [first, divider, second];
+  const current = Array.from(panesWrap.children);
+  if (
+    current.length !== ordered.length ||
+    ordered.some((node, index) => current[index] !== node)
+  ) {
+    for (const node of ordered) {
+      panesWrap.appendChild(node);
+    }
   }
 
   const compareSizes = sizes ?? lastCompareSizes;
