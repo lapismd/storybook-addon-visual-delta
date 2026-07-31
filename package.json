@@ -55,6 +55,7 @@
     "storybook:ci": "node ./scripts/run-storybook.mjs --ci",
     "build-storybook": "storybook build -o storybook-static",
     "examples:baselines": "node ./scripts/generate-example-baselines.mjs",
+    "examples:baselines:capture": "node ./scripts/capture-example-baselines.mjs",
     "test:panel": "playwright test -c playwright.panel.config.ts",
     "test:manager": "playwright test -c playwright.manager.config.ts",
     "spec:lint": "markdownlint-cli2 --config .markdownlint-cli2.jsonc",
