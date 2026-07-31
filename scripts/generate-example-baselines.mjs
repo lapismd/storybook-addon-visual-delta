@@ -1,5 +1,8 @@
 /**
- * Regenerate package Example baseline PNGs (pngjs).
+ * Regenerate package Example baseline PNGs (pngjs painter).
+ * Prefer `capture-example-baselines.mjs` / `pnpm examples:baselines:capture`
+ * when Storybook is running — painted PNGs do not match live React pixels and
+ * will fail Diff HTML even when geometry agrees.
  * CSS sizes match `src/stories/examples/example-sizes.ts`.
  * PNGs are written at deviceScaleFactor 1 (CSS = PNG pixels) to match the
  * built-in project default.

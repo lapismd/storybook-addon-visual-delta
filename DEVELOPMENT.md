@@ -37,8 +37,11 @@ catalog — not the UI Storybook.
   `/visual-baselines/examples`. Vite Storybook reaches them via a symlink from
   the host snapshot tree
   (`../../tests/visual/storybook.spec.ts-snapshots/examples`); nested
-  `staticDirs` under `/visual-baselines` are shadowed in development. Regenerate
-  with `pnpm examples:baselines`.
+  `staticDirs` under `/visual-baselines` are shadowed in development. Prefer
+  live captures from a running package Storybook
+  (`pnpm examples:baselines:capture`, port `VISUAL_DELTA_STORYBOOK_PORT` /
+  `9109`) so Diff HTML matches the React subjects. `pnpm examples:baselines`
+  is the pngjs painter fallback for geometry-only placeholders.
 - **Family Guidance** pages (Panel Shell, Panel Chrome, Testing Module, Diff
   Result, Compare Alignment, Readiness Fixture) explain self-test fixtures.
 - CSF autodocs descriptions point at those Guidance pages.

@@ -34,7 +34,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          "Reply skeleton for panel exploration. Expect clean geometry and alignment; placeholder bars approximate the live layout.",
+          "Reply skeleton for panel exploration. Expect clean geometry and alignment; Diff HTML should match the live stage at 1×.",
       },
     },
   },

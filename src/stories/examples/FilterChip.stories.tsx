@@ -34,7 +34,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          "Chip subject for overlay / Diff HTML exploration. Geometry and alignment should be clean; PNG art is a simplified stand-in for the live chip.",
+          "Chip subject for overlay / Diff HTML exploration. Geometry and alignment should be clean; Diff HTML should match the live stage at 1×.",
       },
     },
   },
