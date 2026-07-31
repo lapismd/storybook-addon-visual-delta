@@ -87,11 +87,22 @@ const MutedText = styled.span(({ theme }) => ({
   color: theme.textMutedColor,
 }));
 
-const FilterRowText = styled(ActionList.Text)({
+/** One child of ActionList.Text — its default column layout stacks sibling spans. */
+const FilterLabelRow = styled.div({
+  display: "flex",
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 8,
+  width: "100%",
+  minWidth: 0,
+});
+
+const FilterLabel = styled.span({
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 });
 
 const OptionCount = styled.span(({ theme }) => ({
@@ -261,20 +272,22 @@ export function VisualFiltersMenu({
                                 }
                               />
                             </ActionList.Icon>
-                            <FilterRowText>
-                              <span>
-                                {LABELS[id]}
-                                {excluded ? (
-                                  <MutedText> (excluded)</MutedText>
-                                ) : null}
-                              </span>
-                              <OptionCount
-                                data-testid={`visual-filter-option-count-${id}`}
-                                aria-hidden="true"
-                              >
-                                {excluded ? <s>{count}</s> : count}
-                              </OptionCount>
-                            </FilterRowText>
+                            <ActionList.Text>
+                              <FilterLabelRow>
+                                <FilterLabel>
+                                  {LABELS[id]}
+                                  {excluded ? (
+                                    <MutedText> (excluded)</MutedText>
+                                  ) : null}
+                                </FilterLabel>
+                                <OptionCount
+                                  data-testid={`visual-filter-option-count-${id}`}
+                                  aria-hidden="true"
+                                >
+                                  {excluded ? <s>{count}</s> : count}
+                                </OptionCount>
+                              </FilterLabelRow>
+                            </ActionList.Text>
                           </ActionList.Action>
                           <ActionList.Button
                             data-target-id={targetId}
