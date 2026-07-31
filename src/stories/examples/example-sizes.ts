@@ -1,3 +1,5 @@
+import type { VisualDeltaParams } from "../../constants.js";
+
 /**
  * Example stage sizes in CSS pixels. Baseline PNGs match these sizes at the
  * built-in `deviceScaleFactor` of 1 (PNG width = CSS width).
@@ -20,4 +22,17 @@ export const EXAMPLE_SIZES = {
 /** Example baseline URL (PNG is 1× CSS; built-in deviceScaleFactor applies). */
 export function exampleBaseline(src: string): string {
   return src;
+}
+
+/**
+ * Component-sized Example baselines use Story canvas alignment so the panel
+ * does not advise switching away from the default Capture viewport mode.
+ */
+export function exampleVisualDelta(
+  params: Omit<VisualDeltaParams, "align"> = {},
+): VisualDeltaParams {
+  return {
+    align: "canvas",
+    ...params,
+  };
 }

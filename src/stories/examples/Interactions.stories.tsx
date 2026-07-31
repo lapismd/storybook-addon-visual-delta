@@ -2,7 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import React, { useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
 import { DemoDisclosure, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 function InteractiveDisclosure() {
   const [open, setOpen] = useState(false);
@@ -26,11 +30,11 @@ const meta = {
         component: `
 Interaction baselines: primary **idle** image, plus a mid-play **Opened details** image after the play function parks.
 
-Stage height grows when details open so the opened baseline’s CSS size matches the live subject (no geometry warning when that interaction baseline is selected).
+Stage height grows when details open so the opened baseline’s CSS size matches the live subject (no geometry warning when that interaction baseline is selected). Uses Story canvas alignment for component-sized captures.
 `,
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/interactions/idle.png"),
       ],
@@ -43,7 +47,7 @@ Stage height grows when details open so the opened baseline’s CSS size matches
           ),
         },
       ],
-    },
+    }),
   },
 } satisfies Meta;
 

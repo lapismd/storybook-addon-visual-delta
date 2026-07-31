@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { DemoModeBlock, ExampleStage } from "./demo-subjects.js";
-import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
+import {
+  EXAMPLE_SIZES,
+  exampleBaseline,
+  exampleVisualDelta,
+} from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Modes",
@@ -12,11 +16,11 @@ const meta = {
         component: `
 Named **Compact** mode baseline alongside the Default primary image.
 
-The story reads the \`exampleDensity\` global so switching Visual Delta modes remounts a Compact-sized subject that matches the Compact baseline geometry.
+The story reads the \`exampleDensity\` global so switching Visual Delta modes remounts a Compact-sized subject that matches the Compact baseline geometry. Uses Story canvas alignment for component-sized captures.
 `,
       },
     },
-    visualDelta: {
+    visualDelta: exampleVisualDelta({
       images: [
         exampleBaseline("/visual-baselines/examples/modes/default.png"),
       ],
@@ -28,7 +32,7 @@ The story reads the \`exampleDensity\` global so switching Visual Delta modes re
           ),
         },
       },
-    },
+    }),
   },
 } satisfies Meta;
 

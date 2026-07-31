@@ -10,7 +10,8 @@ in a **static read-only** build where middleware writes are unavailable.
 
 Each Example mounts a fixed-size **stage** (`#storybook-root`’s first child) that
 matches its baseline CSS size. Baselines are 1× PNGs (built-in
-`deviceScaleFactor`), so geometry warnings stay off for happy-path stories.
+`deviceScaleFactor`) with Story canvas alignment, so geometry and alignment
+warnings stay off for happy-path stories.
 
 ## What you will see
 
