@@ -20,6 +20,12 @@ type Story = StoryObj<typeof meta>;
 export const AddFilterViaCombobox: Story = {
   name: "Add filter via combobox",
   parameters: {
+    docs: {
+      description: {
+        component:
+          "Host stub for manager/overlay story IDs — not product documentation. See Visual Delta/Host Stubs/Guidance (`VD-HOST-006`).",
+      },
+    },
     visualDelta: {
       images: [
         "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium-darwin.png",

@@ -6,6 +6,12 @@ const meta = {
   title: "Shadcn/Overlays/Popover",
   tags: ["skip-visual"],
   parameters: {
+    docs: {
+      description: {
+        component:
+          "Host stub for manager/overlay story IDs — not product documentation. See Visual Delta/Host Stubs/Guidance (`VD-HOST-006`).",
+      },
+    },
     visualDelta: {
       images: [
         "/visual-baselines/shadcn/popover/open-panel-chromium-darwin.png",

@@ -10,8 +10,11 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Shared Testing Module chrome for the global runner and sidebar context menu: Run visual tests heading, play split (Create missing / Rewrite existing), and action checkboxes.",
+        component: [
+          "Shared Testing Module chrome for the global runner and sidebar context menu:",
+          "Run visual tests heading, play split (Create missing / Rewrite existing), and action checkboxes.",
+          "See **Testing Module/Guidance** for scopes and Spec links (`VD-RUN-*`, `VD-MUT-*`).",
+        ].join(" "),
       },
     },
   },

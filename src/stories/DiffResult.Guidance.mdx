@@ -1,0 +1,72 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Diff Result/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Diff Result
+
+Deterministic mounts of the real Diff Result / compare viewer with fixture
+sidecars. Used to validate 2-up, Swipe, Diff, Focus, and Blink over one pixel
+coordinate system and responsive zoom behavior.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook self-test catalog</td>
+</tr>
+<tr>
+<td>Data</td>
+<td>Synthetic compare payloads via <code>DiffResultFixture</code></td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Keyboard/zoom/mode coverage without a live Playwright run</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview — comparison views</a>, <code>VD-UI-005</code></td>
+</tr>
+</tbody>
+</table>
+
+## Requirement focus
+
+- **`VD-UI-005`** — hydrate Diff Result evidence; shared Fit / custom / `100%` zoom
+- Aspect-locked stage across 2-up, Swipe, Diff, Focus, Blink
+- Capture diagnostics remain visible without poisoning compare state
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Component clipped result</td>
+<td>Subject-clipped geometry</td>
+</tr>
+<tr>
+<td>Full viewport result</td>
+<td>Full-frame compare</td>
+</tr>
+<tr>
+<td>Wide / Tall result</td>
+<td>Extreme aspect ratios and scroll viewports</td>
+</tr>
+</tbody>
+</table>

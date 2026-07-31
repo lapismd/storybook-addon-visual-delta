@@ -1,0 +1,96 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Panel Chrome/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Panel Chrome
+
+Browseable mounts of individual Visual Delta panel React controls (Storybook
+light theme). Use these when you need a focused surface — gallery, placement
+pad, accordion, history — without the full Panel Shell orchestration.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook self-test catalog</td>
+</tr>
+<tr>
+<td>Data</td>
+<td>Local fixtures in <code>panel-fixtures.tsx</code> (static props / light interaction)</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Component-level review of manager chrome; tagged <code>skip-visual</code></td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview</a>, <a href="?path=/docs/visual-delta-specification-version-control-and-history--docs">VCS and history</a></td>
+</tr>
+</tbody>
+</table>
+
+Prefer **Panel Shell** for end-to-end panel flows and Playwright panel
+acceptance. Prefer **Panel Chrome** when iterating on one control.
+
+## Requirement focus
+
+- **`VD-UI-001`** — status badges and review pad mutate only the named concept
+- **`VD-UI-002` / `VD-UI-003`** — gallery selection, placement pad soft-hide, image-only
+- **`VD-UI-004`** — baseline accordion / interaction rows
+- **`VD-VCS-001`** — baseline history compare UI (read-only presentation)
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Overview</td>
+<td>Composite chrome fixture</td>
+</tr>
+<tr>
+<td>Baseline history</td>
+<td>History load-more and Before/After compare tabs</td>
+</tr>
+<tr>
+<td>Placement pad soft-hide</td>
+<td>Soft hide preserves selection semantics</td>
+</tr>
+<tr>
+<td>Image only toggle</td>
+<td>Live/story visibility switch</td>
+</tr>
+<tr>
+<td>Review status pad</td>
+<td>Ready-for-review control</td>
+</tr>
+<tr>
+<td>Status badges</td>
+<td>Outcome / coverage badge presentation</td>
+</tr>
+<tr>
+<td>Image gallery</td>
+<td>Baseline gallery selection</td>
+</tr>
+<tr>
+<td>Baseline accordion</td>
+<td>Primary vs interaction accordion actions</td>
+</tr>
+</tbody>
+</table>

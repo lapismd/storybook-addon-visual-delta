@@ -1,0 +1,60 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Readiness Fixture/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Readiness Fixture
+
+Manager-oriented readiness fixture used when testing delayed missing-baseline
+actions and generation-bound UI. Stories here are not product visual subjects;
+they exist so manager / panel acceptance can observe readiness transitions.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook self-test catalog</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Drive readiness / missing-baseline reconciliation without a provisional product baseline</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-capture-and-comparison--docs">Capture and comparison</a>, <a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview</a>, gap notes in <a href="?path=/docs/visual-delta-specification-verification--docs">Verification</a></td>
+</tr>
+</tbody>
+</table>
+
+## Requirement focus
+
+- **`VD-CAP-001` … `VD-CAP-006`** — readiness, capture targets, geometry settlement
+- **`VD-UI-001` / VD-GAP-005** — missing-target create actions appear after the completed render generation without requiring navigation refresh
+- Story completion timing fixtures pair with Panel Shell delayed-completion stories
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Delayed missing baseline</td>
+<td>Subject that becomes ready after a delay so the panel can reconcile create actions</td>
+</tr>
+</tbody>
+</table>

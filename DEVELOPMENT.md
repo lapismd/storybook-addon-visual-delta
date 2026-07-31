@@ -2,7 +2,8 @@
 
 ## Package Storybook (self-test catalog)
 
-Addon demos and panel/manager acceptance stories live in this package:
+Addon demos, panel/manager acceptance stories, and **browseable documentation**
+live in this package Storybook:
 
 ```bash
 # from repo root
@@ -16,10 +17,24 @@ Default port is `9109` (`VISUAL_DELTA_STORYBOOK_PORT`). Panel Playwright uses
 `STORYBOOK_PORT + 4` (or `VISUAL_DELTA_PANEL_STORYBOOK_PORT`) and boots this
 catalog — not the UI Storybook.
 
-Stories are React CSF under `src/stories/**/*.stories.tsx`. A few Compare
-Alignment demos remain Svelte and mount through `SvelteHost`. Minimal
-host-product stubs under `src/stories/host-stubs/` keep manager/overlay story
-IDs stable while the UI catalog no longer hosts Visual Delta CSF.
+### Documentation in Storybook
+
+- **Visual Delta → Specification** — live mirror of canonical `spec/src/*.md`
+  (edit the Markdown tree; Storybook does not fork the contract). mdBook remains
+  the lint/build gate (`pnpm visual-delta:spec:check` / `spec:serve`).
+- **Family Guidance** pages (Panel Shell, Panel Chrome, Testing Module, Diff
+  Result, Compare Alignment, Readiness Fixture, Host Stubs) explain usage
+  context, story maps, and `VD-*` links into the Spec section.
+- CSF autodocs descriptions point at those Guidance pages.
+
+Stories are React CSF under `src/stories/**/*.stories.tsx` (plus `*.mdx` docs).
+A few Compare Alignment demos remain Svelte and mount through `SvelteHost`.
+Minimal host-product stubs under `src/stories/host-stubs/` keep manager/overlay
+story IDs stable while the UI catalog no longer hosts Visual Delta CSF.
+
+Preview fonts: `.storybook/preview.ts` and `ThemeHost` apply Storybook theming
+`createReset` / Nunito Sans so panel fixtures match manager chrome. Do not rely
+on `ThemeProvider` alone — it does not inject the manager’s Global styles.
 
 ```bash
 pnpm --filter storybook-addon-visual-delta build-storybook

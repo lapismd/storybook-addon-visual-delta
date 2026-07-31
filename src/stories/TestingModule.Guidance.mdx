@@ -1,0 +1,84 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Testing Module/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Testing Module
+
+Shared Testing Module chrome for the global runner and sidebar context menu:
+run heading, play split (Create missing / Rewrite existing), action
+checkboxes, progress, and visual story filters.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook; mounts <code>TestingModuleShell</code> under light theme</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>In-story props / shell state — not a live global run against product stories</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Verify module UX and scope controls before wiring into the real manager</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-test-runs-and-scopes--docs">Test runs and scopes</a>, <a href="?path=/docs/visual-delta-specification-mutations-and-review--docs">Mutations and review</a></td>
+</tr>
+</tbody>
+</table>
+
+## Requirement focus
+
+- **`VD-RUN-001` … `VD-RUN-006`** — frozen scopes, progress, cancellation, reconnect expectations
+- **`VD-MUT-002` … `VD-MUT-006`** — create-missing / rewrite / review actions stay explicit
+- Sidebar filters support “needs attention” style triage without broadening empty scopes
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Global defaults</td>
+<td>Default checkboxes and run selected actions</td>
+</tr>
+<tr>
+<td>Sidebar context menu</td>
+<td>Compact menu variant</td>
+</tr>
+<tr>
+<td>Update baselines mode</td>
+<td>Rewrite-existing path enabled</td>
+</tr>
+<tr>
+<td>Running progress</td>
+<td>In-flight progress presentation</td>
+</tr>
+<tr>
+<td>Global preflight</td>
+<td>Preflight / stop controls</td>
+</tr>
+<tr>
+<td>Sidebar filters</td>
+<td>Filter dialog and active filter chip</td>
+</tr>
+</tbody>
+</table>

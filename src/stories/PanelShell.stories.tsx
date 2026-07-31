@@ -12,8 +12,12 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Live-panel-shaped harness with in-memory create/update/run/review/skip-visual mocks. Click through or rely on play functions — no Playwright writes.",
+        component: [
+          "Live-panel-shaped harness with in-memory create/update/run/review/skip-visual mocks.",
+          "Click through or rely on play functions — no Playwright writes.",
+          "See **Panel Shell/Guidance** for usage context and Spec links (`VD-UI-*`, `VD-RUN-*`, `VD-MUT-*`).",
+          "Normative: Visual Delta/Specification → Panel and preview.",
+        ].join(" "),
       },
     },
   },

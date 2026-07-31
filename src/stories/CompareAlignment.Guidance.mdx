@@ -1,0 +1,73 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Compare Alignment/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Compare Alignment
+
+Regression fixtures for split inset sync, overlay session soft-hide, and
+baseline chip placement. A few demos remain Svelte and mount through
+`SvelteHost`; they still exercise the same preview geometry contracts.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook; not product visual capture (<code>skip-visual</code>)</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Prove placement geometry and overlay lifecycle without full panel chrome</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview — placement</a>, <a href="?path=/docs/visual-delta-specification-capture-and-comparison--docs">Capture and comparison</a></td>
+</tr>
+</tbody>
+</table>
+
+## Requirement focus
+
+- **`VD-UI-003`** — equal split panes, synchronized navigation, center overlay
+- **`VD-UI-002`** — soft hide preserves selection; hard clear on navigation
+- **`VD-CAP-002` / `VD-CAP-005`** — settled measured geometry for overlay attachment
+- Baseline chip offsets stay clamped and must not alter pane geometry
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Subject with / without vertical margin</td>
+<td>Split inset sync with different subject frames</td>
+</tr>
+<tr>
+<td>Soft hide keeps selection</td>
+<td>Soft hide / restore without losing target</td>
+</tr>
+<tr>
+<td>Baseline chip on overlay placements</td>
+<td>Chip visibility across placements</td>
+</tr>
+<tr>
+<td>Baseline chip project offsets</td>
+<td>Configured label offsets stay in-frame</td>
+</tr>
+</tbody>
+</table>

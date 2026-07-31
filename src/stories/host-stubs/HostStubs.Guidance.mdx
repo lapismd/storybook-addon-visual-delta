@@ -1,0 +1,43 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Host Stubs/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Host Stubs
+
+Minimal stand-ins for UI catalog product stories (Button, Empty, Dialog,
+Popover, Send Button, Task Due Calendar, Power Search). They keep historical
+manager / overlay / sidebar **story IDs** stable after Visual Delta CSF moved
+into this package.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Not product UI</td>
+<td>Stubs are not Shadcn/Forms documentation</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Manager Playwright (<code>test:visual-delta-manager</code>) and overlay sessions that still target familiar story IDs</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><a href="?path=/docs/visual-delta-specification-ui-catalog-host-profile--docs"><code>VD-HOST-006</code></a> — portable self-test Storybook owns fixtures; product catalog owns product stories</td>
+</tr>
+</tbody>
+</table>
+
+Deepen stub fidelity only when promoting manager/overlay acceptance into the
+aggregate gate. For panel chrome and contracts, start from
+[Panel Shell Guidance](?path=/docs/visual-delta-panel-shell-guidance--docs) and
+the [Specification](?path=/docs/visual-delta-specification-system-specification--docs).

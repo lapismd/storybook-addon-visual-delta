@@ -10,8 +10,10 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
+        component: [
           "Deterministic real DiffResult fixtures for viewport diagnostics and responsive compare zoom.",
+          "See **Diff Result/Guidance** and Spec `VD-UI-005` (Panel and preview — comparison views).",
+        ].join(" "),
       },
     },
   },

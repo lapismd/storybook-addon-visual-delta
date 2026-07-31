@@ -1,0 +1,9 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { SpecMarkdown, SpecMirrorBanner } from "../SpecMarkdown";
+import source from "../../../../spec/src/index.md?raw";
+
+<Meta title="Visual Delta/Specification/System specification" parameters={{ layout: "padded" }} />
+
+<SpecMirrorBanner />
+
+<SpecMarkdown source={source} />

@@ -13,8 +13,11 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Regression fixtures for Visual Delta split inset sync and overlay session behaviour. Tagged skip-visual (meta tooling, not product UI).",
+        component: [
+          "Regression fixtures for Visual Delta split inset sync and overlay session behaviour.",
+          "Tagged skip-visual (meta tooling, not product UI).",
+          "See **Compare Alignment/Guidance** for Spec links (`VD-UI-002`, `VD-UI-003`, `VD-CAP-*`).",
+        ].join(" "),
       },
     },
   },
