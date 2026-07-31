@@ -15,6 +15,7 @@ These requirements prevent implementation, tests, and generated documentation fr
 | VD-GOV-005 | Local enforcement MUST inspect the current Jujutsu change, and pull-request enforcement MUST inspect the exact base-to-head change set. Failure to determine the change set MUST fail closed and report the unresolved scope.                                 |
 | VD-GOV-006 | A code-to-spec mismatch MUST be treated as an implementation defect unless an explicit specification change is accepted. Weakening a requirement requires rationale and MUST NOT be disguised by editing non-normative documentation.                         |
 | VD-GOV-007 | The package root MUST retain exactly `AGENTS.md`, `DEVELOPMENT.md`, and `README.md` as Markdown files. The obsolete `specs/` tree and package-root historical contract or plan files MUST NOT exist. Links to normative content MUST target `spec/src/`.      |
+| VD-GOV-008 | A dependency-audit remediation that changes the Visual Delta package manifest or resolved dependency graph MUST upgrade each reported vulnerable package to a patched release and verify a clean `pnpm audit` result. It MUST NOT create, replace, or delete visual baselines. |
 
 ## Authority and timing
 
