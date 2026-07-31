@@ -9,7 +9,7 @@ const DEV_STORYBOOK = `http://127.0.0.1:${
   process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ??
   Number(process.env.STORYBOOK_PORT ?? "9009") + 4
 }`;
-const SIDEBAR_STATUS_FIXTURE = "shadcn-actions-button--default";
+const SIDEBAR_STATUS_FIXTURE = "shadcn-feedback-empty--preview";
 const SIDEBAR_LABEL_FIXTURE = "shadcn-feedback-empty--preview";
 
 async function mockFixtureTags(page: Page, tags: string[]) {
@@ -49,8 +49,10 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
         .locator('[data-tag="visual-ready"]')
         .filter({ hasText: "Ready" }),
     ).toBeVisible();
+    // Package self-test stubs use component name "Empty" (UI catalog used the
+    // Feedback group label with the same badge aria-label suffix).
     const feedback = page.getByRole("button", {
-      name: "Feedback Ready: Visual baseline is ready for review",
+      name: "Empty Ready: Visual baseline is ready for review",
       exact: true,
     });
     await expect(feedback.locator('[data-tag="visual-ready"]')).toBeVisible();
@@ -71,7 +73,7 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     await expect(page).toHaveURL(/visualFilter=review\.ready/);
     await expect(
       page.getByRole("button", {
-        name: "Disclosure Ready: Visual baseline is ready for review",
+        name: "Empty Ready: Visual baseline is ready for review",
         exact: true,
       }),
     ).toBeVisible();
@@ -189,7 +191,7 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
       await openManager(page, SIDEBAR_STATUS_FIXTURE, DEV_STORYBOOK);
 
       const storyItem = page.getByRole("button", {
-        name: `Feedback ${status.name}`,
+        name: `Empty ${status.name}`,
         exact: true,
       });
       await expect(

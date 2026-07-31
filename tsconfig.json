@@ -6,6 +6,6 @@
     "noEmit": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", ".storybook/**/*.ts"],
   "exclude": ["src/node/**/*.ts", "dist"]
 }

@@ -13,7 +13,7 @@ These requirements bind the portable package to this repository without merging 
 | VD-HOST-003 | Catalog baseline writes MUST use the `scripts/ui-generator` writers because they own Svelte CSF patches and repository layout. Those adapters MUST consume package-owned static freshness, target resolution, and capture identity contracts for primary and interaction writes. Compare runs MUST use the package CLI and Playwright without snapshot updates.      |
 | VD-HOST-004 | One `STORYBOOK_PORT` MUST derive every secondary lane. At most one supervisor and one Storybook child MAY own a checkout-and-port lane. Duplicate start MUST reuse that owner; restart and stop MUST replace or terminate only the matching owner and descendants. A checkout MUST NOT stop or reuse another checkout’s listener.                                    |
 | VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                                                                                                                                              |
-| VD-HOST-006 | Portable behavior belongs in the package. Repository layout, Svelte source writers, generator approval gates, catalog fixtures, and port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers.                                                                                                                           |
+| VD-HOST-006 | Portable behavior belongs in the package, including the package-owned self-test Storybook (`packages/storybook-addon-visual-delta/.storybook`) and Visual Delta panel/manager acceptance fixtures. Repository layout, Svelte source writers, generator approval gates, **product** catalog stories, and UI catalog port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
 | VD-HOST-007 | Regular fullscreen catalog stories MUST retain the established `1.5rem` `#storybook-root` inset. Only explicitly classified Workspace and Shell application surfaces MAY use the full capture viewport. Capture and overlay code MUST measure the active layout instead of assuming either frame, and changing this host layout requires deliberate baseline review. |
 
 ## Local package registration
@@ -50,8 +50,8 @@ The repository derives lanes from `STORYBOOK_PORT`:
 | -------------------------------- | --------------- |
 | Main Storybook                   | Base            |
 | Visual static server             | Base plus `1`   |
-| Visual Delta panel static        | Base plus `3`   |
-| Visual Delta panel Storybook     | Base plus `4`   |
+| Visual Delta panel static        | Base plus `3` (package `storybook-static`) |
+| Visual Delta panel Storybook     | Base plus `4` (package React Storybook; override with `VISUAL_DELTA_STORYBOOK_PORT`) |
 | Visual Delta panel visual server | Base plus `5`   |
 | Spare debug and cleanup          | Base plus `90`  |
 | Workspace pointer Storybook      | Base plus `200` |
@@ -75,13 +75,15 @@ The authoritative host entry points are:
 
 | Command                        | Contract                                                       |
 | ------------------------------ | -------------------------------------------------------------- |
-| `pnpm storybook`               | Start Storybook and its supervised local lane                  |
+| `pnpm storybook`               | Start the UI catalog and its supervised local lane             |
 | `pnpm storybook:ui`            | Start the UI catalog without inventing a different launch path |
-| `pnpm storybook:stop`          | Stop only this checkout’s lane                                 |
-| `pnpm build-storybook`         | Produce static Storybook plus `preview-stats.json`             |
+| `pnpm visual-delta:storybook`  | Start the package-owned Visual Delta self-test Storybook       |
+| `pnpm storybook:stop`          | Stop only this checkout’s UI catalog lane                      |
+| `pnpm build-storybook`         | Produce UI static Storybook plus `preview-stats.json`          |
 | `pnpm test:visual`             | Complete compare-only visual suite                             |
 | `pnpm test:visual:affected`    | Conservative affected compare-only suite                       |
-| `pnpm test:visual-delta-panel` | Browser acceptance for manager, panel, and preview integration |
+| `pnpm test:visual-delta-panel` | Package Storybook panel self-test (`panel.spec.ts`; not UI)    |
+| `pnpm test:visual-delta-manager` | Package Storybook manager/overlay suite (stub fidelity WIP)  |
 | `pnpm storybook:check`         | Storybook tests, build, panel acceptance, and visual compare   |
 | `pnpm checks`                  | Repository aggregate gate including complete visual compare    |
 
@@ -107,14 +109,15 @@ The package owns:
 - Affected planner and run hub
 - Sidecar schema and result classifier
 - VCS adapters and guarded change sets
+- Self-test Storybook catalog (`src/stories/**/*.stories.tsx`) and panel/manager acceptance fixtures
 
 The host owns:
 
-- Catalog story layout and review governance
+- Product catalog story layout and review governance
 - Svelte source patching through `scripts/ui-generator`
-- Snapshot directory policy
-- Port supervision and checkout isolation
+- Product snapshot directory policy (`tests/visual/storybook.spec.ts-snapshots`)
+- UI catalog port supervision and checkout isolation
 - Repository command composition
-- Catalog-specific fixtures and aggregate gates
+- Aggregate gates for the product visual suite
 
 Related contracts: [Architecture](./architecture.md), [Configuration](./configuration.md), [Baseline model](./baseline-model.md), and [Verification](./verification.md).

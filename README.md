@@ -772,7 +772,8 @@ export default defineVisualPlaywrightConfig();
 | `tsx scripts/ui-generator/cli.ts visual-interaction-update`    | Mid-play step PNG + CSF `interactions` entry                                          |
 | `pnpm ui visual:tag …`                                         | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)     |
 | `pnpm exec visual-delta skip` / `include`                      | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                    |
-| `pnpm test:visual-delta-panel`                                 | Real panel, overlay placements, and static/dev manager sidebar compare (never writes) |
+| `pnpm visual-delta:storybook`                                  | Package-owned React Storybook for Visual Delta self-test stories                      |
+| `pnpm test:visual-delta-panel`                                 | Panel/manager acceptance against the package Storybook (never writes)                 |
 | `VISUAL_UPDATE_APPROVED=1 pnpm test:visual-delta-panel:update` | Gated update for the isolated panel self-test baseline directory                      |
 | `pnpm test:visual`                                             | Full compare and affected-cache seed; never writes baselines                          |
 | `pnpm test:visual:affected`                                    | No-op, affected-only compare, or conservative full fallback                           |
