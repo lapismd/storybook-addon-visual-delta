@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
-import { DemoCard, DemoFrame } from "./demo-subjects.js";
+import { DemoCard, ExampleStage } from "./demo-subjects.js";
+import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Card",
@@ -8,8 +9,12 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Realistic card subject with a matching baseline and an intentional drift story. See Examples/Guidance.",
+        component: `
+Card demos for the Visual Delta panel.
+
+- **Match** — live subject and baseline share the same CSS box (no geometry warning).
+- **Intentional difference** — same box size, deliberate pixel drift so overlay / Diff HTML show a delta. The red banner marks this as a teaching story, not a product bug.
+`,
       },
     },
   },
@@ -21,14 +26,22 @@ type Story = StoryObj;
 export const Match: Story = {
   name: "Match",
   parameters: {
+    docs: {
+      description: {
+        story:
+          "Happy path: wired baseline matches the live card’s CSS size. Open Visual Delta — you should **not** see a baseline geometry warning. Placeholder PNG art is approximate; small pixel noise is fine.",
+      },
+    },
     visualDelta: {
-      images: ["/visual-baselines/examples/card/match.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/card/match.png"),
+      ],
     },
   },
   render: () => (
-    <DemoFrame>
+    <ExampleStage {...EXAMPLE_SIZES.card}>
       <DemoCard />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };
 
@@ -37,18 +50,29 @@ export const IntentionalDifference: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          "Live subject differs from the wired baseline so Diff HTML / overlay heatmap are obvious.",
+        story: `
+**Intentional demo — not a bug.**
+
+- Live UI uses a drifted card (accent / bar widths) under a red “INTENTIONAL” banner.
+- Baseline PNG includes the same banner and stage size, with the **non-drifted** card.
+- Expect overlay / Diff HTML pixel deltas. Geometry should still agree (same CSS box).
+
+Do not treat the red banner or heatmap as a regression in the Examples suite.
+`,
       },
     },
     visualDelta: {
-      // Same PNG as Match — live UI drifts so comparison shows a delta.
-      images: ["/visual-baselines/examples/card/drift.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/card/drift.png"),
+      ],
     },
   },
   render: () => (
-    <DemoFrame>
+    <ExampleStage
+      {...EXAMPLE_SIZES.card}
+      intentionalLabel="INTENTIONAL difference — expect Diff HTML / heatmap (geometry should match)"
+    >
       <DemoCard drift />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
-import { DemoFrame, DemoGalleryCard } from "./demo-subjects.js";
+import { DemoGalleryCard, ExampleStage } from "./demo-subjects.js";
+import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Gallery",
@@ -8,16 +9,13 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Multiple wired baselines in one story gallery (Default, Compact, Accent).",
+        component: `
+Gallery wiring for Visual Delta.
+
+- **Multiple images** — two same-size baselines (Default + Accent). Switch images in the panel; Accent differs in accent color (pixel delta), not geometry.
+- **Compact variant** — separate story with a smaller stage so the compact baseline fits without a geometry warning.
+`,
       },
-    },
-    visualDelta: {
-      images: [
-        "/visual-baselines/examples/gallery/default.png",
-        "/visual-baselines/examples/gallery/compact.png",
-        "/visual-baselines/examples/gallery/accent.png",
-      ],
     },
   },
 } satisfies Meta;
@@ -27,23 +25,45 @@ type Story = StoryObj;
 
 export const MultipleImages: Story = {
   name: "Multiple images",
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Primary subject is the Default gallery card. Gallery lists Default and Accent baselines (same CSS size). Selecting Accent while viewing Default shows intentional accent-color drift — geometry stays aligned.",
+      },
+    },
+    visualDelta: {
+      images: [
+        exampleBaseline("/visual-baselines/examples/gallery/default.png"),
+        exampleBaseline("/visual-baselines/examples/gallery/accent.png"),
+      ],
+    },
+  },
   render: () => (
-    <DemoFrame>
+    <ExampleStage {...EXAMPLE_SIZES.gallery}>
       <DemoGalleryCard label="Default gallery" />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };
 
 export const CompactVariant: Story = {
   name: "Compact variant",
   parameters: {
+    docs: {
+      description: {
+        story:
+          "Compact stage size matches the compact baseline PNG. Prefer this story over selecting a compact image against a Default-sized subject.",
+      },
+    },
     visualDelta: {
-      images: ["/visual-baselines/examples/gallery/compact.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/gallery/compact.png"),
+      ],
     },
   },
   render: () => (
-    <DemoFrame>
+    <ExampleStage {...EXAMPLE_SIZES.galleryCompact}>
       <DemoGalleryCard compact label="Compact gallery" />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };

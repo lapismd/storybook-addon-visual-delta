@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
-import { DemoFrame, DemoModeBlock } from "./demo-subjects.js";
+import { DemoModeBlock, ExampleStage } from "./demo-subjects.js";
+import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Modes",
@@ -8,16 +9,23 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Named mode baseline wiring (Compact) alongside the Default primary image.",
+        component: `
+Named **Compact** mode baseline alongside the Default primary image.
+
+The story reads the \`exampleDensity\` global so switching Visual Delta modes remounts a Compact-sized subject that matches the Compact baseline geometry.
+`,
       },
     },
     visualDelta: {
-      images: ["/visual-baselines/examples/modes/default.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/modes/default.png"),
+      ],
       modes: {
         Compact: {
           globals: { exampleDensity: "compact" },
-          src: "/visual-baselines/examples/modes/compact.png",
+          src: exampleBaseline(
+            "/visual-baselines/examples/modes/compact.png",
+          ),
         },
       },
     },
@@ -29,9 +37,21 @@ type Story = StoryObj;
 
 export const DefaultAndCompact: Story = {
   name: "Default and compact",
-  render: () => (
-    <DemoFrame>
-      <DemoModeBlock />
-    </DemoFrame>
-  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Default mode uses the larger stage. Select Compact in Visual Delta to remount with `exampleDensity: compact` — stage shrinks to match the Compact baseline.",
+      },
+    },
+  },
+  render: (_args, { globals }) => {
+    const compact = globals.exampleDensity === "compact";
+    const size = compact ? EXAMPLE_SIZES.modesCompact : EXAMPLE_SIZES.modes;
+    return (
+      <ExampleStage {...size}>
+        <DemoModeBlock compact={compact} />
+      </ExampleStage>
+    );
+  },
 };

@@ -8,6 +8,10 @@ Realistic Visual Delta demos for the package Storybook. Use these to explore
 baselines, overlays, Diff HTML, galleries, interactions, and modes — including
 in a **static read-only** build where middleware writes are unavailable.
 
+Each Example mounts a fixed-size **stage** (`#storybook-root`’s first child) that
+matches its baseline CSS size. Baselines are 3× device-pixel PNGs (addon default
+`deviceScaleFactor`), so geometry warnings stay off for happy-path stories.
+
 ## What you will see
 
 <table>
@@ -15,35 +19,56 @@ in a **static read-only** build where middleware writes are unavailable.
 <tr>
 <th>Example</th>
 <th>Demonstrates</th>
+<th>Intentional?</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="?path=/story/examples-card--match">Card</a></td>
-<td>Match + intentional difference stories</td>
+<td><a href="?path=/story/examples-card--match">Card → Match</a></td>
+<td>Aligned baseline + live subject (no geometry warning)</td>
+<td>No</td>
+</tr>
+<tr>
+<td><a href="?path=/story/examples-card--intentional-difference">Card → Intentional difference</a></td>
+<td>Same CSS box; deliberate pixel drift + red banner</td>
+<td><strong>Yes</strong> — expect Diff HTML / heatmap</td>
 </tr>
 <tr>
 <td><a href="?path=/story/examples-gallery--multiple-images">Gallery</a></td>
-<td>Multiple images in one gallery; separate compact story</td>
+<td>Multiple same-size images; Accent color drift when selected</td>
+<td>Accent selection shows pixel delta by design</td>
 </tr>
 <tr>
 <td><a href="?path=/story/examples-interactions--with-interaction-baseline">Interactions</a></td>
-<td>Primary + mid-play interaction baseline</td>
+<td>Primary idle + mid-play opened baseline</td>
+<td>No</td>
 </tr>
 <tr>
 <td><a href="?path=/story/examples-modes--default-and-compact">Modes</a></td>
-<td>Named mode baseline wiring</td>
+<td>Named Compact mode remounts a matching stage</td>
+<td>No</td>
 </tr>
 <tr>
 <td>Filter Chip / AI Reply / Form Field</td>
 <td>Lightweight layer-flavored subjects</td>
+<td>No</td>
 </tr>
 <tr>
 <td><a href="?path=/story/examples-form-field--missing-baseline">Missing baseline</a></td>
-<td>Empty-state copy (read-only safe)</td>
+<td>Empty-state panel copy (no wired images)</td>
+<td><strong>Yes</strong> — no baseline on purpose</td>
 </tr>
 </tbody>
 </table>
+
+## Reading the canvas
+
+- A red **INTENTIONAL** banner on the canvas means the story is teaching a
+  failure or empty state. Treat panel warnings / heatmaps as the demo, not a
+  broken catalog.
+- Placeholder PNGs approximate the live layout. Small pixel noise on Match
+  stories is expected; a **geometry** warning (mismatched CSS box sizes) is not
+  — report that as a bug in the Examples wiring.
 
 ## Static vs development
 

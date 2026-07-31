@@ -1,10 +1,23 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
-import { DemoFormField, DemoFrame, DemoMissing } from "./demo-subjects.js";
+import { DemoFormField, DemoMissing, ExampleStage } from "./demo-subjects.js";
+import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
 
 const meta = {
   title: "Examples/Form Field",
   tags: ["skip-visual"],
+  parameters: {
+    docs: {
+      description: {
+        component: `
+Form-flavored Examples.
+
+- **Default** — wired baseline with matching stage geometry.
+- **Missing baseline** — **intentional** empty state (no \`visualDelta.images\`). Use it to read empty-state copy in the panel; it is not a broken story.
+`,
+      },
+    },
+  },
 } satisfies Meta;
 
 export default meta;
@@ -13,14 +26,22 @@ type Story = StoryObj;
 export const Default: Story = {
   name: "Default",
   parameters: {
+    docs: {
+      description: {
+        story:
+          "Due-date field subject with a matching baseline box. Open Visual Delta for overlay / Diff HTML.",
+      },
+    },
     visualDelta: {
-      images: ["/visual-baselines/examples/form-field/default.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/form-field/default.png"),
+      ],
     },
   },
   render: () => (
-    <DemoFrame>
+    <ExampleStage {...EXAMPLE_SIZES.formField}>
       <DemoFormField />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };
 
@@ -29,14 +50,22 @@ export const MissingBaseline: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          "No visualDelta.images — demonstrates read-only empty-state messaging.",
+        story: `
+**Intentional demo — not a bug.**
+
+This story deliberately omits \`parameters.visualDelta.images\`. Open the Visual Delta panel to see the empty-state / missing-baseline messaging (including in static read-only builds).
+
+Do not wire a baseline here; that would defeat the demo.
+`,
       },
     },
   },
   render: () => (
-    <DemoFrame>
+    <ExampleStage
+      {...EXAMPLE_SIZES.missing}
+      intentionalLabel="INTENTIONAL empty state — no baseline wired (panel empty-state demo)"
+    >
       <DemoMissing />
-    </DemoFrame>
+    </ExampleStage>
   ),
 };

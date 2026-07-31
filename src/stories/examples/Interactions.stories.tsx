@@ -1,14 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React, { useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
-import { DemoDisclosure, DemoFrame } from "./demo-subjects.js";
+import { DemoDisclosure, ExampleStage } from "./demo-subjects.js";
+import { EXAMPLE_SIZES, exampleBaseline } from "./example-sizes.js";
 
 function InteractiveDisclosure() {
   const [open, setOpen] = useState(false);
+  const size = open
+    ? EXAMPLE_SIZES.interactionsOpen
+    : EXAMPLE_SIZES.interactionsIdle;
+
   return (
-    <DemoFrame>
+    <ExampleStage {...size}>
       <DemoDisclosure open={open} onToggle={() => setOpen((v) => !v)} />
-    </DemoFrame>
+    </ExampleStage>
   );
 }
 
@@ -18,17 +23,24 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Primary idle baseline plus a mid-play interaction baseline after opening details.",
+        component: `
+Interaction baselines: primary **idle** image, plus a mid-play **Opened details** image after the play function parks.
+
+Stage height grows when details open so the opened baseline’s CSS size matches the live subject (no geometry warning when that interaction baseline is selected).
+`,
       },
     },
     visualDelta: {
-      images: ["/visual-baselines/examples/interactions/idle.png"],
+      images: [
+        exampleBaseline("/visual-baselines/examples/interactions/idle.png"),
+      ],
       interactions: [
         {
           id: "opened-details",
           label: "Opened details",
-          src: "/visual-baselines/examples/interactions/opened.png",
+          src: exampleBaseline(
+            "/visual-baselines/examples/interactions/opened.png",
+          ),
         },
       ],
     },
@@ -40,6 +52,14 @@ type Story = StoryObj;
 
 export const WithInteractionBaseline: Story = {
   name: "With interaction baseline",
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Play opens the disclosure. Use Visual Delta’s interaction step control to compare the opened baseline against the parked live UI. Idle primary image matches the closed stage; after open, select the interaction baseline (not the idle primary) to avoid a geometry warning.",
+      },
+    },
+  },
   render: () => <InteractiveDisclosure />,
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
