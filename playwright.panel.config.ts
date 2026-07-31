@@ -1,47 +1,65 @@
 import { defineVisualPlaywrightConfig } from "./src/playwright/config.js";
 import { fileURLToPath } from "node:url";
 
-const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
+const packageRoot = fileURLToPath(new URL(".", import.meta.url));
 const hostStorybookPort = Number(process.env.STORYBOOK_PORT ?? "9009");
 const staticPort = Number(
   process.env.VISUAL_DELTA_PANEL_STATIC_PORT ?? hostStorybookPort + 3,
 );
 const panelStorybookPort = Number(
-  process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ?? hostStorybookPort + 4,
+  process.env.VISUAL_DELTA_PANEL_STORYBOOK_PORT ??
+    process.env.VISUAL_DELTA_STORYBOOK_PORT ??
+    hostStorybookPort + 4,
 );
 const panelVisualPort = Number(
   process.env.VISUAL_DELTA_PANEL_VISUAL_PORT ?? hostStorybookPort + 5,
 );
+const skipStaticBuild = process.env.VISUAL_DELTA_PANEL_SKIP_STATIC_BUILD === "1";
+const staticServerCommand = skipStaticBuild
+  ? `python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`
+  : `pnpm build-storybook && python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`;
 
-export default defineVisualPlaywrightConfig({
-  port: staticPort,
-  testDir: "./tests",
-  override: {
+/** Shared webServer + ports for package Storybook acceptance. */
+export function visualDeltaPackageStorybookOverride(
+  options: { testMatch?: string | string[] } = {},
+) {
+  return {
+    ...(options.testMatch ? { testMatch: options.testMatch } : {}),
     fullyParallel: false,
-    workers: 1,
+    workers: 1 as const,
     webServer: [
       {
-        command: `python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`,
+        command: staticServerCommand,
         url: `http://127.0.0.1:${staticPort}/iframe.html`,
         cwd: packageRoot,
         reuseExistingServer: false,
-        timeout: 120_000,
+        timeout: 300_000,
       },
       {
-        command: `STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort} STORYBOOK_EXTRA_PORTS='${panelVisualPort} ${panelStorybookPort + 90}' pnpm storybook:ui --ci`,
+        command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort} pnpm storybook:ci`,
         url: `http://127.0.0.1:${panelStorybookPort}/index.json`,
         cwd: packageRoot,
         reuseExistingServer: false,
-        timeout: 120_000,
+        timeout: 180_000,
       },
     ],
     expect: {
       toHaveScreenshot: {
-        animations: "disabled",
-        caret: "hide",
+        animations: "disabled" as const,
+        caret: "hide" as const,
         maxDiffPixelRatio: 0,
-        scale: "device",
+        scale: "device" as const,
       },
     },
-  },
+  };
+}
+
+export default defineVisualPlaywrightConfig({
+  port: staticPort,
+  testDir: "./tests",
+  override: visualDeltaPackageStorybookOverride({
+    // Gated self-test: panel harness screenshots + readiness on package Storybook.
+    // Broader manager/overlay acceptance: `playwright.manager.config.ts`.
+    testMatch: ["**/panel.spec.ts"],
+  }),
 });
