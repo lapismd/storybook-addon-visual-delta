@@ -33,8 +33,12 @@ catalog — not the UI Storybook.
   the lint/build gate (`pnpm visual-delta:spec:check` / `spec:serve`).
 - **Examples/** — realistic demos (match/drift, gallery, interactions, modes,
   layer-flavored subjects). Baselines live under
-  `tests/examples-snapshots/examples/` and mount at `/visual-baselines/examples`.
-  Regenerate with `pnpm examples:baselines`.
+  `tests/examples-snapshots/examples/` and are served at
+  `/visual-baselines/examples`. Vite Storybook reaches them via a symlink from
+  the host snapshot tree
+  (`../../tests/visual/storybook.spec.ts-snapshots/examples`); nested
+  `staticDirs` under `/visual-baselines` are shadowed in development. Regenerate
+  with `pnpm examples:baselines`.
 - **Family Guidance** pages (Panel Shell, Panel Chrome, Testing Module, Diff
   Result, Compare Alignment, Readiness Fixture) explain self-test fixtures.
 - CSF autodocs descriptions point at those Guidance pages.
