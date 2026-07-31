@@ -1,15 +1,28 @@
 import type { StorybookConfig } from "@storybook/react-vite";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mergeConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
-const hostSnapshots = path.join(
-  repoRoot,
+/** Optional sibling UI catalog checkout (`../ui`) for host-stub baselines. */
+const siblingUiRoot = path.resolve(packageRoot, "../ui");
+const siblingUiSnapshots = path.join(
+  siblingUiRoot,
   "tests/visual/storybook.spec.ts-snapshots",
 );
+/** Empty mount so standalone Storybook can start without the UI catalog. */
+const packageSnapshotMount = path.join(
+  packageRoot,
+  "tests/fixtures/visual-baselines",
+);
+const hostSnapshots = existsSync(siblingUiSnapshots)
+  ? siblingUiSnapshots
+  : packageSnapshotMount;
+const repoRoot = existsSync(path.join(siblingUiRoot, "package.json"))
+  ? siblingUiRoot
+  : packageRoot;
 const exampleSnapshots = path.join(
   packageRoot,
   "tests/examples-snapshots/examples",
@@ -36,8 +49,8 @@ const config: StorybookConfig = {
   stories,
   // Host snapshotDir is mounted at `/visual-baselines` by the preset. Nested
   // `staticDirs` for `/visual-baselines/examples` are shadowed in Vite dev, so
-  // Examples PNGs are also linked from the host snapshot tree:
-  // `tests/visual/storybook.spec.ts-snapshots/examples` → this folder.
+  // Examples PNGs are also linked from the host snapshot tree when present:
+  // `../ui/tests/visual/storybook.spec.ts-snapshots/examples` → this folder.
   // Keep this mount for static builds (`build-storybook`) where nesting works.
   staticDirs: [
     {

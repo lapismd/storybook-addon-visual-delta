@@ -15,6 +15,7 @@ These requirements bind the portable package to this repository without merging 
 | VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                                                                                                                                              |
 | VD-HOST-006 | Portable behavior belongs in the package, including the package-owned self-test Storybook (`.storybook` in the Visual Delta sibling repo) and Visual Delta panel/manager acceptance fixtures. Repository layout, Svelte source writers, generator approval gates, **product** catalog stories, and UI catalog port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
 | VD-HOST-007 | Regular fullscreen catalog stories MUST retain the established `1.5rem` `#storybook-root` inset. Only explicitly classified Workspace and Shell application surfaces MAY use the full capture viewport. Capture and overlay code MUST measure the active layout instead of assuming either frame, and changing this host layout requires deliberate baseline review. |
+| VD-HOST-008 | The package-owned self-test Storybook MUST NOT assume a monorepo `packages/` path. It MUST resolve `/visual-baselines` from the sibling UI catalog checkout `../ui/tests/visual/storybook.spec.ts-snapshots` when that directory exists; otherwise it MUST mount a package-local empty fixture directory so Storybook can start without the host. Example PNGs MUST mount from `tests/examples-snapshots/examples`. |
 
 ## Local package registration
 
@@ -23,6 +24,8 @@ These requirements bind the portable package to this repository without merging 
 Packaged registration through `storybook-addon-visual-delta` already resolves `manager` and `preview`. The packaged preset MUST NOT append them again.
 
 The host aliases the package name to the local package root and excludes it from dependency optimization. `addonSrcDir` or equivalent local watching MAY trigger preview reloads, but it MUST avoid restart loops with the Storybook supervisor.
+
+The package Storybook (`.storybook/main.ts` in this sibling repo) owns self-test registration. After extract from the UI monorepo, its `root` / `snapshotDir` options MUST follow VD-HOST-008 so panel and manager acceptance can boot standalone or beside `../ui`.
 
 ## Snapshot layout and writers
 
