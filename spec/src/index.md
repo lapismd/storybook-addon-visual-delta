@@ -46,7 +46,9 @@ The manager presents state and requests actions. The preview renders stories, ex
 
 Visual Delta is a local, offline-capable Storybook integration. Its contract covers the local manager and preview, development middleware, local Playwright Chromium capture, committed PNG baselines, derived comparison artifacts, and guarded local Git or Jujutsu operations.
 
-The system does not provide cloud authentication, project linking, billing, a hosted review queue, published-Storybook sharing, or a multi-browser cloud farm. It does not promise a capture matrix beyond the canonical Chromium environment and explicitly configured Storybook modes. Adding one of those capabilities requires an accepted specification change.
+The contract also covers a **static read-only preview** surface: a built Storybook (no Vite middleware) MAY present wired baselines from `/visual-baselines`, overlay and split comparison, Diff HTML, and Diff Result hydration when sidecars exist. That surface MUST NOT enable middleware writes, Diff Chromium, visual runs, accept/review mutations, configuration saves, change-set or VCS operations, init scaffolding, or the Testing Module. See [Panel and preview](./panel-and-preview.md) and [Configuration](./configuration.md).
+
+The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a multi-browser cloud farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. It does not promise a capture matrix beyond the canonical Chromium environment and explicitly configured Storybook modes. Adding one of those out-of-scope capabilities requires an accepted specification change.
 
 Comparisons with third-party products are research evidence only. They do not define Visual Delta behavior or create a parity obligation.
 

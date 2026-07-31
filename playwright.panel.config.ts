@@ -21,7 +21,11 @@ const staticServerCommand = skipStaticBuild
 
 /** Shared webServer + ports for package Storybook acceptance. */
 export function visualDeltaPackageStorybookOverride(
-  options: { testMatch?: string | string[] } = {},
+  options: {
+    testMatch?: string | string[];
+    /** Load host-stubs story IDs (manager/overlay acceptance). */
+    includeHostStubs?: boolean;
+  } = {},
 ) {
   return {
     ...(options.testMatch ? { testMatch: options.testMatch } : {}),
@@ -36,7 +40,11 @@ export function visualDeltaPackageStorybookOverride(
         timeout: 300_000,
       },
       {
-        command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort} pnpm storybook:ci`,
+        command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort}${
+          options.includeHostStubs
+            ? " VISUAL_DELTA_INCLUDE_HOST_STUBS=1"
+            : ""
+        } pnpm storybook:ci`,
         url: `http://127.0.0.1:${panelStorybookPort}/index.json`,
         cwd: packageRoot,
         reuseExistingServer: false,

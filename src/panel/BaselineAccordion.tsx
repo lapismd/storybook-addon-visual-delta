@@ -292,6 +292,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onToggleInteractions,
   onOpenHistory,
   renderBody,
+  allowMutations = true,
 }: {
   sections: BaselineSection[];
   expandedId: BaselineSectionId | null;
@@ -316,6 +317,8 @@ export const BaselineAccordion = memo(function BaselineAccordion({
   onToggleInteractions?: () => void;
   onOpenHistory?: (target: BaselineSectionHistory) => void;
   renderBody: (section: BaselineSection) => React.ReactNode;
+  /** When false, hide create/update/delete (static read-only). */
+  allowMutations?: boolean;
 }) {
   const [openMenuId, setOpenMenuId] = useState<BaselineSectionId | null>(null);
   const labelWidth = useMemo(() => {
@@ -372,15 +375,21 @@ export const BaselineAccordion = memo(function BaselineAccordion({
           ? `Create ${createLabel} baseline (${section.step.stepId})`
           : `Create ${createLabel} baseline`;
         const canCreateDefault =
-          !hasBaseline && section.id === "default" && Boolean(onCreateDefault);
-        const canCreateInteraction = !hasBaseline && Boolean(section.step);
+          allowMutations &&
+          !hasBaseline &&
+          section.id === "default" &&
+          Boolean(onCreateDefault);
+        const canCreateInteraction =
+          allowMutations && !hasBaseline && Boolean(section.step);
         const canCreate = canCreateDefault || canCreateInteraction;
+        const canMutateBaseline = allowMutations && hasBaseline;
         const hasMenu =
-          hasBaseline ||
-          Boolean(section.history && onOpenHistory) ||
-          section.id === "default" ||
-          Boolean(section.step) ||
-          Boolean(section.wired);
+          (allowMutations &&
+            (hasBaseline ||
+              section.id === "default" ||
+              Boolean(section.step) ||
+              Boolean(section.wired))) ||
+          Boolean(section.history && onOpenHistory);
         return (
           <Section key={section.id} $expanded={expanded}>
             {/*
@@ -521,7 +530,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                               </ActionList.Action>
                             </ActionList.Item>
                           ) : null}
-                          {hasBaseline &&
+                          {canMutateBaseline &&
                           (section.id === "default" || section.wired) ? (
                             <ActionList.Item>
                               <ActionList.Action
@@ -545,7 +554,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                               </ActionList.Action>
                             </ActionList.Item>
                           ) : null}
-                          {hasBaseline ? (
+                          {canMutateBaseline ? (
                             <ActionList.Item>
                               <ActionList.Action
                                 ariaLabel={`Delete ${section.label} screenshot`}
