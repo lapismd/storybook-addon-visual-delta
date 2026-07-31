@@ -53,7 +53,17 @@
     "prepack": "pnpm build:node",
     "storybook": "node ./scripts/run-storybook.mjs",
     "storybook:ci": "node ./scripts/run-storybook.mjs --ci",
-    "build-storybook": "storybook build -o storybook-static"
+    "build-storybook": "storybook build -o storybook-static",
+    "examples:baselines": "node ./scripts/generate-example-baselines.mjs",
+    "test:panel": "playwright test -c playwright.panel.config.ts",
+    "test:manager": "playwright test -c playwright.manager.config.ts",
+    "spec:lint": "markdownlint-cli2 --config .markdownlint-cli2.jsonc",
+    "spec:validate": "node ./scripts/check-spec-structure.mjs",
+    "spec:build": "mdbook build ./spec",
+    "spec:serve": "mdbook serve ./spec --open",
+    "spec:test": "node --test ./scripts/*.spec.mjs",
+    "spec:first": "node ./scripts/check-spec-first.mjs",
+    "spec:check": "pnpm spec:lint && pnpm spec:validate && pnpm spec:build && pnpm spec:test && pnpm spec:first"
   },
   "dependencies": {
     "@storybook/icons": "^2.1.0",
@@ -62,6 +72,7 @@
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@storybook/addon-a11y": "10.5.2",
     "@storybook/addon-docs": "10.5.2",
     "@storybook/react-vite": "10.5.2",
@@ -70,7 +81,9 @@
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "markdownlint-cli2": "^0.22.1",
     "mermaid": "^11.16.0",
+    "playwright": "^1.52.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",

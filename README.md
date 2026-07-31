@@ -13,26 +13,30 @@ command reference.
 (human-facing docs site; live mirror of `spec/src`, not a second contract):
 
 ```bash
-pnpm visual-delta:storybook
+# from this package (standalone)
+pnpm storybook
 # → Examples / … (realistic demos)
 # → Visual Delta / Specification / …
 # → Visual Delta / Panel Shell / Guidance (and sibling families)
+
+# monorepo root alias
+pnpm visual-delta:storybook
 ```
 
 Deploy a **static read-only** catalog (baselines + Diff HTML; no middleware
 writes):
 
 ```bash
-pnpm visual-delta:build-storybook
-# serve packages/storybook-addon-visual-delta/storybook-static
+pnpm build-storybook
+# serve ./storybook-static
 ```
 
-Build or check the canonical mdBook from the repository root (lint + structure
-gate; generated HTML is non-normative):
+Canonical Spec lint/build (package scripts; root `pnpm visual-delta:spec:*`
+aliases):
 
 ```bash
-pnpm visual-delta:spec:check
-pnpm visual-delta:spec:serve
+pnpm spec:check
+pnpm spec:serve
 ```
 
 The complete check lints and validates the canonical source, builds the book,
