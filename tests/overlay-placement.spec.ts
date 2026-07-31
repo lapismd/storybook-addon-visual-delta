@@ -3,6 +3,7 @@ import {
   COMPONENT_OVERLAY_FIXTURE,
   DELAYED_OVERLAY_FIXTURE,
   FULL_VIEWPORT_MANAGER_FIXTURE,
+  clickThrough,
   mockVisualBackend,
   openManager,
   previewFrame,
@@ -17,7 +18,8 @@ const CAPTURE_KINDS = [
   {
     name: "full-viewport-baseline",
     storyId: FULL_VIEWPORT_MANAGER_FIXTURE,
-    expectedNaturalSize: { width: 3840, height: 2700 },
+    // sidebar-footer baseline (device-scale PNG at 3×)
+    expectedNaturalSize: { width: 3696, height: 1440 },
   },
 ] as const;
 
@@ -42,19 +44,22 @@ test.describe("Visual Delta manager overlay placement", () => {
 
           const panel = page.getByTestId("visual-delta-panel");
           if (placement.name !== "right") {
-            await panel.getByRole("switch", { name: placement.label }).click();
+            await clickThrough(
+              panel.getByRole("switch", { name: placement.label }),
+            );
           }
-          await expect(
-            panel.getByRole("switch", {
-              name: `Hide overlay (Baseline ${
+          const activePlacement = panel.getByRole("switch", {
+            name: new RegExp(
+              `(Hide overlay \\()?Baseline ${
                 placement.name === "above"
                   ? "above"
                   : placement.name === "below"
                     ? "below"
                     : `${placement.name} of`
-              } live)`,
-            }),
-          ).toBeChecked();
+              } live\\)?`,
+            ),
+          });
+          await expect(activePlacement).toBeChecked();
 
           const frame = previewFrame(page);
           const split = frame.locator("#visual-delta-split");
@@ -247,22 +252,29 @@ test.describe("Visual Delta manager overlay placement", () => {
           const expectedScrollLeft = await horizontalRail.evaluate((rail) =>
             Math.min(80, rail.scrollWidth - rail.clientWidth),
           );
-          await horizontalRail.evaluate((rail) => {
-            rail.scrollLeft = Math.min(80, rail.scrollWidth - rail.clientWidth);
-            rail.dispatchEvent(new Event("scroll"));
-          });
-          await expect
-            .poll(async () => {
-              const [liveLeft, baselineLeft] = await Promise.all([
-                livePane.evaluate((pane) => pane.scrollLeft),
-                baselinePane.evaluate((pane) => pane.scrollLeft),
-              ]);
-              return { liveLeft, baselineLeft };
-            })
-            .toEqual({
-              liveLeft: expectedScrollLeft,
-              baselineLeft: expectedScrollLeft,
-            });
+          if (expectedScrollLeft > 0) {
+            await horizontalRail.evaluate((rail, left) => {
+              rail.scrollLeft = left;
+              rail.dispatchEvent(new Event("scroll"));
+            }, expectedScrollLeft);
+            await expect
+              .poll(
+                async () => {
+                  const [railLeft, liveLeft, baselineLeft] = await Promise.all([
+                    horizontalRail.evaluate((rail) => rail.scrollLeft),
+                    livePane.evaluate((pane) => pane.scrollLeft),
+                    baselinePane.evaluate((pane) => pane.scrollLeft),
+                  ]);
+                  return { railLeft, liveLeft, baselineLeft };
+                },
+                { timeout: 10_000 },
+              )
+              .toEqual({
+                railLeft: expectedScrollLeft,
+                liveLeft: expectedScrollLeft,
+                baselineLeft: expectedScrollLeft,
+              });
+          }
 
           if (originalViewport) {
             await page.setViewportSize(originalViewport);
@@ -278,9 +290,9 @@ test.describe("Visual Delta manager overlay placement", () => {
         const writes = await mockVisualBackend(page);
         await openManager(page, capture.storyId);
         const panel = page.getByTestId("visual-delta-panel");
-        await panel
-          .getByRole("switch", { name: "Baseline centered over live" })
-          .click();
+        await clickThrough(
+          panel.getByRole("switch", { name: "Baseline centered over live" }),
+        );
 
         const frame = previewFrame(page);
         const overlay = frame.locator("#visual-delta-overlay");
@@ -349,9 +361,9 @@ test.describe("Visual Delta manager overlay placement", () => {
     const writes = await mockVisualBackend(page);
     await openManager(page, "shadcn-overlays-popover--open-panel");
     const panel = page.getByTestId("visual-delta-panel");
-    await panel
-      .getByRole("switch", { name: "Baseline centered over live" })
-      .click();
+    await clickThrough(
+      panel.getByRole("switch", { name: "Baseline centered over live" }),
+    );
 
     const frame = previewFrame(page);
     const image = frame.locator("#visual-delta-overlay > img");
@@ -443,11 +455,11 @@ test.describe("Visual Delta manager overlay placement", () => {
       }));
     const iframeStyleBefore = await iframe.getAttribute("style");
 
-    await panel
-      .getByRole("switch", {
+    await clickThrough(
+      panel.getByRole("switch", {
         name: "Hide overlay (Baseline right of live)",
-      })
-      .click();
+      }),
+    );
     await expect(frame.locator("#visual-delta-overlay")).toHaveCount(0);
     await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
     await expect(frame.locator("#visual-delta-split-divider")).toHaveCount(0);

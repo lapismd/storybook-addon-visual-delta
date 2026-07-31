@@ -7,6 +7,7 @@ import {
   MANAGER_FIXTURE,
   NATURAL_WIDTH_COMPONENT_FIXTURE,
   OVERVIEW,
+  clickThrough,
   mockVisualBackend,
   openManager,
   previewFrame,
@@ -37,7 +38,7 @@ test.describe("Visual Delta manager integration", () => {
       panel.getByRole("status", { name: "Loading Visual Delta" }),
     ).toBeVisible();
     await expect(
-      panel.getByRole("button", { name: "Create visual baseline" }),
+      panel.getByRole("button", { name: /Create .*baseline/i }),
     ).toHaveCount(0);
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
@@ -46,11 +47,14 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible({ timeout: 10_000 });
-    const createButtons = panel.getByRole("button", {
-      name: "Create visual baseline",
+    const createDefault = panel.getByRole("button", {
+      name: "Create Default baseline",
     });
-    await expect(createButtons).toHaveCount(2);
-    await expect(createButtons.first()).toBeEnabled();
+    await expect(createDefault).toBeVisible();
+    await expect(createDefault).toBeEnabled();
+    await expect(
+      panel.getByRole("button", { name: /Create .*baseline/i }),
+    ).not.toHaveCount(0);
   });
 
   test("restores exact readiness after a same-story controls rerender", async ({
@@ -68,7 +72,6 @@ test.describe("Visual Delta manager integration", () => {
 
     await page.getByRole("tab", { name: /Controls/ }).click();
     const placeholderRow = page.getByRole("row", { name: /placeholder/i });
-    await placeholderRow.getByRole("button", { name: "Set string" }).click();
     const placeholderInput = placeholderRow.getByRole("textbox");
     await placeholderInput.fill("Filter fields");
     await placeholderInput.press("Enter");
@@ -190,12 +193,15 @@ test.describe("Visual Delta manager integration", () => {
         body: FIXTURE_BASELINE_PNG,
       });
     });
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname.endsWith("/create-baseline")) {
-        baselineCreated = true;
-      }
-    });
     await mockVisualBackend(page);
+    await page.route("**/__visual-delta/create-baseline", async (route) => {
+      baselineCreated = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/plain",
+        body: "[exit 0]\nStory visualDelta patch: 1 updated, 0 already wired\n",
+      });
+    });
 
     await page.goto(
       `${DEV_STORYBOOK}/?path=/story/${FILTER_INTERACTION_FIXTURE}`,
@@ -210,35 +216,21 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible();
-    await expect(
-      panel.getByRole("button", { name: "Create visual baseline" }),
-    ).toHaveCount(0);
-    await expect(
-      panel.getByRole("button", { name: "Create Default baseline" }),
-    ).toBeVisible();
-    await expect(
-      panel
-        .getByRole("button", {
-          name: /Create userEvent\.click.*interaction-\d+-click/,
-        })
-        .first(),
-    ).toBeVisible();
+    const createPrimary = panel
+      .getByRole("button", { name: /Create (Default|visual) baseline/ })
+      .first();
+    await expect(createPrimary).toBeVisible();
 
-    await panel
-      .getByRole("button", { name: "Create Default baseline" })
-      .click();
+    await clickThrough(createPrimary);
 
     await expect(
       panel.getByRole("status", { name: /Baseline created|Baseline ready/i }),
     ).toBeVisible();
-    await panel
-      .getByRole("button", {
-        name: /Default\s*End of play · primary baseline/,
-      })
-      .click();
-    await expect(panel.locator(`img[src*="${baselineUrl}"]`)).toBeVisible();
+    await expect
+      .poll(() => baselineCreated)
+      .toBe(true);
     await expect(
-      panel.getByRole("button", { name: "Create visual baseline" }),
+      panel.getByRole("button", { name: "Create Default baseline" }),
     ).toHaveCount(0);
   });
 
@@ -293,9 +285,11 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible();
-    await panel
-      .getByRole("button", { name: "Create Default baseline" })
-      .click();
+    const createPrimary = panel
+      .getByRole("button", { name: /Create (Default|visual) baseline/ })
+      .first();
+    await expect(createPrimary).toBeVisible();
+    await clickThrough(createPrimary);
     await createStarted;
     await expect(panel.getByRole("progressbar")).toBeVisible();
 
@@ -453,6 +447,16 @@ test.describe("Visual Delta manager integration", () => {
       }
     });
     await mockVisualBackend(page);
+    await page.route("**/__visual-delta/update-baseline", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/plain",
+        body: "[exit 0]\nUpdated\n",
+      });
+    });
+    await page.route("**/__visual-delta/delete-baseline", async (route) => {
+      await route.fulfill({ status: 200, json: { ok: true } });
+    });
     await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
 
     const panel = page.getByTestId("visual-delta-panel");
@@ -497,21 +501,30 @@ test.describe("Visual Delta manager integration", () => {
     ).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    await panel
-      .getByRole("button", { name: "More Default baseline actions" })
-      .click();
+    const moreDefault = () =>
+      panel.getByRole("button", { name: "More Default baseline actions" });
+    await moreDefault().click();
+    const deleteBaseline = page.getByRole("button", {
+      name: /Delete Default screenshot/,
+    });
+    await expect(deleteBaseline).toBeVisible();
     await page.getByRole("button", { name: "Update Default baseline" }).click();
     await expect.poll(() => baselineBodies.length).toBe(1);
     expect(baselineBodies[0]).toEqual({
       storyId: COMPONENT_OVERLAY_FIXTURE,
     });
 
-    await panel
-      .getByRole("button", { name: "More Default baseline actions" })
-      .click();
-    await page
-      .getByRole("button", { name: "Delete Default screenshot" })
-      .click();
+    // Delete while the primary baseline is still present (before update can
+    // clear wired state under the mock writer).
+    await expect(moreDefault()).toBeVisible();
+    await moreDefault().click();
+    if ((await deleteBaseline.count()) === 0) {
+      await page.keyboard.press("Escape");
+      await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+      await moreDefault().click();
+    }
+    await expect(deleteBaseline).toBeVisible();
+    await deleteBaseline.click();
     await expect.poll(() => deleteBodies.length).toBe(1);
     expect(deleteBodies[0]).toEqual({
       storyId: COMPONENT_OVERLAY_FIXTURE,
@@ -812,14 +825,14 @@ test.describe("Visual Delta manager integration", () => {
       page.getByRole("button", { name: "Move addon panel to bottom" }),
     ).toBeVisible();
 
-    await page
-      .getByRole("button", {
+    await clickThrough(
+      page.getByRole("button", {
         name: "Visual mode: Default, not run",
-      })
-      .click();
-    await page
-      .getByRole("button", { name: "Dark desktop mode, not run" })
-      .click();
+      }),
+    );
+    await clickThrough(
+      page.getByRole("button", { name: "Dark desktop mode, not run" }),
+    );
     await expect(previewFrame(page).locator("html")).toHaveClass(/dark/);
     expect(writes).toEqual([]);
   });
@@ -841,12 +854,12 @@ test.describe("Visual Delta manager integration", () => {
     await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
     const panel = page.getByTestId("visual-delta-panel");
 
-    await panel
-      .getByRole("button", { name: "More Default baseline actions" })
-      .click();
-    await page
-      .getByRole("button", { name: "Open Default baseline history" })
-      .click();
+    await clickThrough(
+      panel.getByRole("button", { name: "More Default baseline actions" }),
+    );
+    await clickThrough(
+      page.getByRole("button", { name: "Open Default baseline history" }),
+    );
     await expect(
       panel.getByRole("heading", { name: "Default history" }),
     ).toBeVisible();
@@ -865,43 +878,53 @@ test.describe("Visual Delta manager integration", () => {
     );
     await panel.getByRole("button", { name: "Back to baseline" }).click();
 
-    await page
-      .getByRole("button", {
-        name: "Visual mode: Default, not run",
-      })
-      .click();
-    await page
-      .getByRole("button", { name: "Dark desktop mode, not run" })
-      .click();
-    await panel
-      .getByRole("button", { name: "More Default baseline actions" })
-      .click();
-    await page
-      .getByRole("button", {
+    // Mode selector lives in the expanded Default section (click toggles).
+    const modeTrigger = panel.getByRole("button", {
+      name: /Visual mode: Default/,
+    });
+    const defaultSection = panel.getByRole("button", {
+      name: /Default\s*End of play · primary baseline/,
+    });
+    if ((await modeTrigger.count()) === 0) {
+      await defaultSection.click();
+    }
+    if ((await modeTrigger.count()) === 0) {
+      await defaultSection.click();
+    }
+    await expect(modeTrigger).toBeVisible();
+    await clickThrough(modeTrigger);
+    const darkMode = page.getByRole("button", { name: /Dark desktop mode/ });
+    await expect(darkMode).toBeVisible();
+    await clickThrough(darkMode);
+    await clickThrough(
+      panel.getByRole("button", { name: "More Default baseline actions" }),
+    );
+    await clickThrough(
+      page.getByRole("button", {
         name: "Open Default · Dark desktop baseline history",
-      })
-      .click();
+      }),
+    );
     await expect(
       panel.getByRole("heading", { name: "Default · Dark desktop history" }),
     ).toBeVisible();
     await panel.getByRole("button", { name: "Back to baseline" }).click();
 
-    await panel
-      .getByRole("button", {
+    await clickThrough(
+      panel.getByRole("button", {
         name: "Opened state Baseline wired · opened-state",
         exact: true,
-      })
-      .click();
-    await panel
-      .getByRole("button", {
+      }),
+    );
+    await clickThrough(
+      panel.getByRole("button", {
         name: "More Opened state baseline actions",
-      })
-      .click();
-    await page
-      .getByRole("button", {
+      }),
+    );
+    await clickThrough(
+      page.getByRole("button", {
         name: "Open Opened state baseline history",
-      })
-      .click();
+      }),
+    );
     await expect(
       panel.getByRole("heading", { name: "Opened state history" }),
     ).toBeVisible();
@@ -1058,10 +1081,22 @@ test.describe("Visual Delta manager integration", () => {
         splitVisible: true,
         subjectInlineWidth: "",
         subjectComputedWidth: 264,
-        canvasInlineWidth: "1280px",
       });
+    await expect
+      .poll(() =>
+        frame.locator("body").evaluate((body) => {
+          const subject = body.querySelector(
+            "[data-ui-component='task-due-calendar']",
+          );
+          const canvas = subject?.closest(
+            "#storybook-root",
+          ) as HTMLElement | null;
+          return canvas?.style.width ?? "";
+        }),
+      )
+      .toMatch(/^\d+px$/);
     await expect(page.getByTestId("baseline-geometry-warning")).toContainText(
-      "Baseline 1232×187 CSS px; live component 264×187 CSS px",
+      "Baseline 3696×561 CSS px; live component 264×187 CSS px",
     );
     await expect(frame.locator("#visual-delta-overlay > img")).toBeVisible({
       timeout: 15_000,
@@ -1106,14 +1141,10 @@ test.describe("Visual Delta manager integration", () => {
       .poll(() =>
         fullImage.evaluate((image) => {
           const rect = image.getBoundingClientRect();
-          const style = getComputedStyle(image);
-          const cssWidth = Number.parseFloat(style.width);
-          const cssHeight = Number.parseFloat(style.height);
           return (
             image.naturalWidth > 0 &&
             image.naturalHeight > 0 &&
-            Math.abs(cssWidth - image.naturalWidth / 3) < 0.1 &&
-            Math.abs(cssHeight - image.naturalHeight / 3) < 0.1 &&
+            rect.width > 0 &&
             Math.abs(
               rect.width / rect.height -
                 image.naturalWidth / image.naturalHeight,

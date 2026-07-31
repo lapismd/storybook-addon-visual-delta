@@ -268,6 +268,37 @@ export async function mockVisualBackend(
   return writes;
 }
 
+async function dismissStorybookChrome(page: Page) {
+  for (const name of [
+    "Dismiss notification",
+    "Close what's new dialog",
+    "Skip onboarding",
+    "Dismiss",
+  ]) {
+    const button = page.getByRole("button", { name }).first();
+    if (await button.isVisible().catch(() => false)) {
+      await button.click({ force: true }).catch(() => undefined);
+    }
+  }
+}
+
+/** Click a control that may sit under transient panel status chrome. */
+export async function clickThrough(locator: {
+  click: (options?: { force?: boolean }) => Promise<void>;
+  evaluate?: (fn: (el: HTMLElement) => void) => Promise<void>;
+  dispatchEvent?: (type: string) => Promise<void>;
+}) {
+  if (typeof locator.evaluate === "function") {
+    await locator.evaluate((el) => {
+      el.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+      );
+    });
+    return;
+  }
+  await locator.click({ force: true });
+}
+
 export async function openManager(
   page: Page,
   storyId = MANAGER_FIXTURE,
@@ -279,6 +310,7 @@ export async function openManager(
       waitUntil: "networkidle",
     },
   );
+  await dismissStorybookChrome(page);
   const visualDeltaTab = page.getByRole("tab", { name: "Visual Delta" });
   await expect(visualDeltaTab).toBeVisible();
   if ((await visualDeltaTab.getAttribute("aria-selected")) !== "true") {
@@ -287,6 +319,7 @@ export async function openManager(
   await expect(
     page.getByRole("tabpanel", { name: "Visual Delta" }),
   ).toBeVisible();
+  await dismissStorybookChrome(page);
 }
 
 export function previewFrame(page: Page) {

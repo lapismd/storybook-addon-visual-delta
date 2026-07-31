@@ -5,7 +5,6 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "Filter/Power Search",
-  tags: ["skip-visual"],
   args: {
     placeholder: "Filter fields",
   },
@@ -51,7 +50,6 @@ export const AddFilterViaCombobox: Story = {
 
 export const EditRemoveAndClear: Story = {
   name: "Edit remove and clear",
-  tags: ["skip-visual"],
   parameters: {
     visualDelta: {
       align: "canvas",

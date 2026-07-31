@@ -4,7 +4,6 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "AI/Chat/Send Button",
-  tags: ["skip-visual"],
   parameters: {
     docs: {
       description: {

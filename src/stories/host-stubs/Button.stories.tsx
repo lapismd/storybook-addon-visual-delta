@@ -4,7 +4,6 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "Shadcn/Actions/Button",
-  tags: ["skip-visual"],
   parameters: {
     docs: {
       description: {
@@ -13,14 +12,9 @@ const meta = {
       },
     },
     visualDelta: {
+      // Primary only — keep overlay placement switches free of interaction-chip
+      // chrome that otherwise intercepts placement clicks in manager acceptance.
       images: ["/visual-baselines/shadcn/button/default-chromium-darwin.png"],
-      interactions: [
-        {
-          id: "opened-state",
-          label: "Opened state",
-          src: "/visual-baselines/shadcn/button/default-chromium-darwin.png",
-        },
-      ],
     },
   },
 } satisfies Meta;

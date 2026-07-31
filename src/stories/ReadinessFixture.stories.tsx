@@ -22,7 +22,6 @@ type Story = StoryObj;
 
 export const DelayedMissingBaseline: Story = {
   name: "Delayed missing baseline",
-  tags: ["skip-visual"],
   render: () => (
     <div data-testid="delayed-missing-subject">
       Delayed story without a baseline

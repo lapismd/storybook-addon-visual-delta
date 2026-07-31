@@ -12,14 +12,22 @@ const siblingUiSnapshots = path.join(
   siblingUiRoot,
   "tests/visual/storybook.spec.ts-snapshots",
 );
-/** Empty mount so standalone Storybook can start without the UI catalog. */
+/**
+ * Packaged host-stub PNGs for manager acceptance / standalone boots.
+ * Manager Playwright sets VISUAL_DELTA_PACKAGE_BASELINES=1 so CI and local
+ * acceptance share the same fixture set. Otherwise prefer the sibling UI
+ * catalog when present (full product baselines for interactive Storybook).
+ */
 const packageSnapshotMount = path.join(
   packageRoot,
   "tests/fixtures/visual-baselines",
 );
-const hostSnapshots = existsSync(siblingUiSnapshots)
-  ? siblingUiSnapshots
-  : packageSnapshotMount;
+const forcePackageBaselines =
+  process.env.VISUAL_DELTA_PACKAGE_BASELINES === "1";
+const hostSnapshots =
+  !forcePackageBaselines && existsSync(siblingUiSnapshots)
+    ? siblingUiSnapshots
+    : packageSnapshotMount;
 const repoRoot = existsSync(path.join(siblingUiRoot, "package.json"))
   ? siblingUiRoot
   : packageRoot;
@@ -47,6 +55,10 @@ const stories: StorybookConfig["stories"] = [
 
 const config: StorybookConfig = {
   stories,
+  features: {
+    // Keep manager acceptance free of the Get started checklist chrome.
+    sidebarOnboardingChecklist: false,
+  },
   // Host snapshotDir is mounted at `/visual-baselines` by the preset. Nested
   // `staticDirs` for `/visual-baselines/examples` are shadowed in Vite dev, so
   // Examples PNGs are also linked from the host snapshot tree when present:
