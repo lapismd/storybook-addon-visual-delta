@@ -3,14 +3,23 @@
 ## Package Storybook (self-test catalog)
 
 Addon demos, panel/manager acceptance stories, and **browseable documentation**
-live in this package Storybook:
+live in this package Storybook. Prefer package scripts (standalone-ready); root
+`pnpm visual-delta:*` aliases delegate here.
 
 ```bash
-# from repo root
-pnpm visual-delta:storybook
+# from this package
+pnpm storybook
+pnpm build-storybook
+pnpm test:panel
+pnpm test:manager
+pnpm spec:check
+pnpm examples:baselines
 
-# or from the package
-pnpm --filter storybook-addon-visual-delta storybook
+# from the monorepo root (same commands via filter)
+pnpm visual-delta:storybook
+pnpm visual-delta:build-storybook
+pnpm test:visual-delta-panel
+pnpm visual-delta:spec:check
 ```
 
 Default port is `9109` (`VISUAL_DELTA_STORYBOOK_PORT`). Panel Playwright uses
@@ -25,7 +34,7 @@ catalog — not the UI Storybook.
 - **Examples/** — realistic demos (match/drift, gallery, interactions, modes,
   layer-flavored subjects). Baselines live under
   `tests/examples-snapshots/examples/` and mount at `/visual-baselines/examples`.
-  Regenerate with `node ./scripts/generate-example-baselines.mjs`.
+  Regenerate with `pnpm examples:baselines`.
 - **Family Guidance** pages (Panel Shell, Panel Chrome, Testing Module, Diff
   Result, Compare Alignment, Readiness Fixture) explain self-test fixtures.
 - CSF autodocs descriptions point at those Guidance pages.
@@ -42,7 +51,7 @@ sets `VISUAL_DELTA_INCLUDE_HOST_STUBS=1` when launching `storybook:ci`.
 ### Static read-only deploy
 
 ```bash
-pnpm --filter storybook-addon-visual-delta build-storybook
+pnpm build-storybook
 # serve storybook-static — Visual Delta panel is read-only (VD-UI-008)
 ```
 
@@ -56,12 +65,12 @@ Preview fonts: `.storybook/preview.ts` and `ThemeHost` apply Storybook theming
 on `ThemeProvider` alone — it does not inject the manager’s Global styles.
 
 ```bash
-pnpm --filter storybook-addon-visual-delta build-storybook
-pnpm test:visual-delta-panel          # gated: panel.spec.ts on package Storybook
-pnpm test:visual-delta-manager        # manager/overlay/sidebar (include host stubs)
+pnpm test:panel      # gated panel.spec.ts (root: pnpm test:visual-delta-panel)
+pnpm test:manager    # manager/overlay (include host stubs)
+pnpm spec:check      # lint + validate + mdBook + gates
 ```
 
-`pnpm checks` runs `test:visual-delta-panel` only.
+Monorepo `pnpm checks` runs the panel suite via the root alias.
 
 ## UI catalog host
 
