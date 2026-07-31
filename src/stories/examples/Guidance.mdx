@@ -71,6 +71,16 @@ warnings stay off for happy-path stories.
   stories is expected; a **geometry** warning (mismatched CSS box sizes) is not
   — report that as a bug in the Examples wiring.
 
+## Baseline files
+
+Example PNGs live under
+<code>tests/examples-snapshots/examples/</code> and are served at
+<code>/visual-baselines/examples/…</code>. In Vite Storybook they are reached
+via a symlink from the host snapshot directory
+(<code>tests/visual/storybook.spec.ts-snapshots/examples</code>) because a
+nested <code>staticDirs</code> mount under <code>/visual-baselines</code> is
+shadowed in development.
+
 ## Static vs development
 
 - **Static / production Storybook** — Visual Delta is read-only: gallery,

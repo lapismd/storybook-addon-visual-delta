@@ -23,7 +23,7 @@ function InteractiveDisclosure() {
 
 const meta = {
   title: "Examples/Interactions",
-  tags: ["skip-visual"],
+  tags: ["visual-delta-examples"],
   parameters: {
     docs: {
       description: {
