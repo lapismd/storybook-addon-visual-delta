@@ -117,6 +117,26 @@ describe("VisualFiltersMenu", () => {
     );
   });
 
+  it("keeps option counts on the same row as filter labels", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <VisualFiltersMenu
+        activeIds={[]}
+        resultFiltersEnabled
+        optionCounts={optionCounts}
+        onChange={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Filter visual stories" }),
+    );
+    const count = screen.getByTestId("visual-filter-option-count-review.ready");
+    const row = count.parentElement;
+    expect(row).not.toBeNull();
+    expect(row!.firstElementChild?.textContent).toContain("Ready for review");
+    expect(getComputedStyle(row!).flexDirection).toBe("row");
+  });
+
   it("disables result facets until a completed run exists", async () => {
     const user = userEvent.setup();
     renderWithTheme(
