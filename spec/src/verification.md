@@ -113,7 +113,7 @@ Use the smallest tier that covers the changed boundary, then add broader checks 
 Run:
 
 ```bash
-pnpm visual-delta:spec:check
+pnpm spec:check
 ```
 
 The command validates:

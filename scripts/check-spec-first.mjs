@@ -6,24 +6,20 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_REPO_ROOT = path.resolve(SCRIPT_DIR, "../../..");
-const PACKAGE_PREFIX = "packages/storybook-addon-visual-delta";
+/** Standalone package root (sibling repo). */
+export const DEFAULT_REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
-const CANONICAL_SPEC_PATTERN = new RegExp(
-  `^${PACKAGE_PREFIX}/spec/src/(?!SUMMARY\\.md$).+\\.md$`,
-);
+const CANONICAL_SPEC_PATTERN = /^spec\/src\/(?!SUMMARY\.md$).+\.md$/;
 
 const IGNORED_PATTERNS = [
   /(^|\/)node_modules\//,
   /(^|\/)dist\//,
   /(^|\/)(?:coverage|test-results|playwright-report|blob-report)\//,
   /(^|\/)\.cache\//,
-  new RegExp(`^${PACKAGE_PREFIX}/spec/book/`),
-  new RegExp(`^${PACKAGE_PREFIX}/tests/`),
-  new RegExp(`^${PACKAGE_PREFIX}/src/test/`),
-  new RegExp(`^${PACKAGE_PREFIX}/src/stories/`),
-  /^src\/storybook\/visual-delta\//,
-  /^tests\/visual\/storybook\.spec\.ts-snapshots\//,
+  /^spec\/book\//,
+  /^tests\//,
+  /^src\/test\//,
+  /^src\/stories\//,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,
   /\.stories\.(?:svelte|[cm]?[jt]sx?)$/,
   /\.d\.ts$/,
@@ -31,33 +27,18 @@ const IGNORED_PATTERNS = [
 ];
 
 const PROTECTED_PATTERNS = [
-  new RegExp(`^${PACKAGE_PREFIX}/src/.+\\.(?:[cm]?[jt]sx?|svelte|css)$`),
-  new RegExp(
-    `^${PACKAGE_PREFIX}/(?:package\\.json|playwright\\.panel\\.config\\.ts|tsconfig(?:\\.[^.]+)*\\.json|AGENTS\\.md)$`,
-  ),
-  new RegExp(
-    `^${PACKAGE_PREFIX}/(?:\\.markdownlint-cli2\\.jsonc|spec/(?:book\\.toml|Makefile))$`,
-  ),
-  new RegExp(`^${PACKAGE_PREFIX}/scripts/check-spec-.+\\.mjs$`),
-  /^\.visual-delta\//,
-  /^\.env\.storybook\.local\.example$/,
-  /^\.storybook\/main\.ts$/,
-  /^\.storybook\/visual-(?:delta|baseline)(?:[.-].*)?\.[cm]?[jt]sx?$/,
-  /^playwright\.config\.ts$/,
-  /^scripts\/(?:storybook-(?:local-env|process|run)\.mjs|storybook-(?:restart|stop)\.sh|with-storybook-env\.mjs|visual-delta-panel-update\.ts)$/,
-  /^scripts\/ui-generator\/pipeline\/visual-(?:update|interaction-update)\.ts$/,
-  /^scripts\/ui-generator\/visual\/.+\.(?:[cm]?[jt]s)$/,
-  /^\.github\/workflows\/visual-delta-spec-first\.ya?ml$/,
+  /^src\/.+\.(?:[cm]?[jt]sx?|svelte|css)$/,
+  /^(?:playwright\.panel\.config\.ts|tsconfig(?:\.[^.]+)*\.json|AGENTS\.md)$/,
+  /^(?:\.markdownlint-cli2\.jsonc|spec\/(?:book\.toml|Makefile))$/,
+  /^scripts\/check-spec-.+\.mjs$/,
+  /^\.storybook\/.+\.[cm]?[jt]sx?$/,
+  /^\.github\/workflows\/visual-delta-.+\.ya?ml$/,
 ];
 
 const CONDITIONAL_PATTERNS = new Map([
   [
     "package.json",
-    /visual-delta|storybook:check|build-storybook|test:visual|workspace:visual|check:visual-delta|"checks"|markdownlint-cli2/i,
-  ],
-  [
-    "scripts/ui-generator/cli.ts",
-    /visual[-:]?(?:delta|update|interaction|tag)|visualUpdate/i,
+    /visual-delta|storybook|test:|spec:|markdownlint|playwright|"checks"/i,
   ],
 ]);
 
@@ -281,9 +262,9 @@ function changesFromVcs({ base, head, files }, repoRoot) {
 function printHelp() {
   console.log(`Usage: node check-spec-first.mjs [--base <rev>] [--head <rev>] [--file <path>...]
 
-Fails when protected Visual Delta implementation or host integration changes
-without a canonical Markdown update under:
-  packages/storybook-addon-visual-delta/spec/src/
+Fails when protected Visual Delta implementation changes without a canonical
+Markdown update under:
+  spec/src/
 
 Local default:
   jj diff --git --from @- --to @
@@ -324,7 +305,7 @@ function main() {
     for (const file of result.protectedFiles) console.error(`  - ${file}`);
     console.error("");
     console.error(
-      `Update the relevant requirement and verification evidence under ${PACKAGE_PREFIX}/spec/src/ in the same logical slice.`,
+      "Update the relevant requirement and verification evidence under spec/src/ in the same logical slice.",
     );
     process.exitCode = 1;
   } catch (error) {

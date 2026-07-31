@@ -6,50 +6,39 @@ import {
   parseUnifiedDiff,
 } from "./check-spec-first.mjs";
 
-const PACKAGE = "packages/storybook-addon-visual-delta";
-const SPEC = `${PACKAGE}/spec/src/verification.md`;
+const SPEC = "spec/src/verification.md";
 
 test("fails portable production code without a canonical spec update", () => {
-  const result = classifySpecFirstChanges([`${PACKAGE}/src/panel/Panel.tsx`]);
+  const result = classifySpecFirstChanges(["src/panel/Panel.tsx"]);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.protectedFiles, [`${PACKAGE}/src/panel/Panel.tsx`]);
+  assert.deepEqual(result.protectedFiles, ["src/panel/Panel.tsx"]);
 });
 
 test("passes protected code with a canonical content page", () => {
-  const result = classifySpecFirstChanges([
-    `${PACKAGE}/src/node/middleware.ts`,
-    SPEC,
-  ]);
+  const result = classifySpecFirstChanges(["src/node/middleware.ts", SPEC]);
   assert.equal(result.ok, true);
   assert.equal(result.requiresSpec, true);
   assert.deepEqual(result.specFiles, [SPEC]);
 });
 
-test("protects package configuration and host integration", () => {
+test("protects package configuration and workflows", () => {
   const result = classifySpecFirstChanges([
-    `${PACKAGE}/package.json`,
+    "package.json",
     ".storybook/main.ts",
-    ".visual-delta/config.json",
-    ".env.storybook.local.example",
-    "playwright.config.ts",
-    "scripts/storybook-process.mjs",
-    "scripts/storybook-stop.sh",
     ".github/workflows/visual-delta-spec-first.yml",
-    "scripts/ui-generator/visual/snapshot-paths.ts",
+    "playwright.panel.config.ts",
   ]);
   assert.equal(result.ok, false);
-  assert.equal(result.protectedFiles.length, 9);
+  assert.equal(result.protectedFiles.length, 4);
 });
 
 test("ignores tests fixtures ordinary stories baselines and generated output", () => {
   const result = classifySpecFirstChanges([
-    `${PACKAGE}/src/panel/Panel.spec.tsx`,
-    `${PACKAGE}/src/stories/PanelShell.tsx`,
-    `${PACKAGE}/tests/manager.spec.ts`,
-    "src/storybook/visual-delta/PanelShell.stories.svelte",
-    "tests/visual/storybook.spec.ts-snapshots/shadcn/button/preview-chromium-darwin.png",
-    `${PACKAGE}/dist/node/index.js`,
-    `${PACKAGE}/spec/book/index.html`,
+    "src/panel/Panel.spec.tsx",
+    "src/stories/PanelShell.tsx",
+    "tests/manager.spec.ts",
+    "dist/node/index.js",
+    "spec/book/index.html",
   ]);
   assert.equal(result.ok, true);
   assert.equal(result.requiresSpec, false);
@@ -57,9 +46,9 @@ test("ignores tests fixtures ordinary stories baselines and generated output", (
 
 test("does not accept SUMMARY or package documentation as specification", () => {
   const result = classifySpecFirstChanges([
-    `${PACKAGE}/src/manager.tsx`,
-    `${PACKAGE}/spec/src/SUMMARY.md`,
-    `${PACKAGE}/DEVELOPMENT.md`,
+    "src/manager.tsx",
+    "spec/src/SUMMARY.md",
+    "DEVELOPMENT.md",
   ]);
   assert.equal(result.ok, false);
   assert.deepEqual(result.specFiles, []);
@@ -67,14 +56,14 @@ test("does not accept SUMMARY or package documentation as specification", () => 
 
 test("protects spec tooling without letting tooling satisfy itself", () => {
   const result = classifySpecFirstChanges([
-    `${PACKAGE}/scripts/check-spec-first.mjs`,
-    `${PACKAGE}/spec/book.toml`,
+    "scripts/check-spec-first.mjs",
+    "spec/book.toml",
   ]);
   assert.equal(result.ok, false);
   assert.equal(result.protectedFiles.length, 2);
 });
 
-test("ignores unrelated root package changes", () => {
+test("ignores unrelated package.json changes", () => {
   const result = classifySpecFirstChanges([
     {
       path: "package.json",
@@ -85,34 +74,15 @@ test("ignores unrelated root package changes", () => {
   assert.equal(result.requiresSpec, false);
 });
 
-test("protects Visual Delta root package changes", () => {
+test("protects Visual Delta package.json script changes", () => {
   const result = classifySpecFirstChanges([
     {
       path: "package.json",
-      changedLines: [
-        '"visual-delta:spec:check": "pnpm visual-delta:spec:lint"',
-      ],
+      changedLines: ['"spec:check": "pnpm spec:lint"'],
     },
   ]);
   assert.equal(result.ok, false);
   assert.deepEqual(result.protectedFiles, ["package.json"]);
-});
-
-test("classifies shared generator CLI changes from their changed lines", () => {
-  const unrelated = classifySpecFirstChanges([
-    {
-      path: "scripts/ui-generator/cli.ts",
-      changedLines: ["registerGuideCommand(program);"],
-    },
-  ]);
-  const visual = classifySpecFirstChanges([
-    {
-      path: "scripts/ui-generator/cli.ts",
-      changedLines: ["registerVisualUpdateCommand(program);"],
-    },
-  ]);
-  assert.equal(unrelated.ok, true);
-  assert.equal(visual.ok, false);
 });
 
 test("parses changed lines from a unified diff", () => {
@@ -122,26 +92,25 @@ index 1111111..2222222 100644
 +++ b/package.json
 @@ -1 +1 @@
 -  "check": "old"
-+  "visual-delta:spec:check": "new"
++  "spec:check": "new"
 `);
   assert.deepEqual(changes, [
     {
       path: "package.json",
-      changedLines: ['  "check": "old"', '  "visual-delta:spec:check": "new"'],
+      changedLines: ['  "check": "old"', '  "spec:check": "new"'],
     },
   ]);
 });
 
 test("protects both sides of a cross-boundary rename", () => {
-  const changes =
-    parseUnifiedDiff(`diff --git a/${PACKAGE}/src/panel/Panel.tsx b/${PACKAGE}/tests/Panel.tsx
+  const changes = parseUnifiedDiff(`diff --git a/src/panel/Panel.tsx b/tests/Panel.tsx
 similarity index 100%
-rename from ${PACKAGE}/src/panel/Panel.tsx
-rename to ${PACKAGE}/tests/Panel.tsx
+rename from src/panel/Panel.tsx
+rename to tests/Panel.tsx
 `);
   const result = classifySpecFirstChanges(changes);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.protectedFiles, [`${PACKAGE}/src/panel/Panel.tsx`]);
+  assert.deepEqual(result.protectedFiles, ["src/panel/Panel.tsx"]);
 });
 
 test("fails closed for non-empty unparseable change-set output", () => {
