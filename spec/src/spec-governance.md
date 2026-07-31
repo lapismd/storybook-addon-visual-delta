@@ -63,6 +63,8 @@ The complete check also runs the checker test suite. It runs near the start of `
 
 On a pull request, the required **Visual Delta Spec First / Validate Visual Delta specification** check compares the exact base and head revisions. Repository settings MUST keep that check required before merge. The workflow pins Node 22, pnpm 10.32.1, and mdBook 0.5.4.
 
+Path-filtered **Visual Delta CI** (`.github/workflows/visual-delta-ci.yml`) runs package typecheck and Vitest, panel browser acceptance, and host catalog visual compare when Visual Delta or catalog paths change. Spec First remains the contract merge gate; repository settings SHOULD enable the Visual Delta CI checks as required once they are stable on the default branch.
+
 The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
 
 Structural validation MUST reject a reintroduced `specs/` tree and any package-root Markdown set other than `AGENTS.md`, `DEVELOPMENT.md`, and `README.md`.

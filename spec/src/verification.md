@@ -29,7 +29,7 @@ The following table names the primary evidence. Related tests can add confidence
 | `VD-MUT-001`, `VD-MUT-002`, `VD-MUT-003`, `VD-MUT-004`, `VD-MUT-005`, `VD-MUT-006`                      | `src/shared/interaction-capture.ts`, `src/node/baseline-cli.ts`, `src/node/middleware.ts`, `src/node/delete-baseline.ts`, `src/node/story-source.ts`, `src/manager/run-visual.ts`, `src/panel/Panel.tsx`, `src/manager/AcceptSplitButton.tsx`, `scripts/ui-generator/pipeline/visual-interaction-update.ts` | `src/shared/interaction-capture.spec.ts`, `src/node/delete-baseline.spec.ts`, `src/node/story-source.spec.ts`, `src/node/init-scaffold.spec.ts`, `src/manager/review-updates-from-results.spec.ts`, host middleware and writer tests                                              | Conforming                              |
 | `VD-VCS-001`, `VD-VCS-002`, `VD-VCS-003`, `VD-VCS-004`, `VD-VCS-005`, `VD-VCS-006`                      | `src/node/baseline-history-vcs.ts`, `src/node/change-set-store.ts`, `src/node/change-set-vcs.ts`, `src/shared/workflow-config.ts`                                                                                                                                              | Baseline history, change-set store, and change-set VCS specifications                                                                                                                                                                                                               | Conforming                              |
 | `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`, `VD-HOST-007` | UI `.storybook/main.ts` + `visual-delta-preset.ts`, package `.storybook/` self-test catalog, `src/storybook.css`, `src/storybook/catalog-layout.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json` | Storybook process tests, `src/storybook/catalog-layout.spec.ts`, host path and static-freshness tests, middleware tests, interaction tests, package panel browser tests | Partial: gap VD-GAP-002                 |
-| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`        | `spec/book.toml`, `AGENTS.md`, root `package.json`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/visual-delta-spec-first.yml`                                                                                                        | `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, mdBook build, Markdown lint, and aggregate-check wiring                                                                                                                                               | Conforming                              |
+| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`        | `spec/book.toml`, `AGENTS.md`, root `package.json`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/visual-delta-spec-first.yml`, `.github/workflows/visual-delta-ci.yml`                                                                 | `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, mdBook build, Markdown lint, aggregate-check wiring, and path-filtered package/panel/host visual CI                                                                                                   | Conforming                              |
 
 ## Current conformance gaps
 
@@ -168,6 +168,18 @@ pnpm test:visual
 ```
 
 Never pass `--update-snapshots` during verification. Baseline changes require the explicit mutation workflow from [Mutations and review](./mutations-and-review.md).
+
+### Pull request CI
+
+Path-filtered workflow `.github/workflows/visual-delta-ci.yml` runs on pull requests that touch Visual Delta package, catalog, Storybook, or visual baseline paths. Jobs (compare-only; no snapshot updates):
+
+| Job | Command surface |
+| --- | --- |
+| Package typecheck and unit tests | `pnpm check:visual-delta`, `pnpm exec vitest run --project visual-delta` |
+| Panel browser acceptance | `pnpm test:visual-delta-panel` |
+| Host catalog visual compare | `pnpm test:visual` |
+
+Specification-first enforcement remains a separate required workflow (see [Specification governance](./spec-governance.md)).
 
 ## Review checklist
 
