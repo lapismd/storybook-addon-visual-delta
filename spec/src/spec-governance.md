@@ -82,7 +82,7 @@ package dry-run, and compare-only browser gates before publication.
 
 The `npm` GitHub Environment MUST require reviewer approval and be registered
 with npm Trusted Publisher for
-`stevejuma/storybook-addon-visual-delta` and
+`lapismd/storybook-addon-visual-delta` and
 `.github/workflows/npm-publish.yml`. The `npm-bootstrap` Environment is the
 one-time `v0.0.1` exception and is the only environment permitted to expose
 `NPM_BOOTSTRAP_TOKEN`. After that release, configure the trusted publisher,
