@@ -5,7 +5,6 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "Shadcn/Overlays/Dialog",
-  tags: ["skip-visual"],
   parameters: {
     docs: {
       description: {

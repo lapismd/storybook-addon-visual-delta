@@ -4,7 +4,7 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "Shadcn/Feedback/Empty",
-  tags: ["skip-visual", "visual-ready"],
+  tags: ["visual-ready"],
   parameters: {
     docs: {
       description: {

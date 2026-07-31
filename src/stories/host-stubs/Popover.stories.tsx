@@ -4,7 +4,6 @@ import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "Shadcn/Overlays/Popover",
-  tags: ["skip-visual"],
   parameters: {
     docs: {
       description: {
@@ -16,6 +15,8 @@ const meta = {
       images: [
         "/visual-baselines/shadcn/popover/open-panel-chromium-darwin.png",
       ],
+      cropToViewport: true,
+      align: "viewport",
     },
   },
 } satisfies Meta;

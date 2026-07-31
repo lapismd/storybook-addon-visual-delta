@@ -390,6 +390,8 @@ export const MixedModeFailure: Story = {
 
 export const ManagerIntegrationFixture: Story = {
   name: "Manager integration fixture",
+  // Opt out of meta skip-visual so the real Visual Delta panel hydrates.
+  tags: ["!skip-visual"],
   parameters: {
     visualDelta: {
       images: ["/visual-baselines/shadcn/button/default-chromium-darwin.png"],
@@ -428,6 +430,7 @@ export const ManagerIntegrationFixture: Story = {
 
 export const ManagerFullViewportIntegrationFixture: Story = {
   name: "Manager full viewport integration fixture",
+  tags: ["!skip-visual"],
   parameters: {
     visualDelta: {
       images: [
@@ -452,6 +455,7 @@ export const ManagerFullViewportIntegrationFixture: Story = {
 
 export const Responsive1440ViewportCanary: Story = {
   name: "Responsive 1440 viewport canary",
+  tags: ["!skip-visual"],
   parameters: {
     visualDelta: {
       images: [
@@ -477,6 +481,7 @@ export const Responsive1440ViewportCanary: Story = {
 
 export const DelayedStoryCompletion: Story = {
   name: "Delayed story completion",
+  tags: ["!skip-visual"],
   parameters: {
     visualDelta: {
       images: ["/visual-baselines/shadcn/button/default-chromium-darwin.png"],

@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
-import { StubSubject } from "./StubSubject.js";
 
 const meta = {
   title: "UI Forms/Form Inputs/Task Due Calendar",
-  tags: ["skip-visual"],
   parameters: {
     docs: {
       description: {
@@ -24,6 +22,18 @@ type Story = StoryObj;
 export const ShowsASelectedDate: Story = {
   name: "Shows a selected date",
   render: () => (
-    <StubSubject label="Task due calendar stub" width={280} height={320} />
+    <div style={{ width: 264 }}>
+      <div
+        data-ui-component="task-due-calendar"
+        data-testid="host-product-stub"
+        style={{
+          boxSizing: "border-box",
+          height: 187,
+          border: "2px solid #2563eb",
+          borderRadius: 8,
+          background: "#eff6ff",
+        }}
+      />
+    </div>
   ),
 };

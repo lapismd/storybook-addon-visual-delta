@@ -28,7 +28,7 @@ The following table names the primary evidence. Related tests can add confidence
 | `VD-RUN-001`, `VD-RUN-002`, `VD-RUN-003`, `VD-RUN-004`, `VD-RUN-005`, `VD-RUN-006`                      | `src/shared/action-scope.ts`, `src/node/static-build.ts`, `src/node/affected-visual-tests.ts`, `src/node/run-hub.ts`, `src/manager/run-visual.ts`, `src/manager/VisualTestProvider.tsx`, `src/manager/visual-test-module-prefs.ts`, `src/manager/VisualTestModuleUI.tsx`, `src/panel/Panel.tsx`, `scripts/ui-generator/pipeline/visual-interaction-update.ts`                           | `src/shared/action-scope.spec.ts`, `src/node/static-build.spec.ts`, `src/node/affected-visual-tests.spec.ts`, `src/node/affected-plan-cache.spec.ts`, `src/node/run-hub.spec.ts`, `src/manager/abort-visual-work.spec.ts`, `src/manager/run-visual-reconnect.spec.ts`, `tests/manager-sidebar.spec.ts`, host interaction static-freshness, create-progress scope, and manager run tests | Conforming                              |
 | `VD-MUT-001`, `VD-MUT-002`, `VD-MUT-003`, `VD-MUT-004`, `VD-MUT-005`, `VD-MUT-006`                      | `src/shared/interaction-capture.ts`, `src/node/baseline-cli.ts`, `src/node/middleware.ts`, `src/node/delete-baseline.ts`, `src/node/story-source.ts`, `src/manager/run-visual.ts`, `src/panel/Panel.tsx`, `src/manager/AcceptSplitButton.tsx`, `scripts/ui-generator/pipeline/visual-interaction-update.ts` | `src/shared/interaction-capture.spec.ts`, `src/node/delete-baseline.spec.ts`, `src/node/story-source.spec.ts`, `src/node/init-scaffold.spec.ts`, `src/manager/review-updates-from-results.spec.ts`, host middleware and writer tests                                              | Conforming                              |
 | `VD-VCS-001`, `VD-VCS-002`, `VD-VCS-003`, `VD-VCS-004`, `VD-VCS-005`, `VD-VCS-006`                      | `src/node/baseline-history-vcs.ts`, `src/node/change-set-store.ts`, `src/node/change-set-vcs.ts`, `src/shared/workflow-config.ts`                                                                                                                                              | Baseline history, change-set store, and change-set VCS specifications                                                                                                                                                                                                               | Conforming                              |
-| `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`, `VD-HOST-007`, `VD-HOST-008` | UI `.storybook/main.ts` + `visual-delta-preset.ts`, package `.storybook/main.ts` self-test catalog (sibling snapshot mount), `src/storybook.css`, `src/storybook/catalog-layout.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json` | Storybook process tests, `src/storybook/catalog-layout.spec.ts`, host path and static-freshness tests, middleware tests, interaction tests, package panel browser tests | Partial: gap VD-GAP-002                 |
+| `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`, `VD-HOST-007`, `VD-HOST-008`, `VD-HOST-009` | UI `.storybook/main.ts` + `visual-delta-preset.ts`, package `.storybook/main.ts` self-test catalog (sibling / packaged fixture mounts), `playwright.manager.config.ts`, host-stub stories, `src/storybook.css`, `src/storybook/catalog-layout.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json` | Storybook process tests, `src/storybook/catalog-layout.spec.ts`, host path and static-freshness tests, middleware tests, interaction tests, package panel and manager browser tests | Partial: gap VD-GAP-002                 |
 | `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`        | `spec/book.toml`, `AGENTS.md`, root `package.json`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/visual-delta-spec-first.yml`, `.github/workflows/visual-delta-ci.yml`                                                                 | `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, mdBook build, Markdown lint, aggregate-check wiring, and path-filtered package/panel/host visual CI                                                                                                   | Conforming                              |
 
 ## Current conformance gaps
@@ -171,15 +171,19 @@ Never pass `--update-snapshots` during verification. Baseline changes require th
 
 ### Pull request CI
 
-Path-filtered workflow `.github/workflows/visual-delta-ci.yml` runs on pull requests that touch Visual Delta package, catalog, Storybook, or visual baseline paths. Jobs (compare-only; no snapshot updates):
+Standalone package workflow `.github/workflows/visual-delta-ci.yml` runs on pull requests. Jobs (compare-only; no snapshot updates):
 
 | Job | Command surface |
 | --- | --- |
-| Package typecheck and unit tests | `pnpm check:visual-delta`, `pnpm exec vitest run --project visual-delta` |
-| Panel browser acceptance | `pnpm test:visual-delta-panel` |
-| Host catalog visual compare | `pnpm test:visual` |
+| Package typecheck and unit tests | `pnpm typecheck`, `pnpm test` |
+| Panel browser acceptance | `pnpm test:panel` |
+| Manager browser acceptance | `pnpm test:manager` (live Storybook + host stubs; packaged fixture baselines under `tests/fixtures/visual-baselines`) |
 
-Specification-first enforcement remains a separate required workflow (see [Specification governance](./spec-governance.md)).
+Specification-first enforcement remains a separate required workflow (see [Specification governance](./spec-governance.md)). Host catalog `pnpm test:visual` stays in the UI repository.
+
+Also fix EditRemoveAndClear to use its own baseline path for primary image (optional consistency).
+
+Kill any leftover storybook on panel ports, then run focused failing tests first.
 
 ## Review checklist
 
