@@ -26,24 +26,24 @@ describe("mode snapshot paths", () => {
     ).toBe("shadcn/button/primary--dark-desktop-chromium-darwin.png");
   });
 
-  it("includes the story filename when components share a story directory", () => {
+  it("nests AI chat baselines under each component folder", () => {
     expect(
       screenshotRelativePath(
         {
           id: "ai-chat-composer--astryx-showcase",
-          importPath: "./src/shared/ai/chat/Composer.stories.svelte",
+          importPath: "./src/shared/ai/composer/Composer.stories.svelte",
         },
         "nested-import",
       ),
-    ).toBe("ai/chat/composer/astryx-showcase.png");
+    ).toBe("ai/composer/astryx-showcase.png");
     expect(
       screenshotRelativePath(
         {
           id: "ai-chat-layout--astryx-showcase",
-          importPath: "./src/shared/ai/chat/Layout.stories.svelte",
+          importPath: "./src/shared/ai/layout/Layout.stories.svelte",
         },
         "nested-import",
       ),
-    ).toBe("ai/chat/layout/astryx-showcase.png");
+    ).toBe("ai/layout/astryx-showcase.png");
   });
 });

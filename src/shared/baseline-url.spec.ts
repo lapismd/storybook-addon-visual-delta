@@ -56,13 +56,13 @@ describe("baselineUrlForStoryRef", () => {
     );
   });
 
-  it("includes the story filename when sibling story files share a directory", () => {
+  it("nests AI chat baselines under each component folder", () => {
     expect(
       baselineUrlForStoryRef({
         id: "ai-chat-composer--states",
-        importPath: "./src/shared/ai/chat/Composer.stories.svelte",
+        importPath: "./src/shared/ai/composer/Composer.stories.svelte",
       }),
-    ).toBe("/visual-baselines/ai/chat/composer/states-chromium-darwin.png");
+    ).toBe("/visual-baselines/ai/composer/states-chromium-darwin.png");
   });
 
   it("skips skip-visual unless allowSkipVisual", () => {
