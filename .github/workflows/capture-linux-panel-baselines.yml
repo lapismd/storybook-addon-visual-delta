@@ -1,0 +1,74 @@
+name: Capture Linux panel baselines
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capture-linux-panel-baselines-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture missing Linux panel references
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the selected revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Capture only missing Linux panel references
+        run: >-
+          pnpm exec playwright test -c playwright.panel.config.ts
+          --update-snapshots=missing
+
+      - name: Verify and record the capture set
+        run: |
+          snapshot_root=tests/panel.spec.ts-snapshots
+          expected_paths=(
+            "$snapshot_root/narrow-right/capture-error-chromium-linux.png"
+            "$snapshot_root/narrow-right/missing-baseline-chromium-linux.png"
+            "$snapshot_root/narrow-right/mixed-mode-failure-chromium-linux.png"
+            "$snapshot_root/narrow-right/passed-chromium-linux.png"
+            "$snapshot_root/wide-bottom/capture-error-chromium-linux.png"
+            "$snapshot_root/wide-bottom/missing-baseline-chromium-linux.png"
+            "$snapshot_root/wide-bottom/mixed-mode-failure-chromium-linux.png"
+            "$snapshot_root/wide-bottom/passed-chromium-linux.png"
+          )
+          for snapshot in "${expected_paths[@]}"; do
+            test -f "$snapshot"
+          done
+          actual_paths="$(find "$snapshot_root" -type f -name '*-chromium-linux.png' -print | sort)"
+          expected_paths_text="$(printf '%s\n' "${expected_paths[@]}")"
+          test "$actual_paths" = "$expected_paths_text"
+          printf '%s\n' "$actual_paths" | xargs sha256sum > panel-linux-snapshot-checksums.txt
+          pnpm test:panel
+
+      - name: Upload Linux panel references for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-panel-baselines-${{ github.sha }}
+          path: |
+            tests/panel.spec.ts-snapshots/**/*-chromium-linux.png
+            panel-linux-snapshot-checksums.txt
+          if-no-files-found: error
+          retention-days: 14
