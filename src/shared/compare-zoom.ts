@@ -36,6 +36,37 @@ export function compareZoomFromDefault(
     : { mode: "fit", scale: 1 };
 }
 
+/** True when `current` is still the unedited project/default zoom. */
+export function compareZoomMatchesDefault(
+  current: CompareZoomState,
+  zoomDefault: VisualDeltaZoomDefault,
+): boolean {
+  if (zoomDefault === "100%") {
+    return current.mode === "custom" && Math.abs(current.scale - 1) < 0.0001;
+  }
+  return current.mode === "fit";
+}
+
+/**
+ * Resolve split zoom on INIT_IMAGE. The first decorator INIT often carries
+ * built-in defaults (`fit`); a follow-up INIT with project config (`100%`)
+ * must still adopt the project default when the user has not customized zoom.
+ */
+export function resolveSplitZoomOnInit(options: {
+  resetDefaults: boolean;
+  previousDefault: VisualDeltaZoomDefault;
+  nextDefault: VisualDeltaZoomDefault;
+  current: CompareZoomState;
+}): CompareZoomState {
+  if (
+    options.resetDefaults ||
+    compareZoomMatchesDefault(options.current, options.previousDefault)
+  ) {
+    return compareZoomFromDefault(options.nextDefault);
+  }
+  return options.current;
+}
+
 export function fitCompareScale(input: CompareFitInput): number {
   const columns = input.columns ?? 1;
   const gap = input.columnGap ?? 0;

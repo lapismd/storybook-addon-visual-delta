@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   clampCompareZoom,
   compareZoomFromDefault,
+  compareZoomMatchesDefault,
   fitCompareScale,
+  resolveSplitZoomOnInit,
   resolvedCompareZoomScale,
   stepCompareZoom,
 } from "./compare-zoom.js";
@@ -59,5 +61,30 @@ describe("shared compare zoom", () => {
     };
     expect(resolvedCompareZoomScale(fit, input)).toBe(0.5);
     expect(resolvedCompareZoomScale(custom, input)).toBe(1);
+  });
+
+  it("adopts project 100% after the built-in fit INIT", () => {
+    expect(
+      resolveSplitZoomOnInit({
+        resetDefaults: false,
+        previousDefault: "fit",
+        nextDefault: "100%",
+        current: compareZoomFromDefault("fit"),
+      }),
+    ).toEqual({ mode: "custom", scale: 1 });
+    expect(
+      compareZoomMatchesDefault(compareZoomFromDefault("fit"), "fit"),
+    ).toBe(true);
+  });
+
+  it("preserves a user Fit choice when the project default is 100%", () => {
+    expect(
+      resolveSplitZoomOnInit({
+        resetDefaults: false,
+        previousDefault: "100%",
+        nextDefault: "100%",
+        current: { mode: "fit", scale: 0.5 },
+      }),
+    ).toEqual({ mode: "fit", scale: 0.5 });
   });
 });

@@ -870,6 +870,14 @@ function bindSharedScrollRails(
   };
 
   const onWheel = (event: WheelEvent) => {
+    // Fit locks both panes to the scaled frame with overflow hidden. Wheel
+    // must not programmatically scroll — tiny subjects still inherit
+    // Storybook `min-height: 100vh` scroll metrics inside tall panes.
+    if (currentSplitZoom.mode === "fit") {
+      event.preventDefault();
+      applyScroll(0, 0);
+      return;
+    }
     event.preventDefault();
     const maxTop = Math.max(
       0,
