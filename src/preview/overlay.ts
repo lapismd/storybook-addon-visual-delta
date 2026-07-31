@@ -960,10 +960,12 @@ function teardownSplit(canvasElement: HTMLElement) {
 
 /**
  * Size both panes equally for compare:
- * - Free axis fills the host (left/right → full height; above/below → full width)
- *   so unused preview space is used instead of short panes + scroll rails.
- * - Constrained axis fits baseline CSS content plus canvas insets (storybook-root
- *   padding), not only the small compare pad — otherwise padding forces scroll.
+ * - Each pane fills its preview split slot (half the iframe on the stacked axis,
+ *   full slot on the free axis) so spare viewport space is used.
+ * - Scroll rails appear only when zoomed content exceeds that slot — never
+ *   because the pane was collapsed to the baseline CSS box.
+ * - Do not reserve rail thickness up front; reserving 12px while content is
+ *   full-iframe width creates a permanent 12px horizontal overflow.
  */
 function applyEqualPaneViewports(
   canvasElement: HTMLElement,
@@ -985,15 +987,15 @@ function applyEqualPaneViewports(
   const view = document.defaultView;
   const availW = Math.max(
     0,
-    (view?.innerWidth ||
+    view?.innerWidth ||
       hostEl?.clientWidth ||
-      sizes.viewport.width * 2) - RAIL_THICKNESS_PX,
+      sizes.viewport.width * 2,
   );
   const availH = Math.max(
     0,
-    (view?.innerHeight ||
+    view?.innerHeight ||
       hostEl?.clientHeight ||
-      sizes.viewport.height * 2) - RAIL_THICKNESS_PX,
+      sizes.viewport.height * 2,
   );
   const selectedImage = lastSelection?.images[lastSelection.index];
   const snapshot = lastSelection?.layoutSnapshot;
@@ -1005,8 +1007,6 @@ function applyEqualPaneViewports(
       cropToViewport: viewportCapture,
     }),
   );
-  const minPaneW = Math.ceil(sizes.content.width + insets.x);
-  const minPaneH = Math.ceil(sizes.content.height + insets.y);
   // Fit against the host split slot (half the preview), not a content-sized
   // pane — otherwise spare space is ignored and small subjects stay on Fit.
   const hostPaneW = horizontal
@@ -1023,23 +1023,10 @@ function applyEqualPaneViewports(
   });
   const zoomScale = resolvedZoom.scale;
 
-  let paneW: number;
-  let paneH: number;
-  if (horizontal) {
-    paneW = Math.min(
-      Math.max(minPaneW, sizes.viewport.width),
-      hostPaneW,
-    );
-    // Use the iframe height — short baseline-sized panes left empty space below
-    // while `#storybook-root { min-height: 100vh }` still scrolled inside.
-    paneH = hostPaneH;
-  } else {
-    paneW = hostPaneW;
-    paneH = Math.min(
-      Math.max(minPaneH, sizes.viewport.height),
-      hostPaneH,
-    );
-  }
+  // Always fill the split slot. Baseline-sized panes (e.g. 100px) left empty
+  // host space below while live content (e.g. 168px) scrolled inside.
+  const paneW = hostPaneW;
+  const paneH = hostPaneH;
 
   for (const pane of [livePane, baselinePane]) {
     pane.style.width = `${paneW}px`;

@@ -53,7 +53,7 @@ The placement pad supports:
 | `below`   | Baseline pane below live pane      |
 | `center`  | Baseline ghost over the live story |
 
-Split panes use equal frame sizes derived from baseline CSS dimensions and settled preview geometry. Both panes expose a shared scroll extent based on the larger content. Vertical and horizontal scroll, shared rails, wheel input, and shift-wheel input MUST stay synchronized when zoom is not Fit. Fit MUST pin scroll to the origin and MUST NOT offer pan/scroll chrome. Fit MUST measure against the preview iframe viewport split slot (not a collapsed `body`/host box) and MUST resolve to native `100%` when the fitted scale is 1 (subject already fits without shrinking).
+Split panes use equal frames that fill the preview iframe split slot (half the viewport on the stacked axis). Both panes expose a shared scroll extent based on the larger content. Vertical and horizontal scroll, shared rails, wheel input, and shift-wheel input MUST stay synchronized when zoom is not Fit, and MUST appear only when zoomed content exceeds that slot — not when spare iframe space remains unused because panes were sized to the baseline CSS box. Fit MUST pin scroll to the origin and MUST NOT offer pan/scroll chrome. Fit MUST measure against the preview iframe viewport split slot (not a collapsed `body`/host box) and MUST resolve to native `100%` when the fitted scale is 1 (subject already fits without shrinking).
 
 Opening split zoom MUST follow project `previewSplitZoomDefault` (`fit` or `100%`), including when a follow-up INIT replaces built-in defaults after config load. A user-edited zoom MUST survive later INIT for the same story. Placement pad activation MUST reopen with the project default rather than always forcing Fit.
 
