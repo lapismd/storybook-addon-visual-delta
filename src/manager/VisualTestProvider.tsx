@@ -98,7 +98,9 @@ import {
   writeBoolFlag,
 } from "./visual-test-module-prefs.js";
 import {
+  buildVisualFilterOptionCounts,
   buildVisualStoryFilterFacts,
+  countStoriesMatchingFilters,
   createVisualStoryFilter,
   parseVisualFilterIds,
   serializeVisualFilterIds,
@@ -408,6 +410,23 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         hasCompletedVisualRun,
       ),
     [hasCompletedVisualRun, lastRun?.results, storyCoverage, storyDescriptors],
+  );
+  const visualFilterOptionCounts = useMemo(
+    () =>
+      buildVisualFilterOptionCounts(
+        visualFilterFacts,
+        hasCompletedVisualRun,
+      ),
+    [hasCompletedVisualRun, visualFilterFacts],
+  );
+  const visualFilterMatchingSummary = useMemo(
+    () =>
+      countStoriesMatchingFilters(
+        visualFilterFacts,
+        activeVisualFilterIds,
+        hasCompletedVisualRun,
+      ),
+    [activeVisualFilterIds, hasCompletedVisualRun, visualFilterFacts],
   );
 
   const anyActionSelected = anyModuleActionSelected({
@@ -1287,6 +1306,8 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               activeIds: activeVisualFilterIds,
               resultFiltersEnabled: hasCompletedVisualRun,
               alwaysVisibleErrorCount,
+              optionCounts: visualFilterOptionCounts,
+              matchingSummary: visualFilterMatchingSummary,
               onChange: (next) => {
                 setActiveVisualFilterIds(next);
                 api.applyQueryParams(

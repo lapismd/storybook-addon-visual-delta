@@ -107,6 +107,8 @@ Review controls set exactly one of pending, ready, approved, or failed. Skip eli
 
 The Storybook Testing Module presents compare, create or update baselines, result-to-status update, and affected-only choices. Its preferences do not change panel review controls.
 
+Development sidebar Visual Delta filters MAY include or exclude facet values. Excluded tokens use a `!` prefix in the `visualFilter` query param (for example `review.ready,!result.passed`). Includes within a group use OR; excludes within a group use AND; groups combine with AND. The filter menu MUST show per-option story counts and, when any filter is active, the number of matching stories.
+
 Review layout MAY expand the preview and panel for inspection. It MUST restore the prior Storybook layout when disabled or when the addon unmounts.
 
 ## Persistence and reload behavior

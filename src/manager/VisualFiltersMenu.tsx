@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FilterIcon } from "@storybook/icons";
+import { DeleteIcon, FilterIcon } from "@storybook/icons";
 import {
   Button,
   Form,
@@ -10,6 +10,9 @@ import { styled } from "storybook/theming";
 import {
   VISUAL_FILTER_GROUPS,
   VISUAL_QUICK_FILTER_IDS,
+  filterSelectionState,
+  invertFilterPolarity,
+  toggleFilterCheckbox,
 } from "./visual-filters.js";
 
 const FilterButton = styled(Button)({
@@ -46,7 +49,7 @@ const Count = styled.span(({ theme }) => ({
 }));
 
 const MenuScrollArea = styled(ScrollArea)({
-  width: 290,
+  width: 310,
   height: "min(620px, calc(100vh - 80px))",
 });
 
@@ -71,20 +74,81 @@ const Legend = styled.legend(({ theme }) => ({
   color: theme.textMutedColor,
 }));
 
-const CheckRow = styled.label<{ disabled?: boolean }>(
-  ({ disabled, theme }) => ({
+const InvertButton = styled.button(({ theme }) => ({
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  color: theme.color.secondary,
+  fontSize: theme.typography.size.s1 - 2,
+  fontWeight: theme.typography.weight.bold,
+  padding: "2px 4px",
+  borderRadius: 4,
+  cursor: "pointer",
+  opacity: 0,
+  flexShrink: 0,
+  "&:hover, &:focus-visible": {
+    opacity: 1,
+    background: theme.background.hoverable,
+  },
+  "&:disabled": {
+    cursor: "not-allowed",
+    opacity: 0.4,
+  },
+}));
+
+const CheckRow = styled.div<{ disabled?: boolean; excluded?: boolean }>(
+  ({ disabled, excluded, theme }) => ({
     display: "flex",
     alignItems: "center",
     gap: 8,
     minHeight: 28,
     padding: "2px 4px",
     borderRadius: 4,
-    cursor: disabled ? "not-allowed" : "pointer",
-    color: disabled ? theme.textMutedColor : theme.color.defaultText,
+    color: disabled
+      ? theme.textMutedColor
+      : excluded
+        ? theme.textMutedColor
+        : theme.color.defaultText,
     opacity: disabled ? 0.65 : 1,
-    "&:hover": disabled ? {} : { background: theme.background.hoverable },
+    "& svg": { width: 12, height: 12, flexShrink: 0 },
+    "&:hover": disabled
+      ? {}
+      : {
+          background: theme.background.hoverable,
+          [`& ${InvertButton}`]: { opacity: 1 },
+        },
+    "&:focus-within": {
+      [`& ${InvertButton}`]: { opacity: 1 },
+    },
   }),
 );
+
+const CheckLabel = styled.label<{ disabled?: boolean }>(
+  ({ disabled }) => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+    cursor: disabled ? "not-allowed" : "pointer",
+  }),
+);
+
+const RowLabel = styled.span({
+  flex: 1,
+  minWidth: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+});
+
+const OptionCount = styled.span(({ theme }) => ({
+  fontSize: theme.typography.size.s1 - 1,
+  fontVariantNumeric: "tabular-nums",
+  color: theme.textMutedColor,
+  minWidth: 18,
+  textAlign: "right",
+}));
 
 const QuickViews = styled.div({
   display: "grid",
@@ -93,14 +157,21 @@ const QuickViews = styled.div({
 });
 
 const QuickButton = styled(Button)({
-  justifyContent: "flex-start",
+  justifyContent: "space-between",
   width: "100%",
 });
+
+const QuickCount = styled.span(({ theme }) => ({
+  fontVariantNumeric: "tabular-nums",
+  color: theme.textMutedColor,
+  fontSize: theme.typography.size.s1 - 1,
+  marginLeft: 8,
+}));
 
 const Footer = styled.div({
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: 8,
   paddingTop: 8,
 });
@@ -110,6 +181,14 @@ const Note = styled.div(({ theme }) => ({
   lineHeight: 1.35,
   color: theme.textMutedColor,
   padding: "6px 4px 0",
+}));
+
+const Summary = styled.div(({ theme }) => ({
+  fontSize: theme.typography.size.s1 - 1,
+  lineHeight: 1.35,
+  color: theme.color.defaultText,
+  padding: "8px 4px 0",
+  fontVariantNumeric: "tabular-nums",
 }));
 
 const LABELS: Record<string, string> = {
@@ -144,6 +223,10 @@ export type VisualFiltersMenuProps = {
   activeIds: readonly string[];
   resultFiltersEnabled: boolean;
   alwaysVisibleErrorCount?: number;
+  /** Per filter-id story population counts. */
+  optionCounts?: Readonly<Record<string, number>>;
+  /** Stories matching the current selection vs catalog total. */
+  matchingSummary?: { matching: number; total: number };
   onChange: (ids: string[]) => void;
 };
 
@@ -151,18 +234,12 @@ export function VisualFiltersMenu({
   activeIds,
   resultFiltersEnabled,
   alwaysVisibleErrorCount = 0,
+  optionCounts = {},
+  matchingSummary,
   onChange,
 }: VisualFiltersMenuProps) {
   const [open, setOpen] = useState(false);
-  const active = new Set(activeIds);
-  const toggleFacet = (id: string) => {
-    const next = new Set(
-      activeIds.filter((item) => !item.startsWith("quick.")),
-    );
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onChange([...next]);
-  };
+  const activeCount = activeIds.length;
 
   return (
     <PopoverProvider
@@ -175,17 +252,22 @@ export function VisualFiltersMenu({
         <MenuScrollArea vertical scrollPadding={8}>
           <Menu role="dialog" aria-label="Visual story filters">
             <QuickViews aria-label="Quick views">
-              {VISUAL_QUICK_FILTER_IDS.map((id) => (
-                <QuickButton
-                  key={id}
-                  size="small"
-                  variant={active.has(id) ? "solid" : "ghost"}
-                  ariaLabel={false}
-                  onClick={() => onChange(active.has(id) ? [] : [id])}
-                >
-                  {LABELS[id]}
-                </QuickButton>
-              ))}
+              {VISUAL_QUICK_FILTER_IDS.map((id) => {
+                const selected = activeIds.includes(id);
+                const count = optionCounts[id] ?? 0;
+                return (
+                  <QuickButton
+                    key={id}
+                    size="small"
+                    variant={selected ? "solid" : "ghost"}
+                    ariaLabel={false}
+                    onClick={() => onChange(selected ? [] : [id])}
+                  >
+                    <span>{LABELS[id]}</span>
+                    <QuickCount aria-hidden="true">{count}</QuickCount>
+                  </QuickButton>
+                );
+              })}
             </QuickViews>
             {(
               Object.entries(VISUAL_FILTER_GROUPS) as Array<
@@ -196,24 +278,68 @@ export function VisualFiltersMenu({
               return (
                 <Section key={group}>
                   <Legend>{GROUP_LABELS[group]}</Legend>
-                  {ids.map((id) => (
-                    <CheckRow key={id} disabled={disabled}>
-                      <Form.Checkbox
-                        name={LABELS[id]}
-                        checked={active.has(id)}
+                  {ids.map((id) => {
+                    const state = filterSelectionState(activeIds, id);
+                    const excluded = state === "excluded";
+                    const checked = state !== "off";
+                    const count = optionCounts[id] ?? 0;
+                    const invertLabel = excluded ? "Include" : "Exclude";
+                    return (
+                      <CheckRow
+                        key={id}
                         disabled={disabled}
-                        onChange={() => toggleFacet(id)}
-                      />
-                      <span>{LABELS[id]}</span>
-                    </CheckRow>
-                  ))}
+                        excluded={excluded}
+                      >
+                        <CheckLabel disabled={disabled}>
+                          <Form.Checkbox
+                            name={LABELS[id]}
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() =>
+                              onChange(toggleFilterCheckbox(activeIds, id))
+                            }
+                          />
+                          <RowLabel>
+                            {excluded ? <DeleteIcon aria-hidden /> : null}
+                            <span>
+                              {LABELS[id]}
+                              {excluded ? " (excluded)" : ""}
+                            </span>
+                          </RowLabel>
+                        </CheckLabel>
+                        <OptionCount
+                          data-testid={`visual-filter-option-count-${id}`}
+                        >
+                          {excluded ? <s>{count}</s> : count}
+                        </OptionCount>
+                        <InvertButton
+                          type="button"
+                          disabled={disabled}
+                          aria-label={`${invertLabel} ${LABELS[id]}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onChange(invertFilterPolarity(activeIds, id));
+                          }}
+                        >
+                          {invertLabel}
+                        </InvertButton>
+                      </CheckRow>
+                    );
+                  })}
                   {disabled ? (
                     <Note>Run visual tests once to enable result filters.</Note>
                   ) : null}
                 </Section>
               );
             })}
-            {alwaysVisibleErrorCount > 0 && activeIds.length > 0 ? (
+            {matchingSummary && activeCount > 0 ? (
+              <Summary data-testid="visual-filter-match-summary" role="status">
+                Showing {matchingSummary.matching} of {matchingSummary.total}{" "}
+                {matchingSummary.total === 1 ? "story" : "stories"}
+              </Summary>
+            ) : null}
+            {alwaysVisibleErrorCount > 0 && activeCount > 0 ? (
               <Note role="status">
                 {alwaysVisibleErrorCount} Storybook error{" "}
                 {alwaysVisibleErrorCount === 1
@@ -224,13 +350,14 @@ export function VisualFiltersMenu({
             ) : null}
             <Footer>
               <Note>
-                Groups combine with AND; choices within a group use OR.
+                Includes OR within a group; excludes AND. Groups combine with
+                AND. Exclude uses <code>!</code> in the URL.
               </Note>
               <Button
                 size="small"
                 variant="ghost"
                 ariaLabel={false}
-                disabled={!activeIds.length}
+                disabled={!activeCount}
                 onClick={() => onChange([])}
               >
                 Clear
@@ -242,18 +369,18 @@ export function VisualFiltersMenu({
     >
       <FilterButton
         size="small"
-        variant={activeIds.length ? "solid" : "ghost"}
+        variant={activeCount ? "solid" : "ghost"}
         ariaLabel={
-          activeIds.length
-            ? `Filter visual stories, ${activeIds.length} active`
+          activeCount
+            ? `Filter visual stories, ${activeCount} active`
             : "Filter visual stories"
         }
         title="Filter visual stories"
       >
         <FilterIcon />
-        {activeIds.length ? (
+        {activeCount ? (
           <Count aria-hidden="true" data-testid="visual-filter-count">
-            {activeIds.length}
+            {activeCount}
           </Count>
         ) : null}
       </FilterButton>

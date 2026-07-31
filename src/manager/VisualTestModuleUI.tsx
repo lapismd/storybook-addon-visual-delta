@@ -179,6 +179,8 @@ export type VisualTestModuleUIProps = {
     activeIds: readonly string[];
     resultFiltersEnabled: boolean;
     alwaysVisibleErrorCount?: number;
+    optionCounts?: Readonly<Record<string, number>>;
+    matchingSummary?: { matching: number; total: number };
     onChange: (ids: string[]) => void;
   };
 };
