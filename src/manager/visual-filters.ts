@@ -62,7 +62,7 @@ export const VISUAL_FILTER_GROUPS = {
     "result.not-run",
   ],
   coverage: ["coverage.present", "coverage.missing", "coverage.unresolved"],
-  inclusion: ["inclusion.included", "inclusion.skipped"],
+  inclusion: ["inclusion.skipped"],
 } as const;
 
 export const VISUAL_QUICK_FILTER_IDS = [

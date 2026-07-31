@@ -171,7 +171,6 @@ const LABELS: Record<string, string> = {
   "coverage.present": "Has primary baseline",
   "coverage.missing": "Missing primary baseline",
   "coverage.unresolved": "Unresolved baseline path",
-  "inclusion.included": "Included",
   "inclusion.skipped": "Visually skipped",
 };
 
