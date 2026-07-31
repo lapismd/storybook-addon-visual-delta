@@ -184,12 +184,14 @@ Specification-first enforcement remains a separate required workflow (see [Speci
 ### Manual Linux panel-baseline capture
 
 `.github/workflows/capture-linux-panel-baselines.yml` runs only when manually
-dispatched for a selected repository revision. It uses Ubuntu Chromium and
+dispatched from the default branch. It uses Ubuntu Chromium and
 `--update-snapshots=missing` to create Linux references without replacing an
 existing one. The workflow then runs compare-only `pnpm test:panel`, records a
 checksum manifest, and uploads only `*-chromium-linux.png` panel references
-plus that manifest. The repository token is read-only: a reviewer must inspect
-the artifact and deliberately add its contents to a Jujutsu change.
+plus that manifest. Its capture job has only `contents: write` and
+`pull-requests: write`: it commits only the exact verified PNG paths to a new
+automation branch and opens a review pull request, never writing to the
+selected revision. A reviewer must inspect and merge that pull request.
 
 ### npm release CI
 
