@@ -56,11 +56,17 @@ describe("visual-delta init scaffold", () => {
       "utf8",
     );
     expect(suite).toContain("defineVisualSuite");
+    expect(suite).toContain(
+      '@lapismd/storybook-addon-visual-delta/playwright',
+    );
     const config = readFileSync(
       path.join(root, "playwright.config.ts"),
       "utf8",
     );
     expect(config).toContain("defineVisualPlaywrightConfig");
+    expect(config).toContain(
+      '@lapismd/storybook-addon-visual-delta/playwright',
+    );
     expect(config).toContain("port: 6007");
 
     const after = inspectVisualDeltaOnboarding(root);

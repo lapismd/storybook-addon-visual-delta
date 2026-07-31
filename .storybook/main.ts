@@ -98,7 +98,7 @@ const config: StorybookConfig = {
       plugins: [svelte()],
       resolve: {
         alias: {
-          "storybook-addon-visual-delta": packageRoot,
+          "@lapismd/storybook-addon-visual-delta": packageRoot,
         },
       },
       server: {
@@ -107,7 +107,7 @@ const config: StorybookConfig = {
         },
       },
       optimizeDeps: {
-        exclude: ["storybook-addon-visual-delta"],
+        exclude: ["@lapismd/storybook-addon-visual-delta"],
       },
     });
   },

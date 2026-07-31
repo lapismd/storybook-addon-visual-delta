@@ -347,7 +347,7 @@ async function captureActualPng(
  *
  * Host entry:
  * ```ts
- * import { defineVisualSuite } from "storybook-addon-visual-delta/playwright";
+ * import { defineVisualSuite } from "@lapismd/storybook-addon-visual-delta/playwright";
  * defineVisualSuite();
  * ```
  *

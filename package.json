@@ -1,5 +1,5 @@
 {
-  "name": "storybook-addon-visual-delta",
+  "name": "@lapismd/storybook-addon-visual-delta",
   "version": "0.1.5",
   "private": true,
   "description": "Local Visual Delta Storybook addon (reimplemented from npm storybook-addon-visual-delta@0.1.5). Overlay / heatmap diff against baseline images.",

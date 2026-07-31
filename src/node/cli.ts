@@ -120,7 +120,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(`  scripts: ${result.scriptsUpdated.join(", ")}`);
     }
     console.log(
-      'Next: addons: ["storybook-addon-visual-delta"] in .storybook/main.ts, then Create visual in the panel.',
+      'Next: addons: ["@lapismd/storybook-addon-visual-delta"] in .storybook/main.ts, then Create visual in the panel.',
     );
     return;
   }

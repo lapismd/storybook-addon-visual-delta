@@ -65,7 +65,7 @@ export function baselineUrlForStory(
 }
 
 /**
- * `parameters.visualDelta` for storybook-addon-visual-delta.
+ * `parameters.visualDelta` for @lapismd/storybook-addon-visual-delta.
  * First baseline auto-selects on load; component-clipped PNGs pin to the
  * story canvas; default split puts the baseline to the right of live.
  */
