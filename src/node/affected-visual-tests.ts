@@ -319,7 +319,14 @@ function isBuiltInGlobalInput(file: string): boolean {
     file.startsWith("scripts/ui-generator/visual/") ||
     file.startsWith("packages/storybook-addon-visual-delta/src/playwright/") ||
     file.startsWith("packages/storybook-addon-visual-delta/src/node/") ||
-    file.startsWith("packages/storybook-addon-visual-delta/src/shared/")
+    file.startsWith("packages/storybook-addon-visual-delta/src/shared/") ||
+    // Standalone sibling checkout / linked package realpath segments.
+    /(^|\/)storybook-addon-visual-delta\/src\/(?:playwright|node|shared)\//.test(
+      file,
+    ) ||
+    file.startsWith("src/playwright/") ||
+    file.startsWith("src/node/") ||
+    file.startsWith("src/shared/")
   );
 }
 

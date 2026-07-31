@@ -1,0 +1,48 @@
+name: Visual Delta Spec First
+
+on:
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate Visual Delta specification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install mdBook
+        run: cargo install mdbook --version 0.5.4 --locked
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint the canonical specification
+        run: pnpm spec:lint
+
+      - name: Validate the canonical specification
+        run: pnpm spec:validate
+
+      - name: Build the mdBook
+        run: pnpm spec:build
+
+      - name: Test the specification checkers
+        run: pnpm spec:test
+
+      - name: Enforce specification-first changes
+        run: >-
+          pnpm spec:first --
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"

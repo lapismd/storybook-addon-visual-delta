@@ -1,6 +1,6 @@
 # UI catalog Visual Delta host profile
 
-This reference defines how the `/Users/stevejuma/ui` catalog hosts the portable Visual Delta package. It covers local package registration, writers, paths, ports, scripts, ownership, and repository-specific safety policy.
+This reference defines how the `/Users/stevejuma/ui` catalog hosts the portable Visual Delta package (sibling checkout `../storybook-addon-visual-delta`, consumed via pnpm `link:`). It covers local package registration, writers, paths, ports, scripts, ownership, and repository-specific safety policy.
 
 ## Normative requirements
 
@@ -13,7 +13,7 @@ These requirements bind the portable package to this repository without merging 
 | VD-HOST-003 | Catalog baseline writes MUST use the `scripts/ui-generator` writers because they own Svelte CSF patches and repository layout. Those adapters MUST consume package-owned static freshness, target resolution, and capture identity contracts for primary and interaction writes. Compare runs MUST use the package CLI and Playwright without snapshot updates.      |
 | VD-HOST-004 | One `STORYBOOK_PORT` MUST derive every secondary lane. At most one supervisor and one Storybook child MAY own a checkout-and-port lane. Duplicate start MUST reuse that owner; restart and stop MUST replace or terminate only the matching owner and descendants. A checkout MUST NOT stop or reuse another checkout’s listener.                                    |
 | VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                                                                                                                                              |
-| VD-HOST-006 | Portable behavior belongs in the package, including the package-owned self-test Storybook (`packages/storybook-addon-visual-delta/.storybook`) and Visual Delta panel/manager acceptance fixtures. Repository layout, Svelte source writers, generator approval gates, **product** catalog stories, and UI catalog port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
+| VD-HOST-006 | Portable behavior belongs in the package, including the package-owned self-test Storybook (`.storybook` in the Visual Delta sibling repo) and Visual Delta panel/manager acceptance fixtures. Repository layout, Svelte source writers, generator approval gates, **product** catalog stories, and UI catalog port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
 | VD-HOST-007 | Regular fullscreen catalog stories MUST retain the established `1.5rem` `#storybook-root` inset. Only explicitly classified Workspace and Shell application surfaces MAY use the full capture viewport. Capture and overlay code MUST measure the active layout instead of assuming either frame, and changing this host layout requires deliberate baseline review. |
 
 ## Local package registration

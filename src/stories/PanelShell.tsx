@@ -77,7 +77,7 @@ const SAMPLE_CONFIG: VisualDeltaResolvedConfig = {
     visualUpdateArgs: ["visual-delta", "update"],
     visualInteractionUpdateArgs: ["visual-delta", "interaction-update"],
     visualTestArgs: ["playwright", "test"],
-    addonSrcDir: "packages/storybook-addon-visual-delta/src",
+    addonSrcDir: "src",
   },
   playwrightPassThresholdPercent: 1,
   workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,

@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -7,5 +7,13 @@
     "types": ["vite/client", "node"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", ".storybook/**/*.ts"],
-  "exclude": ["src/node/**/*.ts", "dist"]
+  "exclude": [
+    "src/node/**/*.ts",
+    "src/stories/**",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "dist"
+  ]
 }

@@ -48,16 +48,16 @@ Only a canonical content page under `spec/src/` satisfies the gate. `SUMMARY.md`
 Run the complete local policy check from the repository root:
 
 ```bash
-pnpm visual-delta:spec:check
+pnpm spec:check
 ```
 
 The component commands are:
 
-- `pnpm visual-delta:spec:lint`
-- `pnpm visual-delta:spec:validate`
-- `pnpm visual-delta:spec:build`
-- `pnpm visual-delta:spec:serve`
-- `pnpm visual-delta:spec:first`
+- `pnpm spec:lint`
+- `pnpm spec:validate`
+- `pnpm spec:build`
+- `pnpm spec:serve`
+- `pnpm spec:first`
 
 The complete check also runs the checker test suite. It runs near the start of `pnpm checks`, before implementation typechecking and browser validation.
 
