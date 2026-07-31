@@ -186,9 +186,11 @@ Specification-first enforcement remains a separate required workflow (see [Speci
 `.github/workflows/capture-linux-panel-baselines.yml` runs only when manually
 dispatched from the default branch. It uses Ubuntu Chromium and
 `--update-snapshots=missing` to create Linux references without replacing an
-existing one. The workflow then runs compare-only `pnpm test:panel`, records a
-checksum manifest, and uploads only `*-chromium-linux.png` panel references
-plus that manifest. Its capture job has only `contents: write` and
+existing one. Playwright reports a non-zero result for those newly written
+references, so the workflow continues only to its exact-set assertion and
+compare-only `pnpm test:panel` gate; both must pass before it records a checksum
+manifest or uploads only `*-chromium-linux.png` panel references plus that
+manifest. Its capture job has only `contents: write` and
 `pull-requests: write`: it commits only the exact verified PNG paths to a new
 automation branch and opens a review pull request, never writing to the
 selected revision. A reviewer must inspect and merge that pull request.
