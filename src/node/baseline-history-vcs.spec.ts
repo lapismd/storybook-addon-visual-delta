@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +16,16 @@ const PNG = Buffer.from(
   "base64",
 );
 const tempDirs: string[] = [];
+
+function hasCommand(commandName: string): boolean {
+  return (
+    spawnSync(commandName, ["--version"], {
+      stdio: "ignore",
+    }).status === 0
+  );
+}
+
+const HAS_JUJUTSU = hasCommand("jj");
 
 async function tempRepo(prefix: string): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -142,7 +152,7 @@ describe("Git baseline history adapter", () => {
 });
 
 describe("Jujutsu baseline history adapter", () => {
-  it("uses stable change ids and reads commits without snapshotting the workspace", async () => {
+  it.skipIf(!HAS_JUJUTSU)("uses stable change ids and reads commits without snapshotting the workspace", async () => {
     const root = await tempRepo("visual-delta-jj-");
     await command(root, "jj", ["git", "init", "--colocate", "."]);
     const relative = "snapshots/example.png";
@@ -183,7 +193,7 @@ describe("Jujutsu baseline history adapter", () => {
     ).resolves.toContain("+export const card = 2;");
   });
 
-  it("prefers JJ when a checkout also has Git metadata", async () => {
+  it.skipIf(!HAS_JUJUTSU)("prefers JJ when a checkout also has Git metadata", async () => {
     const root = await tempRepo("visual-delta-detect-");
     await command(root, "jj", ["git", "init", "--colocate", "."]);
 
