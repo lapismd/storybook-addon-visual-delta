@@ -522,8 +522,9 @@ review.
 
 **Defaults** edits the allow-listed project defaults in
 `.visual-delta/config.json`: pass and pixel thresholds, anti-aliasing,
-capture delay/cropping, placement/opacity, Baseline-label offsets, and the
-opening zoom for preview splits and Diff results. **Resolved** keeps the
+capture delay, device scale factor (built-in `1`), cropping, placement/opacity,
+Baseline-label offsets, and the opening zoom for preview splits and Diff
+results. **Resolved** keeps the
 read-only host paths, commands, diagnostics, setting sources, and raw JSON.
 Preview splits open with Fit by default; Diff results open at native 100% so
 component-clipped captures remain readable, with Fit still available as an
@@ -546,6 +547,7 @@ The project file remains a backward-compatible flat capture configuration:
 {
   "passThresholdPercent": 1,
   "diffThreshold": 0.2,
+  "deviceScaleFactor": 1,
   "workflow": {
     "autoAcceptLiveStoryComparisons": false,
     "vcs": {

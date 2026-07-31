@@ -8,6 +8,7 @@ export const BUILTIN_VISUAL_DELTA_DEFAULTS: VisualDeltaProjectDefaults = {
   diffThreshold: 0.2,
   diffIncludeAntiAliasing: false,
   delay: 0,
+  deviceScaleFactor: 1,
   cropToViewport: false,
   placement: "right",
   opacity: 0.5,
@@ -21,6 +22,7 @@ export const VISUAL_DELTA_PROJECT_DEFAULT_KEYS = [
   "diffThreshold",
   "diffIncludeAntiAliasing",
   "delay",
+  "deviceScaleFactor",
   "cropToViewport",
   "placement",
   "opacity",
@@ -118,6 +120,12 @@ export function validateVisualDeltaProjectDefaults(
     (candidate): candidate is number =>
       finiteInRange(candidate, 0, 60_000) && Number.isInteger(candidate),
     "must be a whole number from 0 to 60000 milliseconds.",
+  );
+  read(
+    "deviceScaleFactor",
+    (candidate): candidate is number =>
+      finiteInRange(candidate, 1, 8) && Number.isInteger(candidate),
+    "must be a whole number from 1 to 8.",
   );
   read(
     "cropToViewport",

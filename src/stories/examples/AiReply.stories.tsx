@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Lightweight AI-flavored reply block. Fixed stage size matches the wired baseline CSS box (PNG at 3× device scale).",
+          "Lightweight AI-flavored reply block. Fixed stage size matches the wired baseline CSS box (PNG at 1× device scale).",
       },
     },
     visualDelta: {

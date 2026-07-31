@@ -394,6 +394,10 @@ export function configurationSections(
       title: "Capture",
       rows: [
         {
+          label: "Device scale factor",
+          value: String(config.projectDefaults.deviceScaleFactor),
+        },
+        {
           label: "Static server",
           value: `localhost:${config.options.visualServerPort}`,
         },
@@ -722,7 +726,12 @@ export function ConfigurationPanel({
   const source = (key: keyof VisualDeltaProjectDefaults) =>
     config?.projectDefaultSources?.[key] ?? "built-in";
   const setNumber = (
-    key: "passThresholdPercent" | "diffThreshold" | "delay" | "opacity",
+    key:
+      | "passThresholdPercent"
+      | "diffThreshold"
+      | "delay"
+      | "deviceScaleFactor"
+      | "opacity",
     value: number,
   ) => {
     setSaved(null);
@@ -1124,6 +1133,26 @@ export function ConfigurationPanel({
                 </Field>
                 <Field>
                   <FieldLabel>
+                    Device scale factor{" "}
+                    <Source>{storySource("deviceScaleFactor")}</Source>
+                  </FieldLabel>
+                  <RangeNumberInput
+                    label="Story device scale factor"
+                    min={1}
+                    max={8}
+                    step={1}
+                    value={storyDraft.deviceScaleFactor}
+                    inputWidth="4rem"
+                    onChange={(value) =>
+                      setStoryValue("deviceScaleFactor", value)
+                    }
+                  />
+                  <FieldHint>
+                    PNG natural size ÷ this value is the CSS display size.
+                  </FieldHint>
+                </Field>
+                <Field>
+                  <FieldLabel>
                     Overlay opacity <Source>{storySource("opacity")}</Source>
                   </FieldLabel>
                   <RangeNumberInput
@@ -1306,6 +1335,25 @@ export function ConfigurationPanel({
                 />
                 <FieldHint>
                   Applied once after Storybook reports storyFinished.
+                </FieldHint>
+              </Field>
+              <Field>
+                <FieldLabel>
+                  Device scale factor{" "}
+                  <Source>{source("deviceScaleFactor")}</Source>
+                </FieldLabel>
+                <RangeNumberInput
+                  label="Device scale factor"
+                  min={1}
+                  max={8}
+                  step={1}
+                  value={draft.deviceScaleFactor}
+                  inputWidth="4rem"
+                  onChange={(value) => setNumber("deviceScaleFactor", value)}
+                />
+                <FieldHint>
+                  Default capture density (1–8). Image entries may override.
+                  Existing 3× baselines need project value 3.
                 </FieldHint>
               </Field>
               <Field>

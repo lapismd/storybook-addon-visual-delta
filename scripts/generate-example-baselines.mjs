@@ -1,7 +1,8 @@
 /**
  * Regenerate package Example baseline PNGs (pngjs).
  * CSS sizes match `src/stories/examples/example-sizes.ts`.
- * PNGs are written at deviceScaleFactor 3 (CSS × 3) to match the addon default.
+ * PNGs are written at deviceScaleFactor 1 (CSS = PNG pixels) to match the
+ * built-in project default.
  * Usage: node ./scripts/generate-example-baselines.mjs
  */
 import { PNG } from "pngjs";
@@ -25,7 +26,7 @@ const CSS = {
   aiReply: { width: 320, height: 120 },
   formField: { width: 280, height: 96 },
 };
-const SCALE = 3;
+const SCALE = 1;
 const BANNER_H = 28;
 const PAD = 12;
 

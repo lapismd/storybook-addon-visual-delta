@@ -65,6 +65,8 @@ export function visualDeltaPackageStorybookOverride(
 export default defineVisualPlaywrightConfig({
   port: staticPort,
   testDir: "./tests",
+  // Committed panel snapshots are 3× device-pixel PNGs.
+  deviceScaleFactor: 3,
   override: visualDeltaPackageStorybookOverride({
     // Gated self-test: panel harness screenshots + readiness on package Storybook.
     // Broader manager/overlay acceptance: `playwright.manager.config.ts`.

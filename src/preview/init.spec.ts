@@ -29,11 +29,13 @@ describe("buildInitPayload", () => {
       opacity: 1,
       passThresholdPercent: 2,
       diffThreshold: 0.4,
+      deviceScaleFactor: 1,
       baselineLabelOffset: { x: 5, y: -3 },
       layout: "centered",
       renderGeneration: 7,
       storyFinished: true,
     });
+    expect(project.images[0]?.deviceScaleFactor).toBe(1);
 
     const story = buildInitPayload(
       { id: "story", name: "Story" },
@@ -43,6 +45,7 @@ describe("buildInitPayload", () => {
         align: "canvas",
         opacity: 0.25,
         passThresholdPercent: 0.5,
+        deviceScaleFactor: 3,
         baselineLabelOffset: { x: 1, y: 2 },
       },
       projectDefaults,
@@ -52,7 +55,9 @@ describe("buildInitPayload", () => {
       placement: "center",
       opacity: 0.25,
       passThresholdPercent: 0.5,
+      deviceScaleFactor: 3,
       baselineLabelOffset: { x: 1, y: 2 },
     });
+    expect(story.images[0]?.deviceScaleFactor).toBe(3);
   });
 });

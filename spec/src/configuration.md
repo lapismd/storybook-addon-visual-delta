@@ -41,6 +41,7 @@ The built-in project defaults are:
 | `diffThreshold`           | `0.2`            | Number from `0` to `1`                      |
 | `diffIncludeAntiAliasing` | `false`          | Boolean                                     |
 | `delay`                   | `0`              | Integer from `0` to `60000` ms              |
+| `deviceScaleFactor`       | `1`              | Integer from `1` to `8`                     |
 | `cropToViewport`          | `false`          | Boolean                                     |
 | `placement`               | `right`          | `left`, `right`, `above`, `below`, `center` |
 | `opacity`                 | `0.5`            | Number from `0` to `1`                      |
@@ -80,10 +81,11 @@ Valid commit message tokens are `{action}`, `{scope}`, `{storyId}`, `{storyName}
 | `diffThreshold`           | Per-pixel color threshold from `0` to `1`                             |
 | `diffIncludeAntiAliasing` | Whether anti-aliased pixels count                                     |
 | `delay`                   | Additional settle delay in milliseconds                               |
+| `deviceScaleFactor`       | Capture / display density when image entries omit it                  |
 | `ignoreSelectors`         | CSS selectors whose painted regions do not count                      |
 | `cropToViewport`          | Capture the viewport instead of the component subject                 |
 
-Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`, `placement`, offsets, and anchor metadata. Legacy placement values MUST normalize to `right` for `beside` and `center` for `over`.
+Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`, `placement`, offsets, and anchor metadata. When an image omits `deviceScaleFactor`, the effective value MUST resolve from the story override, then the project default, then the built-in default `1`. Legacy placement values MUST normalize to `right` for `beside` and `center` for `over`.
 
 ## Host options
 

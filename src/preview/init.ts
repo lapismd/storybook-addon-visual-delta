@@ -51,11 +51,16 @@ export function buildInitPayload(
   configUpdated = false,
 ) {
   const modes = stackModes(visualDeltaParams?.modes);
+  const deviceScaleFactor =
+    visualDeltaParams?.deviceScaleFactor ?? projectDefaults.deviceScaleFactor;
   const normalizedImages = normalizeImagesWithModes({
     placement: projectDefaults.placement,
     ...visualDeltaParams,
     modes,
-  });
+  }).map((image) => ({
+    ...image,
+    deviceScaleFactor: image.deviceScaleFactor ?? deviceScaleFactor,
+  }));
   const placement = normalizePlacement(
     normalizedImages[0]?.placement ??
       visualDeltaParams?.placement ??
@@ -64,6 +69,7 @@ export function buildInitPayload(
   );
   return {
     images: normalizedImages,
+    deviceScaleFactor,
     interactions: visualDeltaParams?.interactions ?? [],
     modes,
     modeNames: modeNames(modes),
@@ -173,6 +179,7 @@ export const withInitImage: DecoratorFunction = (storyFn, context) => {
     visualDeltaParams?.opacity,
     visualDeltaParams?.placement,
     visualDeltaParams?.delay,
+    visualDeltaParams?.deviceScaleFactor,
     visualDeltaParams?.ignoreSelectors,
     visualDeltaParams?.cropToViewport,
     context.id,

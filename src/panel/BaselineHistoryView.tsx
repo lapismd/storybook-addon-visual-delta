@@ -17,6 +17,7 @@ import {
   type BaselineHistoryEntry,
   type BaselineHistoryResponse,
 } from "../shared/baseline-history.js";
+import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
 import type { DiffResultData } from "../types.js";
 import { DiffResult } from "./DiffResult.js";
 import {
@@ -606,7 +607,7 @@ export function BaselineHistoryView({
       pixelThreshold: 0.2,
       includeAntiAliasing: false,
       passThresholdPercent: 1,
-      deviceScaleFactor: 3,
+      deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
     })
       .then((result) => {
         if (!cancelled) setComparison(result);
