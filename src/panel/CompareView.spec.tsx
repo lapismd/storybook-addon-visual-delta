@@ -1,9 +1,31 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  createEvent,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../test/render.js";
 import { CompareView } from "./CompareView.js";
+
+/** React 19 + fireEvent drops clientX from pointer init options; set it explicitly. */
+function firePointer(
+  element: Element,
+  type: "pointerDown" | "pointerMove" | "pointerUp",
+  coords: { clientX: number; clientY?: number; pointerId?: number },
+) {
+  const event = createEvent[type](element, {
+    pointerId: coords.pointerId ?? 1,
+  });
+  Object.defineProperties(event, {
+    clientX: { configurable: true, value: coords.clientX },
+    clientY: { configurable: true, value: coords.clientY ?? 100 },
+  });
+  fireEvent(element, event);
+}
 
 beforeEach(() => {
   class ResizeObserverStub {
@@ -115,7 +137,7 @@ describe("CompareView zoom and coordinates", () => {
       configurable: true,
       value: vi.fn(),
     });
-    fireEvent.pointerDown(swipe, { clientX: 420, pointerId: 1 });
+    firePointer(swipe, "pointerDown", { clientX: 420, pointerId: 1 });
     expect(
       screen.getByRole("button", {
         name: "Open Swipe comparison full image, 25% baseline revealed",
@@ -180,12 +202,12 @@ describe("CompareView zoom and coordinates", () => {
       releasePointerCapture: { configurable: true, value: vi.fn() },
     });
 
-    fireEvent.pointerDown(swipe, {
+    firePointer(swipe, "pointerDown", {
       clientX: 300,
       clientY: 100,
       pointerId: 1,
     });
-    fireEvent.pointerUp(swipe, {
+    firePointer(swipe, "pointerUp", {
       clientX: 300,
       clientY: 100,
       pointerId: 1,
@@ -195,17 +217,17 @@ describe("CompareView zoom and coordinates", () => {
     ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Close modal" }));
 
-    fireEvent.pointerDown(swipe, {
+    firePointer(swipe, "pointerDown", {
       clientX: 300,
       clientY: 100,
       pointerId: 2,
     });
-    fireEvent.pointerMove(swipe, {
+    firePointer(swipe, "pointerMove", {
       clientX: 500,
       clientY: 100,
       pointerId: 2,
     });
-    fireEvent.pointerUp(swipe, {
+    firePointer(swipe, "pointerUp", {
       clientX: 500,
       clientY: 100,
       pointerId: 2,

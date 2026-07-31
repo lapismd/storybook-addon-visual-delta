@@ -87,7 +87,7 @@ describe("BaselineAccordion", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Opens chooserNo baseline yet · opens",
+        name: "Opens chooser No baseline yet · opens",
       }),
     );
     expect(onExpand).toHaveBeenCalledWith("opens");
