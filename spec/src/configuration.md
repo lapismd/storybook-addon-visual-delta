@@ -46,7 +46,7 @@ The built-in project defaults are:
 | `placement`               | `right`          | `left`, `right`, `above`, `below`, `center` |
 | `opacity`                 | `0.5`            | Number from `0` to `1`                      |
 | `baselineLabelOffset`     | `{ x: 0, y: 0 }` | Each value from `-1000` to `1000`           |
-| `previewSplitZoomDefault` | `fit`            | `fit` or `100%`                             |
+| `previewSplitZoomDefault` | `fit`            | `fit` or `100%` — applied when a split opens; follow-up INIT after config load MUST adopt this when zoom is still the prior default |
 | `diffResultZoomDefault`   | `100%`           | `fit` or `100%`                             |
 
 An explicitly injected story value, including `passThresholdPercent: 0.1`, is a story override and wins over the project default of `1`. Implementations MUST expose the winning source so the panel can explain the effective value.

@@ -53,7 +53,9 @@ The placement pad supports:
 | `below`   | Baseline pane below live pane      |
 | `center`  | Baseline ghost over the live story |
 
-Split panes use equal frame sizes derived from baseline CSS dimensions and settled preview geometry. Both panes expose a shared scroll extent based on the larger content. Vertical and horizontal scroll, shared rails, wheel input, and shift-wheel input MUST stay synchronized.
+Split panes use equal frame sizes derived from baseline CSS dimensions and settled preview geometry. Both panes expose a shared scroll extent based on the larger content. Vertical and horizontal scroll, shared rails, wheel input, and shift-wheel input MUST stay synchronized when zoom is not Fit. Fit MUST pin scroll to the origin and MUST NOT offer pan/scroll chrome.
+
+Opening split zoom MUST follow project `previewSplitZoomDefault` (`fit` or `100%`), including when a follow-up INIT replaces built-in defaults after config load. A user-edited zoom MUST survive later INIT for the same story. Placement pad activation MUST reopen with the project default rather than always forcing Fit.
 
 Fit and `100%` zoom preserve the same pixel coordinate system in baseline and actual panes. Swipe, diff, focus, blink, and two-up result views MUST use an aspect-locked stage.
 

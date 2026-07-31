@@ -25,6 +25,7 @@ import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import type { BaselineAlignmentMismatch } from "../shared/story-config.js";
 import {
   compareZoomFromDefault,
+  resolveSplitZoomOnInit,
   type CompareZoomState,
 } from "../shared/compare-zoom.js";
 import type { DiffCaptureEngine } from "../manager/DiffCaptureSplitButton.js";
@@ -630,9 +631,12 @@ export function useStoryData(currentStoryId?: string) {
             data.align ?? primaryImages[0]?.align ?? prev.effectiveAlign,
           previewSplitZoomDefault: data.previewSplitZoomDefault ?? "fit",
           diffResultZoomDefault: data.diffResultZoomDefault ?? "100%",
-          splitZoom: resetDefaults
-            ? compareZoomFromDefault(data.previewSplitZoomDefault ?? "fit")
-            : prev.splitZoom,
+          splitZoom: resolveSplitZoomOnInit({
+            resetDefaults,
+            previousDefault: prev.previewSplitZoomDefault,
+            nextDefault: data.previewSplitZoomDefault ?? "fit",
+            current: prev.splitZoom,
+          }),
           baselineGeometryMismatch:
             prev.storyId === data.storyId && !diagnosticsStale
               ? prev.baselineGeometryMismatch
@@ -934,7 +938,7 @@ export function useStoryData(currentStoryId?: string) {
           placement,
           images,
           opacity,
-          splitZoom: compareZoomFromDefault("fit"),
+          splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
         };
         persist(next);
         emitStyle(next);
@@ -982,7 +986,7 @@ export function useStoryData(currentStoryId?: string) {
           opacity: action.opacity,
           index: action.index,
           overlayOn: action.index >= 0,
-          splitZoom: compareZoomFromDefault("fit"),
+          splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
         };
         persist(next);
         emitStyle(next);
@@ -1100,7 +1104,7 @@ export function useStoryData(currentStoryId?: string) {
         placement: defaults.placement,
         liveVisible: defaults.liveVisible,
         passThresholdByEngine: { ...defaults.passThresholdByEngine },
-        splitZoom: compareZoomFromDefault("fit"),
+        splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
       };
       emitStyle(next);
       void selectImage(selection.previewIndex, images);
