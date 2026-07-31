@@ -9,7 +9,7 @@ import {
 
 const meta = {
   title: "Examples/Modes",
-  tags: ["skip-visual"],
+  tags: ["visual-delta-examples"],
   parameters: {
     docs: {
       description: {

@@ -9,7 +9,7 @@ import {
 
 const meta = {
   title: "Examples/Gallery",
-  tags: ["skip-visual"],
+  tags: ["visual-delta-examples"],
   parameters: {
     docs: {
       description: {

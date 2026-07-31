@@ -34,6 +34,11 @@ const stories: StorybookConfig["stories"] = [
 
 const config: StorybookConfig = {
   stories,
+  // Host snapshotDir is mounted at `/visual-baselines` by the preset. Nested
+  // `staticDirs` for `/visual-baselines/examples` are shadowed in Vite dev, so
+  // Examples PNGs are also linked from the host snapshot tree:
+  // `tests/visual/storybook.spec.ts-snapshots/examples` → this folder.
+  // Keep this mount for static builds (`build-storybook`) where nesting works.
   staticDirs: [
     {
       from: exampleSnapshots,

@@ -9,7 +9,7 @@ import {
 
 const meta = {
   title: "Examples/Filter Chip",
-  tags: ["skip-visual"],
+  tags: ["visual-delta-examples"],
   parameters: {
     docs: {
       description: {
