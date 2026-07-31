@@ -6,6 +6,12 @@ const meta = {
   title: "UI Forms/Form Inputs/Task Due Calendar",
   tags: ["skip-visual"],
   parameters: {
+    docs: {
+      description: {
+        component:
+          "Host stub for manager/overlay story IDs — not product documentation. See Visual Delta/Host Stubs/Guidance (`VD-HOST-006`).",
+      },
+    },
     visualDelta: {
       images: [
         "/visual-baselines/forms/task-due-calendar/shows-a-selected-date-chromium-darwin.png",

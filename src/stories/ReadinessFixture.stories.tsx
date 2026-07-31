@@ -8,8 +8,10 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
+        component: [
           "Manager-only readiness fixture. It is excluded from product visual captures without supplying a provisional baseline.",
+          "See **Readiness Fixture/Guidance** for Spec links (`VD-CAP-*`, `VD-UI-001` / VD-GAP-005).",
+        ].join(" "),
       },
     },
   },

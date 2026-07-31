@@ -5,6 +5,14 @@ import { StubSubject } from "./StubSubject.js";
 const meta = {
   title: "Shadcn/Feedback/Empty",
   tags: ["skip-visual", "visual-ready"],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          "Host stub for manager/overlay story IDs — not product documentation. See Visual Delta/Host Stubs/Guidance (`VD-HOST-006`).",
+      },
+    },
+  },
 } satisfies Meta;
 export default meta;
 type Story = StoryObj;

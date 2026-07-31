@@ -19,8 +19,11 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component:
-          "Browseable mounts of the real Visual Delta manager/panel React controls (Storybook light theme). Tagged skip-visual — tooling chrome, not product UI.",
+        component: [
+          "Browseable mounts of the real Visual Delta manager/panel React controls (Storybook light theme).",
+          "Tagged skip-visual — tooling chrome, not product UI.",
+          "See **Panel Chrome/Guidance** for the story map and Spec links (`VD-UI-*`, `VD-VCS-001`).",
+        ].join(" "),
       },
     },
   },

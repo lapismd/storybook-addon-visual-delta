@@ -9,7 +9,17 @@ The [`Visual Delta system specification`](./spec/src/index.md) is the normative
 contract for behavior and acceptance. This README is an integration guide and
 command reference.
 
-Build or browse the canonical mdBook from the repository root:
+**Browse the Spec and story Guidance in package Storybook** (human-facing docs
+site; live mirror of `spec/src`, not a second contract):
+
+```bash
+pnpm visual-delta:storybook
+# → Visual Delta / Specification / …
+# → Visual Delta / Panel Shell / Guidance (and sibling families)
+```
+
+Build or check the canonical mdBook from the repository root (lint + structure
+gate; generated HTML is non-normative):
 
 ```bash
 pnpm visual-delta:spec:check

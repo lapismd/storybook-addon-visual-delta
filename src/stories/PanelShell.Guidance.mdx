@@ -1,0 +1,113 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta
+  title="Visual Delta/Panel Shell/Guidance"
+  parameters={{ layout: "padded" }}
+/>
+
+# Panel Shell
+
+Live-panel-shaped self-test harness for Visual Delta manager chrome. Stories
+mount the real panel shell against an in-memory mock backend so create /
+update / run / review / skip-visual flows can be clicked or driven by play
+functions without Playwright writes or product catalog stories.
+
+## Usage context
+
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behavior in this catalog</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>Package Storybook (<code>pnpm visual-delta:storybook</code>), not the UI product catalog</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td><code>createMockVisualBackend()</code> — no real <code>{`/__visual-delta/*`}</code> mutations</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Panel acceptance (<code>panel.spec.ts</code>) and interactive exploration of panel states</td>
+</tr>
+<tr>
+<td>Normative contract</td>
+<td><a href="?path=/docs/visual-delta-specification-panel-and-preview--docs">Panel and preview</a>, <a href="?path=/docs/visual-delta-specification-mutations-and-review--docs">Mutations and review</a>, <a href="?path=/docs/visual-delta-specification-test-runs-and-scopes--docs">Test runs and scopes</a></td>
+</tr>
+</tbody>
+</table>
+
+These fixtures satisfy portable self-test ownership under
+[`VD-HOST-006`](?path=/docs/visual-delta-specification-ui-catalog-host-profile--docs).
+Product visuals still run in the UI catalog host.
+
+## Requirement focus
+
+- **`VD-UI-001`** — coverage, outcome, review, skip, and run state stay separate concepts
+- **`VD-UI-002` / `VD-UI-006`** — selection, soft hide, story-switch hard clear, remount recovery
+- **`VD-UI-003`** — placement pad and split/center presentations
+- **`VD-UI-004`** — modes and interaction accordion / create-for-unwired points
+- **`VD-RUN-*` / `VD-MUT-*`** — run chooser scopes and guarded create/update/review actions
+
+Full requirement tables live in the Spec mirror under
+[Specification](?path=/docs/visual-delta-specification-system-specification--docs).
+
+## Story map
+
+<table>
+<thead>
+<tr>
+<th>Story</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Overview</td>
+<td>Shell mount; run-scope chooser → Affected</td>
+</tr>
+<tr>
+<td>Setup required / Skipped / Failed / Passed / Running</td>
+<td>Result-state status chrome</td>
+</tr>
+<tr>
+<td>Missing baseline / Capture error / Geometry mismatch</td>
+<td>Diagnostic and missing-coverage states</td>
+</tr>
+<tr>
+<td>Configuration*</td>
+<td>Defaults / Resolved tabs, save success and failure, narrow scroll</td>
+</tr>
+<tr>
+<td>Current run review / Mixed mode failure</td>
+<td>Accept scope and multi-mode outcomes</td>
+</tr>
+<tr>
+<td>Placement and gallery</td>
+<td>Soft hide, placement switches, image-only</td>
+</tr>
+<tr>
+<td>Create / Update and review / Toggle skip-visual</td>
+<td>Mutation and tag controls against the mock</td>
+</tr>
+<tr>
+<td>Diff and run visual</td>
+<td>Diff HTML + run lifecycle (mock progress)</td>
+</tr>
+<tr>
+<td>Accordion create interaction</td>
+<td>Unwired interaction create path</td>
+</tr>
+<tr>
+<td>Manager / viewport fixtures</td>
+<td>Integration and responsive canaries for panel Playwright</td>
+</tr>
+</tbody>
+</table>
+
+Open the **Canvas** stories under **Visual Delta → Panel Shell** to interact;
+use this Guidance page as the map back to the Spec.
