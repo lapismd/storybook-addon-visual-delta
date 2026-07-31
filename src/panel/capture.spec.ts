@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toPng } from "html-to-image";
 import { VISUAL_DELTA_STORY_FINISHED_ATTR } from "../shared/capture-params-attrs.js";
 import {
+  PreviewLayoutSettlementError,
   PreviewViewportEstablishmentError,
   capturePreviewSubject,
   measureCurrentPreviewLayout,
+  measureSettledOverlayLayout,
   withVerifiedPreviewViewport,
 } from "./capture.js";
 
@@ -279,6 +281,65 @@ describe("verified Diff HTML viewport transaction", () => {
 
     expect(iframe.style.width).toBe("640px");
     expect(iframe.style.height).toBe("400px");
+  });
+});
+
+describe("overlay layout settlement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("measures at the current preview size without resizing the iframe", async () => {
+    const { iframe } = installPreviewIframe({
+      observedWidth: 640,
+      observedHeight: 400,
+    });
+
+    const snapshot = await measureSettledOverlayLayout({
+      storyId: "example--ready",
+      layout: "padded",
+    });
+
+    expect(snapshot).toMatchObject({
+      storyId: "example--ready",
+      viewport: { width: 640, height: 400 },
+      layout: "padded",
+    });
+    expect(iframe.style.width).toBe("640px");
+    expect(iframe.style.height).toBe("400px");
+  });
+
+  it("waits for storyFinished without forcing the capture viewport", async () => {
+    const { iframe, doc } = installPreviewIframe({
+      observedWidth: 640,
+      observedHeight: 400,
+    });
+    doc.documentElement.removeAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR);
+    window.setTimeout(() => {
+      doc.documentElement.setAttribute(
+        VISUAL_DELTA_STORY_FINISHED_ATTR,
+        "example--ready",
+      );
+    }, 20);
+
+    const snapshot = await measureSettledOverlayLayout({
+      storyId: "example--ready",
+    });
+
+    expect(snapshot.viewport).toEqual({ width: 640, height: 400 });
+    expect(iframe.style.width).toBe("640px");
+  });
+
+  it("fails when the current preview never settles", async () => {
+    const { doc } = installPreviewIframe();
+    doc.documentElement.removeAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR);
+
+    await expect(
+      measureSettledOverlayLayout({
+        storyId: "example--ready",
+        timeout: 20,
+      }),
+    ).rejects.toBeInstanceOf(PreviewLayoutSettlementError);
   });
 });
 

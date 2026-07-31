@@ -37,7 +37,7 @@ When a ready story has baselines, the first applicable image auto-selects. The s
 
 Soft hide removes overlay or split DOM but retains the selected target and placement. Selecting the same placement again restores it. Hard clear resets comparison state when the story changes, the selected target disappears, or Storybook leaves Canvas mode. When preview reports `overlay-listener-ready` for a different storyId than the panel session, the panel MUST discard the prior gallery, index, and pins before requesting INIT — it MUST NOT keep the previous story’s baseline tag while waiting for the new story.
 
-Baseline image paint requires a `SELECT_IMAGE` with measured `layoutSnapshot` for the active generation. A load failure MUST remove or hide Baseline chrome for that generation rather than leave a chip without a bitmap.
+Baseline image paint requires a `SELECT_IMAGE` with measured `layoutSnapshot` for the active generation. Overlay geometry measurement MUST settle at the manager’s current preview size after the active render is ready; it MUST NOT resize the preview iframe to the Playwright capture viewport (that transaction is reserved for Diff HTML / subject capture). A load failure MUST remove or hide Baseline chrome for that generation rather than leave a chip without a bitmap.
 
 Image-only mode hides the live story and displays the baseline in center placement. Restoring live visibility MUST restore the prior comparison without changing durable state.
 

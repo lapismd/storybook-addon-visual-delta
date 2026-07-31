@@ -29,9 +29,14 @@ export function exampleBaseline(src: string): string {
  * does not advise switching away from the default Capture viewport mode.
  */
 export function exampleVisualDelta(
-  params: Omit<VisualDeltaParams, "align"> = {},
+  params: Omit<VisualDeltaParams, "align" | "deviceScaleFactor"> & {
+    deviceScaleFactor?: number;
+  } = {},
 ): VisualDeltaParams {
   return {
+    // Package Storybook may load the host repo’s `.visual-delta/config.json`
+    // (often deviceScaleFactor 3). Example PNGs are authored at 1× CSS size.
+    deviceScaleFactor: 1,
     align: "canvas",
     ...params,
   };

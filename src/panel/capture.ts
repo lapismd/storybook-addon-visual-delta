@@ -61,6 +61,17 @@ export class PreviewViewportEstablishmentError extends Error {
   }
 }
 
+export class PreviewLayoutSettlementError extends Error {
+  constructor(storyId: string, readiness?: string) {
+    super(
+      `Unable to settle preview layout for overlay on ${storyId}` +
+        (readiness ? ` (${readiness})` : "") +
+        ".",
+    );
+    this.name = "PreviewLayoutSettlementError";
+  }
+}
+
 class PreviewIframeReplacedError extends Error {
   constructor() {
     super("Storybook replaced the preview iframe during Diff HTML capture");
@@ -107,6 +118,46 @@ export function measureCurrentPreviewLayout(options: {
     throw new Error("Storybook preview iframe not found");
   }
   return measurePreviewLayout(doc, options);
+}
+
+/**
+ * Settle story readiness at the manager's current preview size and measure
+ * layout for overlay / split positioning.
+ *
+ * Unlike Diff HTML capture, this MUST NOT resize the iframe to the Playwright
+ * capture viewport — that resize is the main source of multi-second overlay
+ * gaps after reload when a placement is already selected.
+ */
+export async function measureSettledOverlayLayout(options: {
+  storyId: string;
+  layout?: StorybookLayoutMode | null;
+  signal?: AbortSignal;
+  timeout?: number;
+}): Promise<PreviewLayoutSnapshot> {
+  const iframe = getPreviewIframe();
+  const doc = iframe?.contentDocument;
+  if (!iframe || !doc?.documentElement) {
+    throw new Error("Storybook preview iframe not found");
+  }
+  if (!iframe.isConnected || getPreviewIframe() !== iframe) {
+    throw new PreviewIframeReplacedError();
+  }
+  const observed = await waitForSettledPreview({
+    iframe,
+    doc,
+    storyId: options.storyId,
+    signal: options.signal,
+    timeout: options.timeout ?? 5_000,
+    requireFonts: false,
+  });
+  if (!iframe.isConnected || getPreviewIframe() !== iframe) {
+    throw new PreviewIframeReplacedError();
+  }
+  return measurePreviewLayout(doc, {
+    storyId: options.storyId,
+    viewport: observed,
+    layout: options.layout,
+  });
 }
 
 function nextFrame(view: Window): Promise<void> {
@@ -235,22 +286,43 @@ async function settleUsedPreviewFonts(doc: Document): Promise<void> {
   );
 }
 
-async function waitForStableRequestedViewport(options: {
+type PreviewSettlementOptions = {
   iframe: HTMLIFrameElement;
   doc: Document;
-  viewport: { width: number; height: number };
   storyId: string;
   signal?: AbortSignal;
   timeout: number;
-}): Promise<{ width: number; height: number }> {
-  const { iframe, doc, viewport, storyId, signal, timeout } = options;
+  /**
+   * When set, the observed iframe viewport must match exactly (Diff HTML /
+   * capture). When omitted, settle at the current manager preview size (overlay).
+   */
+  viewport?: { width: number; height: number };
+  /**
+   * Diff HTML waits for used fonts. Overlay positioning only needs story
+   * readiness + stable boxes so SELECT_IMAGE is not blocked on font loading.
+   */
+  requireFonts?: boolean;
+};
+
+async function waitForSettledPreview(
+  options: PreviewSettlementOptions,
+): Promise<{ width: number; height: number }> {
+  const {
+    iframe,
+    doc,
+    storyId,
+    signal,
+    timeout,
+    viewport,
+    requireFonts = true,
+  } = options;
   const view = iframe.contentWindow;
   if (!view) {
     throw new Error("Cannot access preview window (cross-origin or not ready)");
   }
   const deadline = performance.now() + timeout;
   let previous: StableLayout | null = null;
-  let fontsSettledAfterStory = !doc.fonts?.ready;
+  let fontsSettledAfterStory = !requireFonts || !doc.fonts?.ready;
   let fontSettlementStarted = fontsSettledAfterStory;
   let lastReadiness = "preview not sampled";
   while (performance.now() <= deadline) {
@@ -261,13 +333,15 @@ async function waitForStableRequestedViewport(options: {
     }
     const current = readStableLayout(iframe, doc);
     const exactViewport =
-      current.viewportWidth === viewport.width &&
-      current.viewportHeight === viewport.height;
+      !viewport ||
+      (current.viewportWidth === viewport.width &&
+        current.viewportHeight === viewport.height);
     const storyFinished =
       doc.documentElement.getAttribute(VISUAL_DELTA_STORY_FINISHED_ATTR) ===
       storyId;
     const preparing = hasPreparationOverlay(doc);
     if (
+      requireFonts &&
       exactViewport &&
       storyFinished &&
       !preparing &&
@@ -285,6 +359,7 @@ async function waitForStableRequestedViewport(options: {
       `storyFinished=${storyFinished}`,
       `fonts=${doc.fonts?.status ?? "unavailable"}`,
       `fontsSettledAfterStory=${fontsSettledAfterStory}`,
+      `requireFonts=${requireFonts}`,
       `preparing=${preparing}`,
       `layoutStable=${layoutStable}`,
       `largestDelta=${layoutDelta}`,
@@ -306,11 +381,25 @@ async function waitForStableRequestedViewport(options: {
         ? current
         : null;
   }
-  throw new PreviewViewportEstablishmentError(
-    viewport,
-    readObservedViewport(iframe),
-    lastReadiness,
-  );
+  if (viewport) {
+    throw new PreviewViewportEstablishmentError(
+      viewport,
+      readObservedViewport(iframe),
+      lastReadiness,
+    );
+  }
+  throw new PreviewLayoutSettlementError(storyId, lastReadiness);
+}
+
+async function waitForStableRequestedViewport(options: {
+  iframe: HTMLIFrameElement;
+  doc: Document;
+  viewport: { width: number; height: number };
+  storyId: string;
+  signal?: AbortSignal;
+  timeout: number;
+}): Promise<{ width: number; height: number }> {
+  return waitForSettledPreview(options);
 }
 
 function readIframeSizeStyles(iframe: HTMLIFrameElement): IframeSizeStyles {
