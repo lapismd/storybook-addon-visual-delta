@@ -16,6 +16,7 @@ These requirements prevent implementation, tests, and generated documentation fr
 | VD-GOV-006 | A code-to-spec mismatch MUST be treated as an implementation defect unless an explicit specification change is accepted. Weakening a requirement requires rationale and MUST NOT be disguised by editing non-normative documentation.                         |
 | VD-GOV-007 | The package root MUST retain exactly `AGENTS.md`, `DEVELOPMENT.md`, and `README.md` as Markdown files. The obsolete `specs/` tree and package-root historical contract or plan files MUST NOT exist. Links to normative content MUST target `spec/src/`.      |
 | VD-GOV-008 | A dependency-audit remediation that changes the Visual Delta package manifest or resolved dependency graph MUST upgrade each reported vulnerable package to a patched release and verify a clean `pnpm audit` result. It MUST NOT create, replace, or delete visual baselines. |
+| VD-GOV-009 | A public npm release MUST originate only from an exact stable `vX.Y.Z` tag matching the package version, pass the release validation gates, and wait for protected GitHub Environment approval. Normal publication MUST use npm trusted publishing with GitHub OIDC and provenance, never a registry token. The release MUST install the published package on a clean runner and verify its Sigstore provenance with `npm audit signatures`. Only `v0.0.1` MAY use a one-time bootstrap token, isolated to a separate protected Environment; it MUST still publish provenance and MUST be revoked before the next release. |
 
 ## Authority and timing
 
@@ -69,6 +70,30 @@ Path-filtered **Visual Delta CI** (`.github/workflows/visual-delta-ci.yml`) runs
 The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
 
 Structural validation MUST reject a reintroduced `specs/` tree and any package-root Markdown set other than `AGENTS.md`, `DEVELOPMENT.md`, and `README.md`.
+
+## Package releases
+
+The portable package is publicly released to `https://registry.npmjs.org`. The
+release workflow accepts only pushed `v*` tags; its release guard rejects a tag
+that does not exactly equal the stable package version, a private package, an
+unexpected package identifier, or incorrect public-registry or repository
+metadata. It runs the specification, build, typecheck, unit, dependency-audit,
+package dry-run, and compare-only browser gates before publication.
+
+The `npm` GitHub Environment MUST require reviewer approval and be registered
+with npm Trusted Publisher for
+`stevejuma/storybook-addon-visual-delta` and
+`.github/workflows/npm-publish.yml`. The `npm-bootstrap` Environment is the
+one-time `v0.0.1` exception and is the only environment permitted to expose
+`NPM_BOOTSTRAP_TOKEN`. After that release, configure the trusted publisher,
+revoke the token, and retain only the tokenless `npm` release path.
+
+After a successful publish, a separate clean runner MUST install the exact
+version from npm, run `npm audit signatures --json --include-attestations`, and
+verify that its Sigstore-verified SLSA provenance binds the expected package,
+tag, repository, and workflow. The JSON evidence is retained as a workflow
+artifact. A missing or invalid attestation fails the release workflow; it never
+updates a visual baseline.
 
 ## Agent workflow
 

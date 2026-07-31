@@ -26,10 +26,11 @@ test("protects package configuration and workflows", () => {
     "package.json",
     ".storybook/main.ts",
     ".github/workflows/visual-delta-spec-first.yml",
+    ".github/workflows/npm-publish.yml",
     "playwright.panel.config.ts",
   ]);
   assert.equal(result.ok, false);
-  assert.equal(result.protectedFiles.length, 4);
+  assert.equal(result.protectedFiles.length, 5);
 });
 
 test("ignores tests fixtures ordinary stories baselines and generated output", () => {
@@ -79,6 +80,17 @@ test("protects Visual Delta package.json script changes", () => {
     {
       path: "package.json",
       changedLines: ['"spec:check": "pnpm spec:lint"'],
+    },
+  ]);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.protectedFiles, ["package.json"]);
+});
+
+test("protects public package and release configuration", () => {
+  const result = classifySpecFirstChanges([
+    {
+      path: "package.json",
+      changedLines: ['"publishConfig": {', '"version": "1.0.0"'],
     },
   ]);
   assert.equal(result.ok, false);

@@ -32,13 +32,13 @@ const PROTECTED_PATTERNS = [
   /^(?:\.markdownlint-cli2\.jsonc|spec\/(?:book\.toml|Makefile))$/,
   /^scripts\/check-spec-.+\.mjs$/,
   /^\.storybook\/.+\.[cm]?[jt]sx?$/,
-  /^\.github\/workflows\/visual-delta-.+\.ya?ml$/,
+  /^\.github\/workflows\/.+\.ya?ml$/,
 ];
 
 const CONDITIONAL_PATTERNS = new Map([
   [
     "package.json",
-    /visual-delta|storybook|test:|spec:|markdownlint|playwright|"checks"/i,
+    /visual-delta|storybook|test:|spec:|markdownlint|playwright|"checks"|publishConfig|repository|private|"version"|release:/i,
   ],
 ]);
 
