@@ -67,6 +67,7 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   "visual-delta-capture-profile.json",
   "Smoke published image on x64",
   "Smoke published image on ARM64",
+  "HOME: /root",
   "runs-on: ubuntu-24.04-arm",
   "image: ${{ needs.publish.outputs.image_reference }}",
 ];
@@ -117,6 +118,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
 const CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
 const CONSUMER_IMAGE_LINE = `      image: ${CI_IMAGE}`;
+const CONSUMER_HOME_LINE = "        HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
 const CONSUMER_PASSWORD_LINE =
   "        password: ${{ secrets.GITHUB_TOKEN }}";
@@ -175,6 +177,7 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
 
   for (const [needle, expectedCount, description] of [
     [CONSUMER_IMAGE_LINE, expected.jobs, "job container"],
+    [CONSUMER_HOME_LINE, expected.jobs, "root-owned container HOME"],
     [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
     ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
@@ -273,6 +276,11 @@ export function validateCiImageSources({
   if (smokeArm64Index < 0 || profileIndex <= smokeArm64Index) {
     errors.push(
       "publish workflow: capture profile must be assembled after native ARM64 smoke",
+    );
+  }
+  if (countOccurrences(publishWorkflow, "        HOME: /root") !== 2) {
+    errors.push(
+      "publish workflow: both native smoke containers must use root-owned HOME",
     );
   }
 

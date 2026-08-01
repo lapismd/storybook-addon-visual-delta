@@ -29,6 +29,27 @@ test("requires every package-tooling job to use the authenticated image", () => 
   assert.match(result.errors.join("\n"), /expected 4 job container/);
 });
 
+test("requires root-owned HOME in every repository job container", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "        HOME: /root",
+        "        HOME: /github/home",
+      ),
+    },
+    publishWorkflow: sources.publishWorkflow.replace(
+      "        HOME: /root",
+      "        HOME: /github/home",
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /root-owned container HOME/);
+  assert.match(result.errors.join("\n"), /native smoke containers/);
+});
+
 test("requires ARM64 visual jobs and explicit pending profile locks before publication", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({
