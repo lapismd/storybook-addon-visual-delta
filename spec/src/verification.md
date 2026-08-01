@@ -279,6 +279,12 @@ jobs therefore register the safe checkout explicitly, while focused and full
 Linux manager acceptance must prove that active shared scroll survives chrome
 rebuilds before the ARM lane is accepted.
 
+The combined primary, mode, and interaction VCS-history manager test remains
+temporarily skipped because its mode-popover sequence is unstable only within
+the full ARM64 manager suite. Focused execution against the immutable ARM64
+image passed repeatedly, but the skipped test is not verification evidence and
+must be re-enabled before VCS-history UI coverage can be considered complete.
+
 ### Manual canonical panel-baseline capture
 
 `.github/workflows/capture-canonical-panel-baselines.yml` runs only when manually

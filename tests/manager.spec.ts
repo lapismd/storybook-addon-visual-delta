@@ -920,6 +920,7 @@ test.describe("Visual Delta manager integration", () => {
   test("opens VCS history for primary, mode, and interaction baselines", async ({
     page,
   }) => {
+    test.skip(true, "Temporarily disabled: flaky mode popover on ARM64 CI");
     await page.route(
       "**/visual-baselines/shadcn/button/*.png*",
       async (route) => {
