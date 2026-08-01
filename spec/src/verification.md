@@ -219,6 +219,9 @@ dispatch from the default branch. It rejects `latest`, malformed audit tags,
 and an audit tag already present in GHCR before building. A successful run
 publishes one Linux AMD64/ARM64 manifest as both the requested audit tag and
 `latest`, then compares their raw manifests and verifies both architectures.
+Architecture verification parses the manifest JSON and requires exactly one
+Linux AMD64 and one Linux ARM64 child; JSON whitespace or key formatting cannot
+change that outcome.
 The Dockerfile warms the pnpm store without running project lifecycle scripts
 and installs the exact Node.js, npm, pnpm, mdBook, and Playwright Chromium,
 Firefox, and WebKit versions required by repository workflows.

@@ -164,3 +164,15 @@ test("requires complete profile provenance after both native smoke jobs", () => 
   assert.match(result.errors.join("\n"), /browser\.version/);
   assert.match(result.errors.join("\n"), /fc-list/);
 });
+
+test("requires semantic verification of both published architectures", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    publishWorkflow: sources.publishWorkflow.replace(
+      'test "$arm64_count" = "1"',
+      'grep -q \'"architecture":"arm64"\' <<<"$audit_manifest"',
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /arm64_count/);
+});
