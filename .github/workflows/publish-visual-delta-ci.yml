@@ -1,0 +1,94 @@
+name: Publish Visual Delta CI image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Unique audit tag, for example node24.15.0-pnpm10.32.1-playwright1.61.1-r1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-visual-delta-ci
+  cancel-in-progress: false
+
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci
+
+jobs:
+  publish:
+    name: Build and publish CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Require the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
+
+      - name: Validate the audit tag
+        env:
+          IMAGE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$IMAGE_TAG" != "latest"
+          [[ "$IMAGE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,127}$ ]]
+
+      - name: Check out the selected revision
+        uses: actions/checkout@v5
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: amd64,arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Require a new audit tag
+        env:
+          AUDIT_IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}
+        run: |
+          if docker buildx imagetools inspect "$AUDIT_IMAGE" >/dev/null 2>&1; then
+            echo "Audit tag already exists: $AUDIT_IMAGE" >&2
+            exit 1
+          fi
+
+      - name: Build and push the multi-platform image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/visual-delta-ci/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}
+            ${{ env.VISUAL_DELTA_CI_IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify both published tags and platforms
+        env:
+          AUDIT_IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}
+          LATEST_IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}:latest
+        run: |
+          audit_manifest="$(docker buildx imagetools inspect "$AUDIT_IMAGE" --raw)"
+          latest_manifest="$(docker buildx imagetools inspect "$LATEST_IMAGE" --raw)"
+          test "$audit_manifest" = "$latest_manifest"
+          grep -q '"architecture":"amd64"' <<<"$audit_manifest"
+          grep -q '"architecture":"arm64"' <<<"$audit_manifest"
+          docker buildx imagetools inspect "$AUDIT_IMAGE"

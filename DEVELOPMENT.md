@@ -79,6 +79,44 @@ pnpm spec:check      # lint + validate + mdBook + gates
 
 Monorepo `pnpm checks` runs the panel suite via the root alias.
 
+## CI image administration
+
+Repository workflows use a manually published toolchain image at
+`ghcr.io/lapismd/storybook-addon-visual-delta-ci`. The canonical publication
+policy is [VD-GOV-012](./spec/src/spec-governance.md#normative-requirements).
+
+After merging an image, dependency, or pinned-tool change, dispatch **Publish
+Visual Delta CI image** from the default branch with a new audit tag. Audit tags
+are lowercase Docker tags and cannot be reused; `latest` moves to the same
+verified multi-platform manifest. The initial tag is:
+
+```text
+node24.15.0-pnpm10.32.1-playwright1.61.1-r1
+```
+
+The normal rebuild triggers are changes to `package.json`, `pnpm-lock.yaml`,
+the CI Dockerfile, or the Node.js, npm, pnpm, mdBook, or Playwright pins. A
+stale image does not override the checked-out lockfile: every consumer still
+runs `pnpm install --frozen-lockfile`, downloading only missing deltas.
+
+Validate the policy and build the host architecture locally with:
+
+```bash
+pnpm ci:image:check
+docker buildx build --load \
+  --file docker/visual-delta-ci/Dockerfile \
+  --tag visual-delta-ci:local \
+  .
+```
+
+Smoke-test the installed browser without mounting the checkout:
+
+```bash
+docker run --rm --workdir /build visual-delta-ci:local \
+  node --input-type=module -e \
+  "import { chromium } from 'playwright'; const browser = await chromium.launch({ headless: true }); console.log(await browser.version()); await browser.close();"
+```
+
 ## npm release administration
 
 The release contract is canonical in

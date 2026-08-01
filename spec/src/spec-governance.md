@@ -19,6 +19,7 @@ These requirements prevent implementation, tests, and generated documentation fr
 | VD-GOV-009 | A public npm release MUST originate only from an exact stable `vX.Y.Z` tag matching the package version, pass the release validation gates, and wait for protected GitHub Environment approval. Normal publication MUST use npm trusted publishing with GitHub OIDC and provenance, never a registry token. The release MUST install the published package on a clean runner and verify its Sigstore provenance with `npm audit signatures`. Only `v0.0.1` MAY use a one-time bootstrap token, isolated to a separate protected Environment; it MUST still publish provenance and MUST be revoked before the next release. |
 | VD-GOV-010 | The Linux panel-baseline capture workflow MUST run only through manual dispatch from the default branch and capture only missing platform-qualified Linux panel references. It MAY grant its capture job only `contents: write` and `pull-requests: write`, and MUST use those permissions only to commit the exact verified Linux PNGs to a new automation branch and open a review pull request; it MUST NOT write directly to the selected revision. Playwright's expected non-zero result while recording a missing reference MAY continue only to the exact-set and compare-only gates; a successful capture job MUST pass both before uploading an artifact or opening a pull request. After that verification pass, it MUST upload the exact Linux PNGs and their checksums as a review artifact. |
 | VD-GOV-011 | Every repository-owned GitHub Actions workflow that executes package tooling MUST configure Node.js `24.15.0`. Repository-owned JavaScript actions used by those workflows MUST use a Node.js 24 runtime. |
+| VD-GOV-012 | The repository CI image MUST be published to `ghcr.io/lapismd/storybook-addon-visual-delta-ci` only by a manually dispatched default-branch workflow. A publication MUST build Linux AMD64 and ARM64 from the reviewed Dockerfile, pin Node.js `24.15.0`, npm `12.0.2`, pnpm `10.32.1`, mdBook `0.5.4`, and Playwright Chromium, Firefox, and WebKit `1.61.1`, install mdBook from checksum-verified upstream binaries without Cargo compilation, reject `latest` or an existing image tag as its audit tag, push the same manifest under that unique audit tag and `latest`, and verify both tags after publication. The publication job MAY grant only `contents: read` and `packages: write`, MUST authenticate with its repository `GITHUB_TOKEN`, and MUST NOT create or update a visual baseline. |
 
 ## Authority and timing
 
@@ -72,6 +73,22 @@ Path-filtered **Visual Delta CI** (`.github/workflows/visual-delta-ci.yml`) runs
 The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
 
 Structural validation MUST reject a reintroduced `specs/` tree and any package-root Markdown set other than `AGENTS.md`, `DEVELOPMENT.md`, and `README.md`.
+
+## CI image publication
+
+The manually published CI image moves stable toolchain and browser downloads
+out of ordinary package jobs. Its pnpm store is warmed from the reviewed
+`package.json` and `pnpm-lock.yaml` with lifecycle scripts disabled, and mdBook
+comes from checksum-verified upstream binaries rather than Cargo compilation.
+A consumer still installs its checked-out lockfile before running package
+commands. A stale image is therefore a cache miss rather than permission to
+ignore the current dependency graph.
+
+The required audit tag is an immutable operational record. `latest` is the
+consumer alias and MAY move only when the manual publication workflow produces
+and verifies a new multi-platform manifest from the default branch. Rebuild the
+image after a merged dependency, Dockerfile, Node.js, npm, pnpm, mdBook, or
+Playwright version change.
 
 ## Package releases
 

@@ -58,10 +58,13 @@ test("does not accept SUMMARY or package documentation as specification", () => 
 test("protects spec tooling without letting tooling satisfy itself", () => {
   const result = classifySpecFirstChanges([
     "scripts/check-spec-first.mjs",
+    "scripts/check-ci-image.mjs",
     "spec/book.toml",
+    ".dockerignore",
+    "docker/visual-delta-ci/Dockerfile",
   ]);
   assert.equal(result.ok, false);
-  assert.equal(result.protectedFiles.length, 2);
+  assert.equal(result.protectedFiles.length, 5);
 });
 
 test("ignores unrelated package.json changes", () => {

@@ -30,6 +30,8 @@ const PROTECTED_PATTERNS = [
   /^src\/.+\.(?:[cm]?[jt]sx?|svelte|css)$/,
   /^(?:playwright\.panel\.config\.ts|tsconfig(?:\.[^.]+)*\.json|AGENTS\.md)$/,
   /^(?:\.markdownlint-cli2\.jsonc|spec\/(?:book\.toml|Makefile))$/,
+  /^(?:\.dockerignore|docker\/visual-delta-ci\/Dockerfile)$/,
+  /^scripts\/check-ci-image\.mjs$/,
   /^scripts\/check-spec-.+\.mjs$/,
   /^\.storybook\/.+\.[cm]?[jt]sx?$/,
   /^\.github\/workflows\/.+\.ya?ml$/,
