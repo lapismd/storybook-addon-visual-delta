@@ -86,6 +86,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 3,
     canaryJobs: 0,
     pendingProfileLocks: 0,
+    trustedCheckoutJobs: ["manager"],
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/visual-delta-spec-first.yml": {
@@ -98,6 +99,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 0,
     canaryJobs: 0,
     pendingProfileLocks: 0,
+    trustedCheckoutJobs: ["validate"],
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/npm-publish.yml": {
@@ -110,6 +112,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 1,
     canaryJobs: 0,
     pendingProfileLocks: 0,
+    trustedCheckoutJobs: ["visual-gate"],
     allowedPermissions: new Set(["contents", "packages", "id-token"]),
   },
   ".github/workflows/capture-canonical-panel-baselines.yml": {
@@ -122,6 +125,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 1,
     canaryJobs: 0,
     pendingProfileLocks: 0,
+    trustedCheckoutJobs: [],
     allowedPermissions: new Set(["contents", "packages", "pull-requests"]),
   },
 };
@@ -139,6 +143,8 @@ const CANONICAL_ARM64_CI_IMAGE =
 const TOOLCHAIN_IMAGE_LINE = `      image: ${TOOLCHAIN_CI_IMAGE}`;
 const CANONICAL_IMAGE_LINE = `      image: ${CANONICAL_ARM64_CI_IMAGE}`;
 const CANARY_JOB_LINE = "    continue-on-error: true";
+const TRUST_CHECKOUT_LINE =
+  '        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"';
 const CONSUMER_HOME_LINE = "  HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
 const CONSUMER_PASSWORD_LINE =
@@ -164,6 +170,16 @@ function countOccurrences(source, needle) {
 
 function countExactLines(source, line) {
   return source.split("\n").filter((candidate) => candidate === line).length;
+}
+
+function workflowJobSection(source, jobName) {
+  const lines = source.split("\n");
+  const start = lines.findIndex((line) => line === `  ${jobName}:`);
+  if (start === -1) return "";
+  const end = lines.findIndex(
+    (line, index) => index > start && /^  [a-zA-Z0-9_-]+:\s*$/.test(line),
+  );
+  return lines.slice(start, end === -1 ? undefined : end).join("\n");
 }
 
 function permissionKeys(source) {
@@ -231,6 +247,20 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     errors.push(
       `${label}: expected ${expected.canaryJobs} canary job occurrence(s), found ${canaryJobCount}`,
     );
+  }
+  const trustedCheckoutCount = countExactLines(source, TRUST_CHECKOUT_LINE);
+  if (trustedCheckoutCount !== expected.trustedCheckoutJobs.length) {
+    errors.push(
+      `${label}: expected ${expected.trustedCheckoutJobs.length} trusted checkout occurrence(s), found ${trustedCheckoutCount}`,
+    );
+  }
+  for (const jobName of expected.trustedCheckoutJobs) {
+    if (
+      countExactLines(workflowJobSection(source, jobName), TRUST_CHECKOUT_LINE) !==
+      1
+    ) {
+      errors.push(`${label}: ${jobName} must trust its checkout history`);
+    }
   }
   if (countOccurrences(source, CONSUMER_HOME_LINE) !== 1) {
     errors.push(

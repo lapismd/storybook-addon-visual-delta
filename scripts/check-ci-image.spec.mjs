@@ -73,6 +73,26 @@ test("requires a complete and trusted checkout for the exact PR change set", () 
   assert.match(result.errors.join("\n"), /safe.directory/);
 });
 
+test("requires manager acceptance jobs to trust checkout history", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const trustCommand =
+    'git config --global --add safe.directory "$GITHUB_WORKSPACE"';
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath]
+        .replace(`        run: ${trustCommand}`, '        run: echo "moved"')
+        .replace(
+          "      - name: Run panel acceptance",
+          `      - name: Trust the wrong checkout\n        run: ${trustCommand}\n\n      - name: Run panel acceptance`,
+        ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /manager must trust/);
+});
+
 test("requires ARM64 visual jobs to use the reviewed immutable profile", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({

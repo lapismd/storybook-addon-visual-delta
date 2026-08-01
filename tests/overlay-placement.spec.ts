@@ -277,6 +277,12 @@ test.describe("Visual Delta manager overlay placement", () => {
                 baselineLeft: expectedScrollLeft,
               });
 
+            if (
+              capture.name === "full-viewport-baseline" &&
+              placement.name === "right"
+            ) {
+              await horizontalRail.evaluate((rail) => rail.remove());
+            }
             await page.setViewportSize({ width: 880, height: 650 });
             await expect
               .poll(

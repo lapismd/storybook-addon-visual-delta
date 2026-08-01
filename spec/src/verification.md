@@ -270,6 +270,15 @@ therefore fetches complete history and explicitly registers
 `$GITHUB_WORKSPACE` under `/root` before its exact base-to-head diff; the CI
 image checker rejects removal of either prerequisite.
 
+ARM64 canary run
+[`30714115219`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30714115219)
+then exposed checkout-history access under the same root HOME in manager
+acceptance and a Linux-only race that discarded shared horizontal scroll when
+split chrome was rebuilt after a zoom transition. Manager and release visual
+jobs therefore register the safe checkout explicitly, while focused and full
+Linux manager acceptance must prove that active shared scroll survives chrome
+rebuilds before the ARM lane is accepted.
+
 ### Manual canonical panel-baseline capture
 
 `.github/workflows/capture-canonical-panel-baselines.yml` runs only when manually

@@ -84,6 +84,9 @@ jobs:
       - name: Check out the release tag
         uses: actions/checkout@v5
 
+      - name: Trust the checkout for baseline history
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

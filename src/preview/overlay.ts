@@ -108,6 +108,7 @@ let dragCleanupRef: (() => void) | null = null;
 let layoutObserverRef: ResizeObserver | null = null;
 let sharedScrollCleanupRef: (() => void) | null = null;
 let sharedScrollRefreshRef: (() => void) | null = null;
+let sharedScrollPosition = { top: 0, left: 0 };
 let liveViewportWidthRestoreRef: (() => void) | null = null;
 /** Canvas laid out at the baseline capture viewport (may detach on remount). */
 let liveViewportWidthCanvas: HTMLElement | null = null;
@@ -748,10 +749,17 @@ function bindSharedScrollRails(
   unbindSharedScroll();
   let syncing = false;
   let syncGeneration = 0;
-  let desiredTop = 0;
-  let desiredLeft = 0;
+  let desiredTop = sharedScrollPosition.top;
+  let desiredLeft = sharedScrollPosition.left;
+  let restoringSharedPosition = desiredTop > 0 || desiredLeft > 0;
+  let restoreFramesRemaining = 4;
+  let restoreFrame = 0;
 
-  const applyScroll = (top: number, left: number) => {
+  const applyScroll = (
+    top: number,
+    left: number,
+    preserveTransientTarget = false,
+  ) => {
     const maxTop = Math.max(
       0,
       Math.max(livePane.scrollHeight, baselinePane.scrollHeight) -
@@ -764,8 +772,17 @@ function bindSharedScrollRails(
     );
     const nextTop = Math.max(0, Math.min(maxTop, top));
     const nextLeft = Math.max(0, Math.min(maxLeft, left));
-    desiredTop = nextTop;
-    desiredLeft = nextLeft;
+    // Rebuilt split chrome can be measured while it still has a transiently
+    // partial or zero extent. Preserve the target across a few layout frames
+    // so the following ResizeObserver refresh can restore the active position.
+    // User-driven navigation still records the final clamped coordinates.
+    desiredTop =
+      preserveTransientTarget && top > nextTop ? Math.max(0, top) : nextTop;
+    desiredLeft =
+      preserveTransientTarget && left > nextLeft
+        ? Math.max(0, left)
+        : nextLeft;
+    sharedScrollPosition = { top: desiredTop, left: desiredLeft };
     syncing = true;
     const generation = ++syncGeneration;
     livePane.scrollTop = nextTop;
@@ -782,14 +799,15 @@ function bindSharedScrollRails(
     // the desired position on the next frame so the larger side stays reachable.
     requestAnimationFrame(() => {
       if (generation !== syncGeneration) return;
-      livePane.scrollTop = desiredTop;
-      livePane.scrollLeft = desiredLeft;
-      baselinePane.scrollTop = desiredTop;
-      baselinePane.scrollLeft = desiredLeft;
-      if (vRail.style.display !== "none") vRail.scrollTop = desiredTop;
-      if (hRail.style.display !== "none") hRail.scrollLeft = desiredLeft;
+      livePane.scrollTop = nextTop;
+      livePane.scrollLeft = nextLeft;
+      baselinePane.scrollTop = nextTop;
+      baselinePane.scrollLeft = nextLeft;
+      if (vRail.style.display !== "none") vRail.scrollTop = nextTop;
+      if (hRail.style.display !== "none") hRail.scrollLeft = nextLeft;
       syncing = false;
     });
+    return nextTop === Math.max(0, top) && nextLeft === Math.max(0, left);
   };
 
   const clientWidth = () =>
@@ -814,6 +832,7 @@ function bindSharedScrollRails(
       if (corner instanceof HTMLElement) corner.style.display = "none";
       split.style.gridTemplateColumns = "1fr 0px";
       split.style.gridTemplateRows = "1fr 0px";
+      restoringSharedPosition = false;
       applyScroll(0, 0);
       return;
     }
@@ -856,15 +875,31 @@ function bindSharedScrollRails(
     // Extent measurement temporarily removes each pane's spacer. Reapply the
     // shared position under the synchronization lock so a browser's reclamp
     // scroll event cannot replace it with a stale zero position.
-    applyScroll(desiredTop, desiredLeft);
+    const restored = applyScroll(
+      desiredTop,
+      desiredLeft,
+      restoringSharedPosition,
+    );
+    if (restoringSharedPosition) {
+      if (restored) {
+        restoringSharedPosition = false;
+      } else if (restoreFramesRemaining > 0 && restoreFrame === 0) {
+        restoreFrame = requestAnimationFrame(() => {
+          restoreFrame = 0;
+          restoreFramesRemaining -= 1;
+          if (restoreFramesRemaining === 0) restoringSharedPosition = false;
+          refreshSpacers();
+        });
+      }
+    }
   };
 
-  const onVRailScroll = () => {
-    if (syncing && vRail.scrollTop === desiredTop) return;
+  const onVRailScroll = (event: Event) => {
+    if (syncing && event.isTrusted) return;
     applyScroll(vRail.scrollTop, desiredLeft);
   };
-  const onHRailScroll = () => {
-    if (syncing && hRail.scrollLeft === desiredLeft) return;
+  const onHRailScroll = (event: Event) => {
+    if (syncing && event.isTrusted) return;
     applyScroll(desiredTop, hRail.scrollLeft);
   };
 
@@ -921,6 +956,7 @@ function bindSharedScrollRails(
   sharedScrollRefreshRef = refreshSpacers;
   sharedScrollCleanupRef = () => {
     syncGeneration += 1;
+    cancelAnimationFrame(restoreFrame);
     vRail.removeEventListener("scroll", onVRailScroll);
     hRail.removeEventListener("scroll", onHRailScroll);
     livePane.removeEventListener("scroll", onLiveScroll);
@@ -1116,7 +1152,25 @@ function ensureSplit(
     !(hSpacer instanceof HTMLElement) ||
     !(corner instanceof HTMLElement);
 
+  const retainedScrollPosition = needsBuild
+    ? {
+        top: Math.max(
+          sharedScrollPosition.top,
+          livePane instanceof HTMLElement ? livePane.scrollTop : 0,
+          baselinePane instanceof HTMLElement ? baselinePane.scrollTop : 0,
+          vRail instanceof HTMLElement ? vRail.scrollTop : 0,
+        ),
+        left: Math.max(
+          sharedScrollPosition.left,
+          livePane instanceof HTMLElement ? livePane.scrollLeft : 0,
+          baselinePane instanceof HTMLElement ? baselinePane.scrollLeft : 0,
+          hRail instanceof HTMLElement ? hRail.scrollLeft : 0,
+        ),
+      }
+    : sharedScrollPosition;
+
   if (needsBuild) {
+    sharedScrollPosition = retainedScrollPosition;
     unbindSharedScroll();
     if (
       split instanceof HTMLElement &&
@@ -1631,6 +1685,7 @@ function removeOverlayDom(retainSelection: boolean) {
   if (!retainSelection) {
     lastSelection = null;
     pendingSelection = null;
+    sharedScrollPosition = { top: 0, left: 0 };
   }
   layoutObserverRef?.disconnect();
   layoutObserverRef = null;
