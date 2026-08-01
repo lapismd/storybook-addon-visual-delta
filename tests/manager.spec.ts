@@ -976,6 +976,12 @@ test.describe("Visual Delta manager integration", () => {
     const darkMode = page.getByRole("button", { name: /Dark desktop mode/ });
     await expect(darkMode).toBeVisible();
     await clickThrough(darkMode);
+    await expect(
+      panel.getByRole("button", {
+        name: "Visual mode: Dark desktop, not run",
+      }),
+    ).toBeVisible();
+    await expect(previewFrame(page).locator("html")).toHaveClass(/dark/);
     await clickThrough(
       panel.getByRole("button", { name: "More Default baseline actions" }),
     );
