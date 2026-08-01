@@ -485,7 +485,7 @@ export const PanelScroll = styled.div(({ theme }) => ({
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
-  // Clearance for the fixed half-width status bar over the bottom-right.
+  // Clearance for the fixed full-width status bar along the panel bottom.
   paddingBottom: PANEL_STATUS_BAR_HEIGHT,
   background: panelCanvasBackground(theme),
 }));
@@ -513,8 +513,8 @@ export const StatusBar = styled.div<{ $running?: boolean }>(
     padding: $running ? "4px 8px 0" : "0 8px",
     boxSizing: "border-box",
     borderTop: `1px solid ${theme.appBorderColor}`,
-    borderLeft: $running ? "none" : `1px solid ${theme.appBorderColor}`,
-    borderTopLeftRadius: $running ? 0 : Math.max(theme.appBorderRadius ?? 4, 6),
+    borderLeft: "none",
+    borderTopLeftRadius: 0,
     backgroundColor: theme.background.app ?? theme.background.content,
     color: theme.textMutedColor,
     fontSize: theme.typography.size.s1 - 1,

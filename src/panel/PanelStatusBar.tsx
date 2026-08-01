@@ -169,7 +169,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       setPos({
         right: Math.max(0, window.innerWidth - rect.right),
         bottom: Math.max(0, window.innerHeight - rect.bottom),
-        width: running || environment ? rect.width : rect.width * 0.5,
+        width: rect.width,
       });
     };
 
@@ -187,7 +187,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       window.removeEventListener("scroll", update, true);
       scrollPort.removeEventListener("scroll", update);
     };
-  }, [container, environment, running]);
+  }, [container]);
 
   if (!pos) return null;
 

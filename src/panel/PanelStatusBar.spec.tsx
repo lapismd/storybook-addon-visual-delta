@@ -106,7 +106,11 @@ describe("PanelStatusBar", () => {
       "1",
     );
     expect(screen.getByText("1/2")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveStyle({ width: "400px" });
+    expect(screen.getByRole("status")).toHaveStyle({
+      width: "400px",
+      borderLeft: "none",
+      borderTopLeftRadius: "0",
+    });
     expect(screen.getByTestId("status-popover")).toHaveAttribute(
       "data-aria-label",
       "Visual Delta progress log",
@@ -154,7 +158,9 @@ describe("PanelStatusBar", () => {
 
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.getByRole("status")).toHaveStyle({
-      width: "200px",
+      width: "400px",
+      borderLeft: "none",
+      borderTopLeftRadius: "0",
       pointerEvents: "auto",
     });
 

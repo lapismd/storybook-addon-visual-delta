@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   settleVisualStoryPage,
   waitForVisualStoryFinished,
@@ -30,6 +30,22 @@ async function openPanelStory(page: Page, storyId: string) {
   return panel;
 }
 
+async function expectFullWidthStatusFooter(panel: Locator) {
+  const footer = panel.getByRole("status").last();
+  await expect(footer).toBeVisible();
+
+  const [panelBox, footerBox] = await Promise.all([
+    panel.boundingBox(),
+    footer.boundingBox(),
+  ]);
+  expect(panelBox).not.toBeNull();
+  expect(footerBox).not.toBeNull();
+  expect(Math.abs(footerBox!.x - panelBox!.x)).toBeLessThan(1);
+  expect(Math.abs(footerBox!.width - panelBox!.width)).toBeLessThan(1);
+  await expect(footer).toHaveCSS("border-top-left-radius", "0px");
+  await expect(footer).toHaveCSS("border-left-width", "0px");
+}
+
 for (const layout of [
   { name: "wide-bottom", viewport: { width: 1280, height: 900 } },
   { name: "narrow-right", viewport: { width: 420, height: 900 } },
@@ -45,11 +61,11 @@ for (const layout of [
           return;
         }
         if (name === "running") {
-          await expect(
-            panel.getByRole("status", {
-              name: "Visual test running. Comparing the current story",
-            }),
-          ).toBeVisible();
+          const status = panel.getByRole("status", {
+            name: "Visual test running. Comparing the current story",
+          });
+          await expect(status).toBeVisible();
+          await expectFullWidthStatusFooter(panel);
           return;
         }
         await expect(

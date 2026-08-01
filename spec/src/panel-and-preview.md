@@ -17,6 +17,7 @@ These requirements keep interactive state recoverable and separate from durable 
 | VD-UI-007 | Local presentation settings MAY persist in browser storage. Durable configuration, review metadata, coverage, and mutation authorization MUST come from project or source state.                                                                                                                                                                                                                                                                                                                                     |
 | VD-UI-008 | In read-only capability mode (static Storybook or host `readOnly`), the panel MUST keep baseline gallery selection, placement, soft hide, opacity, zoom, modes, interaction replay, Diff HTML, and Diff Result hydrate available when data exists. It MUST NOT present enabled Create, Update, Delete, skip/include mutation, Accept, Diff Browser, Story official compare, Run visual, Rebuild static, Configuration save, Changes/VCS, Init scaffold, or baseline history actions. Empty states MUST NOT offer Create visual or Set up Visual Delta; they MUST explain that baselines are wired through story parameters or require a development host. |
 | VD-UI-009 | The panel MUST expose independent OS and Browser selectors for baseline environments as one joined split control, with OS on the left, Browser on the right, and a recognizable icon before each selected label. Chromium and the runtime OS are initial defaults. Configured browsers are runnable; discovered but disabled browsers and non-runtime operating systems are view-only. Selection MUST resolve exact matching images, history, and sidecars, persist only as presentation state, and never emulate or fall back to another environment. |
+| VD-UI-010 | The persistent bottom status footer MUST span the full visible Visual Delta panel width in idle, logging, environment-selection, and running states. Its top edge MUST meet the panel's left edge without a rounded top-left corner or an inset left border. |
 
 ## Panel structure
 
@@ -27,8 +28,8 @@ The Visual Delta panel contains:
 - Primary and interaction accordions
 - Placement, visibility, opacity, inversion, zoom, and ignore-region controls
 - Diff HTML, Diff Browser, and persisted Diff Result surfaces
-- A joined OS-left, Browser-right environment split control in the persistent
-  status footer
+- A joined OS-left, Browser-right environment split control in the full-width
+  persistent status footer
 - Review status, baseline history, and change-set views
 - Progress, cancellation, missing-coverage, readiness, and diagnostic states
 
