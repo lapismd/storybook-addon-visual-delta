@@ -1,0 +1,77 @@
+name: Publish Storybook to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  pages: read
+
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build static Storybook
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      env:
+        HOME: /root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Build static Storybook
+        env:
+          VISUAL_DELTA_PACKAGE_BASELINES: "1"
+        run: pnpm build-storybook
+
+      - name: Verify complete static Storybook
+        run: |
+          test -f storybook-static/index.html
+          test -f storybook-static/iframe.html
+          test -f storybook-static/index.json
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: storybook-static
+
+  deploy:
+    name: Deploy static Storybook
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 10
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -159,6 +159,9 @@ const PROHIBITED_CONSUMER_INSTALLS = [
 ];
 const AUDITED_NODE24_ACTIONS = new Set([
   "actions/checkout@v5",
+  "actions/configure-pages@v6",
+  "actions/deploy-pages@v5",
+  "actions/upload-pages-artifact@v5",
   "actions/upload-artifact@v6",
   "peter-evans/create-pull-request@v8",
   "docker/login-action@v4",
@@ -166,6 +169,9 @@ const AUDITED_NODE24_ACTIONS = new Set([
   "docker/setup-buildx-action@v4",
   "docker/build-push-action@v7",
 ]);
+
+const STORYBOOK_PAGES_URL =
+  "https://lapismd.github.io/storybook-addon-visual-delta/";
 
 function requireSnippet(errors, label, source, snippet) {
   if (!source.includes(snippet)) {
@@ -342,6 +348,83 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
   }
 }
 
+function validateStorybookPagesWorkflow(errors, source, readme) {
+  const label = "Storybook Pages workflow";
+  for (const snippet of [
+    "  push:\n    branches:\n      - main",
+    "  workflow_dispatch:",
+    "  contents: read\n  packages: read\n  pages: read",
+    "defaults:\n  run:\n    shell: bash",
+    "  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest",
+    "  group: github-pages",
+    "  cancel-in-progress: true",
+    "  build:",
+    "pnpm install --frozen-lockfile",
+    "actions/configure-pages@v6",
+    'VISUAL_DELTA_PACKAGE_BASELINES: "1"',
+    "pnpm build-storybook",
+    "test -f storybook-static/index.html",
+    "test -f storybook-static/iframe.html",
+    "test -f storybook-static/index.json",
+    "actions/upload-pages-artifact@v5",
+    "path: storybook-static",
+    "  deploy:",
+    "needs: build",
+    "name: github-pages",
+    "      pages: write\n      id-token: write",
+    "url: ${{ steps.deployment.outputs.page_url }}",
+    "actions/deploy-pages@v5",
+  ]) {
+    requireSnippet(errors, label, source ?? "", snippet);
+  }
+
+  for (const [needle, expectedCount, description] of [
+    [TOOLCHAIN_IMAGE_LINE, 1, "toolchain build container"],
+    [CONTAINER_HOME_LINE, 1, "root-owned container HOME"],
+    [CONSUMER_USERNAME_LINE, 1, "container username"],
+    [CONSUMER_PASSWORD_LINE, 1, "container token"],
+    ["runs-on: ubuntu-latest", 2, "stable x64 runner"],
+  ]) {
+    const actualCount = countOccurrences(source ?? "", needle);
+    if (actualCount !== expectedCount) {
+      errors.push(
+        `${label}: expected ${expectedCount} ${description} occurrence(s), found ${actualCount}`,
+      );
+    }
+  }
+
+  const permissions = permissionKeys(source ?? "").sort();
+  const expectedPermissions = [
+    "contents",
+    "id-token",
+    "packages",
+    "pages",
+    "pages",
+  ];
+  if (JSON.stringify(permissions) !== JSON.stringify(expectedPermissions)) {
+    errors.push(
+      `${label}: permissions must be exactly contents: read, packages: read, pages: read/write, and id-token: write`,
+    );
+  }
+
+  for (const prohibited of [
+    "--update-snapshots",
+    "examples:baselines:capture",
+    "pnpm test:panel",
+    "pnpm test:manager",
+    "pnpm test:browsers",
+    "pnpm visual-delta test",
+  ]) {
+    if ((source ?? "").includes(prohibited)) {
+      errors.push(`${label}: prohibited visual command ${prohibited}`);
+    }
+  }
+
+  if (!(readme ?? "").includes(STORYBOOK_PAGES_URL)) {
+    errors.push(`${label}: README must link to ${STORYBOOK_PAGES_URL}`);
+  }
+}
+
 export function validateCiImageSources({
   dockerfile,
   dockerignore,
@@ -349,6 +432,8 @@ export function validateCiImageSources({
   publishWorkflow,
   consumerWorkflows,
   captureProfile,
+  pagesWorkflow,
+  readme,
 }) {
   const errors = [];
   let manifest;
@@ -515,9 +600,12 @@ export function validateCiImageSources({
     validateConsumerWorkflow(errors, pathLabel, source, expected);
   }
 
+  validateStorybookPagesWorkflow(errors, pagesWorkflow, readme);
+
   for (const [pathLabel, source] of Object.entries({
     ".github/workflows/publish-visual-delta-ci.yml": publishWorkflow,
     ...consumerWorkflows,
+    ".github/workflows/publish-storybook-pages.yml": pagesWorkflow,
   })) {
     for (const reference of actionReferences(source ?? "")) {
       if (!reference || !AUDITED_NODE24_ACTIONS.has(reference)) {
@@ -540,6 +628,8 @@ export function loadCiImageSources(repoRoot = DEFAULT_REPO_ROOT) {
     packageJson: read("package.json"),
     publishWorkflow: read(".github/workflows/publish-visual-delta-ci.yml"),
     captureProfile: read("src/shared/capture-profile.ts"),
+    pagesWorkflow: read(".github/workflows/publish-storybook-pages.yml"),
+    readme: read("README.md"),
     consumerWorkflows: Object.fromEntries(
       Object.keys(EXPECTED_CONSUMER_WORKFLOWS).map((relativePath) => [
         relativePath,

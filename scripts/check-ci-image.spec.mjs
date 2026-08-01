@@ -13,6 +13,29 @@ test("accepts the repository CI-image publication and reuse configuration", () =
   assert.equal(result.ok, true, result.errors.join("\n"));
 });
 
+test("requires a safe and complete Storybook Pages deployment", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    pagesWorkflow: sources.pagesWorkflow
+      .replace("needs: build", "needs: []")
+      .replace("  pages: read", "  pages: write")
+      .replace('VISUAL_DELTA_PACKAGE_BASELINES: "1"', "")
+      .replace("test -f storybook-static/iframe.html", "true")
+      .replace("      pages: write", "      contents: write"),
+    readme: sources.readme.replace(
+      "https://lapismd.github.io/storybook-addon-visual-delta/",
+      "https://example.invalid/storybook/",
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /needs: build/);
+  assert.match(result.errors.join("\n"), /pages: read/);
+  assert.match(result.errors.join("\n"), /VISUAL_DELTA_PACKAGE_BASELINES/);
+  assert.match(result.errors.join("\n"), /iframe\.html/);
+  assert.match(result.errors.join("\n"), /permissions must be exactly/);
+  assert.match(result.errors.join("\n"), /README must link/);
+});
+
 test("requires every package-tooling job to use the authenticated image", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({

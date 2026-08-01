@@ -2,6 +2,7 @@
 
 [![npm release and provenance](https://github.com/lapismd/storybook-addon-visual-delta/actions/workflows/npm-publish.yml/badge.svg?event=push)](https://github.com/lapismd/storybook-addon-visual-delta/actions/workflows/npm-publish.yml)
 [![npm version](https://img.shields.io/npm/v/@lapismd/storybook-addon-visual-delta.svg)](https://www.npmjs.com/package/@lapismd/storybook-addon-visual-delta)
+[![Storybook](https://img.shields.io/badge/Storybook-live-ff4785?logo=storybook&logoColor=white)](https://lapismd.github.io/storybook-addon-visual-delta/)
 
 Visual Delta is a local-first visual regression testing addon for Storybook. It compares stories with committed Playwright screenshots and adds baseline review, overlays, diffs, and visual test controls to Storybook.
 
