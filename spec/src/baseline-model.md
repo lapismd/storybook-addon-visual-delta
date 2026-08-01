@@ -15,6 +15,7 @@ These requirements give every comparison target one safe and durable identity.
 | VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                                            |
 | VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                                                                                              |
 | VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser, platform }` identity. Resolution MUST use the exact selected environment and MUST NOT fall back to another browser or platform. Canonical baseline artifacts MUST encode that identity in their filename; an explicitly wired non-canonical demo asset MAY instead declare the same exact environment as story metadata, and an unqualified source without that metadata MUST NOT match any environment. Existing Chromium/Darwin filenames remain valid without migration. |
+| VD-BASE-008 | Project OS parity for a story's primary baseline MUST require every configured browser combined with every platform observed anywhere beneath the configured `snapshotDir`, plus the runtime platform. Observed environments for disabled browsers MUST remain discoverable and filterable but MUST NOT add that browser to the required matrix. Missing or unresolved primary paths MUST remain distinct coverage values. Modes and interactions MUST NOT affect a story's primary parity result. |
 
 ## Story eligibility and coverage
 
@@ -27,6 +28,13 @@ Coverage has three independent dimensions:
 - Every wired interaction entry has an existing `src`
 
 Missing coverage reports `missing-baseline` for the missing target. It does not classify an existing target as mismatched and does not infer review status.
+
+The project-wide parity platform set is the union of the runtime platform and
+platforms parsed from canonical baseline PNG filenames beneath `snapshotDir`.
+The required matrix combines that set with configured browsers only. Per-story
+environment coverage checks the primary path for the union of required and
+observed exact environments; additional environments require file-existence
+checks only and do not replace the runtime aggregate or its result hashes.
 
 ## Canonical baseline identity
 

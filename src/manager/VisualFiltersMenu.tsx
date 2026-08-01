@@ -14,6 +14,7 @@ import {
   filterSelectionState,
   invertFilterPolarity,
   toggleFilterCheckbox,
+  type VisualFilterGroupDescriptor,
 } from "./visual-filters.js";
 
 const FilterButton = styled(Button)({
@@ -158,6 +159,7 @@ const LABELS: Record<string, string> = {
   "quick.needs-attention": "Needs attention",
   "quick.review-queue": "Review queue",
   "quick.coverage-gaps": "Coverage gaps",
+  "quick.os-parity-gaps": "OS parity gaps",
   "review.ready": "Ready for review",
   "review.pending": "Pending review",
   "review.approved": "Approved",
@@ -189,6 +191,8 @@ export type VisualFiltersMenuProps = {
   optionCounts?: Readonly<Record<string, number>>;
   /** Stories matching the current selection vs catalog total. */
   matchingSummary?: { matching: number; total: number };
+  /** Dynamic project Browser × OS facet sections from story facts. */
+  environmentGroups?: readonly VisualFilterGroupDescriptor[];
   onChange: (ids: string[]) => void;
 };
 
@@ -198,10 +202,26 @@ export function VisualFiltersMenu({
   alwaysVisibleErrorCount = 0,
   optionCounts = {},
   matchingSummary,
+  environmentGroups = [],
   onChange,
 }: VisualFiltersMenuProps) {
   const [open, setOpen] = useState(false);
   const activeCount = activeIds.length;
+  const filterGroups = [
+    ...(
+      Object.entries(VISUAL_FILTER_GROUPS) as Array<
+        [keyof typeof VISUAL_FILTER_GROUPS, readonly string[]]
+      >
+    ).map(([id, ids]) => ({
+      id,
+      label: GROUP_LABELS[id],
+      options: ids.map((optionId) => ({
+        id: optionId,
+        label: LABELS[optionId] ?? optionId,
+      })),
+    })),
+    ...environmentGroups,
+  ];
 
   return (
     <PopoverProvider
@@ -231,17 +251,14 @@ export function VisualFiltersMenu({
                 );
               })}
             </QuickViews>
-            {(
-              Object.entries(VISUAL_FILTER_GROUPS) as Array<
-                [keyof typeof VISUAL_FILTER_GROUPS, readonly string[]]
-              >
-            ).map(([group, ids]) => {
-              const disabled = group === "result" && !resultFiltersEnabled;
+            {filterGroups.map((group) => {
+              const disabled =
+                group.id === "result" && !resultFiltersEnabled;
               return (
-                <Section key={group}>
-                  <Legend>{GROUP_LABELS[group]}</Legend>
-                  <FilterActionList aria-label={GROUP_LABELS[group]}>
-                    {ids.map((id) => {
+                <Section key={group.id}>
+                  <Legend>{group.label}</Legend>
+                  <FilterActionList aria-label={group.label}>
+                    {group.options.map(({ id, label }) => {
                       const state = filterSelectionState(activeIds, id);
                       const excluded = state === "excluded";
                       const checked = state !== "off";
@@ -258,11 +275,11 @@ export function VisualFiltersMenu({
                             <ActionList.Icon>
                               {excluded ? <DeleteIcon aria-hidden /> : null}
                               <Form.Checkbox
-                                name={LABELS[id]}
+                                name={label}
                                 aria-label={
                                   excluded
-                                    ? `${LABELS[id]} (excluded)`
-                                    : LABELS[id]
+                                    ? `${label} (excluded)`
+                                    : label
                                 }
                                 checked={checked}
                                 disabled={disabled}
@@ -274,7 +291,7 @@ export function VisualFiltersMenu({
                             <ActionList.Text>
                               <FilterLabelRow>
                                 <FilterLabel>
-                                  {LABELS[id]}
+                                  {label}
                                   {excluded ? (
                                     <MutedText> (excluded)</MutedText>
                                   ) : null}
@@ -328,8 +345,9 @@ export function VisualFiltersMenu({
             ) : null}
             <Footer>
               <Note>
-                Includes OR within a group; excludes AND. Groups combine with
-                AND. Exclude uses <code>!</code> in the URL.
+                Includes OR within a group; Browser × OS includes require one
+                exact baseline pair. Groups combine with AND. Exclude uses{" "}
+                <code>!</code> in the URL.
               </Note>
               <Button
                 size="small"

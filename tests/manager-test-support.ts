@@ -1,4 +1,6 @@
 import { expect, type Page } from "@playwright/test";
+import type { VisualBaselineEnvironment } from "../src/shared/environments.js";
+import type { VisualStoryFact } from "../src/shared/story-facts.js";
 
 export const MANAGER_FIXTURE =
   "visual-delta-panel-shell--manager-integration-fixture";
@@ -96,9 +98,22 @@ const HISTORY_PNG = Buffer.from(
 
 export async function mockVisualBackend(
   page: Page,
-  options: { runtimeInstanceId?: () => string } = {},
+  options: {
+    runtimeInstanceId?: () => string;
+    availableEnvironments?: VisualBaselineEnvironment[];
+    requiredEnvironments?: VisualBaselineEnvironment[];
+    storyFact?: (storyId: string) => Partial<VisualStoryFact>;
+  } = {},
 ) {
   const writes: string[] = [];
+  const availableEnvironments =
+    options.availableEnvironments ?? CONFIG.availableEnvironments;
+  const requiredEnvironments = options.requiredEnvironments ?? [
+    { browser: "chromium" as const, platform: "darwin" },
+    { browser: "chromium" as const, platform: "linux" },
+    { browser: "firefox" as const, platform: "darwin" },
+    { browser: "firefox" as const, platform: "linux" },
+  ];
   await page.route("**/__visual-delta/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -114,10 +129,32 @@ export async function mockVisualBackend(
         status: 200,
         json: {
           ok: true,
-          version: 1,
+          version: 3,
           generatedAt: Date.now(),
+          availableEnvironments,
+          requiredEnvironments,
           stories: (body.stories ?? []).flatMap((story) =>
-            story.id ? [{ storyId: story.id, baseline: "present" }] : [],
+            story.id
+              ? [
+                  {
+                    storyId: story.id,
+                    baseline: "present",
+                    environmentCoverage: requiredEnvironments.map(
+                      (environment) => ({
+                        ...environment,
+                        baseline: availableEnvironments.some(
+                          (available) =>
+                            available.browser === environment.browser &&
+                            available.platform === environment.platform,
+                        )
+                          ? ("present" as const)
+                          : ("missing" as const),
+                      }),
+                    ),
+                    ...options.storyFact?.(story.id),
+                  },
+                ]
+              : [],
           ),
         },
       });

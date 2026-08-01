@@ -137,6 +137,129 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     expect(writes).toEqual([]);
   });
 
+  test("filters exact Browser × OS coverage and finds OS parity gaps", async ({
+    page,
+  }) => {
+    await mockFixtureTags(page, ["visual-ready"]);
+    await mockVisualBackend(page, {
+      storyFact: (storyId) => ({
+        environmentCoverage:
+          storyId === SIDEBAR_LABEL_FIXTURE
+            ? [
+                {
+                  browser: "chromium",
+                  platform: "darwin",
+                  baseline: "present",
+                },
+                {
+                  browser: "chromium",
+                  platform: "linux",
+                  baseline: "missing",
+                },
+                {
+                  browser: "firefox",
+                  platform: "darwin",
+                  baseline: "missing",
+                },
+                {
+                  browser: "firefox",
+                  platform: "linux",
+                  baseline: "present",
+                },
+              ]
+            : [
+                {
+                  browser: "chromium",
+                  platform: "darwin",
+                  baseline: "present",
+                },
+                {
+                  browser: "chromium",
+                  platform: "linux",
+                  baseline: "present",
+                },
+                {
+                  browser: "firefox",
+                  platform: "darwin",
+                  baseline: "present",
+                },
+                {
+                  browser: "firefox",
+                  platform: "linux",
+                  baseline: "present",
+                },
+              ],
+      }),
+    });
+    await openManager(page, SIDEBAR_LABEL_FIXTURE, DEV_STORYBOOK);
+
+    await page.getByRole("button", { name: "Expand testing module" }).click();
+    const module = page.getByTestId("visual-test-module-global");
+    await module.getByRole("button", { name: "Filter visual stories" }).click();
+    await expect(page.getByText("Operating System", { exact: true })).toBeVisible();
+    await expect(page.getByText("Browser", { exact: true })).toBeVisible();
+    await page.getByRole("checkbox", { name: "Linux" }).check();
+    await expect(page).toHaveURL(/visualFilter=os\.linux/);
+    await expect(
+      page.getByRole("button", {
+        name: "Empty Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("checkbox", { name: "Chromium" }).check();
+    await expect(page).toHaveURL(
+      /visualFilter=os\.linux%2Cbrowser\.chromium|visualFilter=os\.linux,browser\.chromium/,
+    );
+    await expect(
+      page.getByRole("button", {
+        name: "Empty Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page).toHaveURL(/browser\.chromium/);
+    await page.getByRole("button", { name: "Expand testing module" }).click();
+    await page
+      .getByTestId("visual-test-module-global")
+      .getByRole("button", { name: "Filter visual stories, 2 active" })
+      .click();
+    await expect(
+      page.getByRole("checkbox", { name: "Linux" }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "Chromium" }),
+    ).toBeChecked();
+
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    const linuxRow = page
+      .getByRole("checkbox", { name: "Linux" })
+      .locator("xpath=ancestor::li[1]");
+    await linuxRow.hover();
+    await linuxRow.getByRole("button", { name: "Exclude" }).click();
+    await expect(page).toHaveURL(/visualFilter=!os\.linux/);
+    await expect(
+      page.getByRole("button", {
+        name: "Empty Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    await page.getByRole("button", { name: "OS parity gaps" }).click();
+    await expect(page).toHaveURL(/visualFilter=quick\.os-parity-gaps/);
+    await expect(
+      page.getByRole("button", {
+        name: "Empty Ready: Visual baseline is ready for review",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId("visual-filter-match-summary")).toContainText(
+      "Showing 1 of",
+    );
+  });
+
   test("renders the global module and real story context menu", async ({
     page,
   }) => {

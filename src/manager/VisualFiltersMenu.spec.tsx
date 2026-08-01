@@ -21,9 +21,29 @@ afterEach(() => {
 
 const optionCounts = {
   "quick.needs-attention": 2,
+  "quick.os-parity-gaps": 1,
   "review.ready": 1,
   "result.mismatch": 1,
+  "os.darwin": 3,
+  "os.linux": 2,
+  "browser.chromium": 3,
 };
+
+const environmentGroups = [
+  {
+    id: "os" as const,
+    label: "Operating System",
+    options: [
+      { id: "os.darwin", label: "macOS" },
+      { id: "os.linux", label: "Linux" },
+    ],
+  },
+  {
+    id: "browser" as const,
+    label: "Browser",
+    options: [{ id: "browser.chromium", label: "Chromium" }],
+  },
+];
 
 describe("VisualFiltersMenu", () => {
   it("applies quick views and clears active filters", async () => {
@@ -135,6 +155,46 @@ describe("VisualFiltersMenu", () => {
     expect(row).not.toBeNull();
     expect(row!.firstElementChild?.textContent).toContain("Ready for review");
     expect(getComputedStyle(row!).flexDirection).toBe("row");
+  });
+
+  it("renders dynamic environment facets and the parity quick view", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <VisualFiltersMenu
+        activeIds={[]}
+        resultFiltersEnabled
+        optionCounts={optionCounts}
+        environmentGroups={environmentGroups}
+        onChange={onChange}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Filter visual stories" }),
+    );
+
+    expect(
+      screen.getByRole("group", { name: "Operating System" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Browser" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "macOS" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Linux" })).toBeInTheDocument();
+    expect(
+      screen.getByTestId("visual-filter-option-count-os.linux"),
+    ).toHaveTextContent("2");
+
+    await user.click(screen.getByRole("button", { name: "OS parity gaps" }));
+    expect(onChange).toHaveBeenLastCalledWith(["quick.os-parity-gaps"]);
+
+    const linuxRow = screen
+      .getByRole("checkbox", { name: "Linux" })
+      .closest("li");
+    expect(linuxRow).not.toBeNull();
+    await user.hover(linuxRow!);
+    await user.click(
+      within(linuxRow!).getByRole("button", { name: "Exclude" }),
+    );
+    expect(onChange).toHaveBeenLastCalledWith(["!os.linux"]);
   });
 
   it("disables result facets until a completed run exists", async () => {

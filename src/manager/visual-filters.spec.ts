@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVisualFilterOptionCounts,
+  buildVisualEnvironmentFilterGroups,
   buildVisualStoryFilterFacts,
   countStoriesMatchingFilters,
   filterSelectionState,
@@ -20,10 +21,79 @@ const stories = [
   { id: "unreviewed-new", tags: [] },
 ];
 const coverage = [
-  { storyId: "ready-mismatch", baseline: "present" as const },
-  { storyId: "approved-pass", baseline: "present" as const },
-  { storyId: "skipped-missing", baseline: "missing" as const },
-  { storyId: "unreviewed-new", baseline: "missing" as const },
+  {
+    storyId: "ready-mismatch",
+    baseline: "present" as const,
+    environmentCoverage: [
+      {
+        browser: "chromium" as const,
+        platform: "darwin",
+        baseline: "present" as const,
+      },
+      {
+        browser: "chromium" as const,
+        platform: "linux",
+        baseline: "missing" as const,
+      },
+    ],
+  },
+  {
+    storyId: "approved-pass",
+    baseline: "present" as const,
+    environmentCoverage: [
+      {
+        browser: "chromium" as const,
+        platform: "darwin",
+        baseline: "present" as const,
+      },
+      {
+        browser: "chromium" as const,
+        platform: "linux",
+        baseline: "present" as const,
+      },
+      {
+        browser: "firefox" as const,
+        platform: "linux",
+        baseline: "present" as const,
+      },
+    ],
+  },
+  {
+    storyId: "skipped-missing",
+    baseline: "missing" as const,
+    environmentCoverage: [
+      {
+        browser: "chromium" as const,
+        platform: "darwin",
+        baseline: "missing" as const,
+      },
+      {
+        browser: "chromium" as const,
+        platform: "linux",
+        baseline: "missing" as const,
+      },
+    ],
+  },
+  {
+    storyId: "unreviewed-new",
+    baseline: "missing" as const,
+    environmentCoverage: [
+      {
+        browser: "chromium" as const,
+        platform: "darwin",
+        baseline: "unresolved" as const,
+      },
+      {
+        browser: "chromium" as const,
+        platform: "linux",
+        baseline: "missing" as const,
+      },
+    ],
+  },
+];
+const requiredEnvironments = [
+  { browser: "chromium" as const, platform: "darwin" },
+  { browser: "chromium" as const, platform: "linux" },
 ];
 const results = [
   {
@@ -52,7 +122,13 @@ function matchingIds(
 }
 
 describe("visual filters", () => {
-  const facts = buildVisualStoryFilterFacts(stories, coverage, results, true);
+  const facts = buildVisualStoryFilterFacts(
+    stories,
+    coverage,
+    results,
+    true,
+    requiredEnvironments,
+  );
 
   it("uses OR within a group and AND across groups", () => {
     expect(
@@ -102,6 +178,53 @@ describe("visual filters", () => {
     expect(matchingIds(facts, ["quick.coverage-gaps"])).toEqual([
       "unreviewed-new",
     ]);
+    expect(matchingIds(facts, ["quick.os-parity-gaps"])).toEqual([
+      "ready-mismatch",
+      "unreviewed-new",
+    ]);
+  });
+
+  it("matches exact Browser × OS pairs and excludes present facets", () => {
+    expect(matchingIds(facts, ["os.linux"])).toEqual(["approved-pass"]);
+    expect(matchingIds(facts, ["browser.firefox"])).toEqual([
+      "approved-pass",
+    ]);
+    expect(matchingIds(facts, ["os.linux", "browser.firefox"])).toEqual([
+      "approved-pass",
+    ]);
+    expect(matchingIds(facts, ["!os.linux"])).toEqual([
+      "ready-mismatch",
+      "skipped-missing",
+      "unreviewed-new",
+    ]);
+
+    const crossPairFacts = new Map([
+      [
+        "cross-pair",
+        {
+          storyId: "cross-pair",
+          review: "unreviewed" as const,
+          result: "not-run" as const,
+          baseline: "present" as const,
+          inclusion: "included" as const,
+          requiredEnvironments: [],
+          environmentCoverage: [
+            {
+              browser: "chromium" as const,
+              platform: "darwin",
+              baseline: "present" as const,
+            },
+            {
+              browser: "firefox" as const,
+              platform: "linux",
+              baseline: "present" as const,
+            },
+          ],
+        },
+      ],
+    ]);
+    expect(matchingIds(crossPairFacts, ["os.linux", "browser.chromium"]))
+      .toEqual([]);
   });
 
   it("ignores result facets until a completed run exists", () => {
@@ -127,6 +250,11 @@ describe("visual filters", () => {
       "!review.ready,!result.passed",
     );
     expect(parseVisualFilterIds("!quick.needs-attention")).toEqual([]);
+    expect(
+      parseVisualFilterIds(
+        "os.linux,!browser.firefox,quick.os-parity-gaps,!quick.os-parity-gaps",
+      ),
+    ).toEqual(["os.linux", "!browser.firefox", "quick.os-parity-gaps"]);
   });
 
   it("toggles include/exclude polarity for facets", () => {
@@ -157,6 +285,9 @@ describe("visual filters", () => {
     expect(counts["coverage.present"]).toBe(2);
     expect(counts["quick.needs-attention"]).toBe(2);
     expect(counts["result.passed"]).toBe(1);
+    expect(counts["os.linux"]).toBe(1);
+    expect(counts["browser.firefox"]).toBe(1);
+    expect(counts["quick.os-parity-gaps"]).toBe(2);
     expect(buildVisualFilterOptionCounts(facts, false)["result.passed"]).toBe(
       0,
     );
@@ -168,5 +299,35 @@ describe("visual filters", () => {
       matching: 4,
       total: 4,
     });
+  });
+
+  it("builds friendly dynamic environment filter descriptors", () => {
+    expect(
+      buildVisualEnvironmentFilterGroups(
+        [
+          { browser: "chromium", platform: "linux" },
+          { browser: "webkit", platform: "darwin" },
+        ],
+        [{ browser: "firefox", platform: "darwin" }],
+      ),
+    ).toEqual([
+      {
+        id: "os",
+        label: "Operating System",
+        options: [
+          { id: "os.darwin", label: "macOS" },
+          { id: "os.linux", label: "Linux" },
+        ],
+      },
+      {
+        id: "browser",
+        label: "Browser",
+        options: [
+          { id: "browser.chromium", label: "Chromium" },
+          { id: "browser.firefox", label: "Firefox" },
+          { id: "browser.webkit", label: "WebKit" },
+        ],
+      },
+    ]);
   });
 });

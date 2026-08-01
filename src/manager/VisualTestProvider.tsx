@@ -23,6 +23,7 @@ import {
   visualReviewStatusFromTags,
 } from "../constants.js";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
+import type { VisualBaselineEnvironment } from "../shared/environments.js";
 import type {
   VisualStoryDescriptor,
   VisualStoryFact,
@@ -99,6 +100,7 @@ import {
 } from "./visual-test-module-prefs.js";
 import {
   buildVisualFilterOptionCounts,
+  buildVisualEnvironmentFilterGroups,
   buildVisualStoryFilterFacts,
   countStoriesMatchingFilters,
   createVisualStoryFilter,
@@ -350,6 +352,10 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   );
   const [scopeMessage, setScopeMessage] = useState<string | null>(null);
   const [storyCoverage, setStoryCoverage] = useState<VisualStoryFact[]>([]);
+  const [availableFilterEnvironments, setAvailableFilterEnvironments] =
+    useState<VisualBaselineEnvironment[]>([]);
+  const [requiredFilterEnvironments, setRequiredFilterEnvironments] =
+    useState<VisualBaselineEnvironment[]>([]);
   const [visualFiltersAvailable, setVisualFiltersAvailable] = useState(false);
   const [activeVisualFilterIds, setActiveVisualFilterIds] = useState<string[]>(
     () => parseVisualFilterIds(api.getQueryParam(VISUAL_FILTER_QUERY_PARAM)),
@@ -408,8 +414,23 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         storyCoverage,
         lastRun?.results,
         hasCompletedVisualRun,
+        requiredFilterEnvironments,
       ),
-    [hasCompletedVisualRun, lastRun?.results, storyCoverage, storyDescriptors],
+    [
+      hasCompletedVisualRun,
+      lastRun?.results,
+      requiredFilterEnvironments,
+      storyCoverage,
+      storyDescriptors,
+    ],
+  );
+  const visualEnvironmentFilterGroups = useMemo(
+    () =>
+      buildVisualEnvironmentFilterGroups(
+        availableFilterEnvironments,
+        requiredFilterEnvironments,
+      ),
+    [availableFilterEnvironments, requiredFilterEnvironments],
   );
   const visualFilterOptionCounts = useMemo(
     () =>
@@ -926,11 +947,15 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           throw new Error("Visual story facts are unavailable");
         }
         setStoryCoverage(data.stories);
+        setAvailableFilterEnvironments(data.availableEnvironments ?? []);
+        setRequiredFilterEnvironments(data.requiredEnvironments ?? []);
         setVisualFiltersAvailable(true);
       })
       .catch(() => {
         if (controller.signal.aborted) return;
         setStoryCoverage([]);
+        setAvailableFilterEnvironments([]);
+        setRequiredFilterEnvironments([]);
         setVisualFiltersAvailable(false);
       });
     return () => controller.abort();
@@ -1319,6 +1344,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
               alwaysVisibleErrorCount,
               optionCounts: visualFilterOptionCounts,
               matchingSummary: visualFilterMatchingSummary,
+              environmentGroups: visualEnvironmentFilterGroups,
               onChange: (next) => {
                 setActiveVisualFilterIds(next);
                 api.applyQueryParams(

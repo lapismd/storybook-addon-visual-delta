@@ -7,6 +7,7 @@ import {
   type BaselineWriteMode,
 } from "./VisualBaselineSplitButton.js";
 import { VisualFiltersMenu } from "./VisualFiltersMenu.js";
+import type { VisualFilterGroupDescriptor } from "./visual-filters.js";
 
 export type VisualModuleChipStatus =
   | "positive"
@@ -181,6 +182,7 @@ export type VisualTestModuleUIProps = {
     alwaysVisibleErrorCount?: number;
     optionCounts?: Readonly<Record<string, number>>;
     matchingSummary?: { matching: number; total: number };
+    environmentGroups?: readonly VisualFilterGroupDescriptor[];
     onChange: (ids: string[]) => void;
   };
 };

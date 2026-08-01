@@ -70,6 +70,56 @@ test.describe("Visual Delta manager integration", () => {
     ).toHaveCount(0);
   });
 
+  test("swaps the overlay to the selected exact OS baseline", async ({
+    page,
+  }) => {
+    let linuxBaselineRequests = 0;
+    await page.route(
+      "**/visual-baselines/shadcn/button/default-chromium-linux.png*",
+      async (route) => {
+        linuxBaselineRequests += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: "image/png",
+          body: FIXTURE_BASELINE_PNG,
+        });
+      },
+    );
+    await mockVisualBackend(page);
+    await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    const operatingSystem = panel.getByRole("button", {
+      name: "Visual baseline operating system",
+    });
+    const frame = previewFrame(page);
+    await expect(
+      frame.locator('img[src*="default-chromium-darwin.png"]'),
+    ).toBeVisible();
+
+    await operatingSystem.click();
+    await page
+      .getByRole("button", { name: "Linux (view only)", exact: true })
+      .click();
+    await expect(operatingSystem).toContainText("Linux");
+    await expect.poll(() => linuxBaselineRequests).toBeGreaterThan(0);
+    await expect(
+      panel.getByRole("status", { name: /Baseline ready/i }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      frame.locator('img[src*="default-chromium-linux.png"]'),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      frame.locator('img[src*="default-chromium-darwin.png"]'),
+    ).toHaveCount(0);
+
+    await operatingSystem.click();
+    await page.getByRole("button", { name: "macOS", exact: true }).click();
+    await expect(
+      frame.locator('img[src*="default-chromium-darwin.png"]'),
+    ).toBeVisible();
+  });
+
   test("keeps explicit demo coverage aligned with the displayed overlay", async ({
     page,
   }) => {

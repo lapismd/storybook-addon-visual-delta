@@ -394,7 +394,10 @@ export const ManagerIntegrationFixture: Story = {
   tags: ["!skip-visual"],
   parameters: {
     visualDelta: {
-      images: ["/visual-baselines/shadcn/button/default-chromium-darwin.png"],
+      images: [
+        "/visual-baselines/shadcn/button/default-chromium-darwin.png",
+        "/visual-baselines/shadcn/button/default-chromium-linux.png",
+      ],
       interactions: [
         {
           id: "opened-state",

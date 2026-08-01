@@ -18,6 +18,7 @@ These requirements keep interactive state recoverable and separate from durable 
 | VD-UI-008 | In read-only capability mode (static Storybook or host `readOnly`), the panel MUST keep baseline gallery selection, placement, soft hide, opacity, zoom, modes, interaction replay, Diff HTML, and Diff Result hydrate available when data exists. It MUST NOT present enabled Create, Update, Delete, skip/include mutation, Accept, Diff Browser, Story official compare, Run visual, Rebuild static, Configuration save, Changes/VCS, Init scaffold, or baseline history actions. Empty states MUST NOT offer Create visual or Set up Visual Delta; they MUST explain that baselines are wired through story parameters or require a development host. |
 | VD-UI-009 | The panel MUST expose independent OS and Browser selectors for baseline environments as one joined split control, with OS on the left, Browser on the right, and a recognizable icon before each selected label. Chromium and the runtime OS are initial defaults. The option set MUST combine configured browsers and the runtime OS with the project-wide environment inventory from `GET /config` and any exact environments wired only to the current story. Configured browsers on the runtime OS are runnable; discovered but disabled browsers and non-runtime operating systems are view-only. A project environment without a matching current-story baseline MUST remain selectable and present missing coverage. Selection MUST resolve exact matching images, history, and sidecars, persist only as presentation state, and never emulate or fall back to another environment. |
 | VD-UI-010 | The persistent bottom status footer MUST span the full visible Visual Delta panel width in idle, logging, environment-selection, and running states. Its top edge MUST meet the panel's left edge without a rounded top-left corner or an inset left border. |
+| VD-UI-011 | Development sidebar filters MUST derive dynamic Operating System and Browser facets from story-facts environments and persist their include/exclude tokens in `visualFilter`. Includes use OR within each environment facet; when both facets have includes, one exact present primary `{ browser, platform }` pair MUST satisfy both. An excluded OS or browser MUST remove a story carrying any present primary baseline with that facet. Environment facets combine with existing groups using AND. `OS parity gaps` MUST include only non-skipped story leaves with a missing or unresolved required primary environment. Component folders remain visible when at least one child matches. Static/read-only managers without `/story-facts` MUST NOT advertise project-wide sidebar filtering. |
 
 ## Panel structure
 
@@ -111,7 +112,18 @@ Review controls set exactly one of pending, ready, approved, or failed. Skip eli
 
 The Storybook Testing Module presents compare, create or update baselines, result-to-status update, and affected-only choices. Its preferences do not change panel review controls.
 
-Development sidebar Visual Delta filters MAY include or exclude facet values. Excluded tokens use a `!` prefix in the `visualFilter` query param (for example `review.ready,!result.passed`). Includes within a group use OR; excludes within a group use AND; groups combine with AND. Inclusion exposes only `inclusion.skipped` (include = skipped stories; exclude = hide skipped). The filter menu MUST show per-option story counts and, when any filter is active, the number of matching stories.
+Development sidebar Visual Delta filters MAY include or exclude facet values.
+Excluded tokens use a `!` prefix in the `visualFilter` query param (for
+example `review.ready,!result.passed`). Includes within a scalar group use OR;
+excludes within a group remove matching values; groups combine with AND.
+Operating System and Browser filters inspect exact present primary-baseline
+environments so selecting both cannot be satisfied by two different pairs.
+Their dynamic options use friendly platform and browser labels. Inclusion
+exposes only `inclusion.skipped` (include = skipped stories; exclude = hide
+skipped). Quick views are include-only, including `OS parity gaps` for included
+stories whose required primary matrix is incomplete. The filter menu MUST show
+per-option story counts and, when any filter is active, the number of matching
+story leaves.
 
 Review layout MAY expand the preview and panel for inspection. It MUST restore the prior Storybook layout when disabled or when the addon unmounts.
 

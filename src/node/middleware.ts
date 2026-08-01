@@ -87,7 +87,10 @@ import type {
   VisualStoryFactsRequest,
   VisualStoryFactsResponse,
 } from "../shared/story-facts.js";
-import { resolveVisualStoryFacts } from "./story-facts.js";
+import {
+  requiredVisualBaselineEnvironments,
+  resolveVisualStoryFacts,
+} from "./story-facts.js";
 import { createVisualDeltaRuntimeEndpoint } from "./runtime-instance.js";
 import {
   patchStorySkipVisual,
@@ -345,16 +348,27 @@ async function handleStoryFacts(
     });
     return;
   }
+  const snapshotDir = resolveSnapshotDir(options, root);
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const availableEnvironments = discoverSnapshotEnvironments(snapshotDir);
+  const requiredEnvironments = requiredVisualBaselineEnvironments(
+    projectConfig.browsers,
+    availableEnvironments,
+    process.platform,
+  );
   const response: VisualStoryFactsResponse = {
     ok: true,
-    version: 2,
+    version: 3,
     generatedAt: Date.now(),
+    availableEnvironments,
+    requiredEnvironments,
     stories: resolveVisualStoryFacts(
       stories,
-      resolveSnapshotDir(options, root),
+      snapshotDir,
       resolveBaselinePathMode(options),
-      readVisualDeltaProjectConfig(root).browsers,
+      projectConfig.browsers,
       process.platform,
+      availableEnvironments,
     ),
   };
   writeJson(res, 200, response);
