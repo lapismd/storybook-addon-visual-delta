@@ -654,6 +654,43 @@ test.describe("Visual Delta manager integration", () => {
     expect(staticRequests).toEqual([]);
   });
 
+  test("Diff Browser sends the explicit browser target for an unqualified teaching baseline", async ({
+    page,
+  }) => {
+    const compareBodies: Array<Record<string, unknown>> = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.endsWith("/compare-story")) {
+        compareBodies.push(request.postDataJSON() as Record<string, unknown>);
+      }
+    });
+    await mockVisualBackend(page);
+    await openManager(
+      page,
+      "examples-gallery--compact-variant",
+      DEV_STORYBOOK,
+    );
+
+    await page
+      .getByRole("button", { name: "Choose Diff HTML or Diff Browser" })
+      .click();
+    await page
+      .getByRole("button", { name: "Diff Browser", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: /Compare via the selected Playwright browser/,
+      })
+      .click();
+    await expect.poll(() => compareBodies.length).toBe(1);
+
+    expect(compareBodies[0]).toMatchObject({
+      storyId: "examples-gallery--compact-variant",
+      baselineUrl: "/visual-baselines/examples/gallery/compact.png",
+      browser: "chromium",
+      target: { browser: "chromium" },
+    });
+  });
+
   test("creates a baseline for the exact Storybook interaction selected by the user", async ({
     page,
   }) => {

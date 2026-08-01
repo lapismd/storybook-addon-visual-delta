@@ -39,6 +39,11 @@ export type CompareStoryRequest = {
   globals?: string;
   /** Playwright browser for this exact comparison; defaults to Chromium. */
   browser?: VisualDeltaBrowser;
+  /**
+   * Explicit identity for a story-wired teaching asset whose URL has no
+   * canonical browser suffix. Canonical filename identity remains authoritative.
+   */
+  target?: VisualBaselineTarget;
 };
 
 export type CompareStoryResult = {

@@ -678,6 +678,15 @@ export async function compareExactStory(
   if (!baselineUrl) {
     throw new Error(`No baseline screenshot for ${storyId}`);
   }
+  const interactionEnvironment = params?.interactions?.find(
+    (interaction) =>
+      interaction.src.split("?")[0] === baselineUrl.split("?")[0],
+  )?.environment;
+  const declaredEnvironment =
+    image?.environment ?? interactionEnvironment ?? params?.environment;
+  const declaredTarget = declaredEnvironment
+    ? { browser: declaredEnvironment.browser }
+    : undefined;
   const defaults = config.projectDefaults;
   const modeGlobals =
     options?.mode && params?.modes?.[options.mode]?.globals
@@ -719,6 +728,7 @@ export async function compareExactStory(
       includeAntiAliasing:
         params?.diffIncludeAntiAliasing ?? defaults.diffIncludeAntiAliasing,
       browser,
+      target: declaredTarget,
     },
     {
       signal: options?.signal,
