@@ -276,6 +276,25 @@ test.describe("Visual Delta manager overlay placement", () => {
                 liveLeft: expectedScrollLeft,
                 baselineLeft: expectedScrollLeft,
               });
+
+            await page.setViewportSize({ width: 880, height: 650 });
+            await expect
+              .poll(
+                async () => {
+                  const [railLeft, liveLeft, baselineLeft] = await Promise.all([
+                    horizontalRail.evaluate((rail) => rail.scrollLeft),
+                    livePane.evaluate((pane) => pane.scrollLeft),
+                    baselinePane.evaluate((pane) => pane.scrollLeft),
+                  ]);
+                  return { railLeft, liveLeft, baselineLeft };
+                },
+                { timeout: 10_000 },
+              )
+              .toEqual({
+                railLeft: expectedScrollLeft,
+                liveLeft: expectedScrollLeft,
+                baselineLeft: expectedScrollLeft,
+              });
           }
 
           if (originalViewport) {

@@ -752,19 +752,31 @@ function bindSharedScrollRails(
   let desiredLeft = 0;
 
   const applyScroll = (top: number, left: number) => {
-    desiredTop = top;
-    desiredLeft = left;
+    const maxTop = Math.max(
+      0,
+      Math.max(livePane.scrollHeight, baselinePane.scrollHeight) -
+        clientHeight(),
+    );
+    const maxLeft = Math.max(
+      0,
+      Math.max(livePane.scrollWidth, baselinePane.scrollWidth) -
+        clientWidth(),
+    );
+    const nextTop = Math.max(0, Math.min(maxTop, top));
+    const nextLeft = Math.max(0, Math.min(maxLeft, left));
+    desiredTop = nextTop;
+    desiredLeft = nextLeft;
     syncing = true;
     const generation = ++syncGeneration;
-    livePane.scrollTop = top;
-    livePane.scrollLeft = left;
-    baselinePane.scrollTop = top;
-    baselinePane.scrollLeft = left;
-    if (vRail.style.display !== "none" && vRail.scrollTop !== top) {
-      vRail.scrollTop = top;
+    livePane.scrollTop = nextTop;
+    livePane.scrollLeft = nextLeft;
+    baselinePane.scrollTop = nextTop;
+    baselinePane.scrollLeft = nextLeft;
+    if (vRail.style.display !== "none" && vRail.scrollTop !== nextTop) {
+      vRail.scrollTop = nextTop;
     }
-    if (hRail.style.display !== "none" && hRail.scrollLeft !== left) {
-      hRail.scrollLeft = left;
+    if (hRail.style.display !== "none" && hRail.scrollLeft !== nextLeft) {
+      hRail.scrollLeft = nextLeft;
     }
     // A clamped pane can emit a late `scroll` after we clear syncing; re-assert
     // the desired position on the next frame so the larger side stays reachable.
@@ -795,8 +807,6 @@ function bindSharedScrollRails(
         const extent = getOrCreateScrollExtent(pane);
         extent.style.width = "0px";
         extent.style.height = "0px";
-        pane.scrollTop = 0;
-        pane.scrollLeft = 0;
       }
       vRail.style.display = "none";
       hRail.style.display = "none";
@@ -804,6 +814,7 @@ function bindSharedScrollRails(
       if (corner instanceof HTMLElement) corner.style.display = "none";
       split.style.gridTemplateColumns = "1fr 0px";
       split.style.gridTemplateRows = "1fr 0px";
+      applyScroll(0, 0);
       return;
     }
     const extent = equalizePaneScrollExtents(livePane, baselinePane);
@@ -842,22 +853,10 @@ function bindSharedScrollRails(
       ? `1fr ${RAIL_THICKNESS_PX}px`
       : "1fr 0px";
 
-    if (overflowY && vRail.scrollTop !== desiredTop) {
-      vRail.scrollTop = desiredTop;
-    }
-    if (overflowX && hRail.scrollLeft !== desiredLeft) {
-      hRail.scrollLeft = desiredLeft;
-    }
-
-    // Keep panes on the shared position after extent changes.
-    if (
-      livePane.scrollTop !== desiredTop ||
-      livePane.scrollLeft !== desiredLeft ||
-      baselinePane.scrollTop !== desiredTop ||
-      baselinePane.scrollLeft !== desiredLeft
-    ) {
-      applyScroll(desiredTop, desiredLeft);
-    }
+    // Extent measurement temporarily removes each pane's spacer. Reapply the
+    // shared position under the synchronization lock so a browser's reclamp
+    // scroll event cannot replace it with a stale zero position.
+    applyScroll(desiredTop, desiredLeft);
   };
 
   const onVRailScroll = () => {
