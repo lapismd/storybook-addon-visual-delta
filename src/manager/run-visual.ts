@@ -49,7 +49,13 @@ import {
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
-import { postChromiumStoryCompare } from "../panel/chromium-capture.js";
+import { postBrowserStoryCompare } from "../panel/chromium-capture.js";
+import type {
+  VisualBaselineEnvironment,
+  VisualDeltaBrowser,
+} from "../shared/environments.js";
+import { parseVisualBaselineEnvironment } from "../shared/environments.js";
+import type { VisualComparisonPolicyStatus } from "../visual-diff-sidecar.js";
 
 export type VisualRunResultItem = {
   storyId: string;
@@ -62,6 +68,8 @@ export type VisualRunResultItem = {
   missingBaseline?: boolean;
   /** Normalized outcome when restored from Storybook's status store. */
   outcome?: VisualComparisonOutcome;
+  environment?: VisualBaselineEnvironment;
+  policyStatus?: VisualComparisonPolicyStatus;
   /** Optional review mutation produced by authoritative live auto-approval. */
   review?: CompareStoryResult["review"];
 };
@@ -94,16 +102,29 @@ export function reviewUpdatesFromRunResults(
   options?: ReviewUpdatesFromRunResultsOptions,
 ): Array<{ storyId: string; status: VisualReviewStatus }> {
   const updates: Array<{ storyId: string; status: VisualReviewStatus }> = [];
-  for (const item of results) {
-    const outcome = classifyVisualRunResult(item);
-    if (outcome === "passed" || outcome === "changed-within-tolerance") {
-      if (options?.currentReviewStatus?.(item.storyId) === "approved") {
+  const grouped = new Map<string, VisualRunResultItem[]>();
+  for (const result of results) {
+    grouped.set(result.storyId, [
+      ...(grouped.get(result.storyId) ?? []),
+      result,
+    ]);
+  }
+  for (const [storyId, storyResults] of grouped) {
+    const outcomes = storyResults.map(classifyVisualRunResult);
+    const clean = storyResults.every(
+      (item, index) =>
+        item.policyStatus !== "warning" &&
+        (outcomes[index] === "passed" ||
+          outcomes[index] === "changed-within-tolerance"),
+    );
+    if (clean) {
+      if (options?.currentReviewStatus?.(storyId) === "approved") {
         continue;
       }
-      updates.push({ storyId: item.storyId, status: "ready" });
+      updates.push({ storyId, status: "ready" });
     }
-    if (outcome === "mismatch") {
-      updates.push({ storyId: item.storyId, status: "failed" });
+    if (outcomes.includes("mismatch")) {
+      updates.push({ storyId, status: "failed" });
     }
   }
   return updates;
@@ -127,10 +148,12 @@ export type VisualRunResponse = {
     passed: number;
     failed: number;
     skipped: number;
+    warnings?: number;
   };
   results: VisualRunResultItem[];
   logTail: string;
   affected?: AffectedVisualSummary;
+  browsers?: VisualDeltaBrowser[];
   /** Set when `/run-events` reports no active or recent run. */
   idle?: boolean;
 };
@@ -140,8 +163,10 @@ export type VisualRunProgress = {
   total: number;
   passed: number;
   failed: number;
+  warnings?: number;
   storyId?: string;
   status?: "passed" | "failed";
+  environment?: VisualBaselineEnvironment;
   affected?: AffectedVisualSummary;
 };
 
@@ -254,14 +279,24 @@ export type VisualLastRunSummary = {
 export function acceptableStoryIdsFromLastRun(
   lastRun: VisualLastRunSummary | null,
 ): string[] {
-  const ids = new Set<string>();
+  const grouped = new Map<string, VisualRunResultItem[]>();
   for (const result of lastRun?.results ?? []) {
-    const outcome = classifyVisualRunResult(result);
-    if (outcome === "passed" || outcome === "changed-within-tolerance") {
-      ids.add(result.storyId);
-    }
+    grouped.set(result.storyId, [
+      ...(grouped.get(result.storyId) ?? []),
+      result,
+    ]);
   }
-  return [...ids];
+  return [...grouped]
+    .filter(([, results]) =>
+      results.every((result) => {
+        const outcome = classifyVisualRunResult(result);
+        return (
+          result.policyStatus !== "warning" &&
+          (outcome === "passed" || outcome === "changed-within-tolerance")
+        );
+      }),
+    )
+    .map(([storyId]) => storyId);
 }
 
 /**
@@ -438,14 +473,34 @@ function statusTitle(item: VisualRunResultItem): string {
 }
 
 export function applyVisualStatuses(results: VisualRunResultItem[]) {
-  const storyIds = results.map((item) => item.storyId);
+  const priority: Record<VisualComparisonOutcome, number> = {
+    error: 6,
+    mismatch: 5,
+    "missing-baseline": 4,
+    skipped: 3,
+    "changed-within-tolerance": 2,
+    passed: 1,
+  };
+  const byStory = new Map<string, VisualRunResultItem>();
+  for (const item of results) {
+    const current = byStory.get(item.storyId);
+    if (
+      !current ||
+      priority[classifyVisualRunResult(item)] >
+        priority[classifyVisualRunResult(current)]
+    ) {
+      byStory.set(item.storyId, item);
+    }
+  }
+  const aggregated = [...byStory.values()];
+  const storyIds = aggregated.map((item) => item.storyId);
   if (storyIds.length) {
     statusStore.unset(storyIds);
   } else {
     statusStore.unset();
   }
   statusStore.set(
-    results.map((item) => {
+    aggregated.map((item) => {
       const outcome = classifyVisualRunResult(item);
       return {
         storyId: item.storyId,
@@ -548,7 +603,7 @@ export function visualResultFromLiveDiff(input: {
 }
 
 /**
- * Authoritative live Chromium comparison for one exact story. Both the panel's
+ * Authoritative live selected-browser comparison for one exact story. Both the panel's
  * Story action and the story-level Testing Module route through this helper.
  */
 export async function compareExactStory(
@@ -559,6 +614,7 @@ export async function compareExactStory(
     visualCaptureUntil?: string;
     visualCaptureCallId?: string;
     mode?: string;
+    browser?: VisualDeltaBrowser;
     onProgress?: (progress: { label: string }) => void;
     signal?: AbortSignal;
   },
@@ -575,8 +631,19 @@ export async function compareExactStory(
           }
         ).visualDelta
       : undefined;
+  const config = await fetchVisualConfig();
+  const browser = options?.browser ?? "chromium";
+  const environment = { browser, platform: config.runtimePlatform };
   const imageInput = Array.isArray(params?.images)
-    ? params.images[0]
+    ? params.images.find((candidate) => {
+        const source =
+          typeof candidate === "string" ? candidate : candidate?.src;
+        return options?.baselineUrl
+          ? source?.split("?")[0] === options.baselineUrl.split("?")[0]
+          : parseVisualBaselineEnvironment(source ?? "")?.browser === browser &&
+              parseVisualBaselineEnvironment(source ?? "")?.platform ===
+                config.runtimePlatform;
+      })
     : params?.images;
   const image =
     imageInput && typeof imageInput === "object" ? imageInput : undefined;
@@ -589,18 +656,17 @@ export async function compareExactStory(
         importPath: "importPath" in entry ? entry.importPath : undefined,
         tags: entry.tags,
       },
-      { allowSkipVisual: true },
+      { allowSkipVisual: true, environment },
     );
   if (!baselineUrl) {
     throw new Error(`No baseline screenshot for ${storyId}`);
   }
-  const config = await fetchVisualConfig();
   const defaults = config.projectDefaults;
   const modeGlobals =
     options?.mode && params?.modes?.[options.mode]?.globals
       ? params.modes[options.mode]!.globals
       : undefined;
-  const compared = await postChromiumStoryCompare(
+  const compared = await postBrowserStoryCompare(
     {
       storyId,
       story: {
@@ -635,6 +701,7 @@ export async function compareExactStory(
       diffThreshold: params?.diffThreshold ?? defaults.diffThreshold,
       includeAntiAliasing:
         params?.diffIncludeAntiAliasing ?? defaults.diffIncludeAntiAliasing,
+      browser,
     },
     {
       signal: options?.signal,
@@ -647,6 +714,8 @@ export async function compareExactStory(
     status: compared.sidecar.status,
     sidecar: compared.sidecar,
     outcome: compared.sidecar.outcome,
+    policyStatus: compared.sidecar.policyStatus,
+    environment: compared.environment,
     ...(compared.review ? { review: compared.review } : {}),
     ...(compared.sidecar.error ? { error: compared.sidecar.error } : {}),
   };
@@ -789,8 +858,10 @@ async function readNdjsonRun(
               total: event.total,
               passed: event.passed,
               failed: event.failed,
+              warnings: event.warnings,
               storyId: event.storyId,
               status: event.status,
+              environment: event.environment,
             },
             onProgress,
           );
@@ -935,6 +1006,8 @@ export async function postVisualRun(
     storyIds?: string[];
     rebuild?: boolean;
     selection?: VisualRunSelectionMode;
+    browsers?: VisualDeltaBrowser[];
+    failureMode?: "warn" | "strict";
   },
   options?: {
     onProgress?: (progress: VisualRunProgress) => void;
@@ -1476,7 +1549,12 @@ export type VisualCreateResponse = {
 
 async function postVisualBaselineWrite(
   kind: Extract<VisualBaselineJobKind, "create" | "update">,
-  body: { storyId?: string; storyIds?: string[]; rebuild?: boolean },
+  body: {
+    storyId?: string;
+    storyIds?: string[];
+    rebuild?: boolean;
+    browser?: VisualDeltaBrowser;
+  },
   options?: {
     /** Override the in-flight status label (e.g. `Creating… 1/3`). */
     runningLabel?: string;
@@ -1662,6 +1740,7 @@ async function postVisualBaselineWrite(
 export async function postVisualCreateBaseline(body: {
   storyId: string;
   rebuild?: boolean;
+  browser?: VisualDeltaBrowser;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("create", body);
 }
@@ -1738,6 +1817,7 @@ export async function postVisualUpdateBaselinesForStoryIds(
 export async function postVisualUpdateBaseline(body: {
   storyId: string;
   rebuild?: boolean;
+  browser?: VisualDeltaBrowser;
 }): Promise<VisualCreateResponse> {
   return postVisualBaselineWrite("update", body);
 }
@@ -1899,6 +1979,7 @@ export async function postVisualInteractionBaseline(body: {
   /** Exact Storybook Interactions call selected for an ordinary call capture. */
   captureCallId?: string;
   overwrite?: boolean;
+  browser?: VisualDeltaBrowser;
 }): Promise<VisualCreateResponse> {
   const storyIds = [body.storyId];
   emitVisualCreateProgress({

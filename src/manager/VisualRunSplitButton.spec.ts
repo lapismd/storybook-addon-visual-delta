@@ -26,14 +26,14 @@ describe("VisualRunSplitButton", () => {
 });
 
 describe("DiffCaptureSplitButton", () => {
-  it("labels HTML and Chromium Diff distinctly", () => {
+  it("labels HTML and Browser Diff distinctly", () => {
     expect(diffEngineLabel("html")).toBe("Diff HTML");
-    expect(diffEngineLabel("chromium")).toBe("Diff Chromium");
+    expect(diffEngineLabel("chromium")).toBe("Diff Browser");
   });
 
   it("tooltips explain the capture engines", () => {
     expect(diffEngineTooltip("html")).toMatch(/html-to-image/i);
-    expect(diffEngineTooltip("chromium")).toMatch(/Chromium/i);
+    expect(diffEngineTooltip("chromium")).toMatch(/selected Playwright browser/i);
   });
 });
 

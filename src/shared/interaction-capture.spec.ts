@@ -4,6 +4,7 @@ import {
   interactionIdForInstrumenterCall,
   instrumenterCallIdForInteraction,
   readVisualCaptureCall,
+  stepIdFromInteractionSnapshotName,
 } from "./interaction-capture.js";
 
 describe("instrumenter interaction capture", () => {
@@ -37,6 +38,21 @@ describe("instrumenter interaction capture", () => {
         "?visualCaptureCall=story%20%5B0%5D%20click&visualCaptureUntil=interaction-0-click",
       ),
     ).toBe("story [0] click");
+  });
+
+  it("parses interaction steps for every supported browser suffix", () => {
+    expect(
+      stepIdFromInteractionSnapshotName(
+        "story--opens-menu-firefox-linux.png",
+        "story",
+      ),
+    ).toBe("opens-menu");
+    expect(
+      stepIdFromInteractionSnapshotName(
+        "story--opens-menu-webkit-darwin.png",
+        "story",
+      ),
+    ).toBe("opens-menu");
   });
 });
 

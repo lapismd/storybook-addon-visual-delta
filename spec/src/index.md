@@ -32,7 +32,7 @@ flowchart LR
   Manager <--> Middleware[Visual Delta dev middleware]
   Middleware --> CLI[Visual Delta CLI and host writers]
   CLI --> Static[Static Storybook]
-  Static --> Playwright[Playwright Chromium]
+  Static --> Playwright[Playwright browser projects]
   Playwright <--> Artifacts[PNGs and sidecars]
   Middleware <--> Artifacts
   Middleware <--> VCS[Git or Jujutsu]
@@ -44,11 +44,11 @@ The manager presents state and requests actions. The preview renders stories, ex
 
 ## Scope and non-goals
 
-Visual Delta is a local, offline-capable Storybook integration. Its contract covers the local manager and preview, development middleware, local Playwright Chromium capture, committed PNG baselines, derived comparison artifacts, and guarded local Git or Jujutsu operations.
+Visual Delta is a local, offline-capable Storybook integration. Its contract covers the local manager and preview, development middleware, local Playwright Chromium, Firefox, and WebKit capture, committed PNG baselines, derived comparison artifacts, and guarded local Git or Jujutsu operations.
 
-The contract also covers a **static read-only preview** surface: a built Storybook (no Vite middleware) MAY present wired baselines from `/visual-baselines`, overlay and split comparison, Diff HTML, and Diff Result hydration when sidecars exist. That surface MUST NOT enable middleware writes, Diff Chromium, visual runs, accept/review mutations, configuration saves, change-set or VCS operations, init scaffolding, or the Testing Module. See [Panel and preview](./panel-and-preview.md) and [Configuration](./configuration.md).
+The contract also covers a **static read-only preview** surface: a built Storybook (no Vite middleware) MAY present wired baselines from `/visual-baselines`, overlay and split comparison, Diff HTML, and Diff Result hydration when sidecars exist. That surface MUST NOT enable middleware writes, Diff Browser, visual runs, accept/review mutations, configuration saves, change-set or VCS operations, init scaffolding, or the Testing Module. See [Panel and preview](./panel-and-preview.md) and [Configuration](./configuration.md).
 
-The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a multi-browser cloud farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. It does not promise a capture matrix beyond the canonical Chromium environment and explicitly configured Storybook modes. Adding one of those out-of-scope capabilities requires an accepted specification change.
+The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a multi-browser cloud farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. The local capture matrix is the configured subset of Chromium, Firefox, and WebKit on the runtime platform plus explicitly configured Storybook modes. Branded browser channels, device projects, remote execution, and operating-system emulation remain out of scope.
 
 Comparisons with third-party products are research evidence only. They do not define Visual Delta behavior or create a parity obligation.
 
@@ -80,7 +80,8 @@ These invariants apply across all component specifications:
 - An empty action scope MUST remain empty and MUST NOT broaden to another scope
 - The primary baseline, each configured mode baseline, and each wired interaction baseline MUST be treated as independent comparison targets
 - Review metadata, comparison outcome, baseline coverage, and skip eligibility MUST remain independent state dimensions
-- Live HTML comparison MAY aid diagnosis, but only Chromium capture and Playwright comparison are authoritative
+- Live HTML comparison MAY aid diagnosis, but only a configured Playwright browser capture and Playwright comparison are authoritative
+- Browser and operating-system baselines MUST remain independent; no environment may silently fall back to another environment's PNG
 - Baseline path resolution MUST use one canonical contract across capture, injection, serving, sidecars, history, deletion, and hydration
 - Automation MUST default to off, and repository commits MUST require both project opt-in and host permission
 - Missing or unreliable affected-run evidence MUST select all eligible stories
@@ -105,7 +106,8 @@ The specification uses these terms consistently:
 - **Mode baseline**: a PNG for one named set of Storybook globals
 - **Interaction baseline**: a PNG captured at one wired play-function capture point
 - **Sidecar**: local JSON, actual PNG, or diff PNG evidence beside a baseline
-- **Authoritative comparison**: a Chromium or static Playwright comparison that can establish official result state
+- **Authoritative comparison**: a configured Playwright-browser comparison that can establish official result state
+- **Baseline environment**: one configured browser and one operating-system platform that identify an independent baseline
 - **Live HTML comparison**: an in-browser DOM-to-image approximation used only for diagnosis
 - **Review status**: one of pending, ready, approved, or failed
 - **Coverage**: whether the expected baseline variants exist and are wired

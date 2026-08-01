@@ -15,6 +15,7 @@ import type {
 } from "./options.js";
 import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 const CACHE_VERSION = 1;
 const DEFAULT_CACHE_DIR = ".cache/visual-delta";
@@ -351,7 +352,7 @@ function baselineFilesForStories(
     }
     const directory = path.posix.dirname(primary);
     const fileName = path.posix.basename(primary);
-    const stem = fileName.replace(/-chromium-[^.]+\.png$/i, "");
+    const stem = fileName.replace(/-(?:chromium|firefox|webkit)-[^.]+\.png$/i, "");
     const owned = files
       .filter((file) => {
         const normalized = normalizeSlashes(file);
@@ -360,7 +361,7 @@ function baselineFilesForStories(
         return (
           candidate === `${stem}.png` ||
           new RegExp(
-            `^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--[^/]+)?-chromium-[^.]+\\.png$`,
+            `^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--[^/]+)?-(?:chromium|firefox|webkit)-[^.]+\\.png$`,
             "i",
           ).test(candidate)
         );
@@ -372,9 +373,11 @@ function baselineFilesForStories(
 }
 
 function configFingerprint(
+  root: string,
   hostOptions: VisualDeltaHostOptions | undefined,
 ): string {
   const options = affectedOptions(hostOptions);
+  const project = readVisualDeltaProjectConfig(root);
   return sha256(
     JSON.stringify({
       baselinePathMode: resolveBaselinePathMode(hostOptions),
@@ -382,6 +385,8 @@ function configFingerprint(
       externals: normalizedAffectedGlobs(options.externals),
       snapshotDir: hostOptions?.snapshotDir ?? null,
       untraced: normalizedAffectedGlobs(options.untraced),
+      browsers: project.browsers,
+      visualTestFailureMode: project.workflow.visualTestFailureMode,
     }),
   );
 }
@@ -397,7 +402,7 @@ function buildGraphSnapshot(
     entries = readStoryIndex(root);
   } catch (error) {
     return {
-      configFingerprint: configFingerprint(hostOptions),
+      configFingerprint: configFingerprint(root, hostOptions),
       inputHashes: {},
       stories: {},
       storyFiles: [],
@@ -415,7 +420,7 @@ function buildGraphSnapshot(
     modules = readPreviewStats(statsPath);
   } catch (error) {
     return {
-      configFingerprint: configFingerprint(hostOptions),
+      configFingerprint: configFingerprint(root, hostOptions),
       inputHashes: {},
       stories: {},
       storyFiles: entries.map((entry) =>
@@ -437,7 +442,7 @@ function buildGraphSnapshot(
   );
   if (!hasViteBuilder) {
     return {
-      configFingerprint: configFingerprint(hostOptions),
+      configFingerprint: configFingerprint(root, hostOptions),
       inputHashes: {},
       stories: {},
       storyFiles: entries.map((entry) =>
@@ -543,7 +548,7 @@ function buildGraphSnapshot(
   }
 
   return {
-    configFingerprint: configFingerprint(hostOptions),
+    configFingerprint: configFingerprint(root, hostOptions),
     inputHashes,
     stories,
     storyFiles,

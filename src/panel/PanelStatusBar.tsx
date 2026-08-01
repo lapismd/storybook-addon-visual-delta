@@ -67,6 +67,14 @@ export type PanelStatusBarProps = {
     completed: number;
     total: number;
   } | null;
+  environment?: {
+    browser: string;
+    platform: string;
+    browsers: Array<{ value: string; label: string }>;
+    platforms: Array<{ value: string; label: string }>;
+    onBrowserChange: (value: string) => void;
+    onPlatformChange: (value: string) => void;
+  };
 };
 
 type FixedPos = {
@@ -128,6 +136,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
   log,
   error,
   progress,
+  environment,
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<FixedPos | null>(null);
@@ -159,7 +168,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       setPos({
         right: Math.max(0, window.innerWidth - rect.right),
         bottom: Math.max(0, window.innerHeight - rect.bottom),
-        width: running ? rect.width : rect.width * 0.5,
+        width: running || environment ? rect.width : rect.width * 0.5,
       });
     };
 
@@ -177,7 +186,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
       window.removeEventListener("scroll", update, true);
       scrollPort.removeEventListener("scroll", update);
     };
-  }, [container, running]);
+  }, [container, environment, running]);
 
   if (!pos) return null;
 
@@ -193,7 +202,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
         bottom: pos.bottom,
         width: pos.width,
         maxWidth: pos.width,
-        pointerEvents: running || hasLog ? "auto" : "none",
+        pointerEvents: running || hasLog || environment ? "auto" : "none",
       }}
     >
       {running ? (
@@ -214,6 +223,49 @@ export const PanelStatusBar = memo(function PanelStatusBar({
             $percent={percent}
           />
         </StatusProgressTrack>
+      ) : null}
+      {environment ? (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flex: "0 0 auto",
+          }}
+        >
+          <label>
+            Browser{" "}
+            <select
+              aria-label="Visual baseline browser"
+              value={environment.browser}
+              onChange={(event) =>
+                environment.onBrowserChange(event.currentTarget.value)
+              }
+            >
+              {environment.browsers.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            OS{" "}
+            <select
+              aria-label="Visual baseline operating system"
+              value={environment.platform}
+              onChange={(event) =>
+                environment.onPlatformChange(event.currentTarget.value)
+              }
+            >
+              {environment.platforms.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       ) : null}
       <PopoverProvider
         ariaLabel="Visual Delta progress log"

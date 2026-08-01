@@ -13,6 +13,7 @@ import type {
   CompareStoryStreamEvent,
 } from "../shared/compare-story-types.js";
 import { announceVisualDeltaChanges } from "../shared/change-events.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
 
 export type { CaptureSubjectProgress, CaptureSubjectStreamEvent };
 
@@ -20,7 +21,7 @@ export type { CaptureSubjectProgress, CaptureSubjectStreamEvent };
  * Ask Storybook middleware to capture the story subject with Playwright
  * Chromium. Streams NDJSON progress (launch → navigate → capture → done).
  */
-export async function postChromiumSubjectCapture(
+export async function postBrowserSubjectCapture(
   body: {
     storyId: string;
     origin?: string;
@@ -31,6 +32,7 @@ export async function postChromiumSubjectCapture(
     delay?: number;
     ignoreSelectors?: string[];
     cropToViewport?: boolean;
+    browser?: VisualDeltaBrowser;
   },
   options?: {
     onProgress?: (progress: CaptureSubjectProgress) => void;
@@ -48,7 +50,7 @@ export async function postChromiumSubjectCapture(
   });
 
   if (!response.ok && !response.body) {
-    throw new Error(`Chromium capture failed (${response.status})`);
+    throw new Error(`Browser capture failed (${response.status})`);
   }
 
   const reader = response.body?.getReader();
@@ -60,14 +62,14 @@ export async function postChromiumSubjectCapture(
         | { ok: false; error: string };
     } catch {
       throw new Error(
-        `Chromium capture failed (${response.status}): empty response`,
+        `Browser capture failed (${response.status}): empty response`,
       );
     }
     if (!("ok" in payload) || !payload.ok) {
       throw new Error(
         "error" in payload && typeof payload.error === "string"
           ? payload.error
-          : `Chromium capture failed (${response.status})`,
+          : `Browser capture failed (${response.status})`,
       );
     }
     return {
@@ -130,8 +132,8 @@ export async function postChromiumSubjectCapture(
   if (!doneResult?.ok) {
     throw new Error(
       response.ok
-        ? "Chromium capture finished without a PNG"
-        : `Chromium capture failed (${response.status})`,
+        ? "Browser capture finished without a PNG"
+        : `Browser capture failed (${response.status})`,
     );
   }
 
@@ -143,7 +145,7 @@ export async function postChromiumSubjectCapture(
 }
 
 /** Capture, compare, persist artifacts, and classify one exact live story. */
-export async function postChromiumStoryCompare(
+export async function postBrowserStoryCompare(
   body: Omit<CompareStoryRequest, "origin"> & { origin?: string },
   options?: {
     onProgress?: (progress: CaptureSubjectProgress) => void;
@@ -161,7 +163,7 @@ export async function postChromiumStoryCompare(
   });
   const reader = response.body?.getReader();
   if (!reader) {
-    throw new Error(`Chromium comparison failed (${response.status})`);
+    throw new Error(`Browser comparison failed (${response.status})`);
   }
 
   const decoder = new TextDecoder();
@@ -201,10 +203,14 @@ export async function postChromiumStoryCompare(
   if (!finalResult) {
     throw new Error(
       response.ok
-        ? "Chromium comparison ended without a result"
-        : `Chromium comparison failed (${response.status})`,
+        ? "Browser comparison ended without a result"
+        : `Browser comparison failed (${response.status})`,
     );
   }
   announceVisualDeltaChanges(finalResult.review?.changes);
   return finalResult;
 }
+
+/** Compatibility aliases retained for existing callers. */
+export const postChromiumSubjectCapture = postBrowserSubjectCapture;
+export const postChromiumStoryCompare = postBrowserStoryCompare;

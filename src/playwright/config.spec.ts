@@ -53,4 +53,22 @@ describe("defineVisualPlaywrightConfig", () => {
       url: "http://127.0.0.1:6010/iframe.html",
     });
   });
+
+  it("generates Chromium, Firefox, and WebKit projects from an explicit matrix", () => {
+    const config = defineVisualPlaywrightConfig({
+      browsers: ["chromium", "firefox", "webkit"],
+    });
+    expect(config.projects?.map((project) => project.name)).toEqual([
+      "chromium",
+      "firefox",
+      "webkit",
+    ]);
+    expect(
+      config.projects?.map(
+        (project) =>
+          (project.use as { defaultBrowserType?: string } | undefined)
+            ?.defaultBrowserType,
+      ),
+    ).toEqual(["chromium", "firefox", "webkit"]);
+  });
 });

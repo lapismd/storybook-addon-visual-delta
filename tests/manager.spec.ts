@@ -27,6 +27,28 @@ const FIXTURE_BASELINE_PNG = Buffer.from(
 );
 
 test.describe("Visual Delta manager integration", () => {
+  test("surfaces the configured browser and runtime OS", async ({ page }) => {
+    await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    const browser = panel.getByLabel("Visual baseline browser");
+    const platform = panel.getByLabel("Visual baseline operating system");
+    await expect(browser).toHaveValue("chromium");
+    await expect(browser.locator("option")).toHaveText([
+      "Chromium",
+      "Firefox",
+    ]);
+    await expect(platform).toHaveValue("darwin");
+    await expect(platform.locator("option")).toHaveText(["macOS"]);
+
+    await browser.selectOption("firefox");
+    await expect(browser).toHaveValue("firefox");
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+  });
+
   test("keeps a delayed missing baseline provisional until storyFinished", async ({
     page,
   }) => {
@@ -512,6 +534,7 @@ test.describe("Visual Delta manager integration", () => {
     await expect.poll(() => baselineBodies.length).toBe(1);
     expect(baselineBodies[0]).toEqual({
       storyId: COMPONENT_OVERLAY_FIXTURE,
+      browser: "chromium",
     });
 
     // Delete while the primary baseline is still present (before update can
@@ -533,7 +556,7 @@ test.describe("Visual Delta manager integration", () => {
     });
   });
 
-  test("Story and Diff Chromium use the same live exact-story contract without static work", async ({
+  test("Story and Diff Browser use the same live exact-story contract without static work", async ({
     page,
   }) => {
     const compareBodies: unknown[] = [];
@@ -554,14 +577,14 @@ test.describe("Visual Delta manager integration", () => {
     await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
 
     await page
-      .getByRole("button", { name: "Choose Diff HTML or Diff Chromium" })
+      .getByRole("button", { name: "Choose Diff HTML or Diff Browser" })
       .click();
     await page
-      .getByRole("button", { name: "Diff Chromium", exact: true })
+      .getByRole("button", { name: "Diff Browser", exact: true })
       .click();
     await page
       .getByRole("button", {
-        name: /Compare via Playwright Chromium screenshot/,
+        name: /Compare via the selected Playwright browser/,
       })
       .click();
     await expect.poll(() => compareBodies.length).toBe(1);
@@ -632,6 +655,7 @@ test.describe("Visual Delta manager integration", () => {
     await expect.poll(() => interactionBodies.length).toBe(1);
     expect(interactionBodies[0]).toEqual({
       storyId: MANAGER_FIXTURE,
+      browser: "chromium",
       stepLabel: 'findByTestId("panel-shell")',
       stepId: "interaction-1-findByTestId",
       captureCallId: `${MANAGER_FIXTURE} [1] findByTestId`,

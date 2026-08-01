@@ -34,6 +34,11 @@ import {
   type VisualDeltaStoryConfigUpdateResponse,
 } from "../shared/story-config.js";
 import { RangeNumberInput } from "./RangeNumberInput.js";
+import {
+  VISUAL_DELTA_BROWSERS,
+  visualDeltaBrowserLabel,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
 
 const Root = styled.div(({ theme }) => ({
   display: "flex",
@@ -462,6 +467,19 @@ function defaultsFor(config: VisualDeltaResolvedConfig | null) {
   return config?.projectDefaults ?? BUILTIN_VISUAL_DELTA_DEFAULTS;
 }
 
+function workflowForConfig(
+  config: VisualDeltaResolvedConfig | null | undefined,
+): VisualDeltaWorkflowConfig {
+  return {
+    ...BUILTIN_VISUAL_DELTA_WORKFLOW,
+    ...(config?.workflow ?? {}),
+    vcs: {
+      ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs,
+      ...(config?.workflow?.vcs ?? {}),
+    },
+  };
+}
+
 async function saveDefaults(
   defaults: VisualDeltaProjectDefaults,
 ): Promise<VisualDeltaResolvedConfig> {
@@ -489,11 +507,12 @@ async function saveDefaults(
 async function saveWorkflow(
   defaults: VisualDeltaProjectDefaults,
   workflow: VisualDeltaWorkflowConfig,
+  browsers: VisualDeltaBrowser[],
 ): Promise<VisualDeltaResolvedConfig> {
   const response = await fetch(VISUAL_DELTA_CONFIG_PATH, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectDefaults: defaults, workflow }),
+    body: JSON.stringify({ projectDefaults: defaults, workflow, browsers }),
   });
   const payload = (await response.json()) as
     | (VisualDeltaResolvedConfig & {
@@ -554,6 +573,7 @@ export type ConfigurationPanelProps = {
   ) => Promise<VisualDeltaResolvedConfig>;
   onSaveWorkflow?: (
     workflow: VisualDeltaWorkflowConfig,
+    browsers: VisualDeltaBrowser[],
   ) => Promise<VisualDeltaResolvedConfig>;
   onSaveStoryConfig?: (
     update: VisualDeltaStoryConfigUpdate,
@@ -582,12 +602,10 @@ export function ConfigurationPanel({
     },
   }));
   const [workflowDraft, setWorkflowDraft] = useState<VisualDeltaWorkflowConfig>(
-    () => ({
-      ...(initialConfig?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW),
-      vcs: {
-        ...(initialConfig?.workflow.vcs ?? BUILTIN_VISUAL_DELTA_WORKFLOW.vcs),
-      },
-    }),
+    () => workflowForConfig(initialConfig),
+  );
+  const [browserDraft, setBrowserDraft] = useState<VisualDeltaBrowser[]>(
+    initialConfig?.browsers ?? ["chromium"],
   );
   const [tab, setTab] = useState<
     "story" | "defaults" | "workflow" | "resolved"
@@ -616,10 +634,8 @@ export function ConfigurationPanel({
           ...defaultsFor(initialConfig).baselineLabelOffset,
         },
       });
-      setWorkflowDraft({
-        ...initialConfig.workflow,
-        vcs: { ...initialConfig.workflow.vcs },
-      });
+      setWorkflowDraft(workflowForConfig(initialConfig));
+      setBrowserDraft([...(initialConfig.browsers ?? ["chromium"])]);
       setLoading(false);
       setError(null);
       return;
@@ -642,10 +658,8 @@ export function ConfigurationPanel({
               ...defaultsFor(data).baselineLabelOffset,
             },
           });
-          setWorkflowDraft({
-            ...data.workflow,
-            vcs: { ...data.workflow.vcs },
-          });
+          setWorkflowDraft(workflowForConfig(data));
+          setBrowserDraft([...(data.browsers ?? ["chromium"])]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -712,7 +726,11 @@ export function ConfigurationPanel({
   });
   const workflowDirty =
     JSON.stringify(workflowDraft) !==
-    JSON.stringify(config?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW);
+      JSON.stringify(config?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW) ||
+    JSON.stringify(browserDraft) !==
+      JSON.stringify(config?.browsers ?? ["chromium"]);
+  const browserValidationError =
+    browserDraft.length === 0 ? "Enable at least one browser." : null;
   const workflowMessagePreview = renderVisualDeltaCommitMessage(
     workflowDraft.vcs.commitMessageTemplate,
     {
@@ -877,19 +895,18 @@ export function ConfigurationPanel({
   };
 
   const handleSaveWorkflow = async () => {
-    if (workflowValidation.errors.length || !config) return;
+    if (workflowValidation.errors.length || browserValidationError || !config)
+      return;
     setSaving(true);
     setError(null);
     setSaved(null);
     try {
       const next = await (onSaveWorkflow
-        ? onSaveWorkflow(workflowDraft)
-        : saveWorkflow(config.projectDefaults, workflowDraft));
+        ? onSaveWorkflow(workflowDraft, browserDraft)
+        : saveWorkflow(config.projectDefaults, workflowDraft, browserDraft));
       setConfig(next);
-      setWorkflowDraft({
-        ...next.workflow,
-        vcs: { ...next.workflow.vcs },
-      });
+      setWorkflowDraft(workflowForConfig(next));
+      setBrowserDraft([...(next.browsers ?? ["chromium"])]);
       onUpdated?.(next);
       setSaved(
         "Workflow saved. This policy change remains available for manual review.",
@@ -1550,10 +1567,61 @@ export function ConfigurationPanel({
           <>
             <DefaultsGrid>
               <Field>
+                <FieldLabel>Browser matrix</FieldLabel>
+                {VISUAL_DELTA_BROWSERS.map((browser) => (
+                  <CheckboxRow key={browser}>
+                    <Input
+                      aria-label={`Enable ${visualDeltaBrowserLabel(browser)}`}
+                      type="checkbox"
+                      checked={browserDraft.includes(browser)}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setSaved(null);
+                        setBrowserDraft((current) =>
+                          checked
+                            ? [...current, browser]
+                            : current.filter((item) => item !== browser),
+                        );
+                      }}
+                      style={{ width: 16 }}
+                    />
+                    {visualDeltaBrowserLabel(browser)}
+                  </CheckboxRow>
+                ))}
+                <FieldHint>
+                  Full runs execute every enabled browser. Chromium is the
+                  zero-configuration default.
+                </FieldHint>
+              </Field>
+
+              <Field>
+                <FieldLabel>Visual test failure mode</FieldLabel>
+                <Select
+                  aria-label="Visual test failure mode"
+                  value={workflowDraft.visualTestFailureMode}
+                  onChange={(event) => {
+                    const visualTestFailureMode = event.currentTarget
+                      .value as VisualDeltaWorkflowConfig["visualTestFailureMode"];
+                    setSaved(null);
+                    setWorkflowDraft((current) => ({
+                      ...current,
+                      visualTestFailureMode,
+                    }));
+                  }}
+                >
+                  <option value="warn">Warn and exit successfully</option>
+                  <option value="strict">Fail on visual warnings</option>
+                </Select>
+                <FieldHint>
+                  Infrastructure errors remain fatal in both modes.
+                </FieldHint>
+              </Field>
+
+              <Field>
                 <FieldLabel>Live comparison review</FieldLabel>
                 <CheckboxRow>
                   <Input
-                    aria-label="Automatically accept passing Diff Chromium, Story, and Run Diff"
+                    aria-label="Automatically accept passing Diff Browser, Story, and Run Diff"
                     type="checkbox"
                     checked={workflowDraft.autoAcceptLiveStoryComparisons}
                     onChange={(event) => {
@@ -1566,12 +1634,12 @@ export function ConfigurationPanel({
                     }}
                     style={{ width: 16 }}
                   />
-                  Auto-accept passing Diff Chromium, Story, and Run Diff
+                  Auto-accept passing Diff Browser, Story, and Run Diff
                 </CheckboxRow>
                 <FieldHint>
-                  Fresh passed or within-tolerance Chromium comparisons mark
-                  stories visual-approved for Diff Chromium, Story, and Testing
-                  Module Run Diff. Failures never change review state.
+                  Fresh passed or within-tolerance browser comparisons mark
+                  stories visual-approved only after the configured matrix is
+                  clean. Failures and warnings never change review state.
                 </FieldHint>
               </Field>
 
@@ -1658,6 +1726,11 @@ export function ConfigurationPanel({
                 ))}
               </Validation>
             ) : null}
+            {browserValidationError ? (
+              <Validation aria-label="Browser validation errors">
+                <li>{browserValidationError}</li>
+              </Validation>
+            ) : null}
 
             <Actions>
               <Button
@@ -1667,7 +1740,8 @@ export function ConfigurationPanel({
                 disabled={
                   !workflowDirty ||
                   saving ||
-                  workflowValidation.errors.length > 0
+                  workflowValidation.errors.length > 0 ||
+                  Boolean(browserValidationError)
                 }
                 onClick={() => void handleSaveWorkflow()}
               >
@@ -1678,13 +1752,8 @@ export function ConfigurationPanel({
                 ariaLabel={false}
                 disabled={!workflowDirty || saving}
                 onClick={() => {
-                  setWorkflowDraft({
-                    ...(config?.workflow ?? BUILTIN_VISUAL_DELTA_WORKFLOW),
-                    vcs: {
-                      ...(config?.workflow.vcs ??
-                        BUILTIN_VISUAL_DELTA_WORKFLOW.vcs),
-                    },
-                  });
+                  setWorkflowDraft(workflowForConfig(config));
+                  setBrowserDraft([...(config?.browsers ?? ["chromium"])]);
                   setError(null);
                   setSaved(null);
                 }}
@@ -1700,6 +1769,7 @@ export function ConfigurationPanel({
                     ...BUILTIN_VISUAL_DELTA_WORKFLOW,
                     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
                   });
+                  setBrowserDraft(["chromium"]);
                   setError(null);
                   setSaved(null);
                 }}

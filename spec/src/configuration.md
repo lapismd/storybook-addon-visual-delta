@@ -14,7 +14,8 @@ These requirements keep configuration precedence explicit and preserve safe defa
 | VD-CONF-004 | `parameters.visualDelta` MUST contain story-owned baseline wiring and story-specific overrides. Interaction entries MUST use `{ id, label, src }`.                                              |
 | VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.              |
 | VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                   |
-| VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Chromium, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired. |
+| VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Browser, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired. |
+| VD-CONF-008 | Project browser configuration MUST be a non-empty unique subset of `chromium`, `firefox`, and `webkit`, defaulting to only `chromium`. Visual test failure mode MUST be `warn` or `strict`, defaulting to `warn`; an explicit CLI value wins over `VISUAL_DELTA_FAILURE_MODE`, project workflow, and the built-in default. |
 
 ## Configuration precedence
 
@@ -31,7 +32,9 @@ Local panel preferences can change how one browser displays a comparison. They d
 
 ## Project configuration
 
-`.visual-delta/config.json` contains the editable default keys and MAY contain a `workflow` object. Readers MAY accept the older `projectDefaults` wrapper. Unknown or invalid editable keys MUST produce diagnostics and MUST NOT be applied.
+`.visual-delta/config.json` contains the editable default keys, MAY contain a `browsers` array, and MAY contain a `workflow` object. Readers MAY accept the older `projectDefaults` wrapper. Unknown or invalid editable keys MUST produce diagnostics and MUST NOT be applied.
+
+`browsers` defaults to `["chromium"]`. The supported values are `chromium`, `firefox`, and `webkit`; duplicates, unknown names, and an empty array are invalid. WebKit is presented as WebKit, not Safari. Each configured browser creates an independent baseline target on the runtime platform.
 
 The built-in project defaults are:
 
@@ -55,7 +58,8 @@ The workflow defaults are:
 
 | Setting                                   | Built-in value                   | Meaning                                             |
 | ----------------------------------------- | -------------------------------- | --------------------------------------------------- |
-| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not Accept after Diff Chromium / Story / Testing Module Run Diff |
+| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not Accept after Diff Browser / Story / Testing Module Run Diff  |
+| `workflow.visualTestFailureMode`           | `warn`                           | Report missing baselines and visual mismatches without a failing process |
 | `workflow.vcs.mode`                       | `off`                            | Do not prepare or create repository commits         |
 | `workflow.vcs.commitMessageTemplate`      | `Visual Delta: {action} {scope}` | Template for an allowed local commit                |
 
@@ -129,6 +133,7 @@ The supported process controls are:
 | `VISUAL_DELTA_PASS_THRESHOLD_PERCENT` | Explicit process override for the Playwright threshold               |
 | `VISUAL_DELTA_BASELINE_PATH_MODE`     | CLI-to-suite path mode                                               |
 | `VISUAL_DELTA_SNAPSHOT_DIR`           | CLI-to-suite snapshot directory                                      |
+| `VISUAL_DELTA_FAILURE_MODE`            | `warn` or `strict` compare-result process policy                     |
 | `PLAYWRIGHT_UPDATE_SNAPSHOTS`         | Enables writes only when exactly `1` and an approved writer set it   |
 | `PLAYWRIGHT_UPDATE_MODE`              | `missing` for create-only, otherwise all requested targets           |
 | `VISUAL_UPDATE_APPROVED`              | Explicit baseline-write approval when exactly `1`                    |

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import type * as PlaywrightTest from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -44,6 +44,15 @@ import {
   settleVisualStoryPage,
   waitForVisualStoryFinished,
 } from "./readiness.js";
+import {
+  isVisualDeltaBrowser,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
+import {
+  isVisualTestFailureMode,
+  isWarningComparisonOutcome,
+  resolveVisualTestFailureMode,
+} from "../shared/failure-mode.js";
 
 const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
@@ -79,6 +88,49 @@ type InteractionCaptureRequest = {
   stepLabel?: string;
   captureCallId?: string;
 };
+
+function browserForTest(testInfo: TestInfo): VisualDeltaBrowser {
+  const name = testInfo.project.name;
+  if (!isVisualDeltaBrowser(name)) {
+    throw new Error(
+      `Unsupported Visual Delta Playwright project ${JSON.stringify(name)}; use chromium, firefox, or webkit.`,
+    );
+  }
+  return name;
+}
+
+function comparisonMessage(
+  label: string,
+  sidecar: ReturnType<typeof writeDiffArtifactsForBaseline>,
+): string {
+  return `${label}: ${
+    sidecar.error ??
+    `Visual comparison outcome: ${sidecar.outcome ?? "mismatch"}`
+  }`;
+}
+
+function applyFailurePolicy(options: {
+  label: string;
+  sidecar: ReturnType<typeof writeDiffArtifactsForBaseline>;
+  testInfo: TestInfo;
+  failureMode: "warn" | "strict";
+  failures: string[];
+}): void {
+  if (options.sidecar.passed) return;
+  const message = comparisonMessage(options.label, options.sidecar);
+  if (
+    options.failureMode === "warn" &&
+    isWarningComparisonOutcome(options.sidecar.outcome)
+  ) {
+    options.testInfo.annotations.push({
+      type: "visual-warning",
+      description: message,
+    });
+    console.warn(`[visual-delta] ${message}`);
+    return;
+  }
+  options.failures.push(message);
+}
 
 function resolveRoot(options: VisualSuiteOptions): string {
   return options.packageRoot?.trim() || process.cwd();
@@ -358,7 +410,24 @@ async function captureActualPng(
 export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   const { test } = loadHostPlaywrightTest();
   const packageRoot = resolveRoot(options);
-  const projectDefaults = readVisualDeltaProjectConfig(packageRoot).defaults;
+  const projectConfig = readVisualDeltaProjectConfig(packageRoot);
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+  }
+  const projectDefaults = projectConfig.defaults;
+  if (
+    process.env.VISUAL_DELTA_FAILURE_MODE != null &&
+    !isVisualTestFailureMode(process.env.VISUAL_DELTA_FAILURE_MODE)
+  ) {
+    throw new Error('VISUAL_DELTA_FAILURE_MODE must be "warn" or "strict".');
+  }
+  const failureMode = resolveVisualTestFailureMode({
+    environment: process.env.VISUAL_DELTA_FAILURE_MODE,
+    configured: projectConfig.workflow.visualTestFailureMode,
+  });
   const mode = resolveMode(options);
   const snapshotDir = resolveSnapshotDirRel(options);
   const stories = loadVisualStories(packageRoot, options.includeStory);
@@ -372,7 +441,8 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
     const entry = stories.find((s) => s.id === interactionRequest.storyId);
     test(`interaction ${interactionRequest.storyId} / ${interactionRequest.stepId}`, async ({
       page,
-    }) => {
+    }, testInfo) => {
+      const browser = browserForTest(testInfo);
       if (!entry) {
         throw new Error(
           `Story not found or skip-visual: ${interactionRequest.storyId}`,
@@ -416,7 +486,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
       };
       let status: "passed" | "failed" = "passed";
       let error: string | undefined;
-      let classificationError: string | null = null;
+      const failures: string[] = [];
       try {
         target = await screenshotStorySubject(
           page,
@@ -427,20 +497,21 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
       } catch (err) {
         status = "failed";
         error = err instanceof Error ? err.message : String(err);
-        throw err;
       } finally {
         const actualPng = await captureActualPng(page, target).catch(
           () => null,
         );
-        // `{slug}--{stepId}-chromium-darwin.png` beside the primary baseline.
+        // `{slug}--{stepId}-{browser}-{platform}.png` beside the primary baseline.
         const baselinePngAbsPath = baselinePngAbs(
           entry,
           packageRoot,
           snapshotDir,
           mode,
+          browser,
+          process.platform,
         ).replace(
-          /-chromium-([a-z0-9]+)\.png$/i,
-          `--${interactionRequest.stepId}-chromium-$1.png`,
+          `-${browser}-${process.platform}.png`,
+          `--${interactionRequest.stepId}-${browser}-${process.platform}.png`,
         );
         const sidecar = writeDiffArtifactsForBaseline({
           entry,
@@ -457,20 +528,26 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           diffThreshold: target.captureConfig.diffThreshold,
           includeAntiAliasing: target.captureConfig.includeAntiAliasing,
           captureConfig: target.captureConfig,
+          browser,
+          platform: process.platform,
+          failureMode,
         });
-        if (status === "passed" && !sidecar.passed) {
-          classificationError =
-            sidecar.error ??
-            `Visual comparison outcome: ${sidecar.outcome ?? "mismatch"}`;
-        }
+        applyFailurePolicy({
+          label: "Interaction",
+          sidecar,
+          testInfo,
+          failureMode,
+          failures,
+        });
       }
-      if (classificationError) throw new Error(classificationError);
+      if (failures.length > 0) throw new Error(failures.join("\n"));
     });
     return;
   }
 
   for (const story of stories) {
-    test(story.id, async ({ page }) => {
+    test(story.id, async ({ page }, testInfo) => {
+      const browser = browserForTest(testInfo);
       await prepareStoryPage(page, story.id, {
         projectDefaultDelay: projectDefaults.delay,
       });
@@ -524,7 +601,6 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           } catch (err) {
             status = "failed";
             error = err instanceof Error ? err.message : String(err);
-            failures.push(`${capture.name}: ${error}`);
           } finally {
             const actualPng = await captureActualPng(page, target).catch(
               () => null,
@@ -539,7 +615,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
                 packageRoot,
                 snapshotDir,
                 mode,
-                "chromium",
+                browser,
                 process.platform,
                 capture.modeName,
               ),
@@ -559,15 +635,17 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
                 mode: capture.modeName ?? null,
                 globals: capture.globals ?? null,
               },
+              browser,
+              platform: process.platform,
+              failureMode,
             });
-            if (status === "passed" && !sidecar.passed) {
-              failures.push(
-                `${capture.name}: ${
-                  sidecar.error ??
-                  `Visual comparison outcome: ${sidecar.outcome ?? "mismatch"}`
-                }`,
-              );
-            }
+            applyFailurePolicy({
+              label: capture.name,
+              sidecar,
+              testInfo,
+              failureMode,
+              failures,
+            });
           }
         });
       }

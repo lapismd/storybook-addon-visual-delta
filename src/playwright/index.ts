@@ -35,6 +35,11 @@ export {
   waitForVisualStoryFinished,
 } from "./readiness.js";
 export type { BaselinePathMode } from "../node/options.js";
+export type {
+  VisualBaselineEnvironment,
+  VisualDeltaBrowser,
+} from "../shared/environments.js";
+export type { VisualTestFailureMode } from "../shared/failure-mode.js";
 export {
   baselinePublicUrl,
   screenshotRelativePath,

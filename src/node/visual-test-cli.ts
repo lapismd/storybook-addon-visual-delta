@@ -16,6 +16,9 @@ import {
   type PlaywrightListResult,
 } from "./playwright-results.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
+import type { VisualTestFailureMode } from "../shared/failure-mode.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 export type VisualTestCliOptions = {
   root?: string;
@@ -23,6 +26,8 @@ export type VisualTestCliOptions = {
   dryRun?: boolean;
   explain?: boolean;
   hostOptions?: VisualDeltaHostOptions;
+  browsers?: VisualDeltaBrowser[];
+  failureMode?: VisualTestFailureMode;
 };
 
 type CommandResult = {
@@ -103,6 +108,31 @@ export async function runVisualTestCli(
 ): Promise<number> {
   const root = options.root?.trim() || process.cwd();
   const hostOptions = options.hostOptions;
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    console.error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+    return 1;
+  }
+  const configuredBrowsers = projectConfig.browsers;
+  const browsers = options.browsers?.length
+    ? options.browsers
+    : configuredBrowsers;
+  if (new Set(browsers).size !== browsers.length) {
+    console.error("Browser selections must be unique");
+    return 1;
+  }
+  const disabled = browsers.filter(
+    (browser) => !configuredBrowsers.includes(browser),
+  );
+  if (disabled.length > 0) {
+    console.error(
+      `Browsers are not enabled in project configuration: ${disabled.join(", ")}`,
+    );
+    return 1;
+  }
   let plan =
     options.selection === "affected"
       ? planAffectedVisualTests(root, hostOptions)
@@ -138,21 +168,22 @@ export async function runVisualTestCli(
     [
       ...DEFAULT_VISUAL_TEST_ARGS,
       "--reporter=list",
+      ...browsers.flatMap((browser) => ["--project", browser]),
       ...(grep ? ["-g", grep] : []),
     ],
     root,
     {
       PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
+      ...(options.failureMode
+        ? { VISUAL_DELTA_FAILURE_MODE: options.failureMode }
+        : {}),
     },
   );
-  const passedStoryIds =
-    result.code === 0
-      ? selectedStoryIds
-      : successfulStoryIdsFromPlaywrightResults({
-          root,
-          hostOptions,
-          results: result.results,
-        });
+  const passedStoryIds = successfulStoryIdsFromPlaywrightResults({
+    root,
+    hostOptions,
+    results: result.results,
+  });
   recordAffectedVisualResults({
     root,
     hostOptions,

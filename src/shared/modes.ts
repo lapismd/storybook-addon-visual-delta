@@ -67,7 +67,9 @@ export function modeBaselineSrc(
   if (!primarySrc || primarySrc.startsWith("data:")) return undefined;
   const slug = modeBaselineSlug(modeName);
   if (!slug) return undefined;
-  const match = primarySrc.match(/^(.*)(-chromium-[a-z0-9]+\.png)([?#].*)?$/i);
+  const match = primarySrc.match(
+    /^(.*)(-(?:chromium|firefox|webkit)-[a-z0-9]+\.png)([?#].*)?$/i,
+  );
   if (!match) return undefined;
   return `${match[1]}--${slug}${match[2]}${match[3] ?? ""}`;
 }

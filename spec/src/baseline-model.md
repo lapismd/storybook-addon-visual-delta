@@ -14,6 +14,7 @@ These requirements give every comparison target one safe and durable identity.
 | VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists. Optimistic post-write hydration MUST attach only the successfully written target to its originating story. |
 | VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                                            |
 | VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                                                                                              |
+| VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser, platform }` identity. Resolution MUST use the exact selected environment and MUST NOT fall back to another browser or platform. Existing Chromium/Darwin filenames remain valid without migration. |
 
 ## Story eligibility and coverage
 
@@ -37,8 +38,8 @@ A baseline identity contains:
 | `variant`   | Primary, named mode, or interaction                                  |
 | `variantId` | Mode slug or interaction `id`, absent for primary                    |
 | `pathMode`  | `story-id` or `nested-import`                                        |
-| `project`   | Playwright project, currently `chromium`                             |
-| `platform`  | Baseline platform, currently `darwin` for committed repository files |
+| `browser`   | Playwright browser project: `chromium`, `firefox`, or `webkit`        |
+| `platform`  | Node platform that produced the baseline, such as `darwin`, `linux`, or `win32` |
 
 The resolver MUST normalize path separators to `/` for public URLs. It MUST reject `..`, absolute paths outside the snapshot root, missing story-ID separators, and malformed variant IDs.
 
@@ -47,13 +48,13 @@ The resolver MUST normalize path separators to `/` for public URLs. It MUST reje
 `story-id` stores a flat path:
 
 ```text
-{story-id}{variant-infix}-chromium-darwin.png
+{story-id}{variant-infix}-{browser}-{platform}.png
 ```
 
 `nested-import` derives a directory from the normalized story import path and a filename from the story slug:
 
 ```text
-{import-derived-directory}/{story-slug}{variant-infix}-chromium-darwin.png
+{import-derived-directory}/{story-slug}{variant-infix}-{browser}-{platform}.png
 ```
 
 The variant infix is:
@@ -103,7 +104,7 @@ Each comparison target MAY have:
 
 Version 2 sidecars MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`.
 
-When available, a sidecar records `operationId`, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, and diagnostic artifact paths.
+When available, a sidecar records `operationId`, browser, platform, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, policy status, and diagnostic artifact paths.
 
 ## Freshness
 

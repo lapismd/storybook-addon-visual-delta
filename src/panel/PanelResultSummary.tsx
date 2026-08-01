@@ -7,6 +7,7 @@ export type PanelResultState =
   | "missing"
   | "ready"
   | "running"
+  | "warning"
   | "passed"
   | "failed"
   | "error";
@@ -17,7 +18,10 @@ const Root = styled.div<{ $state: PanelResultState }>(({ theme, $state }) => {
       ? theme.color.positive
       : $state === "failed" || $state === "error"
         ? theme.color.negative
-        : $state === "running" || $state === "setup" || $state === "missing"
+        : $state === "running" ||
+            $state === "setup" ||
+            $state === "missing" ||
+            $state === "warning"
           ? theme.color.warning
           : theme.textMutedColor;
   return {

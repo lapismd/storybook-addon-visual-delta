@@ -257,9 +257,10 @@ describe("ConfigurationPanel", () => {
 
   it("edits opt-in live approval and VCS workflow independently from capture defaults", async () => {
     const user = userEvent.setup();
-    const saveWorkflow = vi.fn(async (workflow) => ({
+    const saveWorkflow = vi.fn(async (workflow, browsers) => ({
       ...config,
       workflow,
+      browsers,
       projectConfigExists: true,
     }));
     renderWithTheme(
@@ -273,12 +274,17 @@ describe("ConfigurationPanel", () => {
     await user.click(screen.getByRole("tab", { name: "Workflow" }));
     await user.click(
       screen.getByLabelText(
-        "Automatically accept passing Diff Chromium, Story, and Run Diff",
+        "Automatically accept passing Diff Browser, Story, and Run Diff",
       ),
     );
     await user.selectOptions(
       screen.getByLabelText("Visual Delta VCS workflow mode"),
       "review",
+    );
+    await user.click(screen.getByLabelText("Enable Firefox"));
+    await user.selectOptions(
+      screen.getByLabelText("Visual test failure mode"),
+      "strict",
     );
     const template = screen.getByLabelText(
       "Visual Delta commit message template",
@@ -288,13 +294,17 @@ describe("ConfigurationPanel", () => {
     });
     await user.click(screen.getByRole("button", { name: "Save workflow" }));
 
-    expect(saveWorkflow).toHaveBeenCalledWith({
-      autoAcceptLiveStoryComparisons: true,
-      vcs: {
-        mode: "review",
-        commitMessageTemplate: "Visual review: {scope}",
+    expect(saveWorkflow).toHaveBeenCalledWith(
+      {
+        autoAcceptLiveStoryComparisons: true,
+        visualTestFailureMode: "strict",
+        vcs: {
+          mode: "review",
+          commitMessageTemplate: "Visual review: {scope}",
+        },
       },
-    });
+      ["chromium", "firefox"],
+    );
     expect(
       await screen.findByText(
         /policy change remains available for manual review/i,

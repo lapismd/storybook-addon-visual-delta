@@ -15,6 +15,11 @@ import type {
   VisualDiffSidecarStatus,
 } from "../visual-diff-sidecar.js";
 import { compareBaselineToActualPng } from "./compare-pixels.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
+import {
+  isWarningComparisonOutcome,
+  type VisualTestFailureMode,
+} from "../shared/failure-mode.js";
 
 export function baselinePngAbs(
   entry: StoryIndexEntry,
@@ -72,6 +77,7 @@ function buildSidecarBase(
   status: VisualDiffSidecarStatus,
   error?: string,
   visualModeName?: string,
+  environment?: { browser: VisualDeltaBrowser; platform: string },
 ): Omit<
   VisualDiffSidecar,
   | "imageWidth"
@@ -95,6 +101,7 @@ function buildSidecarBase(
     snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
     status,
     runnerStatus: status,
+    ...(environment ?? {}),
     ...(visualModeName ? { mode: visualModeName } : {}),
     ...(error ? { error } : {}),
     generatedAt: new Date().toISOString(),
@@ -166,6 +173,9 @@ export function writeDiffArtifactsForBaseline(input: {
   includeAntiAliasing?: boolean;
   captureConfig?: unknown;
   operationId?: string;
+  browser?: VisualDeltaBrowser;
+  platform?: string;
+  failureMode?: VisualTestFailureMode;
 }): VisualDiffSidecar {
   const {
     entry,
@@ -184,10 +194,16 @@ export function writeDiffArtifactsForBaseline(input: {
     includeAntiAliasing,
     captureConfig,
     operationId,
+    browser = "chromium",
+    platform = process.platform,
+    failureMode = "warn",
   } = input;
   const outPath = sidecarJsonPath(baselinePngAbsPath);
   const base = {
-    ...buildSidecarBase(entry, mode, status, error, visualModeName),
+    ...buildSidecarBase(entry, mode, status, error, visualModeName, {
+      browser,
+      platform,
+    }),
     viewport,
     deviceScaleFactor,
     ...(operationId ? { operationId } : {}),
@@ -197,15 +213,28 @@ export function writeDiffArtifactsForBaseline(input: {
   };
   const baselineExists = existsSync(baselinePngAbsPath);
   if (!actualPng || !baselineExists) {
+    const outcome = comparisonOutcome({
+      runnerStatus: status,
+      baselineExists,
+      actualExists: Boolean(actualPng),
+    });
+    const actualPath = actualPngPath(baselinePngAbsPath);
+    if (actualPng) {
+      mkdirSync(path.dirname(actualPath), { recursive: true });
+      writeFileSync(actualPath, actualPng);
+    }
     const sidecar: VisualDiffSidecar = {
       ...base,
       status: "failed",
-      outcome: comparisonOutcome({
-        runnerStatus: status,
-        baselineExists,
-        actualExists: Boolean(actualPng),
-      }),
+      outcome,
+      policyStatus:
+        failureMode === "warn" && isWarningComparisonOutcome(outcome)
+          ? "warning"
+          : "failed",
       passed: false,
+      ...(actualPng
+        ? { actualRel: snapshotPublicRel(actualPath, packageRoot, snapshotDir) }
+        : {}),
     };
     writeVisualDiffSidecar(outPath, sidecar);
     return sidecar;
@@ -242,6 +271,11 @@ export function writeDiffArtifactsForBaseline(input: {
       ...metrics,
       status: passed ? "passed" : "failed",
       outcome,
+      policyStatus: passed
+        ? "passed"
+        : failureMode === "warn" && isWarningComparisonOutcome(outcome)
+          ? "warning"
+          : "failed",
       passed,
       baselineHash: sha256(readFileSync(baselinePngAbsPath)),
       actualRel: snapshotPublicRel(actualPath, packageRoot, snapshotDir),
@@ -254,6 +288,7 @@ export function writeDiffArtifactsForBaseline(input: {
       ...base,
       status: "failed",
       outcome: "error",
+      policyStatus: "failed",
       passed: false,
       error:
         error ?? (caught instanceof Error ? caught.message : String(caught)),

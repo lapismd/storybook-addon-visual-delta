@@ -94,4 +94,48 @@ describe("writeDiffArtifactsForBaseline", () => {
     );
     expect(written.operationId).toBeTruthy();
   });
+
+  it("writes diagnostic actual output and a warning for a missing baseline", () => {
+    const input = fixture();
+    rmSync(input.baselinePngAbsPath);
+    const sidecar = writeDiffArtifactsForBaseline({
+      ...input,
+      mode: "nested-import",
+      status: "failed",
+      error: "Snapshot doesn't exist",
+      actualPng: png(2, 2),
+      browser: "firefox",
+      platform: "linux",
+      failureMode: "warn",
+    });
+
+    expect(sidecar).toMatchObject({
+      outcome: "missing-baseline",
+      policyStatus: "warning",
+      browser: "firefox",
+      platform: "linux",
+      passed: false,
+    });
+    expect(sidecar.actualRel).toMatch(/\.actual\.png$/);
+    expect(
+      readFileSync(input.baselinePngAbsPath.replace(/\.png$/, ".actual.png")),
+    ).toBeTruthy();
+  });
+
+  it("keeps missing baselines failed in strict mode", () => {
+    const input = fixture();
+    rmSync(input.baselinePngAbsPath);
+    const sidecar = writeDiffArtifactsForBaseline({
+      ...input,
+      mode: "nested-import",
+      status: "failed",
+      actualPng: png(2, 2),
+      failureMode: "strict",
+    });
+    expect(sidecar).toMatchObject({
+      outcome: "missing-baseline",
+      policyStatus: "failed",
+      passed: false,
+    });
+  });
 });

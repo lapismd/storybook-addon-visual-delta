@@ -45,6 +45,9 @@ export type PanelViewProps = {
       completed: number;
       total: number;
     } | null;
+    environment?: React.ComponentProps<
+      typeof PanelStatusBar
+    >["environment"];
   };
   /** Stable hook for Storybook stories and manager-level Playwright tests. */
   testId?: string;
@@ -123,6 +126,7 @@ export function PanelView({
         log={status.log}
         error={status.error}
         progress={status.progress}
+        environment={status.environment}
       />
     </PanelShell>
   );

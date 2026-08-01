@@ -1,5 +1,13 @@
 import type { ServerResponse } from "node:http";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
+import type {
+  VisualBaselineEnvironment,
+  VisualDeltaBrowser,
+} from "../shared/environments.js";
+import type {
+  VisualComparisonOutcome,
+  VisualComparisonPolicyStatus,
+} from "../visual-diff-sidecar.js";
 
 /** Per-story outcome from a visual Playwright run. */
 export type VisualRunResultItem = {
@@ -11,6 +19,9 @@ export type VisualRunResultItem = {
   modeResults?: unknown[];
   /** Set when the story failed because no committed baseline PNG exists. */
   missingBaseline?: boolean;
+  environment?: VisualBaselineEnvironment;
+  outcome?: VisualComparisonOutcome;
+  policyStatus?: VisualComparisonPolicyStatus;
 };
 
 export type VisualRunResponse = {
@@ -27,11 +38,13 @@ export type VisualRunResponse = {
     passed: number;
     failed: number;
     skipped: number;
+    warnings?: number;
   };
   results: VisualRunResultItem[];
   logTail: string;
   /** Affected/all/selected scope details for status and explanations. */
   affected?: AffectedVisualSummary;
+  browsers?: VisualDeltaBrowser[];
 };
 
 /** NDJSON events streamed while a visual run is in progress or replayed on reconnect. */
@@ -44,8 +57,10 @@ export type VisualRunStreamEvent =
       total: number;
       passed: number;
       failed: number;
+      warnings?: number;
       storyId: string;
       status: "passed" | "failed";
+      environment?: VisualBaselineEnvironment;
     }
   | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)

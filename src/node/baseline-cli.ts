@@ -34,6 +34,8 @@ import {
 } from "./visual-sidecars.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
 import { decideStorybookStaticBuild } from "./static-build.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -55,6 +57,8 @@ export type BaselineCliOptions = {
   stepLabel?: string;
   stepId?: string;
   captureCallId?: string;
+  /** Exact Playwright browser project. Defaults to Chromium. */
+  browser?: VisualDeltaBrowser;
 };
 
 function packageRootOf(options: BaselineCliOptions): string {
@@ -69,6 +73,24 @@ function snapshotDirOf(options: BaselineCliOptions, root: string): string {
 
 function pathModeOf(options: BaselineCliOptions): BaselinePathMode {
   return options.baselinePathMode ?? DEFAULT_BASELINE_PATH_MODE;
+}
+
+function browserOf(options: BaselineCliOptions, root: string): VisualDeltaBrowser {
+  const browser = options.browser ?? "chromium";
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+  }
+  const enabled = projectConfig.browsers;
+  if (!enabled.includes(browser)) {
+    throw new Error(
+      `Browser ${browser} is not enabled in .visual-delta/config.json.`,
+    );
+  }
+  return browser;
 }
 
 function assertApproved(options: BaselineCliOptions, verb: string): void {
@@ -154,10 +176,12 @@ function interactionSnapshotFileName(
   entry: StoryIndexEntry,
   stepId: string,
   mode: BaselinePathMode,
+  browser: VisualDeltaBrowser,
+  platform: string,
 ): string {
-  return snapshotFileName(entry, mode).replace(
-    /-chromium-([a-z0-9]+)\.png$/i,
-    `--${stepId}-chromium-$1.png`,
+  return snapshotFileName(entry, mode, browser, platform).replace(
+    `-${browser}-${platform}.png`,
+    `--${stepId}-${browser}-${platform}.png`,
   );
 }
 
@@ -186,6 +210,7 @@ export async function runBaselineUpdate(
   );
 
   const root = packageRootOf(options);
+  const browser = browserOf(options, root);
   const mode = pathModeOf(options);
   const snapshotDir = snapshotDirOf(options, root);
   const port = resolveVisualServerPort(options);
@@ -234,7 +259,12 @@ export async function runBaselineUpdate(
   const needingCreate = options.createOnly
     ? targets.filter(
         (entry) =>
-          !existsSync(path.join(snapshotDir, snapshotFileName(entry, mode))),
+          !existsSync(
+            path.join(
+              snapshotDir,
+              snapshotFileName(entry, mode, browser, process.platform),
+            ),
+          ),
       )
     : [];
 
@@ -246,6 +276,7 @@ export async function runBaselineUpdate(
     ...(options.createOnly ? { PLAYWRIGHT_UPDATE_MODE: "missing" } : {}),
     VISUAL_DELTA_BASELINE_PATH_MODE: mode,
     VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+    ...(options.createOnly ? { VISUAL_DELTA_FAILURE_MODE: "warn" } : {}),
   };
 
   try {
@@ -257,21 +288,20 @@ export async function runBaselineUpdate(
         "test",
         // Explicit mode — bare `--update-snapshots` means "all" and overrides config.
         `--update-snapshots=${options.createOnly ? "missing" : "all"}`,
+        "--project",
+        browser,
         ...(grep ? ["-g", grep] : []),
       ],
       { cwd: root, stdio: "inherit", env },
     );
   } catch (error) {
-    // Create-only can exit non-zero when existing baselines still mismatch.
-    if (!options.createOnly) {
-      invalidateVisualResultArtifacts({
-        packageRoot: root,
-        snapshotDir,
-        mode,
-        storyIds: targets.map((entry) => entry.id),
-      });
-      throw error;
-    }
+    invalidateVisualResultArtifacts({
+      packageRoot: root,
+      snapshotDir,
+      mode,
+      storyIds: targets.map((entry) => entry.id),
+    });
+    throw error;
   }
 
   invalidateVisualResultArtifacts({
@@ -282,9 +312,18 @@ export async function runBaselineUpdate(
   });
 
   for (const entry of targets) {
-    const png = path.join(snapshotDir, snapshotFileName(entry, mode));
+    const png = path.join(
+      snapshotDir,
+      snapshotFileName(entry, mode, browser, process.platform),
+    );
     if (!existsSync(png)) continue;
-    const url = baselinePublicUrl(entry, mode);
+    const url = baselinePublicUrl(
+      entry,
+      mode,
+      undefined,
+      browser,
+      process.platform,
+    );
     patchStoryBaselineImages({
       packageRoot: root,
       storyId: entry.id,
@@ -296,7 +335,12 @@ export async function runBaselineUpdate(
   if (options.createOnly && needingCreate.length) {
     const stillMissing = needingCreate.filter(
       (entry) =>
-        !existsSync(path.join(snapshotDir, snapshotFileName(entry, mode))),
+        !existsSync(
+          path.join(
+            snapshotDir,
+            snapshotFileName(entry, mode, browser, process.platform),
+          ),
+        ),
     );
     if (stillMissing.length) {
       throw new Error(
@@ -325,6 +369,7 @@ export async function runInteractionUpdate(
   assertApproved(options, "write interaction baselines");
 
   const root = packageRootOf(options);
+  const browser = browserOf(options, root);
   const mode = pathModeOf(options);
   const snapshotDir = snapshotDirOf(options, root);
   const port = resolveVisualServerPort(options);
@@ -345,7 +390,13 @@ export async function runInteractionUpdate(
 
   const interactionPng = path.join(
     snapshotDir,
-    interactionSnapshotFileName(entry, stepId, mode),
+    interactionSnapshotFileName(
+      entry,
+      stepId,
+      mode,
+      browser,
+      process.platform,
+    ),
   );
   const publicRel = path
     .relative(snapshotDir, interactionPng)
@@ -356,7 +407,7 @@ export async function runInteractionUpdate(
     interactionScreenshotRelativePath(
       screenshotRelativePath(entry, mode),
       stepId,
-    ).replace(/\.png$/i, "-chromium-darwin.png"),
+    ).replace(/\.png$/i, `-${browser}-${process.platform}.png`),
   );
   const interactionPngExists = () =>
     existsSync(interactionPng) || existsSync(fallbackInteractionPng);
@@ -385,7 +436,14 @@ export async function runInteractionUpdate(
     capture: (updateMode) => {
       execFileSync(
         "pnpm",
-        ["exec", "playwright", "test", `--update-snapshots=${updateMode}`],
+        [
+          "exec",
+          "playwright",
+          "test",
+          `--update-snapshots=${updateMode}`,
+          "--project",
+          browser,
+        ],
         {
           cwd: root,
           stdio: "inherit",

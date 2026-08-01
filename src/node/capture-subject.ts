@@ -24,6 +24,11 @@ import type {
   CaptureSubjectResult,
 } from "../shared/capture-subject-types.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import {
+  isVisualDeltaBrowser,
+  visualDeltaBrowserLabel,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
 
 export type {
   CaptureSubjectPhase,
@@ -50,6 +55,7 @@ export type CaptureSubjectRequest = {
   cropToViewport?: boolean;
   /** Storybook `globals` query serialization for mode captures. */
   globals?: string;
+  browser?: VisualDeltaBrowser;
 };
 
 export type CaptureSubjectError = {
@@ -57,12 +63,12 @@ export type CaptureSubjectError = {
   error: string;
 };
 
-let sharedBrowser: Browser | null = null;
+const sharedBrowsers = new Map<VisualDeltaBrowser, Browser>();
 let browserIdleTimer: ReturnType<typeof setTimeout> | null = null;
 const BROWSER_IDLE_MS = 60_000;
 
 const PHASE_LABELS: Record<CaptureSubjectPhase, string> = {
-  launching: "Launching Chromium…",
+  launching: "Launching browser…",
   navigating: "Loading story…",
   settling: "Waiting for play…",
   capturing: "Capturing…",
@@ -73,36 +79,50 @@ function scheduleBrowserClose() {
   if (browserIdleTimer) clearTimeout(browserIdleTimer);
   browserIdleTimer = setTimeout(() => {
     browserIdleTimer = null;
-    const browser = sharedBrowser;
-    sharedBrowser = null;
-    void browser?.close().catch(() => {
-      /* ignore */
-    });
+    const browsers = [...sharedBrowsers.values()];
+    sharedBrowsers.clear();
+    for (const browser of browsers) {
+      void browser.close().catch(() => {
+        /* ignore */
+      });
+    }
   }, BROWSER_IDLE_MS);
 }
 
 async function getBrowser(
+  browserName: VisualDeltaBrowser,
   onProgress?: (progress: CaptureSubjectProgress) => void,
 ): Promise<Browser> {
+  const sharedBrowser = sharedBrowsers.get(browserName);
   if (sharedBrowser) {
     scheduleBrowserClose();
     return sharedBrowser;
   }
   onProgress?.({
     phase: "launching",
-    label: PHASE_LABELS.launching,
+    label: `Launching ${visualDeltaBrowserLabel(browserName)}…`,
   });
   let playwright: typeof import("playwright");
   try {
     playwright = await import("playwright");
   } catch {
     throw new Error(
-      "Playwright is required for Chromium Diff. Install `playwright` in the host project.",
+      "Playwright is required for browser diff. Install `playwright` in the host project.",
     );
   }
-  sharedBrowser = await playwright.chromium.launch({ headless: true });
+  let launched: Browser;
+  try {
+    launched = await playwright[browserName].launch({ headless: true });
+  } catch (error) {
+    throw new Error(
+      `Could not launch ${visualDeltaBrowserLabel(browserName)}. Run \`pnpm exec playwright install ${browserName}\`. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  sharedBrowsers.set(browserName, launched);
   scheduleBrowserClose();
-  return sharedBrowser;
+  return launched;
 }
 
 async function waitForOpenState(page: Page, storyId: string): Promise<void> {
@@ -131,10 +151,10 @@ async function waitForOpenState(page: Page, storyId: string): Promise<void> {
 }
 
 /**
- * Capture the story subject with Playwright Chromium — same pipeline intent as
+ * Capture the story subject with the selected Playwright browser — same pipeline intent as
  * `tests/visual/storybook.spec.ts` (device scale, subject/portal clip).
  */
-export async function captureSubjectWithChromium(
+export async function captureSubjectWithBrowser(
   request: CaptureSubjectRequest,
   onProgress?: (progress: CaptureSubjectProgress) => void,
 ): Promise<CaptureSubjectResult> {
@@ -150,10 +170,18 @@ export async function captureSubjectWithChromium(
   const deviceScaleFactor =
     request.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
 
-  const browser = await getBrowser(onProgress);
+  const browserName = request.browser ?? "chromium";
+  if (!isVisualDeltaBrowser(browserName)) {
+    throw new Error(`Unsupported Visual Delta browser: ${String(browserName)}`);
+  }
+  const browser = await getBrowser(browserName, onProgress);
   const page = await browser.newPage({
     viewport,
     deviceScaleFactor,
+    locale: "en-GB",
+    timezoneId: "Europe/London",
+    colorScheme: "light",
+    reducedMotion: "reduce",
   });
 
   try {
@@ -309,6 +337,7 @@ export async function captureSubjectWithChromium(
       pngBase64: png.toString("base64"),
       width,
       height,
+      environment: { browser: browserName, platform: process.platform },
     };
   } finally {
     await page.close().catch(() => {
@@ -316,4 +345,15 @@ export async function captureSubjectWithChromium(
     });
     scheduleBrowserClose();
   }
+}
+
+/** Compatibility alias for existing Chromium callers. */
+export async function captureSubjectWithChromium(
+  request: CaptureSubjectRequest,
+  onProgress?: (progress: CaptureSubjectProgress) => void,
+): Promise<CaptureSubjectResult> {
+  return captureSubjectWithBrowser(
+    { ...request, browser: request.browser ?? "chromium" },
+    onProgress,
+  );
 }

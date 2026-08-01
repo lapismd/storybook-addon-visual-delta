@@ -65,6 +65,33 @@ describe("reviewUpdatesFromRunResults", () => {
     ).toEqual([]);
   });
 
+  it("does not accept a story when one browser result is a warning", () => {
+    const results: VisualRunResultItem[] = [
+      {
+        storyId: "a--matrix",
+        title: "Chromium",
+        status: "passed",
+        environment: { browser: "chromium", platform: "darwin" },
+      },
+      {
+        storyId: "a--matrix",
+        title: "Firefox",
+        status: "passed",
+        outcome: "missing-baseline",
+        policyStatus: "warning",
+        environment: { browser: "firefox", platform: "darwin" },
+      },
+    ];
+    expect(reviewUpdatesFromRunResults(results)).toEqual([]);
+    expect(
+      acceptableStoryIdsFromLastRun({
+        finishedAt: 1,
+        summary: { total: 2, passed: 1, failed: 0, skipped: 0, warnings: 1 },
+        results,
+      }),
+    ).toEqual([]);
+  });
+
   it("does not demote approved stories to ready when they still pass", () => {
     const results: VisualRunResultItem[] = [
       { storyId: "a--approved", status: "passed", title: "a--approved" },

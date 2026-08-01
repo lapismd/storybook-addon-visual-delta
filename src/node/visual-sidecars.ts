@@ -198,7 +198,7 @@ export function loadSidecarForStoryId(
   snapshotDir: string,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform = process.platform,
+  platform: NodeJS.Platform | string = process.platform,
 ): VisualDiffSidecar | null {
   const png = baselinePngPathForStoryId(
     storyId,

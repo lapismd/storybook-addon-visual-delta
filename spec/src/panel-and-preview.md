@@ -15,7 +15,8 @@ These requirements keep interactive state recoverable and separate from durable 
 | VD-UI-005 | Diff result views MUST hydrate fresh Playwright sidecars and diagnostic images and present 2-up, Swipe, Diff, Focus, and Blink over one aligned pixel coordinate system. Failed fetches and stale evidence MUST NOT poison current state.                                                                                                                                                                                                                                                                            |
 | VD-UI-006 | Manager and preview remounts MUST recover selection and run state through events or middleware. Story-scoped job progress and terminal effects MUST remain bound to the originating story: navigation MUST stop presenting them for another story and MUST NOT hydrate that story. On active storyId change the panel MUST hard-clear the prior story gallery and selection before requesting INIT for the new story. Baseline overlay chrome MUST NOT remain visible for a failed or unloaded baseline image of the active generation. Event listeners and injected DOM MUST be fully torn down when inactive.                                                                                                                                                           |
 | VD-UI-007 | Local presentation settings MAY persist in browser storage. Durable configuration, review metadata, coverage, and mutation authorization MUST come from project or source state.                                                                                                                                                                                                                                                                                                                                     |
-| VD-UI-008 | In read-only capability mode (static Storybook or host `readOnly`), the panel MUST keep baseline gallery selection, placement, soft hide, opacity, zoom, modes, interaction replay, Diff HTML, and Diff Result hydrate available when data exists. It MUST NOT present enabled Create, Update, Delete, skip/include mutation, Accept, Diff Chromium, Story official compare, Run visual, Rebuild static, Configuration save, Changes/VCS, Init scaffold, or baseline history actions. Empty states MUST NOT offer Create visual or Set up Visual Delta; they MUST explain that baselines are wired through story parameters or require a development host. |
+| VD-UI-008 | In read-only capability mode (static Storybook or host `readOnly`), the panel MUST keep baseline gallery selection, placement, soft hide, opacity, zoom, modes, interaction replay, Diff HTML, and Diff Result hydrate available when data exists. It MUST NOT present enabled Create, Update, Delete, skip/include mutation, Accept, Diff Browser, Story official compare, Run visual, Rebuild static, Configuration save, Changes/VCS, Init scaffold, or baseline history actions. Empty states MUST NOT offer Create visual or Set up Visual Delta; they MUST explain that baselines are wired through story parameters or require a development host. |
+| VD-UI-009 | The panel MUST expose independent Browser and OS selectors for baseline environments. Chromium and the runtime OS are initial defaults. Configured browsers are runnable; discovered but disabled browsers and non-runtime operating systems are view-only. Selection MUST resolve exact matching images, history, and sidecars, persist only as presentation state, and never emulate or fall back to another environment. |
 
 ## Panel structure
 
@@ -25,7 +26,8 @@ The Visual Delta panel contains:
 - A baseline gallery and mode selector
 - Primary and interaction accordions
 - Placement, visibility, opacity, inversion, zoom, and ignore-region controls
-- Diff HTML, Diff Chromium, and persisted Diff Result surfaces
+- Diff HTML, Diff Browser, and persisted Diff Result surfaces
+- Browser and OS environment selectors in the persistent status footer
 - Review status, baseline history, and change-set views
 - Progress, cancellation, missing-coverage, readiness, and diagnostic states
 
@@ -86,7 +88,7 @@ interaction without moving or clipping the fixed panel status surface.
 
 Diff HTML captures the live preview in the manager browser. It restores iframe size, scroll positions, focus, temporary capture styles, and preview state even when capture fails.
 
-Diff Chromium requests an exact-story middleware comparison. Diff Result reads the matching sidecar, actual PNG, and diff PNG from `/visual-baselines`.
+Diff Browser requests an exact-story middleware comparison for the selected configured browser on the runtime OS. Diff Result reads the matching sidecar, actual PNG, and diff PNG from `/visual-baselines`.
 
 The panel MUST show:
 

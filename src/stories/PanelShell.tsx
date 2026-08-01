@@ -269,7 +269,7 @@ export function PanelShell({
       setDiffProgressLabel(engine === "chromium" ? "Capturing…" : "Diffing…");
       setDiffResult(
         engine === "chromium"
-          ? "Live Diff Chromium: 0.0000% (mock)"
+          ? "Live Diff Browser: 0.0000% (mock)"
           : "Live Diff HTML: 0.0000% (mock)",
       );
       setBadgeStatus("pass");

@@ -65,6 +65,33 @@ jobs:
       - name: Run panel acceptance
         run: pnpm test:panel
 
+  browser-matrix:
+    name: Chromium, Firefox, and WebKit acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.15.0
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Run browser-matrix acceptance
+        run: pnpm test:browsers
+
   manager:
     name: Manager browser acceptance
     runs-on: ubuntu-latest

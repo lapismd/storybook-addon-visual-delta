@@ -77,6 +77,7 @@ export function baselineUrlForStoryRef(
      * until HMR refreshes — still build the URL so the panel can hydrate.
      */
     allowSkipVisual?: boolean;
+    environment?: import("./environments.js").VisualBaselineEnvironment;
   },
 ): string | undefined {
   const id = story.id ?? "";
@@ -90,5 +91,8 @@ export function baselineUrlForStoryRef(
     importPath: story.importPath,
   });
   if (!isSafeSnapshotDirectory(directory)) return undefined;
-  return `/visual-baselines/${directory}/${storySlugFromId(id)}${VISUAL_BASELINE_SUFFIX}.png`;
+  const suffix = options?.environment
+    ? `-${options.environment.browser}-${options.environment.platform}`
+    : VISUAL_BASELINE_SUFFIX;
+  return `/visual-baselines/${directory}/${storySlugFromId(id)}${suffix}.png`;
 }

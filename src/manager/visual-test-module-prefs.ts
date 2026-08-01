@@ -16,7 +16,7 @@ export const AFFECTED_ONLY_KEY =
 /** Defaults for Testing Module checkboxes / baseline write mode. */
 export const VISUAL_TEST_MODULE_DEFAULTS = {
   runVisualEnabled: true,
-  /** Chromium compare + optional Accept when project auto-accept is on. */
+  /** Selected-browser compare + optional clean-matrix Accept. */
   runDiffEnabled: false,
   /** Create/Update baselines row — off until explicitly enabled. */
   createBaselinesEnabled: false,

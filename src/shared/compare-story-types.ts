@@ -1,6 +1,10 @@
 import type { CaptureSubjectProgress } from "./capture-subject-types.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import type { VisualDeltaChangeSetMutation } from "./change-sets.js";
+import type {
+  VisualBaselineEnvironment,
+  VisualDeltaBrowser,
+} from "./environments.js";
 
 export type CompareStoryEntry = {
   id: string;
@@ -31,12 +35,15 @@ export type CompareStoryRequest = {
   mode?: string;
   /** Storybook `globals` query serialization for a selected visual mode. */
   globals?: string;
+  /** Playwright browser for this exact comparison; defaults to Chromium. */
+  browser?: VisualDeltaBrowser;
 };
 
 export type CompareStoryResult = {
   ok: true;
   storyId: string;
   sidecar: VisualDiffSidecar;
+  environment: VisualBaselineEnvironment;
   review?: {
     autoAccepted: true;
     applied: boolean;
@@ -47,7 +54,11 @@ export type CompareStoryResult = {
 };
 
 export type CompareStoryStreamEvent =
-  | { type: "start"; storyId: string }
+  | {
+      type: "start";
+      storyId: string;
+      environment?: VisualBaselineEnvironment;
+    }
   | ({ type: "progress" } & CaptureSubjectProgress)
   | ({ type: "done" } & CompareStoryResult)
   | { type: "error"; error: string };

@@ -135,7 +135,7 @@ export type VisualTestModuleUIProps = {
   variant: "global" | "context";
   statusLine: React.ReactNode;
   runVisualEnabled: boolean;
-  /** Chromium compare; Accepts passes when project auto-accept is on. */
+  /** Selected-browser compare; accepts only clean configured-matrix passes. */
   runDiffEnabled: boolean;
   createBaselinesEnabled: boolean;
   updateStatusEnabled: boolean;
@@ -387,7 +387,7 @@ export function VisualTestModuleUI({
                   </RowProgress>
                 ) : (
                   <RowProgress>
-                    Chromium compare; Accepts passes when auto-accept is on
+                    Selected-browser compare; accepts only clean passes
                   </RowProgress>
                 )}
               </RowLabel>
@@ -399,7 +399,7 @@ export function VisualTestModuleUI({
                 ? `Run Diff (${compareRowProgress})`
                 : "Run Diff results"
             }
-            tooltip="Chromium compare results (Accepts passes when auto-accept is on)"
+            tooltip="Selected-browser comparison results"
             disabled={compareChipDisabled}
             onClick={onOpenCompareResults}
           >

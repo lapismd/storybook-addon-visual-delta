@@ -73,4 +73,19 @@ describe("portable Visual Delta host options", () => {
       "workspace-shell-tabs--top-light$",
     ]);
   });
+
+  it("narrows Playwright with repeatable browser projects", () => {
+    expect(
+      visualTestCommandArgs({}, undefined, ["firefox", "webkit"]),
+    ).toEqual([
+      "exec",
+      "playwright",
+      "test",
+      "--reporter=list",
+      "--project",
+      "firefox",
+      "--project",
+      "webkit",
+    ]);
+  });
 });

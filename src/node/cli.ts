@@ -7,6 +7,14 @@ import {
 } from "./baseline-cli.js";
 import { runVisualDeltaInit } from "./init-scaffold.js";
 import { runVisualTestCli } from "./visual-test-cli.js";
+import {
+  isVisualDeltaBrowser,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
+import {
+  isVisualTestFailureMode,
+  type VisualTestFailureMode,
+} from "../shared/failure-mode.js";
 
 function readFlag(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(name);
@@ -25,6 +33,7 @@ function readFlags(argv: string[], name: string): string[] {
 }
 
 function parseShared(argv: string[]): BaselineCliOptions {
+  const browser = readFlag(argv, "--browser");
   return {
     storyIds: readFlags(argv, "--story-id"),
     storyId: readFlag(argv, "--story-id"),
@@ -45,6 +54,7 @@ function parseShared(argv: string[]): BaselineCliOptions {
     skipBuild: hasFlag(argv, "--skip-build"),
     forceRebuild: hasFlag(argv, "--rebuild"),
     createOnly: hasFlag(argv, "--create-only"),
+    browser: isVisualDeltaBrowser(browser) ? browser : undefined,
   };
 }
 
@@ -53,7 +63,7 @@ function printHelp(): void {
 
 Usage:
   visual-delta init [--force] [--port <n>]
-  visual-delta test --affected|--all [--dry-run] [--explain]
+  visual-delta test --affected|--all [--browser <id> …] [--failure-mode warn|strict] [--dry-run] [--explain]
   visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta skip --story-id <id>|--component <name>
@@ -71,6 +81,8 @@ Flags:
   --force                   Overwrite existing scaffold files (init)
   --affected                Trace from the last passing local run
   --all                     Run every visual story and seed affected state
+  --browser <id>            chromium | firefox | webkit (repeatable for test)
+  --failure-mode <mode>     warn | strict (test only; default warn)
   --dry-run                 Plan selection without building or capturing
   --explain                 Print changed inputs, selected stories, and fallback
   --cache-dir <path>        Override affected cache directory
@@ -133,10 +145,26 @@ async function main(argv: string[]): Promise<void> {
     if (affected && all) {
       throw new Error("Choose either --affected or --all, not both");
     }
+    const browserValues = readFlags(rest, "--browser");
+    const invalidBrowser = browserValues.find(
+      (browser) => !isVisualDeltaBrowser(browser),
+    );
+    if (invalidBrowser) {
+      throw new Error(`Unsupported browser: ${invalidBrowser}`);
+    }
+    if (new Set(browserValues).size !== browserValues.length) {
+      throw new Error("--browser values must be unique");
+    }
+    const failureModeValue = readFlag(rest, "--failure-mode");
+    if (failureModeValue && !isVisualTestFailureMode(failureModeValue)) {
+      throw new Error('failure mode must be "warn" or "strict"');
+    }
     const exitCode = await runVisualTestCli({
       selection: affected ? "affected" : "all",
       dryRun: hasFlag(rest, "--dry-run"),
       explain: hasFlag(rest, "--explain"),
+      browsers: browserValues as VisualDeltaBrowser[],
+      failureMode: failureModeValue as VisualTestFailureMode | undefined,
       hostOptions: {
         snapshotDir: options.snapshotDir,
         baselinePathMode: options.baselinePathMode,
@@ -152,6 +180,13 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (command === "update" || command === "visual-update") {
+    const browser = readFlag(rest, "--browser");
+    if (browser && !isVisualDeltaBrowser(browser)) {
+      throw new Error(`Unsupported browser: ${browser}`);
+    }
+    if (readFlags(rest, "--browser").length > 1) {
+      throw new Error("Baseline updates accept one --browser value");
+    }
     await runBaselineUpdate(options);
     return;
   }
@@ -159,6 +194,13 @@ async function main(argv: string[]): Promise<void> {
     command === "interaction-update" ||
     command === "visual-interaction-update"
   ) {
+    const browser = readFlag(rest, "--browser");
+    if (browser && !isVisualDeltaBrowser(browser)) {
+      throw new Error(`Unsupported browser: ${browser}`);
+    }
+    if (readFlags(rest, "--browser").length > 1) {
+      throw new Error("Interaction updates accept one --browser value");
+    }
     await runInteractionUpdate(options);
     return;
   }

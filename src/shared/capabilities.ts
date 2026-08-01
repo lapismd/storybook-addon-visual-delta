@@ -6,10 +6,12 @@
 export const READ_ONLY_GLOBAL = "__STORYBOOK_VISUAL_DELTA_READ_ONLY__";
 
 export type VisualDeltaCapabilities = {
-  /** Any middleware-backed mutation or official Chromium compare. */
+  /** Any middleware-backed mutation or official browser compare. */
   readOnly: boolean;
   writes: boolean;
   chromiumCompare: boolean;
+  /** Browser-neutral capability; chromiumCompare remains a compatibility alias. */
+  browserCompare?: boolean;
   runs: boolean;
   configuration: boolean;
   changes: boolean;
@@ -49,6 +51,7 @@ export function resolveVisualDeltaCapabilities(
       readOnly: true,
       writes: false,
       chromiumCompare: false,
+      browserCompare: false,
       runs: false,
       configuration: false,
       changes: false,
@@ -62,6 +65,7 @@ export function resolveVisualDeltaCapabilities(
     readOnly: false,
     writes: true,
     chromiumCompare: true,
+    browserCompare: true,
     runs: true,
     configuration: true,
     changes: true,

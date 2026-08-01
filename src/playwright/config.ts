@@ -7,6 +7,10 @@ import { resolveVisualServerPort } from "../node/options.js";
 import { readVisualDeltaProjectConfig } from "../node/project-config.js";
 import { resolvePlaywrightPassThresholdPercent } from "../node/playwright-threshold.js";
 import { PLAYWRIGHT_PASS_THRESHOLD_PERCENT } from "../visual-diff-sidecar.js";
+import {
+  validateVisualDeltaBrowsers,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
 
 export { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT };
 
@@ -97,6 +101,8 @@ export type DefineVisualPlaywrightConfigOptions = {
    * the built-in default (`1`).
    */
   deviceScaleFactor?: number;
+  /** Enabled browser projects. Defaults to project config, then Chromium. */
+  browsers?: VisualDeltaBrowser[];
   /** Extra fields merged over the Visual Delta defaults. */
   override?: PlaywrightTestConfig;
 };
@@ -118,6 +124,26 @@ export function defineVisualPlaywrightConfig(
   const testDir = options.testDir ?? "./tests/visual";
   const deviceScaleFactor =
     options.deviceScaleFactor ?? resolveVisualDeviceScaleFactor();
+  const projectConfig = readVisualDeltaProjectConfig(process.cwd());
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    throw new Error(
+      configErrors.map((diagnostic) => diagnostic.message).join(" "),
+    );
+  }
+  const browsers = validateVisualDeltaBrowsers(
+    options.browsers ?? projectConfig.browsers,
+  );
+  if (browsers.errors.length > 0) {
+    throw new Error(browsers.errors.join(" "));
+  }
+  const deviceForBrowser: Record<VisualDeltaBrowser, string> = {
+    chromium: "Desktop Chrome",
+    firefox: "Desktop Firefox",
+    webkit: "Desktop Safari",
+  };
   return defineConfig({
     testDir,
     fullyParallel: true,
@@ -134,16 +160,14 @@ export function defineVisualPlaywrightConfig(
       ...visualPlaywrightUse(port),
       deviceScaleFactor,
     },
-    projects: [
-      {
-        name: "chromium",
-        use: {
-          ...devices["Desktop Chrome"],
-          viewport: { ...VISUAL_VIEWPORT },
-          deviceScaleFactor,
-        },
+    projects: browsers.value.map((browser) => ({
+      name: browser,
+      use: {
+        ...devices[deviceForBrowser[browser]],
+        viewport: { ...VISUAL_VIEWPORT },
+        deviceScaleFactor,
       },
-    ],
+    })),
     webServer: visualPlaywrightWebServer(port),
     ...options.override,
   });

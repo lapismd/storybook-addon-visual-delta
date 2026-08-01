@@ -69,4 +69,16 @@ describe("modeBaselineSrc", () => {
       modeBaselineSrc("data:image/png;base64,abc", "Dark"),
     ).toBeUndefined();
   });
+
+  it("preserves Firefox and WebKit environment suffixes", () => {
+    expect(
+      modeBaselineSrc(
+        "/visual-baselines/button-firefox-linux.png",
+        "Dark Desktop",
+      ),
+    ).toBe("/visual-baselines/button--dark-desktop-firefox-linux.png");
+    expect(
+      modeBaselineSrc("/visual-baselines/button-webkit-win32.png", "Dark"),
+    ).toBe("/visual-baselines/button--dark-webkit-win32.png");
+  });
 });

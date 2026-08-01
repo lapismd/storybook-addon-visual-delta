@@ -44,13 +44,23 @@ import type {
   VisualDeltaResolvedConfig,
 } from "../shared/config-types.js";
 import type { VisualDeltaChangeSetMutation } from "../shared/change-sets.js";
+import {
+  isVisualDeltaBrowser,
+  validateVisualDeltaBrowsers,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
+import {
+  isVisualTestFailureMode,
+  resolveVisualTestFailureMode,
+  type VisualTestFailureMode,
+} from "../shared/failure-mode.js";
 import { classifyVisualRunResult } from "../shared/visual-result-classification.js";
 import {
   modeResultStatus,
   type VisualModeRunResult,
 } from "../shared/mode-results.js";
 import {
-  captureSubjectWithChromium,
+  captureSubjectWithBrowser,
   type CaptureSubjectRequest,
 } from "./capture-subject.js";
 import type { CaptureSubjectStreamEvent } from "../shared/capture-subject-types.js";
@@ -58,7 +68,7 @@ import type {
   CompareStoryRequest,
   CompareStoryStreamEvent,
 } from "../shared/compare-story-types.js";
-import { compareLiveStoryWithChromium } from "./compare-story.js";
+import { compareLiveStoryWithBrowser } from "./compare-story.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   DEFAULT_VISUAL_TEST_ARGS,
@@ -157,6 +167,8 @@ type UpdateBody = {
   component?: string;
   /** Force build-storybook before capture (strips host --skip-build). */
   rebuild?: boolean;
+  /** Enabled browser whose current-platform baseline will be written. */
+  browser?: VisualDeltaBrowser;
 };
 
 type InteractionUpdateBody = {
@@ -169,6 +181,8 @@ type InteractionUpdateBody = {
   captureCallId?: string;
   /** Overwrite an existing interaction PNG. */
   overwrite?: boolean;
+  /** Enabled browser whose current-platform interaction baseline will be written. */
+  browser?: VisualDeltaBrowser;
 };
 
 type DeleteBaselineBody = {
@@ -194,6 +208,8 @@ type RunBody = {
   selection?: VisualRunSelectionMode;
   /** Rebuild storybook-static before running (slow but picks up live edits). */
   rebuild?: boolean;
+  browsers?: VisualDeltaBrowser[];
+  failureMode?: VisualTestFailureMode;
 };
 
 export type {
@@ -336,6 +352,8 @@ async function handleStoryFacts(
       stories,
       resolveSnapshotDir(options, root),
       resolveBaselinePathMode(options),
+      readVisualDeltaProjectConfig(root).browsers,
+      process.platform,
     ),
   };
   writeJson(res, 200, response);
@@ -356,6 +374,7 @@ type PlaywrightJsonSpec = {
   title?: string;
   ok?: boolean;
   tests?: Array<{
+    projectName?: string;
     status?: string;
     results?: Array<{ status?: string; error?: { message?: string } }>;
   }>;
@@ -392,6 +411,14 @@ function walkSpecs(
       status,
       title: storyId,
       error: result?.error?.message,
+      ...(isVisualDeltaBrowser(test?.projectName)
+        ? {
+            environment: {
+              browser: test.projectName,
+              platform: process.platform,
+            },
+          }
+        : {}),
     });
   }
   for (const child of suite.suites ?? []) {
@@ -421,23 +448,31 @@ export function attachSidecars(
   const snapshotDir = resolveSnapshotDir(options, packageRoot);
   const mode = resolveBaselinePathMode(options);
   return results.map((item) => {
+    const browser = item.environment?.browser ?? "chromium";
+    const platform = item.environment?.platform ?? process.platform;
     const sidecar = loadSidecarForStoryId(
       item.storyId,
       packageRoot,
       snapshotDir,
       mode,
+      browser,
+      platform,
     );
     const hasBaseline = baselinePngExistsForStoryId(
       item.storyId,
       packageRoot,
       snapshotDir,
       mode,
+      browser,
+      platform,
     );
     const modeSidecars = loadModeSidecarsForStoryId(
       item.storyId,
       packageRoot,
       snapshotDir,
       mode,
+      browser,
+      platform,
     );
     const modeResults: VisualModeRunResult[] = [
       ...(sidecar
@@ -455,7 +490,7 @@ export function attachSidecars(
           snapshotDir,
           modeSidecar.snapshotRel.replace(
             /\.png$/i,
-            `-chromium-${process.platform}.png`,
+            `-${browser}-${platform}.png`,
           ),
         );
         return {
@@ -466,8 +501,28 @@ export function attachSidecars(
         } satisfies VisualModeRunResult;
       }),
     ];
+    const comparisonSidecars = [sidecar, ...modeSidecars].filter(
+      (candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate),
+    );
+    const policyStatus = comparisonSidecars.some(
+      (candidate) => candidate.policyStatus === "failed",
+    )
+      ? "failed"
+      : comparisonSidecars.some(
+            (candidate) => candidate.policyStatus === "warning",
+          )
+        ? "warning"
+        : sidecar?.policyStatus;
     let next: VisualRunResultItem = sidecar
-      ? { ...item, sidecar, modeResults }
+      ? {
+          ...item,
+          sidecar,
+          modeResults,
+          outcome: sidecar.outcome,
+          policyStatus,
+          environment: { browser, platform },
+        }
       : { ...item };
     if (!sidecar && modeResults.length > 0) {
       next = { ...next, modeResults };
@@ -504,9 +559,16 @@ function extractJsonDocument(log: string): string | null {
 }
 
 function summarize(results: VisualRunResultItem[]) {
-  const summary = { total: results.length, passed: 0, failed: 0, skipped: 0 };
+  const summary = {
+    total: results.length,
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    warnings: 0,
+  };
   for (const item of results) {
-    if (item.status === "passed") summary.passed++;
+    if (item.policyStatus === "warning") summary.warnings++;
+    else if (item.status === "passed") summary.passed++;
     else if (item.status === "skipped") summary.skipped++;
     else summary.failed++;
   }
@@ -516,12 +578,14 @@ function summarize(results: VisualRunResultItem[]) {
 export function visualTestCommandArgs(
   options: VisualDeltaHostOptions = {},
   grep?: string,
+  browsers: readonly VisualDeltaBrowser[] = [],
 ): string[] {
   // List-only: pairing `--reporter=json` on stdout suppresses list lines (or
   // downgrades to line reporter), so the Testing Module stays at 0/N until done.
   return [
     ...(options.visualTestArgs ?? [...DEFAULT_VISUAL_TEST_ARGS]),
     "--reporter=list",
+    ...browsers.flatMap((browser) => ["--project", browser]),
     ...(grep ? ["-g", grep] : []),
   ];
 }
@@ -720,6 +784,25 @@ async function handleBaselineWrite(
     return;
   }
 
+  const browser = body.browser ?? "chromium";
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const configError = projectConfig.diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configError) {
+    res.statusCode = 400;
+    res.end(configError.message);
+    return;
+  }
+  const enabledBrowsers = projectConfig.browsers;
+  if (!isVisualDeltaBrowser(browser) || !enabledBrowsers.includes(browser)) {
+    res.statusCode = 400;
+    res.end(
+      `Browser ${JSON.stringify(browser)} is not enabled. Enabled browsers: ${enabledBrowsers.join(", ")}`,
+    );
+    return;
+  }
+
   const createOnly = mode === "create";
   const selectedStoryIds = component
     ? componentStoryIds(root, component)
@@ -740,6 +823,8 @@ async function handleBaselineWrite(
     ...(rebuild ? baseArgs.filter((arg) => arg !== "--skip-build") : baseArgs),
     ...(rebuild ? ["--rebuild"] : []),
     ...(createOnly ? ["--create-only"] : []),
+    "--browser",
+    browser,
     ...(component
       ? ["--component", component]
       : storyIds.flatMap((storyId) => ["--story-id", storyId])),
@@ -815,6 +900,25 @@ async function handleInteractionBaselineWrite(
     return;
   }
 
+  const browser = body.browser ?? "chromium";
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const configError = projectConfig.diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configError) {
+    res.statusCode = 400;
+    res.end(configError.message);
+    return;
+  }
+  const enabledBrowsers = projectConfig.browsers;
+  if (!isVisualDeltaBrowser(browser) || !enabledBrowsers.includes(browser)) {
+    res.statusCode = 400;
+    res.end(
+      `Browser ${JSON.stringify(browser)} is not enabled. Enabled browsers: ${enabledBrowsers.join(", ")}`,
+    );
+    return;
+  }
+
   const baseArgs = options.visualInteractionUpdateArgs ?? [
     ...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   ];
@@ -829,6 +933,8 @@ async function handleInteractionBaselineWrite(
   const args = [
     ...baseArgs,
     ...(body.overwrite ? [] : ["--create-only"]),
+    "--browser",
+    browser,
     "--story-id",
     storyId,
     "--step-label",
@@ -918,6 +1024,56 @@ async function handleRun(
 
   const selection: VisualRunSelectionMode =
     body.selection ?? (Array.isArray(body.storyIds) ? "selected" : "all");
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error: configErrors.map((diagnostic) => diagnostic.message).join(" "),
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0, warnings: 0 },
+      results: [],
+      logTail: "",
+    } satisfies VisualRunResponse);
+    return;
+  }
+  const requestedBrowsers = validateVisualDeltaBrowsers(
+    body.browsers ?? projectConfig.browsers,
+  );
+  const disabledBrowsers = requestedBrowsers.value.filter(
+    (browser) => !projectConfig.browsers.includes(browser),
+  );
+  if (
+    requestedBrowsers.errors.length > 0 ||
+    disabledBrowsers.length > 0 ||
+    (body.failureMode != null && !isVisualTestFailureMode(body.failureMode))
+  ) {
+    writeJson(res, 400, {
+      ok: false,
+      crashed: true,
+      error:
+        requestedBrowsers.errors.join(" ") ||
+        (disabledBrowsers.length
+          ? `Browsers are not enabled in project configuration: ${disabledBrowsers.join(", ")}`
+          : 'failureMode must be "warn" or "strict"'),
+      exitCode: 1,
+      rebuild: false,
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0, warnings: 0 },
+      results: [],
+      logTail: "",
+    } satisfies VisualRunResponse);
+    return;
+  }
+  const selectedBrowsers = requestedBrowsers.value;
+  const failureMode = resolveVisualTestFailureMode({
+    explicit: body.failureMode,
+    environment: process.env.VISUAL_DELTA_FAILURE_MODE,
+    configured: projectConfig.workflow.visualTestFailureMode,
+  });
 
   if (
     selection === "affected" &&
@@ -1056,9 +1212,9 @@ async function handleRun(
   emitRun({
     type: "start",
     total:
-      countVisualStories(root, selectedStoryIds) ??
-      selectedStoryIds?.length ??
-      0,
+      (countVisualStories(root, selectedStoryIds) ??
+        selectedStoryIds?.length ??
+        0) * selectedBrowsers.length,
     affected,
   });
 
@@ -1152,7 +1308,7 @@ async function handleRun(
       log += "Using existing storybook-static\n";
     }
 
-    const total = countVisualStories(root, selectedStoryIds);
+    const total = countVisualStories(root, selectedStoryIds) * selectedBrowsers.length;
     emitRun({ type: "start", total, affected });
 
     const seenIndexes = new Set<number>();
@@ -1160,6 +1316,7 @@ async function handleRun(
     let completed = 0;
     let passed = 0;
     let failed = 0;
+    let warnings = 0;
     let lineBuf = "";
 
     const warm = await ensureWarmStaticStorybookServer(root, visualPort);
@@ -1171,7 +1328,7 @@ async function handleRun(
       await ensurePlaywrightWebServerPort(visualPort);
     }
 
-    const args = visualTestCommandArgs(options, grep);
+    const args = visualTestCommandArgs(options, grep, selectedBrowsers);
     const { code, log: runLog } = await runCommand(
       "pnpm",
       args,
@@ -1180,6 +1337,7 @@ async function handleRun(
         PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
         // Keep Playwright webServer on the same port the middleware warmed.
         VISUAL_SERVER_PORT: String(visualPort),
+        VISUAL_DELTA_FAILURE_MODE: failureMode,
       },
       (chunk) => {
         lineBuf += chunk;
@@ -1190,21 +1348,36 @@ async function handleRun(
             if (seenIndexes.has(item.index)) continue;
             seenIndexes.add(item.index);
             completed = seenIndexes.size;
-            if (item.status === "passed") passed += 1;
-            else failed += 1;
-            progressResults.push({
+            const result = attachSidecars(
+              [{
               storyId: item.storyId,
               status: item.status,
               title: item.storyId,
-            });
+              environment: {
+                browser: item.browser,
+                platform: item.platform,
+              },
+              }],
+              root,
+              options,
+            )[0]!;
+            if (result.policyStatus === "warning") warnings += 1;
+            else if (item.status === "passed") passed += 1;
+            else failed += 1;
+            progressResults.push(result);
             emitRun({
               type: "progress",
               completed,
               total: total || completed,
               passed,
               failed,
+              warnings,
               storyId: item.storyId,
               status: item.status,
+              environment: {
+                browser: item.browser,
+                platform: item.platform,
+              },
             });
           }
         }
@@ -1235,15 +1408,13 @@ async function handleRun(
       summary.total = completed;
       summary.passed = passed;
       summary.failed = failed;
+      summary.warnings = warnings;
     }
-    const passedStoryIds =
-      code === 0
-        ? (selectedStoryIds ?? [])
-        : successfulStoryIdsFromPlaywrightResults({
-            root,
-            hostOptions: options,
-            results,
-          });
+    const passedStoryIds = successfulStoryIdsFromPlaywrightResults({
+      root,
+      hostOptions: options,
+      results,
+    });
     recordAffectedVisualResults({
       root,
       hostOptions: options,
@@ -1259,6 +1430,7 @@ async function handleRun(
       results,
       logTail: log.slice(-6000),
       affected,
+      browsers: selectedBrowsers,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1275,6 +1447,7 @@ async function handleRun(
       results: [],
       logTail: log.slice(-4000),
       affected,
+      browsers: selectedBrowsers,
     });
   }
 }
@@ -1795,6 +1968,8 @@ function resolvedConfigPayload(
     },
     playwrightPassThresholdPercent: projectConfig.defaults.passThresholdPercent,
     projectDefaults: projectConfig.defaults,
+    browsers: projectConfig.browsers,
+    runtimePlatform: process.platform,
     workflow: projectConfig.workflow,
     vcs: {
       kind: vcsKind,
@@ -2063,7 +2238,11 @@ async function handleInit(
   }
 }
 
-async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
+async function handleCaptureSubject(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+) {
   let body: CaptureSubjectRequest;
   try {
     body = await readJsonBody<CaptureSubjectRequest>(req);
@@ -2088,9 +2267,34 @@ async function handleCaptureSubject(req: IncomingMessage, res: ServerResponse) {
     clientClosed = true;
   });
 
-  write({ type: "start", storyId: body.storyId });
+  const browser = body.browser ?? "chromium";
+  const projectConfig = readVisualDeltaProjectConfig(root);
+  const projectConfigError = projectConfig.diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (projectConfigError) {
+    write({ type: "error", error: projectConfigError.message });
+    res.end();
+    return;
+  }
+  if (!projectConfig.browsers.includes(browser)) {
+    write({
+      type: "error",
+      error: `Browser ${browser} is not enabled in project configuration.`,
+    });
+    res.end();
+    return;
+  }
+  write({
+    type: "start",
+    storyId: body.storyId,
+    environment: {
+      browser,
+      platform: process.platform,
+    },
+  });
   try {
-    const result = await captureSubjectWithChromium(body, (progress) => {
+    const result = await captureSubjectWithBrowser(body, (progress) => {
       if (!clientClosed) write({ type: "progress", ...progress });
     });
     if (!clientClosed) write({ type: "done", ...result });
@@ -2130,9 +2334,16 @@ async function handleCompareStory(
     const flushable = res as ServerResponse & { flush?: () => void };
     flushable.flush?.();
   };
-  write({ type: "start", storyId: body.storyId });
+  write({
+    type: "start",
+    storyId: body.storyId,
+    environment: {
+      browser: body.browser ?? "chromium",
+      platform: process.platform,
+    },
+  });
   try {
-    const result = await compareLiveStoryWithChromium({
+    const result = await compareLiveStoryWithBrowser({
       root,
       hostOptions: options,
       request: body,
@@ -2145,7 +2356,12 @@ async function handleCompareStory(
       outcome: result.sidecar.outcome,
       error: result.sidecar.error,
     });
-    if (shouldAutoAcceptLiveStoryComparison(workflow, outcome)) {
+    const fullConfiguredBrowserMatrix =
+      readVisualDeltaProjectConfig(root).browsers.length === 1;
+    if (
+      fullConfiguredBrowserMatrix &&
+      shouldAutoAcceptLiveStoryComparison(workflow, outcome)
+    ) {
       const mutation = await changeSets.begin({
         action: "auto-accept",
         scope: result.storyId,
@@ -2507,7 +2723,7 @@ export function visualDeltaMiddlewarePlugin(
             res.end("Method Not Allowed");
             return;
           }
-          await handleCaptureSubject(req, res);
+          await handleCaptureSubject(req, res, root);
           return;
         }
 

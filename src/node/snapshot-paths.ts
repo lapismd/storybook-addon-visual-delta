@@ -101,12 +101,14 @@ export function baselinePublicUrl(
   entry: StoryIndexEntry,
   mode: BaselinePathMode = "nested-import",
   visualModeName?: string,
+  project = "chromium",
+  platform: NodeJS.Platform | string = "darwin",
 ): string {
   const file = snapshotFileName(
     entry,
     mode,
-    "chromium",
-    "darwin",
+    project,
+    platform,
     visualModeName,
   ).replaceAll(path.sep, "/");
   return `/visual-baselines/${file}`;

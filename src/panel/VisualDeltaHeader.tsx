@@ -162,7 +162,8 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
     ? "Exit review layout"
     : "Review layout";
   const allowWrites = capabilities?.writes !== false;
-  const allowChromium = capabilities?.chromiumCompare !== false;
+  const allowChromium =
+    capabilities?.browserCompare ?? capabilities?.chromiumCompare ?? true;
   const allowRuns = capabilities?.runs !== false;
   const allowConfiguration = capabilities?.configuration !== false;
   const allowChanges = capabilities?.changes !== false;

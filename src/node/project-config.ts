@@ -21,12 +21,18 @@ import {
   BUILTIN_VISUAL_DELTA_WORKFLOW,
   validateVisualDeltaWorkflowConfig,
 } from "../shared/workflow-config.js";
+import {
+  DEFAULT_VISUAL_DELTA_BROWSERS,
+  validateVisualDeltaBrowsers,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
 
 export const VISUAL_DELTA_PROJECT_CONFIG_REL = ".visual-delta/config.json";
 const LEGACY_PLAYWRIGHT_CONFIG_REL = ".visual-delta/playwright.json";
 
 export type VisualDeltaProjectConfigResult = {
   defaults: VisualDeltaProjectDefaults;
+  browsers: VisualDeltaBrowser[];
   workflow: VisualDeltaWorkflowConfig;
   sources: Record<
     keyof VisualDeltaProjectDefaults,
@@ -41,29 +47,43 @@ function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
   return {
     autoAcceptLiveStoryComparisons:
       BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
+    visualTestFailureMode:
+      BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
   };
 }
 
 function splitProjectConfig(input: unknown): {
   defaults: unknown;
+  browsers: unknown;
+  browsersPresent: boolean;
   workflow: unknown;
   workflowPresent: boolean;
 } {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    return { defaults: input, workflow: undefined, workflowPresent: false };
+    return {
+      defaults: input,
+      browsers: undefined,
+      browsersPresent: false,
+      workflow: undefined,
+      workflowPresent: false,
+    };
   }
   const record = input as Record<string, unknown>;
   if ("projectDefaults" in record) {
     return {
       defaults: record.projectDefaults,
+      browsers: record.browsers,
+      browsersPresent: "browsers" in record,
       workflow: record.workflow,
       workflowPresent: "workflow" in record,
     };
   }
-  const { workflow, ...defaults } = record;
+  const { workflow, browsers, ...defaults } = record;
   return {
     defaults,
+    browsers,
+    browsersPresent: "browsers" in record,
     workflow,
     workflowPresent: "workflow" in record,
   };
@@ -111,7 +131,8 @@ export function readVisualDeltaProjectConfig(
       const workflow = validateVisualDeltaWorkflowConfig(split.workflow, {
         rejectUnknown: true,
       });
-      const errors = [...result.errors, ...workflow.errors];
+      const browsers = validateVisualDeltaBrowsers(split.browsers);
+      const errors = [...result.errors, ...workflow.errors, ...browsers.errors];
       if (errors.length) {
         diagnostics.push({
           code: "project-config-invalid",
@@ -124,6 +145,7 @@ export function readVisualDeltaProjectConfig(
       for (const key of result.present) sources[key] = "project";
       return {
         defaults: result.value,
+        browsers: browsers.value,
         workflow: workflow.value,
         sources,
         path,
@@ -148,6 +170,7 @@ export function readVisualDeltaProjectConfig(
             ...BUILTIN_VISUAL_DELTA_DEFAULTS.baselineLabelOffset,
           },
         },
+        browsers: [...DEFAULT_VISUAL_DELTA_BROWSERS],
         workflow: cloneBuiltInWorkflow(),
         sources,
         path,
@@ -170,6 +193,7 @@ export function readVisualDeltaProjectConfig(
   }
   return {
     defaults,
+    browsers: [...DEFAULT_VISUAL_DELTA_BROWSERS],
     workflow: cloneBuiltInWorkflow(),
     sources,
     path,
@@ -192,7 +216,10 @@ export function writeVisualDeltaProjectConfig(
     split.workflowPresent ? split.workflow : current.workflow,
     { rejectUnknown: true },
   );
-  const errors = [...result.errors, ...workflow.errors];
+  const browsers = validateVisualDeltaBrowsers(
+    split.browsersPresent ? split.browsers : current.browsers,
+  );
+  const errors = [...result.errors, ...workflow.errors, ...browsers.errors];
   if (errors.length) {
     throw new Error(errors.join(" "));
   }
@@ -202,7 +229,11 @@ export function writeVisualDeltaProjectConfig(
   writeFileSync(
     temporaryPath,
     `${JSON.stringify(
-      { ...result.value, workflow: workflow.value },
+      {
+        ...result.value,
+        browsers: browsers.value,
+        workflow: workflow.value,
+      },
       null,
       2,
     )}\n`,

@@ -6,7 +6,10 @@ import {
   visualReviewTagFor,
   type VisualReviewStatus,
 } from "../constants.js";
-import { visualBaselineVisualDeltaParameter } from "./baseline-design.js";
+import {
+  existingVisualBaselineUrls,
+  visualBaselineVisualDeltaParameter,
+} from "./baseline-design.js";
 import { findStoryOpenTagEnd, sanitizeStoryName } from "./source-utils.js";
 import type { BaselinePathMode } from "./options.js";
 import { baselinePublicUrl, type StoryIndexEntry } from "./snapshot-paths.js";
@@ -569,7 +572,30 @@ function mutateTsBaseline(objectText: string, url: string): string {
   const end = findBalancedEnd(objectText, parameters.valueStart, "{", "}");
   if (end < 0) return objectText;
   const parametersObject = objectText.slice(parameters.valueStart, end + 1);
-  if (findTopLevelProperty(parametersObject, "visualDelta")) return objectText;
+  const existingVisualDelta = findTopLevelProperty(
+    parametersObject,
+    "visualDelta",
+  );
+  if (existingVisualDelta) {
+    if (parametersObject[existingVisualDelta.valueStart] !== "{") {
+      return objectText;
+    }
+    const vdEnd = findBalancedEnd(
+      parametersObject,
+      existingVisualDelta.valueStart,
+      "{",
+      "}",
+    );
+    if (vdEnd < 0) return objectText;
+    const parsed = parseVisualDeltaObjectLiteral(
+      parametersObject.slice(existingVisualDelta.valueStart, vdEnd + 1),
+    );
+    if (!parsed) return objectText;
+    const images = Array.isArray(parsed.images) ? parsed.images : [];
+    parsed.images = [...images, url];
+    const nextParameters = `${parametersObject.slice(0, existingVisualDelta.valueStart)}${JSON.stringify(parsed)}${parametersObject.slice(vdEnd + 1)}`;
+    return `${objectText.slice(0, parameters.valueStart)}${nextParameters}${objectText.slice(end + 1)}`;
+  }
   const next = insertObjectProperty(
     parametersObject,
     `visualDelta: ${visualDelta}`,
@@ -1069,9 +1095,13 @@ export function injectTypeScriptStoryBaselines(
       importPath: "story.stories.ts",
     };
     const url = baselinePublicUrl(entry, mode);
-    if (!baselineExists(url)) continue;
+    const urls = existingVisualBaselineUrls(url, baselineExists);
+    if (!urls.length) continue;
     const objectText = source.slice(range.objectStart, range.objectEnd);
-    const updated = mutateTsBaseline(objectText, url);
+    const updated = urls.reduce(
+      (current, baselineUrl) => mutateTsBaseline(current, baselineUrl),
+      objectText,
+    );
     next = `${next.slice(0, range.objectStart)}${updated}${next.slice(range.objectEnd)}`;
   }
   return next;

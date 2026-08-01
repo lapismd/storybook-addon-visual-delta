@@ -71,6 +71,7 @@
     "test": "vitest run",
     "test:panel": "playwright test -c playwright.panel.config.ts",
     "test:manager": "playwright test -c playwright.manager.config.ts",
+    "test:browsers": "node ./scripts/test-browser-matrix.mjs",
     "spec:lint": "markdownlint-cli2 --config .markdownlint-cli2.jsonc",
     "spec:validate": "node ./scripts/check-spec-structure.mjs",
     "spec:build": "mdbook build ./spec",

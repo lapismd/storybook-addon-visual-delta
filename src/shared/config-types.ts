@@ -19,9 +19,13 @@ export type VisualDeltaZoomDefault = "fit" | "100%";
 
 export type VisualDeltaVcsMode = "off" | "review" | "auto";
 
+export type { VisualBaselineEnvironment, VisualDeltaBrowser } from "./environments.js";
+export type { VisualTestFailureMode } from "./failure-mode.js";
+
 export type VisualDeltaWorkflowConfig = {
   /** Approve the exact story after a fresh authoritative live pass. */
   autoAcceptLiveStoryComparisons: boolean;
+  visualTestFailureMode: import("./failure-mode.js").VisualTestFailureMode;
   vcs: {
     mode: VisualDeltaVcsMode;
     commitMessageTemplate: string;
@@ -74,6 +78,10 @@ export type VisualDeltaResolvedConfig = {
   playwrightPassThresholdPercent: number;
   /** Editable values resolved from project file → legacy fallback → built-ins. */
   projectDefaults: VisualDeltaProjectDefaults;
+  /** Enabled local Playwright browser projects; Chromium alone by default. */
+  browsers: import("./environments.js").VisualDeltaBrowser[];
+  /** Node platform hosting the development middleware. */
+  runtimePlatform: string;
   /** Project workflow policy. All mutation/commit automation defaults off. */
   workflow: VisualDeltaWorkflowConfig;
   /** Detected repository and effective host write capability. */

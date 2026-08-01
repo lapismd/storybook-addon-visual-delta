@@ -14,6 +14,8 @@ export type VisualComparisonOutcome =
   | "error"
   | "skipped";
 
+export type VisualComparisonPolicyStatus = "passed" | "warning" | "failed";
+
 export type VisualDiffChangeBounds = {
   x: number;
   y: number;
@@ -39,6 +41,10 @@ export type VisualDiffSidecar = {
   runnerStatus?: VisualDiffSidecarStatus;
   /** Canonical comparison classification (v2). */
   outcome?: VisualComparisonOutcome;
+  /** Process-policy classification after applying warn/strict mode. */
+  policyStatus?: VisualComparisonPolicyStatus;
+  browser?: import("./shared/environments.js").VisualDeltaBrowser;
+  platform?: string;
   error?: string;
   generatedAt: string;
   tool: "playwright";

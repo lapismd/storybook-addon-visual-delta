@@ -25,7 +25,7 @@ export type VisualDeltaSettings = {
    * (center overlay). Default true = live visible.
    */
   liveVisible: boolean;
-  /** Pass threshold (%) for Diff HTML vs Diff Chromium. */
+  /** Pass threshold (%) for Diff HTML vs Diff Browser. */
   passThresholdByEngine: PassThresholdByEngine;
 };
 

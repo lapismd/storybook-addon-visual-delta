@@ -2,7 +2,7 @@
  * Shared helpers for opt-in play-step visual captures.
  *
  * Primary baselines remain end-of-play. Interaction PNGs are siblings:
- *   `{slug}--{stepId}-chromium-darwin.png`
+ *   `{slug}--{stepId}-{browser}-{platform}.png`
  */
 
 /** Query param on iframe.html — park play after this step id. */
@@ -145,14 +145,16 @@ export function interactionScreenshotRelativePath(
   return primaryRelPng.replace(/\.png$/, `--${stepId}.png`);
 }
 
-/** Parse `…/{slug}--{stepId}-chromium-darwin.png` → stepId, or null. */
+/** Parse `…/{slug}--{stepId}-{browser}-{platform}.png` → stepId, or null. */
 export function stepIdFromInteractionSnapshotName(
   fileName: string,
   storySlug: string,
 ): string | null {
   const base = fileName.replace(/\\/g, "/").split("/").pop() ?? fileName;
   const prefix = `${storySlug}--`;
-  const suffixMatch = base.match(/-chromium-[a-z0-9]+\.png$/i);
+  const suffixMatch = base.match(
+    /-(?:chromium|firefox|webkit)-[a-z0-9]+\.png$/i,
+  );
   if (!suffixMatch || !base.startsWith(prefix)) return null;
   const withoutSuffix = base.slice(0, -suffixMatch[0].length);
   const stepId = withoutSuffix.slice(prefix.length);

@@ -69,6 +69,7 @@ describe("project configuration", () => {
     expect(result.defaults).toEqual(BUILTIN_VISUAL_DELTA_DEFAULTS);
     expect(result.workflow).toEqual({
       autoAcceptLiveStoryComparisons: true,
+      visualTestFailureMode: "warn",
       vcs: {
         mode: "review",
         commitMessageTemplate: "Visual: {action} {scope}",
@@ -96,5 +97,25 @@ describe("project configuration", () => {
     );
     expect(result.sources.passThresholdPercent).toBe("built-in");
     expect(result.diagnostics[0]?.code).toBe("project-config-unreadable");
+  });
+
+  it("persists and validates the browser matrix and failure mode", () => {
+    const root = mkdtempSync(join(tmpdir(), "visual-delta-config-"));
+    const written = writeVisualDeltaProjectConfig(root, {
+      ...BUILTIN_VISUAL_DELTA_DEFAULTS,
+      browsers: ["chromium", "firefox", "webkit"],
+      workflow: {
+        ...BUILTIN_VISUAL_DELTA_WORKFLOW,
+        visualTestFailureMode: "strict",
+      },
+    });
+    expect(written.browsers).toEqual(["chromium", "firefox", "webkit"]);
+    expect(written.workflow.visualTestFailureMode).toBe("strict");
+    expect(() =>
+      writeVisualDeltaProjectConfig(root, {
+        ...BUILTIN_VISUAL_DELTA_DEFAULTS,
+        browsers: ["chromium", "chromium"],
+      }),
+    ).toThrow(/duplicate chromium/);
   });
 });

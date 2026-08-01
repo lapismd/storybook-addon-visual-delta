@@ -542,18 +542,20 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
         const outcomePassed =
           result.outcome === "passed" ||
           result.outcome === "changed-within-tolerance";
+        const warning = result.policyStatus === "warning";
         const summary: VisualLastRunSummary = {
           finishedAt: Date.now(),
           summary: {
             total: 1,
             passed: outcomePassed ? 1 : 0,
-            failed: outcomePassed ? 0 : 1,
+            failed: outcomePassed || warning ? 0 : 1,
             skipped: 0,
+            warnings: warning ? 1 : 0,
           },
           completed: true,
-          error: outcomePassed ? undefined : "1 failed",
+          error: outcomePassed || warning ? undefined : "1 failed",
           scope,
-          logTail: "Live Chromium story comparison",
+          logTail: "Live browser story comparison",
           results: [result],
         };
         publishVisualLastRun(summary);
@@ -809,7 +811,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                       frozenIds.includes(item.storyId),
                     ) ??
                     [];
-                  const acceptIds = acceptableStoryIdsFromLastRun({
+                  const cleanIds = acceptableStoryIdsFromLastRun({
                     finishedAt: Date.now(),
                     summary: {
                       total: source.length,
@@ -820,6 +822,15 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                     completed: true,
                     results: source,
                   });
+                  const acceptIds = cleanIds.filter((storyId) =>
+                    config.browsers.every((browser) =>
+                      source.some(
+                        (item) =>
+                          item.storyId === storyId &&
+                          (item.environment?.browser ?? "chromium") === browser,
+                      ),
+                    ),
+                  );
                   if (!acceptIds.length) return;
                   setIsUpdatingStatus(true);
                   try {

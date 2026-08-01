@@ -1,4 +1,6 @@
-/** Shared Chromium Diff capture stream types (manager + middleware). */
+/** Shared browser capture stream types (manager + middleware). */
+
+import type { VisualBaselineEnvironment } from "./environments.js";
 
 export type CaptureSubjectPhase =
   | "launching"
@@ -19,10 +21,11 @@ export type CaptureSubjectResult = {
   pngBase64: string;
   width: number;
   height: number;
+  environment: VisualBaselineEnvironment;
 };
 
 export type CaptureSubjectStreamEvent =
-  | { type: "start"; storyId: string }
+  | { type: "start"; storyId: string; environment?: VisualBaselineEnvironment }
   | ({ type: "progress" } & CaptureSubjectProgress)
   | ({ type: "done" } & CaptureSubjectResult)
   | { type: "error"; error: string };

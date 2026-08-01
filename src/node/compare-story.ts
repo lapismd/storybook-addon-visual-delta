@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import {
-  captureSubjectWithChromium,
+  captureSubjectWithBrowser,
   type CaptureSubjectProgress,
 } from "./capture-subject.js";
 import type {
@@ -15,19 +15,44 @@ import {
 import { resolveVisualBaselinePath } from "./delete-baseline.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import { writeDiffArtifactsForBaseline } from "../playwright/write-diff-artifacts.js";
+import { parseVisualBaselineEnvironment } from "../shared/environments.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 /**
  * Capture and compare one live Storybook story without consulting or rebuilding
  * storybook-static. This is the authoritative backend for both Story and Diff
- * Chromium manager actions.
+ * Browser manager actions.
  */
-export async function compareLiveStoryWithChromium(options: {
+export async function compareLiveStoryWithBrowser(options: {
   root: string;
   hostOptions?: VisualDeltaHostOptions;
   request: CompareStoryRequest;
   onProgress?: (progress: CaptureSubjectProgress) => void;
 }): Promise<CompareStoryResult> {
   const storyId = options.request.storyId.trim();
+  const browser = options.request.browser ?? "chromium";
+  const projectConfig = readVisualDeltaProjectConfig(options.root);
+  const configErrors = projectConfig.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (configErrors.length > 0) {
+    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+  }
+  if (!projectConfig.browsers.includes(browser)) {
+    throw new Error(`Browser ${browser} is not enabled in project configuration.`);
+  }
+  const requestedEnvironment = parseVisualBaselineEnvironment(
+    options.request.baselineUrl,
+  );
+  if (
+    !requestedEnvironment ||
+    requestedEnvironment.browser !== browser ||
+    requestedEnvironment.platform !== process.platform
+  ) {
+    throw new Error(
+      `Baseline environment must match ${browser}/${process.platform}.`,
+    );
+  }
   const requestEntry = options.request.story;
   if (requestEntry && requestEntry.id !== storyId) {
     throw new Error("Story metadata does not match the requested story");
@@ -49,7 +74,7 @@ export async function compareLiveStoryWithChromium(options: {
     throw new Error(`No baseline screenshot for ${storyId}`);
   }
 
-  const capture = await captureSubjectWithChromium(
+  const capture = await captureSubjectWithBrowser(
     {
       origin: options.request.origin,
       storyId,
@@ -61,6 +86,7 @@ export async function compareLiveStoryWithChromium(options: {
       ignoreSelectors: options.request.ignoreSelectors,
       cropToViewport: options.request.cropToViewport,
       globals: options.request.globals,
+      browser,
     },
     options.onProgress,
   );
@@ -93,6 +119,17 @@ export async function compareLiveStoryWithChromium(options: {
     diffThreshold: options.request.diffThreshold,
     includeAntiAliasing: options.request.includeAntiAliasing,
     captureConfig,
+    browser,
+    platform: process.platform,
+    failureMode: projectConfig.workflow.visualTestFailureMode,
   });
-  return { ok: true, storyId, sidecar };
+  return {
+    ok: true,
+    storyId,
+    sidecar,
+    environment: { browser, platform: process.platform },
+  };
 }
+
+/** Compatibility alias for existing Chromium callers. */
+export const compareLiveStoryWithChromium = compareLiveStoryWithBrowser;

@@ -3,12 +3,17 @@ import type {
   VisualDeltaWorkflowConfig,
 } from "./config-types.js";
 import type { VisualComparisonOutcome } from "../visual-diff-sidecar.js";
+import {
+  DEFAULT_VISUAL_TEST_FAILURE_MODE,
+  isVisualTestFailureMode,
+} from "./failure-mode.js";
 
 export const DEFAULT_VISUAL_DELTA_COMMIT_MESSAGE_TEMPLATE =
   "Visual Delta: {action} {scope}";
 
 export const BUILTIN_VISUAL_DELTA_WORKFLOW: VisualDeltaWorkflowConfig = {
   autoAcceptLiveStoryComparisons: false,
+  visualTestFailureMode: DEFAULT_VISUAL_TEST_FAILURE_MODE,
   vcs: {
     mode: "off",
     commitMessageTemplate: DEFAULT_VISUAL_DELTA_COMMIT_MESSAGE_TEMPLATE,
@@ -39,6 +44,8 @@ function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
   return {
     autoAcceptLiveStoryComparisons:
       BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
+    visualTestFailureMode:
+      BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
   };
 }
@@ -65,7 +72,11 @@ export function validateVisualDeltaWorkflowConfig(
     };
   }
 
-  const workflowKeys = new Set(["autoAcceptLiveStoryComparisons", "vcs"]);
+  const workflowKeys = new Set([
+    "autoAcceptLiveStoryComparisons",
+    "visualTestFailureMode",
+    "vcs",
+  ]);
   if (options.rejectUnknown) {
     for (const key of Object.keys(input)) {
       if (!workflowKeys.has(key)) {
@@ -80,6 +91,14 @@ export function validateVisualDeltaWorkflowConfig(
         input.autoAcceptLiveStoryComparisons;
     } else {
       errors.push("autoAcceptLiveStoryComparisons must be a boolean.");
+    }
+  }
+
+  if ("visualTestFailureMode" in input) {
+    if (isVisualTestFailureMode(input.visualTestFailureMode)) {
+      value.visualTestFailureMode = input.visualTestFailureMode;
+    } else {
+      errors.push('workflow.visualTestFailureMode must be "warn" or "strict".');
     }
   }
 

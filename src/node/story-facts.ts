@@ -8,6 +8,7 @@ import type {
 import type { BaselinePathMode } from "./options.js";
 import { snapshotFileName } from "./snapshot-paths.js";
 import { isVisualDiffSidecar } from "../visual-diff-sidecar.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
 
 function sha256(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
@@ -25,39 +26,67 @@ export function resolveVisualStoryFacts(
   stories: VisualStoryDescriptor[],
   snapshotDir: string,
   baselinePathMode: BaselinePathMode,
+  browsers: readonly VisualDeltaBrowser[] = ["chromium"],
+  platform = "darwin",
 ): VisualStoryFact[] {
   const resolvedSnapshotDir = path.resolve(snapshotDir);
   return stories.map((story) => {
     try {
-      const relativePath = snapshotFileName(
-        story,
-        baselinePathMode,
-        "chromium",
-        "darwin",
+      const baselinePaths = browsers.map((browser) =>
+        path.resolve(
+          resolvedSnapshotDir,
+          snapshotFileName(story, baselinePathMode, browser, platform),
+        ),
       );
-      const baselinePath = path.resolve(resolvedSnapshotDir, relativePath);
-      if (!isInsideDirectory(resolvedSnapshotDir, baselinePath)) {
+      if (
+        baselinePaths.some(
+          (baselinePath) =>
+            !isInsideDirectory(resolvedSnapshotDir, baselinePath),
+        )
+      ) {
         return { storyId: story.id, baseline: "unresolved" };
       }
-      const baselinePresent = existsSync(baselinePath);
-      const baselineHash = baselinePresent ? sha256(baselinePath) : undefined;
-      const sidecarPath = baselinePath.replace(/\.png$/i, ".json");
-      let resultBaselineHash: string | undefined;
-      let resultCaptureConfigHash: string | undefined;
-      if (baselineHash && existsSync(sidecarPath)) {
-        try {
-          const sidecar = JSON.parse(readFileSync(sidecarPath, "utf8"));
-          if (
-            isVisualDiffSidecar(sidecar) &&
-            sidecar.baselineHash === baselineHash
-          ) {
-            resultBaselineHash = sidecar.baselineHash;
-            resultCaptureConfigHash = sidecar.captureConfigHash;
-          }
-        } catch {
-          /* malformed or stale evidence is intentionally omitted */
-        }
-      }
+      const baselinePresent = baselinePaths.every(existsSync);
+      const baselineHashes = baselinePresent
+        ? baselinePaths.map(sha256)
+        : [];
+      const baselineHash = baselinePresent
+        ? baselineHashes.length === 1
+          ? baselineHashes[0]
+          : createHash("sha256")
+              .update(baselineHashes.join("\0"))
+              .digest("hex")
+        : undefined;
+      const matchingSidecars = baselinePresent
+        ? baselinePaths.map((baselinePath, index) => {
+            const sidecarPath = baselinePath.replace(/\.png$/i, ".json");
+            if (!existsSync(sidecarPath)) return null;
+            try {
+              const sidecar = JSON.parse(readFileSync(sidecarPath, "utf8"));
+              return isVisualDiffSidecar(sidecar) &&
+                sidecar.baselineHash === baselineHashes[index]
+                ? sidecar
+                : null;
+            } catch {
+              return null;
+            }
+          })
+        : [];
+      const allResultsMatch =
+        matchingSidecars.length === browsers.length &&
+        matchingSidecars.every(Boolean);
+      const resultBaselineHash = allResultsMatch ? baselineHash : undefined;
+      const resultCaptureConfigHash = allResultsMatch
+        ? matchingSidecars.length === 1
+          ? matchingSidecars[0]?.captureConfigHash
+          : createHash("sha256")
+              .update(
+                matchingSidecars
+                  .map((sidecar) => sidecar?.captureConfigHash ?? "")
+                  .join("\0"),
+              )
+              .digest("hex")
+        : undefined;
       return {
         storyId: story.id,
         baseline: baselinePresent ? "present" : "missing",

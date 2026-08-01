@@ -74,12 +74,24 @@ describe("Playwright result normalization", () => {
       parseListReporterProgress(
         [
           "  ✓   1 [chromium] › visual.spec.ts › Button › button--passed (1.2s)",
-          "  ✘   2 [chromium] › visual.spec.ts › Button › button--failed (800ms)",
+          "  ✘   2 [firefox] › visual.spec.ts › Button › button--failed (800ms)",
         ].join("\n"),
       ),
     ).toEqual([
-      { index: 1, storyId: "button--passed", status: "passed" },
-      { index: 2, storyId: "button--failed", status: "failed" },
+      {
+        index: 1,
+        storyId: "button--passed",
+        status: "passed",
+        browser: "chromium",
+        platform: process.platform,
+      },
+      {
+        index: 2,
+        storyId: "button--failed",
+        status: "failed",
+        browser: "firefox",
+        platform: process.platform,
+      },
     ]);
   });
 
@@ -102,5 +114,48 @@ describe("Playwright result normalization", () => {
         results,
       }).sort(),
     ).toEqual(["button--passed"]);
+  });
+
+  it("records affected success only after the configured browser matrix passes", () => {
+    const root = fixtureRoot();
+    mkdirSync(path.join(root, ".visual-delta"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".visual-delta/config.json"),
+      JSON.stringify({ browsers: ["chromium", "firefox"] }),
+    );
+    const cleanResults = (["chromium", "firefox"] as const).map((browser) => ({
+      storyId: "button--passed",
+      status: "passed" as const,
+      environment: { browser, platform: process.platform },
+      sidecar: { passed: true, policyStatus: "passed" },
+    }));
+    expect(
+      successfulStoryIdsFromPlaywrightResults({
+        root,
+        hostOptions: {
+          snapshotDir: "snapshots",
+          baselinePathMode: "story-id",
+        },
+        results: cleanResults,
+      }),
+    ).toEqual(["button--passed"]);
+
+    expect(
+      successfulStoryIdsFromPlaywrightResults({
+        root,
+        hostOptions: {
+          snapshotDir: "snapshots",
+          baselinePathMode: "story-id",
+        },
+        results: cleanResults.map((result) =>
+          result.environment.browser === "firefox"
+            ? {
+                ...result,
+                sidecar: { passed: false, policyStatus: "warning" },
+              }
+            : result,
+        ),
+      }),
+    ).toEqual([]);
   });
 });

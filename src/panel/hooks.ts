@@ -112,7 +112,7 @@ type StoryData = {
   placement: PlacementMode;
   /** False = image-only (live hidden, center overlay). Default true. */
   liveVisible: boolean;
-  /** Pass threshold (%) scoped by Diff HTML vs Diff Chromium. */
+  /** Pass threshold (%) scoped by Diff HTML vs Diff Browser. */
   passThresholdByEngine: PassThresholdByEngine;
   diffThreshold: number;
   diffIncludeAntiAliasing: boolean;

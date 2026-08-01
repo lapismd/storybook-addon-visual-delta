@@ -191,4 +191,54 @@ describe("PanelStatusBar", () => {
     container.remove();
     vi.unstubAllGlobals();
   });
+
+  it("surfaces independent Browser and OS selectors", () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 200 });
+    container.getBoundingClientRect = () =>
+      ({ right: 800, bottom: 600, width: 400 }) as DOMRect;
+    document.body.appendChild(container);
+    const onBrowserChange = vi.fn();
+    const onPlatformChange = vi.fn();
+
+    renderWithTheme(
+      <PanelStatusBar
+        container={container}
+        running={false}
+        environment={{
+          browser: "chromium",
+          platform: "darwin",
+          browsers: [
+            { value: "chromium", label: "Chromium" },
+            { value: "webkit", label: "WebKit (view only)" },
+          ],
+          platforms: [
+            { value: "darwin", label: "macOS" },
+            { value: "linux", label: "Linux (view only)" },
+          ],
+          onBrowserChange,
+          onPlatformChange,
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Visual baseline browser"), {
+      target: { value: "webkit" },
+    });
+    fireEvent.change(
+      screen.getByLabelText("Visual baseline operating system"),
+      { target: { value: "linux" } },
+    );
+    expect(onBrowserChange).toHaveBeenCalledWith("webkit");
+    expect(onPlatformChange).toHaveBeenCalledWith("linux");
+    expect(screen.getByRole("status")).toHaveStyle({ width: "400px" });
+
+    container.remove();
+    vi.unstubAllGlobals();
+  });
 });

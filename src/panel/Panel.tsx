@@ -157,6 +157,17 @@ import {
   verifyBaselineSources,
 } from "./baseline-source-availability.js";
 import { resolveCapabilitiesFromEnvironment } from "../shared/capabilities.js";
+import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import {
+  isVisualDeltaBrowser,
+  type VisualDeltaBrowser,
+} from "../shared/environments.js";
+import {
+  discoverVisualEnvironments,
+  loadVisualEnvironmentPreference,
+  saveVisualEnvironmentPreference,
+  sourceMatchesEnvironment,
+} from "./environment-selection.js";
 
 const testProviderStore = experimental_getTestProviderStore(TEST_PROVIDER_ID);
 const panelCapabilities = resolveCapabilitiesFromEnvironment();
@@ -194,9 +205,33 @@ function baselineUrlForComparison(source: string | undefined) {
   }
 }
 
+function normalizePanelConfig(
+  config: VisualDeltaResolvedConfig,
+): VisualDeltaResolvedConfig {
+  return {
+    ...config,
+    browsers:
+      Array.isArray(config.browsers) && config.browsers.length > 0
+        ? config.browsers
+        : ["chromium"],
+    runtimePlatform: config.runtimePlatform || "darwin",
+  };
+}
+
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
   const { storyId: currentStoryId } = useStorybookState();
+  const initialEnvironment = useRef(loadVisualEnvironmentPreference());
+  const [resolvedConfig, setResolvedConfig] =
+    useState<VisualDeltaResolvedConfig | null>(null);
+  const [selectedBrowser, setSelectedBrowser] = useState<VisualDeltaBrowser>(
+    isVisualDeltaBrowser(initialEnvironment.current.browser)
+      ? initialEnvironment.current.browser
+      : "chromium",
+  );
+  const [selectedPlatform, setSelectedPlatform] = useState(
+    initialEnvironment.current.platform || "darwin",
+  );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
     images: configuredImages,
@@ -263,26 +298,131 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     () =>
       configuredImages.filter(
         (image) =>
+          sourceMatchesEnvironment(image.src, {
+            browser: selectedBrowser,
+            platform: selectedPlatform,
+          }) &&
           !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
-    [configuredImages, unavailableBaselineSources],
+    [
+      configuredImages,
+      selectedBrowser,
+      selectedPlatform,
+      unavailableBaselineSources,
+    ],
   );
   const primaryImages = useMemo(
     () =>
       configuredPrimaryImages.filter(
         (image) =>
+          sourceMatchesEnvironment(image.src, {
+            browser: selectedBrowser,
+            platform: selectedPlatform,
+          }) &&
           !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
-    [configuredPrimaryImages, unavailableBaselineSources],
+    [
+      configuredPrimaryImages,
+      selectedBrowser,
+      selectedPlatform,
+      unavailableBaselineSources,
+    ],
   );
   const interactions = useMemo(
     () =>
       configuredInteractions.filter(
         (interaction) =>
+          sourceMatchesEnvironment(interaction.src, {
+            browser: selectedBrowser,
+            platform: selectedPlatform,
+          }) &&
           !unavailableBaselineSources.has(baselineSourceStem(interaction.src)),
       ),
-    [configuredInteractions, unavailableBaselineSources],
+    [
+      configuredInteractions,
+      selectedBrowser,
+      selectedPlatform,
+      unavailableBaselineSources,
+    ],
   );
+  const environmentOptions = useMemo(
+    () =>
+      discoverVisualEnvironments({
+        sources: [
+          ...configuredImages.map((image) => image.src),
+          ...configuredInteractions.map((interaction) => interaction.src),
+        ],
+        configuredBrowsers: resolvedConfig?.browsers,
+        runtimePlatform: resolvedConfig?.runtimePlatform ?? "darwin",
+      }),
+    [configuredImages, configuredInteractions, resolvedConfig],
+  );
+  const environmentMutable = Boolean(
+    resolvedConfig &&
+      (resolvedConfig.browsers ?? ["chromium"]).includes(selectedBrowser) &&
+      resolvedConfig.runtimePlatform === selectedPlatform,
+  );
+  const environmentCapabilities = useMemo(
+    () => ({
+      ...panelCapabilities,
+      writes: panelCapabilities.writes && environmentMutable,
+      runs: panelCapabilities.runs && environmentMutable,
+      browserCompare: panelCapabilities.browserCompare && environmentMutable,
+      chromiumCompare: panelCapabilities.chromiumCompare && environmentMutable,
+    }),
+    [environmentMutable],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchVisualConfig()
+      .then((config) => {
+        if (cancelled) return;
+        const normalized = normalizePanelConfig(config);
+        setResolvedConfig(normalized);
+        if (!initialEnvironment.current.platform) {
+          setSelectedPlatform(normalized.runtimePlatform);
+        }
+      })
+      .catch(() => {
+        /* static/read-only surfaces retain discovered environment choices */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!resolvedConfig) return;
+    if (
+      !environmentOptions.browsers.some(
+        (option) => option.value === selectedBrowser,
+      )
+    ) {
+      setSelectedBrowser(resolvedConfig.browsers[0] ?? "chromium");
+    }
+    if (
+      !environmentOptions.platforms.some(
+        (option) => option.value === selectedPlatform,
+      )
+    ) {
+      setSelectedPlatform(resolvedConfig.runtimePlatform || "darwin");
+    }
+  }, [
+    environmentOptions.browsers,
+    environmentOptions.platforms,
+    resolvedConfig,
+    selectedBrowser,
+    selectedPlatform,
+  ]);
+
+  useEffect(() => {
+    saveVisualEnvironmentPreference({
+      browser: selectedBrowser,
+      platform: selectedPlatform,
+    });
+    setIndex(0);
+  }, [selectedBrowser, selectedPlatform, setIndex]);
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
@@ -875,6 +1015,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError("No story selected");
         return;
       }
+      if (!environmentMutable) {
+        setCaptureError(
+          `Baselines can only be changed for an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"}.`,
+        );
+        return;
+      }
       setCaptureError(null);
       setUpdateLog(null);
       try {
@@ -884,6 +1030,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           stepId: step.stepId,
           captureCallId: step.captureCallId,
           overwrite,
+          browser: selectedBrowser,
         });
         const bust = `t=${Date.now()}`;
         // Prefer URL from on-disk convention; CSF HMR may lag.
@@ -897,13 +1044,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 : undefined,
             tags: entry?.tags,
           },
-          { allowSkipVisual: true },
+          {
+            allowSkipVisual: true,
+            environment: {
+              browser: selectedBrowser,
+              platform: selectedPlatform,
+            },
+          },
         );
-        const src = primary
-          ? primary.replace(
-              /-chromium-darwin\.png$/i,
-              `--${step.stepId}-chromium-darwin.png`,
-            )
+        const suffix = `-${selectedBrowser}-${selectedPlatform}.png`;
+        const src = primary?.endsWith(suffix)
+          ? primary.slice(0, -suffix.length) + `--${step.stepId}${suffix}`
           : undefined;
         if (src) {
           markBaselineSourceAvailable(src);
@@ -928,11 +1079,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     },
     [
       api,
+      environmentMutable,
       hydrateInteractions,
       interactions,
       markBaselineSourceAvailable,
       revealCenteredOverlay,
       selectInteractionBaseline,
+      selectedBrowser,
+      selectedPlatform,
+      resolvedConfig,
       storyId,
     ],
   );
@@ -1103,7 +1258,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           importPath: entry?.importPath,
           tags: entry?.tags,
         },
-        { allowSkipVisual: next.kind === "create" },
+        {
+          allowSkipVisual: next.kind === "create",
+          environment: {
+            browser: selectedBrowser,
+            platform: selectedPlatform,
+          },
+        },
       );
       if (url) {
         // Prefer hydrate over remount: remount can re-emit INIT_IMAGE with
@@ -1123,6 +1284,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     hydrateBaselineImages,
     markBaselineSourceAvailable,
     revealCenteredOverlay,
+    selectedBrowser,
+    selectedPlatform,
   ]);
 
   const handleDiff = useCallback(
@@ -1133,7 +1296,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         return;
       }
       if (!storyId && engine === "chromium") {
-        setCaptureError("No story selected for Chromium Diff");
+        setCaptureError("No story selected for Browser Diff");
+        return;
+      }
+      if (engine === "chromium" && !environmentMutable) {
+        setCaptureError(
+          `Browser comparison is only available for an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"}.`,
+        );
         return;
       }
       diffAbortRef.current?.abort();
@@ -1141,7 +1310,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffAbortRef.current = abort;
       setIsDiffing(true);
       setDiffProgressLabel(
-        engine === "chromium" ? "Starting Chromium…" : "Diffing…",
+        engine === "chromium"
+          ? `Starting ${selectedBrowser}…`
+          : "Diffing…",
       );
       setCaptureError(null);
       setDiffResult(null);
@@ -1169,6 +1340,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             visualCaptureUntil: selectedInteractionId ?? undefined,
             visualCaptureCallId: selectedVisualCaptureCallId,
             mode: selectedMode ?? undefined,
+            browser: selectedBrowser,
             signal: abort.signal,
             onProgress: (progress) => setDiffProgressLabel(progress.label),
           });
@@ -1191,19 +1363,21 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           const outcomePassed =
             result.outcome === "passed" ||
             result.outcome === "changed-within-tolerance";
+          const warning = result.policyStatus === "warning";
           publishVisualLastRun({
             finishedAt: Date.now(),
             completed: true,
             summary: {
               total: 1,
               passed: outcomePassed ? 1 : 0,
-              failed: outcomePassed ? 0 : 1,
+              failed: outcomePassed || warning ? 0 : 1,
               skipped: 0,
+              warnings: warning ? 1 : 0,
             },
-            error: outcomePassed ? undefined : "1 failed",
+            error: outcomePassed || warning ? undefined : "1 failed",
             scope: "story",
             results: [result],
-            logTail: "Live Chromium story comparison",
+            logTail: `Live ${selectedBrowser} story comparison`,
           });
           const stem =
             baselineSrcForDiff.split("?")[0] ??
@@ -1329,12 +1503,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       delay,
       diffIncludeAntiAliasing,
       diffThreshold,
+      environmentMutable,
       getOverlayInfo,
       hideOverlay,
       ignoreSelectors,
       images,
       index,
       passThresholdPercent,
+      resolvedConfig,
+      selectedBrowser,
       selectedInteractionId,
       selectedVisualCaptureCallId,
       selectedMode,
@@ -1356,21 +1533,30 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError("No story selected");
       return;
     }
+    if (!environmentMutable) {
+      setCaptureError("The selected browser and OS are view-only.");
+      return;
+    }
     setCaptureError(null);
     setUpdateLog(null);
     try {
       await postVisualUpdateBaseline({
         storyId,
+        browser: selectedBrowser,
       });
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [storyId]);
+  }, [environmentMutable, selectedBrowser, storyId]);
 
   const handleDeleteBaseline = useCallback(
     async (section: BaselineSection) => {
       if (!storyId) {
         setCaptureError("No story selected");
+        return;
+      }
+      if (!environmentMutable) {
+        setCaptureError("The selected browser and OS are view-only.");
         return;
       }
       const baselineUrl = (
@@ -1439,6 +1625,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       interactions,
       clearBaselineDiagnostics,
       primaryImages,
+      environmentMutable,
       removeBaselineImage,
       restorePrimaryBaselines,
       setSelectedMode,
@@ -1461,20 +1648,26 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError("No story selected");
       return;
     }
+    if (!environmentMutable) {
+      setCaptureError("The selected browser and OS are view-only.");
+      return;
+    }
     setCaptureError(null);
     setUpdateLog(null);
     try {
       await postVisualCreateBaseline({
         storyId,
+        browser: selectedBrowser,
       });
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [storyId]);
+  }, [environmentMutable, selectedBrowser, storyId]);
 
   const refreshOnboarding = useCallback(async () => {
     try {
       const config = await fetchVisualConfig();
+      setResolvedConfig(normalizePanelConfig(config));
       setOnboardingReady(config.onboarding.ready);
       setOnboardingHint(config.onboarding.hint);
     } catch {
@@ -1672,6 +1865,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError("No story selected");
         return;
       }
+      if (scope === "story" && !environmentMutable) {
+        setCaptureError("The selected browser and OS are view-only.");
+        return;
+      }
       setIsRunningVisual(true);
       setCaptureError(null);
       try {
@@ -1697,6 +1894,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               visualCaptureUntil: selectedInteractionId ?? undefined,
               visualCaptureCallId: selectedVisualCaptureCallId,
               mode: selectedMode ?? undefined,
+              browser: selectedBrowser,
               onProgress: (progress) => setDiffProgressLabel(progress.label),
             });
             applyVisualRunResults([storyId!], [result]);
@@ -1717,22 +1915,24 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             const outcomePassed =
               result.outcome === "passed" ||
               result.outcome === "changed-within-tolerance";
+            const warning = result.policyStatus === "warning";
             publishVisualLastRun({
               finishedAt: Date.now(),
               completed: true,
               summary: {
                 total: 1,
                 passed: outcomePassed ? 1 : 0,
-                failed: outcomePassed ? 0 : 1,
+                failed: outcomePassed || warning ? 0 : 1,
                 skipped: 0,
+                warnings: warning ? 1 : 0,
               },
-              error: outcomePassed ? undefined : "1 failed",
+              error: outcomePassed || warning ? undefined : "1 failed",
               scope: "story",
               results: [result],
-              logTail: "Live Chromium story comparison",
+              logTail: `Live ${selectedBrowser} story comparison`,
             });
             setDiffEpoch(Date.now());
-            if (!outcomePassed) {
+            if (!outcomePassed && !warning) {
               setCaptureError("Visual: 1 failed · 0 passed");
             }
             return;
@@ -1795,6 +1995,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [
       api,
       baselineSrc,
+      environmentMutable,
+      selectedBrowser,
       selectedInteractionId,
       selectedVisualCaptureCallId,
       selectedMode,
@@ -1822,9 +2024,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       ? ("pass" as const)
       : ("fail" as const)
     : null;
-  const latestStoryResultCandidate = lastRun?.results?.find(
-    (result) => result.storyId === storyId,
-  );
+  const latestStoryResultCandidate =
+    lastRun?.results?.find(
+      (result) =>
+        result.storyId === storyId &&
+        result.environment?.browser === selectedBrowser &&
+        result.environment.platform === selectedPlatform,
+    ) ??
+    lastRun?.results?.find(
+      (result) => result.storyId === storyId && result.environment == null,
+    );
   const latestStoryResult =
     latestStoryResultCandidate?.sidecar?.version === 2 &&
     (!diffResult ||
@@ -1896,7 +2105,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       title =
         baselineJob.kind === "create" ? "Baseline created" : "Baseline updated";
       detail =
-        "Review is pending. Run Story or Diff Chromium to produce a fresh official result.";
+        "Review is pending. Run Story or Diff Browser to produce a fresh official result.";
     } else if (aggregateModeStatus === "error") {
       state = "error";
       title = "Mode capture error";
@@ -1908,6 +2117,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       state = "missing";
       title = "Mode baseline missing";
       detail = "Create or update baselines for every enabled visual mode.";
+    } else if (latestStoryResult?.policyStatus === "warning") {
+      state = "warning";
+      title =
+        latestStoryResult.outcome === "missing-baseline"
+          ? "Baseline warning"
+          : "Visual difference warning";
+      detail =
+        latestStoryResult.error ??
+        "The comparison completed with a warning and was not counted as passed.";
     } else if (
       aggregateModeStatus === "failed" ||
       latestStoryResult?.status === "failed"
@@ -1933,17 +2151,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       state = "ready";
       title = "Baseline updated";
       detail =
-        "Run Story or Diff Chromium to refresh the official comparison result.";
+        "Run Story or Diff Browser to refresh the official comparison result.";
     } else if (badgeStatus === "fail") {
       state = "failed";
       title = "HTML preview differs";
       detail =
-        "Diagnostic only — run Story or Diff Chromium for an official result.";
+        "Diagnostic only — run Story or Diff Browser for an official result.";
     } else if (badgeStatus === "pass") {
       state = "passed";
       title = "HTML preview matches";
       detail =
-        "Diagnostic only — run Story or Diff Chromium for an official result.";
+        "Diagnostic only — run Story or Diff Browser for an official result.";
     }
 
     return { state, title, detail };
@@ -2175,6 +2393,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             description:
               "No baseline is wired for this story. In a static read-only Storybook, open a story with parameters.visualDelta.images (see Examples). Creating baselines requires Storybook development with Visual Delta middleware.",
           }
+        : !environmentMutable
+          ? {
+              description: `No baseline exists for ${selectedBrowser} on ${selectedPlatform}. This discovered environment is view-only; switch to an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"} to capture.`,
+            }
         : {
             description: skipVisual
               ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
@@ -2264,7 +2486,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onOpenChanges: openChanges,
           pendingChangesCount,
           isRebuilding,
-          capabilities: panelCapabilities,
+          capabilities: environmentCapabilities,
         }}
         loading={loading}
         configuration={
@@ -2298,6 +2520,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 }
               }}
               onUpdated={(config) => {
+                setResolvedConfig(normalizePanelConfig(config));
                 invalidateVisualLastRun();
                 clearBaselineDiagnostics();
                 setDiffResult(null);
@@ -2373,31 +2596,31 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               showInteractionFilter
               onExpand={selectSection}
               onCreateDefault={
-                panelCapabilities.writes
+                environmentCapabilities.writes
                   ? () => void handleCreateBaselines()
                   : undefined
               }
               onCreate={
-                panelCapabilities.writes
+                environmentCapabilities.writes
                   ? (step) => void handleCreateInteraction(step, false)
                   : () => undefined
               }
               onUpdate={
-                panelCapabilities.writes
+                environmentCapabilities.writes
                   ? (step) => void handleCreateInteraction(step, true)
                   : () => undefined
               }
               onUpdateDefault={
-                panelCapabilities.writes
+                environmentCapabilities.writes
                   ? () => void handleUpdateBaselines()
                   : () => undefined
               }
               onDelete={
-                panelCapabilities.writes
+                environmentCapabilities.writes
                   ? (section) => void handleDeleteBaseline(section)
                   : () => undefined
               }
-              allowMutations={panelCapabilities.writes}
+              allowMutations={environmentCapabilities.writes}
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }
@@ -2440,6 +2663,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                     total: baselineJob.total ?? 0,
                   }
                 : null,
+          environment: {
+            browser: selectedBrowser,
+            platform: selectedPlatform,
+            browsers: environmentOptions.browsers,
+            platforms: environmentOptions.platforms,
+            onBrowserChange: (value) => {
+              if (isVisualDeltaBrowser(value)) setSelectedBrowser(value);
+            },
+            onPlatformChange: setSelectedPlatform,
+          },
         }}
       />
       <ImageLightbox

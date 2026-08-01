@@ -1,4 +1,9 @@
 export type {
+  VisualBaselineEnvironment,
+  VisualDeltaBrowser,
+} from "../shared/environments.js";
+export type { VisualTestFailureMode } from "../shared/failure-mode.js";
+export type {
   AffectedVisualTestsOptions,
   BaselinePathMode,
   VisualDeltaHostOptions,
@@ -128,7 +133,10 @@ export {
   type StaticBuildDecision,
   type StaticBuildReason,
 } from "./static-build.js";
-export { compareLiveStoryWithChromium } from "./compare-story.js";
+export {
+  compareLiveStoryWithBrowser,
+  compareLiveStoryWithChromium,
+} from "./compare-story.js";
 export type {
   CompareStoryRequest,
   CompareStoryResult,
@@ -171,6 +179,7 @@ export {
   type VisualDeltaChangeVcs,
 } from "./change-set-vcs.js";
 export {
+  captureSubjectWithBrowser,
   captureSubjectWithChromium,
   type CaptureSubjectError,
   type CaptureSubjectRequest,

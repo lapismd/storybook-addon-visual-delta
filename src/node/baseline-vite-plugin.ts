@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import type { Plugin } from "vite";
 import {
   VISUAL_BASELINE_SUFFIX,
+  existingVisualBaselineUrls,
   visualBaselineVisualDeltaParameter,
 } from "./baseline-design.js";
 import {
@@ -44,9 +45,10 @@ function visualDeltaObjectLiteral(
   baselineExists: BaselineExists,
 ): string | undefined {
   const url = baselineUrl(directory, slug);
-  if (!baselineExists(url)) return undefined;
+  const urls = existingVisualBaselineUrls(url, baselineExists);
+  if (!urls.length) return undefined;
 
-  const visualDelta = visualBaselineVisualDeltaParameter(url);
+  const visualDelta = visualBaselineVisualDeltaParameter(urls);
   return JSON.stringify(visualDelta);
 }
 
@@ -178,10 +180,11 @@ export function injectNestedImportVisualDeltas(
     } else {
       const id = `${sanitizeStoryName(title)}--${sanitizeStoryName(storyName)}`;
       const url = baselinePublicUrl({ id, importPath }, "nested-import");
-      result += baselineExists(url)
+      const urls = existingVisualBaselineUrls(url, baselineExists);
+      result += urls.length
         ? injectVisualDeltaLiteralIntoStoryOpenTag(
             openTag,
-            JSON.stringify(visualBaselineVisualDeltaParameter(url)),
+            JSON.stringify(visualBaselineVisualDeltaParameter(urls)),
           )
         : openTag;
     }
@@ -213,10 +216,11 @@ function injectStoryIdVisualDeltas(
         { id, importPath: "story.stories.svelte" },
         "story-id",
       );
-      result += baselineExists(url)
+      const urls = existingVisualBaselineUrls(url, baselineExists);
+      result += urls.length
         ? injectVisualDeltaLiteralIntoStoryOpenTag(
             openTag,
-            JSON.stringify(visualBaselineVisualDeltaParameter(url)),
+            JSON.stringify(visualBaselineVisualDeltaParameter(urls)),
           )
         : openTag;
     }

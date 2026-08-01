@@ -31,6 +31,8 @@ const CONFIG = {
     addonSrcDir: null,
   },
   playwrightPassThresholdPercent: 1,
+  browsers: ["chromium", "firefox"],
+  runtimePlatform: "darwin",
   projectDefaults: {
     passThresholdPercent: 1,
     diffThreshold: 0.2,
@@ -45,6 +47,7 @@ const CONFIG = {
   },
   workflow: {
     autoAcceptLiveStoryComparisons: false,
+    visualTestFailureMode: "warn",
     vcs: {
       mode: "off",
       commitMessageTemplate: "Visual Delta: {action} {scope}",
@@ -124,6 +127,7 @@ export async function mockVisualBackend(
       const body = request.postDataJSON() as {
         storyId: string;
         baselineUrl?: string;
+        browser?: "chromium" | "firefox" | "webkit";
       };
       const sidecar = {
         version: 2,
@@ -158,6 +162,10 @@ export async function mockVisualBackend(
             ok: true,
             storyId: body.storyId,
             sidecar,
+            environment: {
+              browser: body.browser ?? "chromium",
+              platform: "darwin",
+            },
           }),
           "",
         ].join("\n"),

@@ -80,12 +80,12 @@ const ActionLabel = styled.span({
 const ENGINES: readonly DiffCaptureEngine[] = ["html", "chromium"];
 
 export function diffEngineLabel(engine: DiffCaptureEngine): string {
-  return engine === "chromium" ? "Diff Chromium" : "Diff HTML";
+  return engine === "chromium" ? "Diff Browser" : "Diff HTML";
 }
 
 export function diffEngineTooltip(engine: DiffCaptureEngine): string {
   if (engine === "chromium") {
-    return "Compare via Playwright Chromium screenshot (matches committed baselines)";
+    return "Compare via the selected Playwright browser (matches committed baselines)";
   }
   return "Compare via html-to-image (fast; variable fonts may differ from baselines)";
 }
@@ -111,7 +111,7 @@ function saveEngine(engine: DiffCaptureEngine) {
 }
 
 /**
- * Panel Diff control: split button with HTML vs Chromium capture engines.
+ * Panel Diff control: split button with HTML vs selected-browser capture engines.
  * Kept separate from the Story / Component / All run split button.
  */
 export function DiffCaptureSplitButton({
@@ -140,7 +140,9 @@ export function DiffCaptureSplitButton({
   engines?: readonly DiffCaptureEngine[];
 }) {
   const allowedEngines =
-    engines.length > 0 ? engines : (["html"] as const satisfies readonly DiffCaptureEngine[]);
+    engines.length > 0
+      ? engines
+      : (["html"] as const satisfies readonly DiffCaptureEngine[]);
   const [internalEngine, setInternalEngine] = useState<DiffCaptureEngine>(() => {
     const loaded = loadDiffCaptureEngine();
     return allowedEngines.includes(loaded) ? loaded : allowedEngines[0]!;
@@ -207,45 +209,45 @@ export function DiffCaptureSplitButton({
         <ActionLabel>{label}</ActionLabel>
       </MainButton>
       {showEngineMenu ? (
-      <PopoverProvider
-        ariaLabel="Choose Diff capture engine"
-        placement="bottom-end"
-        padding={0}
-        visible={menuOpen}
-        onVisibleChange={setMenuOpen}
-        popover={() => (
-          <div style={{ minWidth: 200 }}>
-            <ActionList>
-              {allowedEngines.map((item) => (
-                <ActionList.Item key={item} active={engine === item}>
-                  <ActionList.Action
-                    ariaLabel={diffEngineLabel(item)}
-                    title={diffEngineTooltip(item)}
-                    onClick={() => selectEngine(item)}
-                  >
-                    <ActionList.Icon>
-                      {engine === item ? <CheckIcon /> : <span />}
-                    </ActionList.Icon>
-                    <ActionList.Text>{diffEngineLabel(item)}</ActionList.Text>
-                  </ActionList.Action>
-                </ActionList.Item>
-              ))}
-            </ActionList>
-          </div>
-        )}
-      >
-        <MenuButton
-          size="small"
-          variant="ghost"
-          padding="small"
-          $compact={compact}
-          ariaLabel="Choose Diff HTML or Diff Chromium"
-          title="Choose Diff capture engine"
-          disabled={disabled}
+        <PopoverProvider
+          ariaLabel="Choose Diff capture engine"
+          placement="bottom-end"
+          padding={0}
+          visible={menuOpen}
+          onVisibleChange={setMenuOpen}
+          popover={() => (
+            <div style={{ minWidth: 200 }}>
+              <ActionList>
+                {allowedEngines.map((item) => (
+                  <ActionList.Item key={item} active={engine === item}>
+                    <ActionList.Action
+                      ariaLabel={diffEngineLabel(item)}
+                      title={diffEngineTooltip(item)}
+                      onClick={() => selectEngine(item)}
+                    >
+                      <ActionList.Icon>
+                        {engine === item ? <CheckIcon /> : <span />}
+                      </ActionList.Icon>
+                      <ActionList.Text>{diffEngineLabel(item)}</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                ))}
+              </ActionList>
+            </div>
+          )}
         >
-          <ChevronSmallDownIcon />
-        </MenuButton>
-      </PopoverProvider>
+          <MenuButton
+            size="small"
+            variant="ghost"
+            padding="small"
+            $compact={compact}
+            ariaLabel="Choose Diff HTML or Diff Browser"
+            title="Choose Diff capture engine"
+            disabled={disabled}
+          >
+            <ChevronSmallDownIcon />
+          </MenuButton>
+        </PopoverProvider>
       ) : null}
     </Split>
   );
