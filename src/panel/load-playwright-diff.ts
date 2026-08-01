@@ -119,7 +119,7 @@ export async function loadPlaywrightDiffResult(
   const diffPercent =
     sidecar.diffPercent ??
     (totalPixels > 0 ? (diffPixels / totalPixels) * 100 : 0);
-  const passThresholdPercent = sidecar.passThresholdPercent ?? 1;
+  const passThresholdPercent = sidecar.passThresholdPercent ?? 1.5;
   const passed =
     sidecar.outcome === "passed" ||
     sidecar.outcome === "changed-within-tolerance" ||

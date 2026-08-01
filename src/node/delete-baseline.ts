@@ -9,7 +9,7 @@ import { snapshotFileName } from "./snapshot-paths.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
 import { patchStoryRemoveBaseline } from "./story-source.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
-import { parseVisualBaselineEnvironment } from "../shared/environments.js";
+import { parseVisualBaselineTarget } from "../shared/environments.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 export type DeleteVisualBaselineRequest = {
@@ -56,19 +56,18 @@ export function assertBaselineBelongsToStory(options: {
   if (!entry) {
     throw new Error(`Story not found in index: ${options.storyId}`);
   }
-  const environment = parseVisualBaselineEnvironment(options.relativePath);
-  if (!environment) {
-    throw new Error(`Unsupported baseline environment: ${options.relativePath}`);
+  const target = parseVisualBaselineTarget(options.relativePath);
+  if (!target) {
+    throw new Error(`Unsupported baseline target: ${options.relativePath}`);
   }
   const expected = snapshotFileName(
     entry,
     resolveBaselinePathMode(options.hostOptions),
-    environment.browser,
-    environment.platform,
+    target.browser,
   ).replaceAll(path.sep, "/");
   const expectedDir = path.posix.dirname(expected);
   const expectedName = path.posix.basename(expected);
-  const suffix = `-${environment.browser}-${environment.platform}.png`;
+  const suffix = `-${target.browser}.png`;
   const stem = expectedName.endsWith(suffix)
     ? expectedName.slice(0, -suffix.length)
     : expectedName.replace(/\.png$/i, "");
@@ -141,15 +140,14 @@ export function deleteVisualBaseline(
   if (!storyId || !baselineUrl) {
     throw new Error("Provide storyId and baselineUrl");
   }
-  const environment = parseVisualBaselineEnvironment(baselineUrl);
+  const target = parseVisualBaselineTarget(baselineUrl);
   const enabledBrowsers = readVisualDeltaProjectConfig(root).browsers;
   if (
-    !environment ||
-    environment.platform !== process.platform ||
-    !enabledBrowsers.includes(environment.browser)
+    !target ||
+    !enabledBrowsers.includes(target.browser)
   ) {
     throw new Error(
-      `Baseline mutations require an enabled browser on ${process.platform}.`,
+      "Baseline mutations require an enabled browser target.",
     );
   }
 

@@ -1273,8 +1273,10 @@ function ensureSplit(
     grid-row: 2;
     background: transparent;
   `;
-  vSpacer.style.cssText = `width: 1px; height: 1px;`;
-  hSpacer.style.cssText = `width: 1px; height: 1px;`;
+  if (needsBuild) {
+    vSpacer.style.cssText = `width: 1px; height: 1px;`;
+    hSpacer.style.cssText = `width: 1px; height: 1px;`;
+  }
 
   livePane.style.cssText = `${paneStyleBase()} background: transparent;`;
   baselinePane.style.cssText = `${paneStyleBase()} background: transparent;`;

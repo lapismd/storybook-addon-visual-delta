@@ -95,14 +95,14 @@ export function prepareVisualMatrixFixture(): void {
     writeFileSync(
       path.join(
         VISUAL_MATRIX_SNAPSHOT_DIR,
-        `visual-matrix--pass-${browser}-${process.platform}.png`,
+        `visual-matrix--pass-${browser}.png`,
       ),
       passing,
     );
     writeFileSync(
       path.join(
         VISUAL_MATRIX_SNAPSHOT_DIR,
-        `visual-matrix--mismatch-${browser}-${process.platform}.png`,
+        `visual-matrix--mismatch-${browser}.png`,
       ),
       mismatching,
     );

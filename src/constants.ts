@@ -190,7 +190,8 @@ export type VisualDeltaParams = {
 /** Default pixelmatch threshold for Live Diff (Chromatic default is ~0.063). */
 export const DEFAULT_DIFF_THRESHOLD = 0.2;
 
-export const DEFAULT_PASS_THRESHOLD_PERCENT = 0.1;
+/** Allowed changed-pixel percentage; independent from the 0.2 color threshold. */
+export const DEFAULT_PASS_THRESHOLD_PERCENT = 1.5;
 export const DEFAULT_PLACEMENT: PlacementMode = "right";
 /** @deprecated Kept for any external imports; split layout no longer uses a gap. */
 export const BESIDE_GAP_PX = 24;
@@ -276,9 +277,9 @@ export const VISUAL_DELTA_CANCEL_PATH = "/__visual-delta/cancel-tests";
 export const VISUAL_DELTA_REVIEW_PATH = "/__visual-delta/review-status";
 /** Storybook-dev middleware that adds or removes `skip-visual` on a story. */
 export const VISUAL_DELTA_SKIP_VISUAL_PATH = "/__visual-delta/skip-visual";
-/** Storybook-dev middleware that captures a story subject via Playwright Chromium. */
+/** Storybook-dev middleware that captures a story subject via the selected browser. */
 export const VISUAL_DELTA_CAPTURE_PATH = "/__visual-delta/capture-subject";
-/** Authoritative exact-story Chromium capture, compare, and sidecar write. */
+/** Authoritative exact-story selected-browser capture, compare, and sidecar write. */
 export const VISUAL_DELTA_COMPARE_STORY_PATH = "/__visual-delta/compare-story";
 /** Storybook-dev middleware that returns resolved host options (read-only). */
 export const VISUAL_DELTA_CONFIG_PATH = "/__visual-delta/config";

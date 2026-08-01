@@ -25,7 +25,7 @@ export default defineVisualPlaywrightConfig({
     reporter: "list",
     outputDir: ".cache/visual-delta-matrix/results",
     snapshotPathTemplate:
-      ".cache/visual-delta-matrix/snapshots/{arg}-{projectName}-{platform}{ext}",
+      ".cache/visual-delta-matrix/snapshots/{arg}-{projectName}{ext}",
     webServer: {
       command: `python3 -m http.server ${port} --directory storybook-static --bind 127.0.0.1`,
       cwd: VISUAL_MATRIX_FIXTURE_ROOT,

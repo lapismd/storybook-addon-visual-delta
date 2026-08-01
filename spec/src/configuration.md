@@ -15,7 +15,7 @@ These requirements keep configuration precedence explicit and preserve safe defa
 | VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.              |
 | VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                   |
 | VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Browser, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired. |
-| VD-CONF-008 | Project browser configuration MUST be a non-empty unique subset of `chromium`, `firefox`, and `webkit`, defaulting to only `chromium`. Visual test failure mode MUST be `warn` or `strict`, defaulting to `warn`; an explicit CLI value wins over `VISUAL_DELTA_FAILURE_MODE`, project workflow, and the built-in default. |
+| VD-CONF-008 | Project browser configuration MUST be a non-empty unique subset of `chromium`, `firefox`, and `webkit`, defaulting to only `chromium`. Visual test failure mode MUST be `warn` or `strict`, defaulting to `warn`; an explicit CLI value wins over `VISUAL_DELTA_FAILURE_MODE`, project workflow, and the built-in default. The built-in changed-pixel allowance MUST be `1.5%`; `diffThreshold` MUST remain the independent per-pixel color threshold. |
 
 ## Configuration precedence
 
@@ -34,13 +34,13 @@ Local panel preferences can change how one browser displays a comparison. They d
 
 `.visual-delta/config.json` contains the editable default keys, MAY contain a `browsers` array, and MAY contain a `workflow` object. Readers MAY accept the older `projectDefaults` wrapper. Unknown or invalid editable keys MUST produce diagnostics and MUST NOT be applied.
 
-`browsers` defaults to `["chromium"]`. The supported values are `chromium`, `firefox`, and `webkit`; duplicates, unknown names, and an empty array are invalid. WebKit is presented as WebKit, not Safari. Each configured browser creates an independent baseline target on the runtime platform.
+`browsers` defaults to `["chromium"]`. The supported values are `chromium`, `firefox`, and `webkit`; duplicates, unknown names, and an empty array are invalid. WebKit is presented as WebKit, not Safari. Each configured browser creates one independent baseline target in the canonical capture profile.
 
 The built-in project defaults are:
 
 | Setting                   | Built-in value   | Valid values                                |
 | ------------------------- | ---------------- | ------------------------------------------- |
-| `passThresholdPercent`    | `1`              | Number from `0` to `100`                    |
+| `passThresholdPercent`    | `1.5`            | Number from `0` to `100`                    |
 | `diffThreshold`           | `0.2`            | Number from `0` to `1`                      |
 | `diffIncludeAntiAliasing` | `false`          | Boolean                                     |
 | `delay`                   | `0`              | Integer from `0` to `60000` ms              |
@@ -52,7 +52,7 @@ The built-in project defaults are:
 | `previewSplitZoomDefault` | `fit`            | `fit` or `100%` — applied when a split opens; follow-up INIT after config load MUST adopt this when zoom is still the prior default |
 | `diffResultZoomDefault`   | `100%`           | `fit` or `100%`                             |
 
-An explicitly injected story value, including `passThresholdPercent: 0.1`, is a story override and wins over the project default of `1`. Implementations MUST expose the winning source so the panel can explain the effective value.
+An explicitly configured story value is a story override and wins over the project default of `1.5`. Package-generated wiring MUST omit a threshold so the project default applies unless the consumer deliberately supplies a story value. Implementations MUST expose the winning source so the panel can explain the effective value.
 
 The workflow defaults are:
 

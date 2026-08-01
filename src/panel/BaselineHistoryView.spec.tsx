@@ -71,7 +71,7 @@ const comparison: DiffResultData = {
   diffPixels: 2,
   totalPixels: 45_000,
   diffPercent: 0.0044,
-  passThresholdPercent: 1,
+  passThresholdPercent: 1.5,
   passed: true,
   diffHistogram: new Array(32).fill(0),
 };

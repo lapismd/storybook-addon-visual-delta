@@ -7,16 +7,15 @@ import {
 } from "../constants.js";
 import type {
   VisualBaselineCoverage,
-  VisualEnvironmentCoverage,
+  VisualBrowserCoverage,
   VisualStoryDescriptor,
   VisualStoryFact,
 } from "../shared/story-facts.js";
 import {
   VISUAL_DELTA_BROWSERS,
   isVisualDeltaBrowser,
-  visualBaselineEnvironmentKey,
   visualDeltaBrowserLabel,
-  type VisualBaselineEnvironment,
+  type VisualDeltaBrowser,
 } from "../shared/environments.js";
 import {
   classifyVisualRunResult,
@@ -50,8 +49,8 @@ export type VisualStoryFilterFact = {
   result: VisualResultFilterValue;
   baseline: VisualBaselineCoverage;
   inclusion: VisualInclusionFilterValue;
-  environmentCoverage: VisualEnvironmentCoverage[];
-  requiredEnvironments: VisualBaselineEnvironment[];
+  browserCoverage: VisualBrowserCoverage[];
+  requiredBrowsers: VisualDeltaBrowser[];
 };
 
 export type VisualFilterOptionDescriptor = {
@@ -60,7 +59,7 @@ export type VisualFilterOptionDescriptor = {
 };
 
 export type VisualFilterGroupDescriptor = {
-  id: "os" | "browser";
+  id: "browser";
   label: string;
   options: VisualFilterOptionDescriptor[];
 };
@@ -90,7 +89,7 @@ export const VISUAL_QUICK_FILTER_IDS = [
   "quick.needs-attention",
   "quick.review-queue",
   "quick.coverage-gaps",
-  "quick.os-parity-gaps",
+  "quick.browser-coverage-gaps",
 ] as const;
 
 export type VisualQuickFilterId = (typeof VISUAL_QUICK_FILTER_IDS)[number];
@@ -104,12 +103,10 @@ const KNOWN_FACET_IDS = new Set<string>(
   Object.values(VISUAL_FILTER_GROUPS).flat(),
 );
 
-const DYNAMIC_OS_FILTER_RE = /^os\.([a-z0-9]+)$/;
 const DYNAMIC_BROWSER_FILTER_RE = /^browser\.([a-z0-9]+)$/;
 
 function isKnownFacetId(id: string): boolean {
   if (KNOWN_FACET_IDS.has(id)) return true;
-  if (DYNAMIC_OS_FILTER_RE.test(id)) return true;
   const browser = id.match(DYNAMIC_BROWSER_FILTER_RE)?.[1];
   return isVisualDeltaBrowser(browser);
 }
@@ -118,63 +115,26 @@ function isKnownFilterId(id: string): boolean {
   return KNOWN_FILTER_IDS.has(id) || isKnownFacetId(id);
 }
 
-function platformLabel(platform: string): string {
-  if (platform === "darwin") return "macOS";
-  if (platform === "linux") return "Linux";
-  if (platform === "win32") return "Windows";
-  return platform;
-}
-
 export function buildVisualEnvironmentFilterGroups(
-  availableEnvironments: readonly VisualBaselineEnvironment[] = [],
-  requiredEnvironments: readonly VisualBaselineEnvironment[] = [],
+  availableBrowsers: readonly VisualDeltaBrowser[] = [],
+  requiredBrowsers: readonly VisualDeltaBrowser[] = [],
 ): VisualFilterGroupDescriptor[] {
-  const environments = new Map<string, VisualBaselineEnvironment>();
-  for (const environment of [
-    ...availableEnvironments,
-    ...requiredEnvironments,
-  ]) {
-    environments.set(visualBaselineEnvironmentKey(environment), environment);
-  }
-  const platforms = [
-    ...new Set([...environments.values()].map((item) => item.platform)),
-  ];
-  const platformOrder = ["darwin", "linux", "win32"];
-  platforms.sort((left, right) => {
-    const leftIndex = platformOrder.indexOf(left);
-    const rightIndex = platformOrder.indexOf(right);
-    if (leftIndex >= 0 || rightIndex >= 0) {
-      if (leftIndex < 0) return 1;
-      if (rightIndex < 0) return -1;
-      return leftIndex - rightIndex;
-    }
-    return left.localeCompare(right);
-  });
   const browsers = [
-    ...new Set([...environments.values()].map((item) => item.browser)),
+    ...new Set([...availableBrowsers, ...requiredBrowsers]),
   ].sort(
     (left, right) =>
       VISUAL_DELTA_BROWSERS.indexOf(left) -
       VISUAL_DELTA_BROWSERS.indexOf(right),
   );
-  return [
-    {
-      id: "os",
-      label: "Operating System",
-      options: platforms.map((platform) => ({
-        id: `os.${platform}`,
-        label: platformLabel(platform),
-      })),
-    },
-    {
-      id: "browser",
-      label: "Browser",
-      options: browsers.map((browser) => ({
-        id: `browser.${browser}`,
-        label: visualDeltaBrowserLabel(browser),
-      })),
-    },
-  ].filter((group) => group.options.length > 0) as VisualFilterGroupDescriptor[];
+  if (browsers.length === 0) return [];
+  return [{
+    id: "browser",
+    label: "Browser",
+    options: browsers.map((browser) => ({
+      id: `browser.${browser}`,
+      label: visualDeltaBrowserLabel(browser),
+    })),
+  }];
 }
 
 function reviewFromTags(tags: readonly string[]): VisualReviewFilterValue {
@@ -209,7 +169,7 @@ export function buildVisualStoryFilterFacts(
   coverage: readonly VisualStoryFact[],
   results: readonly VisualRunResultItem[] | undefined,
   hasCompletedRun: boolean,
-  requiredEnvironments: readonly VisualBaselineEnvironment[] = [],
+  requiredBrowsers: readonly VisualDeltaBrowser[] = [],
 ): Map<string, VisualStoryFilterFact> {
   const coverageByStory = new Map(coverage.map((fact) => [fact.storyId, fact]));
   const outcomes = hasCompletedRun ? resultByStory(results) : new Map();
@@ -225,8 +185,17 @@ export function buildVisualStoryFilterFacts(
           : "not-run",
         baseline: coverageFact?.baseline ?? "unresolved",
         inclusion: tags.includes(SKIP_VISUAL_TAG) ? "skipped" : "included",
-        environmentCoverage: coverageFact?.environmentCoverage ?? [],
-        requiredEnvironments: [...requiredEnvironments],
+        browserCoverage:
+          coverageFact?.browserCoverage ??
+          [
+            ...new Map(
+              (coverageFact?.environmentCoverage ?? []).map((coverage) => [
+                coverage.browser,
+                { browser: coverage.browser, baseline: coverage.baseline },
+              ]),
+            ).values(),
+          ],
+        requiredBrowsers: [...requiredBrowsers],
       };
       return [story.id, fact];
     }),
@@ -359,23 +328,21 @@ function matchesQuickView(
       fact.review === "failed"
     );
   }
-  if (id === "quick.os-parity-gaps") {
+  if (id === "quick.browser-coverage-gaps") {
     if (
       fact.inclusion !== "included" ||
-      fact.requiredEnvironments.length === 0
+      fact.requiredBrowsers.length === 0
     ) {
       return false;
     }
-    const coverageByEnvironment = new Map(
-      fact.environmentCoverage.map((coverage) => [
-        visualBaselineEnvironmentKey(coverage),
+    const coverageByBrowser = new Map(
+      fact.browserCoverage.map((coverage) => [
+        coverage.browser,
         coverage.baseline,
       ]),
     );
-    return fact.requiredEnvironments.some(
-      (environment) =>
-        coverageByEnvironment.get(visualBaselineEnvironmentKey(environment)) !==
-        "present",
+    return fact.requiredBrowsers.some(
+      (browser) => coverageByBrowser.get(browser) !== "present",
     );
   }
   return (
@@ -419,42 +386,29 @@ function groupMatches(
   return true;
 }
 
-function presentEnvironments(
+function presentBrowsers(
   fact: VisualStoryFilterFact,
-): VisualEnvironmentCoverage[] {
-  return fact.environmentCoverage.filter(
-    (environment) => environment.baseline === "present",
+): VisualBrowserCoverage[] {
+  return fact.browserCoverage.filter(
+    (browser) => browser.baseline === "present",
   );
 }
 
-function environmentGroupsMatch(
+function browserGroupMatches(
   fact: VisualStoryFilterFact,
   tokens: ReadonlySet<string>,
 ): boolean {
-  const osIncludes = groupValues(tokens, "os", "include");
-  const osExcludes = groupValues(tokens, "os", "exclude");
   const browserIncludes = groupValues(tokens, "browser", "include");
   const browserExcludes = groupValues(tokens, "browser", "exclude");
-  const present = presentEnvironments(fact);
+  const present = presentBrowsers(fact);
 
-  if (
-    osExcludes.some((platform) =>
-      present.some((environment) => environment.platform === platform),
-    ) ||
-    browserExcludes.some((browser) =>
-      present.some((environment) => environment.browser === browser),
-    )
-  ) {
+  if (browserExcludes.some((browser) =>
+    present.some((coverage) => coverage.browser === browser))) {
     return false;
   }
 
-  if (osIncludes.length === 0 && browserIncludes.length === 0) return true;
-  return present.some(
-    (environment) =>
-      (osIncludes.length === 0 || osIncludes.includes(environment.platform)) &&
-      (browserIncludes.length === 0 ||
-        browserIncludes.includes(environment.browser)),
-  );
+  if (browserIncludes.length === 0) return true;
+  return present.some((coverage) => browserIncludes.includes(coverage.browser));
 }
 
 export function visualStoryMatchesFilters(
@@ -484,7 +438,7 @@ export function visualStoryMatchesFilters(
     groupMatches(fact.result, resultIncludes, resultExcludes) &&
     groupMatches(fact.baseline, coverageIncludes, coverageExcludes) &&
     groupMatches(fact.inclusion, inclusionIncludes, inclusionExcludes) &&
-    environmentGroupsMatch(fact, tokens)
+    browserGroupMatches(fact, tokens)
   );
 }
 
@@ -497,16 +451,10 @@ export function storyMatchesFilterOption(
     return matchesQuickView(fact, id as VisualQuickFilterId);
   }
   if (id.startsWith("result.") && !hasCompletedRun) return false;
-  const os = id.match(DYNAMIC_OS_FILTER_RE)?.[1];
-  if (os) {
-    return presentEnvironments(fact).some(
-      (environment) => environment.platform === os,
-    );
-  }
   const browser = id.match(DYNAMIC_BROWSER_FILTER_RE)?.[1];
   if (browser) {
-    return presentEnvironments(fact).some(
-      (environment) => environment.browser === browser,
+    return presentBrowsers(fact).some(
+      (coverage) => coverage.browser === browser,
     );
   }
   const prefix = id.split(".")[0] ?? "";
@@ -520,16 +468,15 @@ export function buildVisualFilterOptionCounts(
   facts: ReadonlyMap<string, VisualStoryFilterFact> | Iterable<VisualStoryFilterFact>,
   hasCompletedRun: boolean,
 ): Record<string, number> {
-  const list =
+  const list: VisualStoryFilterFact[] =
     facts instanceof Map ? [...facts.values()] : [...facts];
   const ids = new Set<string>(KNOWN_FILTER_IDS);
   for (const fact of list) {
-    for (const environment of [
-      ...fact.environmentCoverage,
-      ...fact.requiredEnvironments,
+    for (const coverage of [
+      ...fact.browserCoverage,
+      ...fact.requiredBrowsers.map((browser) => ({ browser })),
     ]) {
-      ids.add(`os.${environment.platform}`);
-      ids.add(`browser.${environment.browser}`);
+      ids.add(`browser.${coverage.browser}`);
     }
   }
   const counts: Record<string, number> = {};

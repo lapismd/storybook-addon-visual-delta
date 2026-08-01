@@ -86,7 +86,7 @@ export type VisualDeltaHeaderProps = {
   skipVisual: boolean;
   onDiff: (engine: DiffCaptureEngine) => void;
   onRun: (mode: VisualRunMode) => void;
-  /** Selected Diff capture engine (HTML vs Chromium). */
+  /** Selected Diff capture engine (HTML vs Playwright browser). */
   diffEngine: DiffCaptureEngine;
   onDiffEngineChange: (engine: DiffCaptureEngine) => void;
   onCreate: () => void;

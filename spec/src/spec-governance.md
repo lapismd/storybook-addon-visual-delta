@@ -17,10 +17,10 @@ These requirements prevent implementation, tests, and generated documentation fr
 | VD-GOV-007 | The package root MUST retain exactly `AGENTS.md`, `DEVELOPMENT.md`, and `README.md` as Markdown files. The obsolete `specs/` tree and package-root historical contract or plan files MUST NOT exist. Links to normative content MUST target `spec/src/`.      |
 | VD-GOV-008 | A dependency-audit remediation that changes the Visual Delta package manifest or resolved dependency graph MUST upgrade each reported vulnerable package to a patched release and verify a clean `pnpm audit` result. It MUST NOT create, replace, or delete visual baselines. |
 | VD-GOV-009 | A public npm release MUST originate only from an exact stable `vX.Y.Z` tag matching the package version, pass the release validation gates, and wait for protected GitHub Environment approval. Normal publication MUST use npm trusted publishing with GitHub OIDC and provenance, never a registry token. The release MUST install the published package on a clean runner and verify its Sigstore provenance with `npm audit signatures`. Only `v0.0.1` MAY use a one-time bootstrap token, isolated to a separate protected Environment; it MUST still publish provenance and MUST be revoked before the next release. |
-| VD-GOV-010 | The Linux panel-baseline capture workflow MUST run only through manual dispatch from the default branch and capture only missing platform-qualified Linux panel references. Its capture job MAY grant `packages: read` solely to pull the repository CI image, plus `contents: write` and `pull-requests: write` solely to commit the exact verified Linux PNGs to a new automation branch and open a review pull request; it MUST NOT write directly to the selected revision. Playwright's expected non-zero result while recording a missing reference MAY continue only to the exact-set and compare-only gates; a successful capture job MUST pass both before uploading an artifact or opening a pull request. After that verification pass, it MUST upload the exact Linux PNGs and their checksums as a review artifact. |
+| VD-GOV-010 | The canonical panel-baseline capture workflow MUST run only through manual dispatch from the default branch on `ubuntu-24.04-arm`, use the immutable ARM64 capture-profile image, and capture only missing browser-qualified panel references. Its job MAY grant `packages: read` solely to pull the image, plus `contents: write` and `pull-requests: write` solely to commit the exact verified PNGs to a new automation branch and open a review pull request; it MUST NOT write directly to the selected revision. Playwright's expected non-zero result while recording a missing reference MAY continue only to exact-set and compare-only gates; a successful job MUST upload exact PNGs, profile metadata, and checksums as a review artifact before opening the pull request. |
 | VD-GOV-011 | Every repository-owned GitHub Actions job that executes package tooling MUST run Node.js `24.15.0` as supplied by the repository CI image. Repository-owned JavaScript actions used by those workflows MUST use a Node.js 24 runtime. |
-| VD-GOV-012 | The repository CI image MUST be published to `ghcr.io/lapismd/storybook-addon-visual-delta-ci` only by a manually dispatched default-branch workflow. A publication MUST build Linux AMD64 and ARM64 from the reviewed Dockerfile, pin Node.js `24.15.0`, npm `12.0.2`, pnpm `10.32.1`, mdBook `0.5.4`, and Playwright Chromium, Firefox, and WebKit `1.61.1`, install mdBook from checksum-verified upstream binaries without Cargo compilation, reject `latest` or an existing image tag as its audit tag, push the same manifest under that unique audit tag and `latest`, and verify both tags after publication. The publication job MAY grant only `contents: read` and `packages: write`, MUST authenticate with its repository `GITHUB_TOKEN`, and MUST NOT create or update a visual baseline. |
-| VD-GOV-013 | Every repository-owned GitHub Actions job that executes package tooling MUST use `ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest` as its authenticated job container, grant `packages: read` for that pull without broadening its other permissions, and use Bash for run steps. Such jobs MUST NOT reinstall Node.js, npm, pnpm, mdBook, Playwright browsers, or their Linux dependencies. A job that uses repository dependencies MUST still run `pnpm install --frozen-lockfile`; it MAY download lockfile deltas absent from a stale image store. Consumer jobs MUST NOT be enabled until the initial `latest` manifest has been published. |
+| VD-GOV-012 | The repository CI image MUST be published to `ghcr.io/lapismd/storybook-addon-visual-delta-ci` only by a manually dispatched default-branch workflow. A publication MUST build Linux AMD64 and ARM64 from the reviewed Dockerfile, pin Node.js `24.15.0`, npm `12.0.2`, pnpm `10.32.1`, mdBook `0.5.4`, and Playwright Chromium, Firefox, and WebKit `1.61.1`, reject `latest` or an existing image tag as its audit tag, and verify both native architectures. Only after both native smoke jobs pass, it MUST emit a versioned capture-profile manifest containing the multi-platform and ARM64 child digests, the actual browser and tool versions reported by the native ARM64 container, a content-derived manifest hash of that container's fonts, and the canonical locale, time-zone, viewport, scale, and rendering settings. Publication MAY update `latest` for generic tooling, but canonical visual consumers MUST use the immutable ARM64 digest. The workflow MAY grant only `contents: read` and `packages: write` and MUST NOT create or update a baseline. |
+| VD-GOV-013 | Repository-owned package-tooling jobs MUST use authenticated CI-image job containers, minimal permissions, and Bash without reinstalling image-supplied toolchains or browsers. Specification, package, npm publication, provenance, and image-build jobs MUST remain on stable x64 runners. Panel, manager, browser-matrix, release visual acceptance, and canonical baseline capture MUST run on `ubuntu-24.04-arm` with the immutable ARM64 capture-profile image. The npm release workflow MUST split x64 package gates from ARM64 visual gates and require both before publishing. A checked-out dependency graph still requires `pnpm install --frozen-lockfile`. ARM64 visual jobs MUST be canaried successfully before becoming required. |
 
 ## Authority and timing
 
@@ -88,13 +88,19 @@ with their repository `GITHUB_TOKEN`, receive only `packages: read` for that
 purpose, and use Bash explicitly because container jobs otherwise default to
 `sh`. They do not repeat toolchain, mdBook, Linux-library, or browser installs.
 
-The required audit tag is an immutable operational record. `latest` is the
-consumer alias and MAY move only when the manual publication workflow produces
-and verifies a new multi-platform manifest from the default branch. Rebuild the
-image after a merged dependency, Dockerfile, Node.js, npm, pnpm, mdBook, or
-Playwright version change. Merge and publish the initial image change before
-enabling consumer jobs because GitHub resolves a job container before any job
-step can run.
+The required audit tag is an immutable operational record. `latest` is a
+generic-tooling alias and MAY move only when the manual publication workflow
+produces and verifies a new multi-platform manifest from the default branch.
+Canonical visual jobs use the recorded ARM64 child digest, never `latest`.
+The reviewed lock artifact is assembled only after the native AMD64 and ARM64
+smoke jobs pass. Browser and tool versions and the content-derived font-manifest
+hash come from the ARM64 job rather than the build host or declared dependency
+metadata; the artifact also records the canonical capture context required by
+`VisualCaptureProfile`.
+Rebuild the image and update the reviewed capture-profile lock after a merged
+dependency, Dockerfile, Node.js, npm, pnpm, mdBook, Playwright, browser, or font
+change. Publish the image before enabling jobs that reference its digest because
+GitHub resolves a job container before any job step can run.
 
 ## Package releases
 

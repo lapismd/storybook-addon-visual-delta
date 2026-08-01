@@ -16,6 +16,7 @@ import type {
 } from "../visual-diff-sidecar.js";
 import { compareBaselineToActualPng } from "./compare-pixels.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 import {
   isWarningComparisonOutcome,
   type VisualTestFailureMode,
@@ -27,7 +28,6 @@ export function baselinePngAbs(
   snapshotDir: string,
   mode: BaselinePathMode,
   project = "chromium",
-  platform: NodeJS.Platform | string = process.platform,
   visualModeName?: string,
 ): string {
   const snapshotRoot = path.isAbsolute(snapshotDir)
@@ -35,7 +35,7 @@ export function baselinePngAbs(
     : path.join(packageRoot, snapshotDir);
   return path.join(
     snapshotRoot,
-    snapshotFileName(entry, mode, project, platform, visualModeName),
+    snapshotFileName(entry, mode, project, visualModeName),
   );
 }
 
@@ -77,7 +77,7 @@ function buildSidecarBase(
   status: VisualDiffSidecarStatus,
   error?: string,
   visualModeName?: string,
-  environment?: { browser: VisualDeltaBrowser; platform: string },
+  target?: { browser: VisualDeltaBrowser },
 ): Omit<
   VisualDiffSidecar,
   | "imageWidth"
@@ -95,13 +95,15 @@ function buildSidecarBase(
   | "diffRel"
 > {
   return {
-    version: 2,
+    version: 3,
     storyId: entry.id,
     title: entry.title,
     snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
     status,
     runnerStatus: status,
-    ...(environment ?? {}),
+    ...(target ? { browser: target.browser, target } : {}),
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os,
     ...(visualModeName ? { mode: visualModeName } : {}),
     ...(error ? { error } : {}),
     generatedAt: new Date().toISOString(),
@@ -174,7 +176,6 @@ export function writeDiffArtifactsForBaseline(input: {
   captureConfig?: unknown;
   operationId?: string;
   browser?: VisualDeltaBrowser;
-  platform?: string;
   failureMode?: VisualTestFailureMode;
 }): VisualDiffSidecar {
   const {
@@ -195,14 +196,12 @@ export function writeDiffArtifactsForBaseline(input: {
     captureConfig,
     operationId,
     browser = "chromium",
-    platform = process.platform,
     failureMode = "warn",
   } = input;
   const outPath = sidecarJsonPath(baselinePngAbsPath);
   const base = {
     ...buildSidecarBase(entry, mode, status, error, visualModeName, {
       browser,
-      platform,
     }),
     viewport,
     deviceScaleFactor,

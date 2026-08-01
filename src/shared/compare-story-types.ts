@@ -3,8 +3,10 @@ import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import type { VisualDeltaChangeSetMutation } from "./change-sets.js";
 import type {
   VisualBaselineEnvironment,
+  VisualBaselineTarget,
   VisualDeltaBrowser,
 } from "./environments.js";
+import type { VisualCaptureProfile } from "./capture-profile.js";
 
 export type CompareStoryEntry = {
   id: string;
@@ -43,6 +45,9 @@ export type CompareStoryResult = {
   ok: true;
   storyId: string;
   sidecar: VisualDiffSidecar;
+  target: VisualBaselineTarget;
+  captureProfile?: VisualCaptureProfile;
+  /** @deprecated Informational compatibility alias. */
   environment: VisualBaselineEnvironment;
   review?: {
     autoAccepted: true;
@@ -57,6 +62,8 @@ export type CompareStoryStreamEvent =
   | {
       type: "start";
       storyId: string;
+      target?: VisualBaselineTarget;
+      captureProfile?: VisualCaptureProfile;
       environment?: VisualBaselineEnvironment;
     }
   | ({ type: "progress" } & CaptureSubjectProgress)

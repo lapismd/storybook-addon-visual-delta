@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  requiredVisualBaselineEnvironments,
+  requiredVisualBaselineBrowsers,
   resolveVisualStoryFacts,
 } from "./story-facts.js";
 
@@ -12,7 +12,7 @@ describe("resolveVisualStoryFacts", () => {
     const snapshotDir = mkdtempSync(path.join(tmpdir(), "visual-delta-facts-"));
     mkdirSync(path.join(snapshotDir, "forms"), { recursive: true });
     writeFileSync(
-      path.join(snapshotDir, "forms/default-chromium-darwin.png"),
+      path.join(snapshotDir, "forms/default-chromium.png"),
       "",
     );
 
@@ -35,8 +35,12 @@ describe("resolveVisualStoryFacts", () => {
       {
         storyId: "forms-entry--default",
         baseline: "present",
-        environmentCoverage: [
-          { browser: "chromium", platform: "darwin", baseline: "present" },
+        browserCoverage: [
+          {
+            target: { browser: "chromium" },
+            browser: "chromium",
+            baseline: "present",
+          },
         ],
         baselineHash:
           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -44,8 +48,12 @@ describe("resolveVisualStoryFacts", () => {
       {
         storyId: "forms-entry--missing",
         baseline: "missing",
-        environmentCoverage: [
-          { browser: "chromium", platform: "darwin", baseline: "missing" },
+        browserCoverage: [
+          {
+            target: { browser: "chromium" },
+            browser: "chromium",
+            baseline: "missing",
+          },
         ],
       },
     ]);
@@ -54,7 +62,7 @@ describe("resolveVisualStoryFacts", () => {
   it("supports story-id paths without import metadata", () => {
     const snapshotDir = mkdtempSync(path.join(tmpdir(), "visual-delta-facts-"));
     writeFileSync(
-      path.join(snapshotDir, "forms-entry--default-chromium-darwin.png"),
+      path.join(snapshotDir, "forms-entry--default-chromium.png"),
       "",
     );
     expect(
@@ -67,8 +75,12 @@ describe("resolveVisualStoryFacts", () => {
       {
         storyId: "forms-entry--default",
         baseline: "present",
-        environmentCoverage: [
-          { browser: "chromium", platform: "darwin", baseline: "present" },
+        browserCoverage: [
+          {
+            target: { browser: "chromium" },
+            browser: "chromium",
+            baseline: "present",
+          },
         ],
         baselineHash:
           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -80,7 +92,7 @@ describe("resolveVisualStoryFacts", () => {
     const snapshotDir = mkdtempSync(path.join(tmpdir(), "visual-delta-facts-"));
     const png = path.join(
       snapshotDir,
-      "forms-entry--default-chromium-darwin.png",
+      "forms-entry--default-chromium.png",
     );
     writeFileSync(png, "current");
     writeFileSync(
@@ -123,10 +135,10 @@ describe("resolveVisualStoryFacts", () => {
       {
         storyId: "forms-entry--default",
         baseline: "unresolved",
-        environmentCoverage: [
+        browserCoverage: [
           {
+            target: { browser: "chromium" },
             browser: "chromium",
-            platform: "darwin",
             baseline: "unresolved",
           },
         ],
@@ -134,10 +146,10 @@ describe("resolveVisualStoryFacts", () => {
       {
         storyId: "../../outside--default",
         baseline: "unresolved",
-        environmentCoverage: [
+        browserCoverage: [
           {
+            target: { browser: "chromium" },
             browser: "chromium",
-            platform: "darwin",
             baseline: "unresolved",
           },
         ],
@@ -145,33 +157,15 @@ describe("resolveVisualStoryFacts", () => {
     ]);
   });
 
-  it("builds configured-browser parity across discovered and runtime platforms", () => {
-    expect(
-      requiredVisualBaselineEnvironments(
-        ["chromium", "firefox"],
-        [
-          { browser: "chromium", platform: "linux" },
-          { browser: "webkit", platform: "linux" },
-        ],
-        "darwin",
-      ),
-    ).toEqual([
-      { browser: "chromium", platform: "darwin" },
-      { browser: "chromium", platform: "linux" },
-      { browser: "firefox", platform: "darwin" },
-      { browser: "firefox", platform: "linux" },
-    ]);
+  it("builds required coverage from configured browsers only", () => {
+    expect(requiredVisualBaselineBrowsers(["chromium", "firefox", "chromium"]))
+      .toEqual(["chromium", "firefox"]);
   });
 
   it("reports exact primary coverage without requiring disabled browsers", () => {
     const snapshotDir = mkdtempSync(path.join(tmpdir(), "visual-delta-facts-"));
     mkdirSync(path.join(snapshotDir, "forms"), { recursive: true });
-    for (const name of [
-      "default-chromium-darwin.png",
-      "default-chromium-linux.png",
-      "default-firefox-darwin.png",
-      "default-webkit-linux.png",
-    ]) {
+    for (const name of ["default-chromium.png", "default-firefox.png", "default-webkit.png"]) {
       writeFileSync(path.join(snapshotDir, "forms", name), "");
     }
 
@@ -185,21 +179,26 @@ describe("resolveVisualStoryFacts", () => {
       snapshotDir,
       "nested-import",
       ["chromium", "firefox"],
-      "darwin",
-      [
-        { browser: "chromium", platform: "darwin" },
-        { browser: "chromium", platform: "linux" },
-        { browser: "webkit", platform: "linux" },
-      ],
+      ["chromium", "webkit"],
     );
 
     expect(fact).toMatchObject({ baseline: "present" });
-    expect(fact?.environmentCoverage).toEqual([
-      { browser: "chromium", platform: "darwin", baseline: "present" },
-      { browser: "chromium", platform: "linux", baseline: "present" },
-      { browser: "firefox", platform: "darwin", baseline: "present" },
-      { browser: "firefox", platform: "linux", baseline: "missing" },
-      { browser: "webkit", platform: "linux", baseline: "present" },
+    expect(fact?.browserCoverage).toEqual([
+      {
+        target: { browser: "chromium" },
+        browser: "chromium",
+        baseline: "present",
+      },
+      {
+        target: { browser: "firefox" },
+        browser: "firefox",
+        baseline: "present",
+      },
+      {
+        target: { browser: "webkit" },
+        browser: "webkit",
+        baseline: "present",
+      },
     ]);
   });
 });

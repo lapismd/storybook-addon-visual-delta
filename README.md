@@ -73,7 +73,7 @@ pnpm exec visual-delta init
 `storybook add` registers the addon in `.storybook/main.ts`. `visual-delta init`
 writes the thin suite, Playwright config, snapshot dir, and package scripts.
 Peers: `storybook`, `react`, `vite` (for `viteFinal`), and `playwright` for the
-suite / Diff Chromium / CLI.
+suite / Diff Browser / CLI.
 
 Then open Storybook → **Visual Delta** → **Create visual** on a story.
 
@@ -132,12 +132,12 @@ Defaults (override via `options.visualDelta`):
 | Concern             | Default                                           |
 | ------------------- | ------------------------------------------------- |
 | Snapshot directory  | `tests/visual/storybook.spec.ts-snapshots`        |
-| Path mode           | `story-id` (flat `{storyId}-chromium-darwin.png`) |
+| Path mode           | `story-id` (flat `{storyId}-chromium.png`)        |
 | Create / update CLI | `pnpm exec visual-delta update …`                 |
 | Interaction CLI     | `pnpm exec visual-delta interaction-update …`     |
 | Compare run         | `pnpm exec playwright test`                       |
 
-Baseline URLs look like `/visual-baselines/<story-id>-chromium-darwin.png`.
+Baseline URLs look like `/visual-baselines/<story-id>-chromium.png`.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ Baseline URLs look like `/visual-baselines/<story-id>-chromium-darwin.png`.
 | `storybook`  | Manager + preview annotations                                             |
 | `react`      | Manager / panel UI                                                        |
 | `vite`       | Needed for `viteFinal` (middleware + CSF inject) on Vite Storybook hosts  |
-| `playwright` | Optional peer — required for Diff Chromium, suite, and `visual-delta` CLI |
+| `playwright` | Optional peer — required for Diff Browser, suite, and `visual-delta` CLI  |
 
 You still commit PNGs under the snapshot dir and keep a thin Playwright entry
 (or a custom suite). Tag-badge chrome for review tags is optional host polish.
@@ -248,7 +248,7 @@ Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
 | `POST`       | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
 | `POST`       | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
 | `POST`       | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
-| `POST`       | `/__visual-delta/compare-story`               | Authoritative exact-story Chromium compare + sidecar      |
+| `POST`       | `/__visual-delta/compare-story`               | Authoritative exact-story browser compare + sidecar       |
 | `POST`       | `/__visual-delta/capture-subject`             | Legacy Chromium subject capture (NDJSON progress)         |
 | `POST`       | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
 | `GET`        | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
@@ -372,6 +372,16 @@ pnpm exec visual-delta test --affected
 pnpm exec visual-delta test --affected --dry-run --explain
 ```
 
+Authoritative `test`, `update`, and `interaction-update` commands run through
+the resolved Linux/ARM64 capture runner. The built-in runner uses Docker;
+consumers may export a runner with `defineVisualDeltaCaptureRunner(...)` from
+`.visual-delta/runner.mjs`. Diagnose the profile and transport with
+`pnpm exec visual-delta harness doctor`. Inventory the breaking browser-only
+filename cutover with `pnpm exec visual-delta migrate-baselines --dry-run`;
+applying it requires both canonical recapture and `--apply --approved`, removes
+legacy and canonical derived artifacts, and invalidates `.cache/visual-delta`.
+Pass a repeatable `--cache-dir` when affected evidence lives elsewhere.
+
 Static builds must emit Storybook's Vite stats:
 
 ```json
@@ -419,7 +429,7 @@ live diff:
 parameters: {
   visualDelta: {
     images: [
-      "/visual-baselines/current-chromium-darwin.png",
+      "/visual-baselines/current-chromium.png",
       {
         src: "/lapis-reference/workspace-shell-light.png",
         deviceScaleFactor: 1,
@@ -470,7 +480,7 @@ parameters: {
   visualDelta: {
     images: [
       {
-        src: "/visual-baselines/shadcn/button/default-chromium-darwin.png",
+        src: "/visual-baselines/shadcn/button/default-chromium.png",
         align: "canvas", // pin to story subject; or "viewport"
         placement: "center",
       },
@@ -479,7 +489,7 @@ parameters: {
     modes: {
       dark: {
         globals: { colorMode: "dark" },
-        src: "/visual-baselines/…/default--dark-chromium-darwin.png",
+        src: "/visual-baselines/…/default--dark-chromium.png",
       },
     },
     /** pixelmatch color threshold 0–1 (Live Diff). */
@@ -492,12 +502,11 @@ parameters: {
     /** Hide these CSS regions during capture (plus data-visual-delta-ignore). */
     ignoreSelectors: [".toast"],
     cropToViewport: false,
-    passThresholdPercent: 0.1,
     interactions: [
       {
         id: "opens-chooser",
         label: "Opens chooser",
-        src: "/visual-baselines/…/default--opens-chooser-chromium-darwin.png",
+        src: "/visual-baselines/…/default--opens-chooser-chromium.png",
       },
     ],
   },
@@ -533,10 +542,10 @@ Stories/components may override capture and overlay values through
 `parameters.visualDelta`; resolution order is story/component parameters →
 project defaults → built-ins.
 
-**Workflow** contains two opt-in policies. **Auto-accept passing Diff Chromium,
+**Workflow** contains two opt-in policies. **Auto-accept passing Diff Browser,
 Story, and Run Diff** marks stories `visual-approved` after a fresh
-authoritative Chromium pass (including a tolerance pass), for exact-story Diff
-Chromium / Story and for Testing Module **Run Diff** last-run passes. It does
+authoritative selected-browser pass (including a tolerance pass), for exact-story Diff
+Browser / Story and for Testing Module **Run Diff** last-run passes. It does
 not apply to Diff HTML, ordinary Run visual tests without Run Diff, baseline
 writes, or Update status. The VCS mode is `off`, `review`, or `auto`; legacy
 and new configurations default to off.
@@ -545,11 +554,13 @@ The project file remains a backward-compatible flat capture configuration:
 
 ```json
 {
-  "passThresholdPercent": 1,
+  "browsers": ["chromium"],
+  "passThresholdPercent": 1.5,
   "diffThreshold": 0.2,
   "deviceScaleFactor": 1,
   "workflow": {
     "autoAcceptLiveStoryComparisons": false,
+    "visualTestFailureMode": "warn",
     "vcs": {
       "mode": "off",
       "commitMessageTemplate": "Visual Delta: {action} {scope}"
@@ -615,7 +626,7 @@ independent and preserves the review tag. **Update status** / middleware refuse
 
 **Agent guidance:** Create / Update baselines reset exactly the written stories
 to `visual-pending` and invalidate their prior comparison evidence. A baseline
-write is not a passing comparison. Run Story, Diff Chromium, or the static
+write is not a passing comparison. Run Story, Diff Browser, or the static
 suite, then explicitly update status to map pass/tolerance → `visual-ready` and
 mismatch → `visual-failed` (Update status does not demote an existing
 `visual-approved` when the story still passes). Do **not** set
@@ -666,10 +677,10 @@ Diff is its own split button (separate from Story / Component / All runs):
 | Mode              | Capture                                                     | State effect                         |
 | ----------------- | ----------------------------------------------------------- | ------------------------------------ |
 | **Diff HTML**     | `html-to-image` in the live preview iframe                  | Preview-only diagnostic              |
-| **Diff Chromium** | Playwright Chromium via `/__visual-delta/compare-story`     | Official exact-story result          |
+| **Diff Browser**  | Selected Playwright browser via `/__visual-delta/compare-story` | Official exact-story result       |
 | **Story**         | The same `/__visual-delta/compare-story` request and config | The same official exact-story result |
 
-**Diff Chromium** and **Story** resolve the same effective story configuration,
+**Diff Browser** and **Story** resolve the same effective story configuration,
 wait for the play function, capture the same baseline/mode/interaction key, and
 persist the same v2 sidecar. They stream NDJSON progress (`launching` →
 `navigating` → `settling` → `capturing` → `comparing` → `persisting`) and

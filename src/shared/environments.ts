@@ -6,6 +6,12 @@ export const VISUAL_DELTA_BROWSERS = [
 
 export type VisualDeltaBrowser = (typeof VISUAL_DELTA_BROWSERS)[number];
 
+/** Canonical baseline identity. Platform and architecture are capture provenance. */
+export type VisualBaselineTarget = {
+  browser: VisualDeltaBrowser;
+};
+
+/** @deprecated Capture provenance only; never use this type for baseline lookup. */
 export type VisualBaselineEnvironment = {
   browser: VisualDeltaBrowser;
   platform: string;
@@ -64,13 +70,43 @@ export function validateVisualDeltaBrowsers(input: unknown): {
   };
 }
 
-const ENVIRONMENT_SUFFIX_RE =
+const TARGET_SUFFIX_RE =
+  /-(chromium|firefox|webkit)(?=\.(?:actual\.|diff\.)?png(?:\?|$)|\.json(?:\?|$))/i;
+
+const LEGACY_ENVIRONMENT_SUFFIX_RE =
   /-(chromium|firefox|webkit)-([a-z0-9]+)(?=\.(?:actual\.|diff\.)?png(?:\?|$)|\.json(?:\?|$))/i;
 
+export function parseVisualBaselineTarget(
+  value: string,
+): VisualBaselineTarget | null {
+  const match = value.match(TARGET_SUFFIX_RE);
+  const browser = match?.[1]?.toLowerCase();
+  return browser && isVisualDeltaBrowser(browser) ? { browser } : null;
+}
+
+export function withVisualBaselineTarget(
+  value: string,
+  target: VisualBaselineTarget,
+): string {
+  if (!isVisualDeltaBrowser(target.browser)) return value;
+  if (TARGET_SUFFIX_RE.test(value)) {
+    return value.replace(TARGET_SUFFIX_RE, `-${target.browser}`);
+  }
+  if (LEGACY_ENVIRONMENT_SUFFIX_RE.test(value)) {
+    return value.replace(LEGACY_ENVIRONMENT_SUFFIX_RE, `-${target.browser}`);
+  }
+  return value;
+}
+
+export function visualBaselineTargetKey(target: VisualBaselineTarget): string {
+  return target.browser;
+}
+
+/** Parse legacy platform-qualified names for migration inventory only. */
 export function parseVisualBaselineEnvironment(
   value: string,
 ): VisualBaselineEnvironment | null {
-  const match = value.match(ENVIRONMENT_SUFFIX_RE);
+  const match = value.match(LEGACY_ENVIRONMENT_SUFFIX_RE);
   const browser = match?.[1]?.toLowerCase();
   const platform = match?.[2]?.toLowerCase();
   return browser && isVisualDeltaBrowser(browser) && platform
@@ -86,7 +122,7 @@ export function withVisualBaselineEnvironment(
     return value;
   }
   return value.replace(
-    ENVIRONMENT_SUFFIX_RE,
+    LEGACY_ENVIRONMENT_SUFFIX_RE,
     `-${environment.browser}-${environment.platform}`,
   );
 }

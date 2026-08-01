@@ -21,8 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release-gates:
-    name: Validate release and package
+  package-gate:
+    name: Validate release and package on x64
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
@@ -70,6 +70,23 @@ jobs:
       - name: Verify npm package contents
         run: pnpm pack --dry-run
 
+  visual-gate:
+    name: Validate canonical visuals on ARM64
+    # PROFILE_LOCK_PENDING: replace :latest with the published immutable ARM64 digest.
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Run compare-only panel acceptance
         run: pnpm test:panel
 
@@ -78,8 +95,8 @@ jobs:
 
   publish-bootstrap:
     name: Publish bootstrap release
-    needs: release-gates
-    if: needs.release-gates.outputs.bootstrap == 'true'
+    needs: [package-gate, visual-gate]
+    if: needs.package-gate.outputs.bootstrap == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
@@ -112,8 +129,8 @@ jobs:
 
   publish-oidc:
     name: Publish trusted release
-    needs: release-gates
-    if: needs.release-gates.outputs.bootstrap != 'true'
+    needs: [package-gate, visual-gate]
+    if: needs.package-gate.outputs.bootstrap != 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
@@ -143,12 +160,14 @@ jobs:
   verify-provenance:
     name: Verify npm Sigstore provenance
     needs:
-      - release-gates
+      - package-gate
+      - visual-gate
       - publish-bootstrap
       - publish-oidc
     if: >-
       always() &&
-      needs.release-gates.result == 'success' &&
+      needs.package-gate.result == 'success' &&
+      needs.visual-gate.result == 'success' &&
       (needs.publish-bootstrap.result == 'success' || needs.publish-oidc.result == 'success')
     runs-on: ubuntu-latest
     container:
@@ -167,7 +186,7 @@ jobs:
       - name: Wait for the exact npm version
         env:
           PACKAGE_NAME: '@lapismd/storybook-addon-visual-delta'
-          VERSION: ${{ needs.release-gates.outputs.version }}
+          VERSION: ${{ needs.package-gate.outputs.version }}
         run: |
           for attempt in $(seq 1 12); do
             published="$(npm view "${PACKAGE_NAME}@${VERSION}" version --registry=https://registry.npmjs.org 2>/dev/null || true)"
@@ -184,7 +203,7 @@ jobs:
       - name: Install the published package in a clean project
         env:
           PACKAGE_NAME: '@lapismd/storybook-addon-visual-delta'
-          VERSION: ${{ needs.release-gates.outputs.version }}
+          VERSION: ${{ needs.package-gate.outputs.version }}
         run: |
           verify_dir="$RUNNER_TEMP/npm-provenance-verify"
           mkdir -p "$verify_dir"
@@ -196,7 +215,7 @@ jobs:
 
       - name: Verify registry signatures and Sigstore provenance
         env:
-          VERSION: ${{ needs.release-gates.outputs.version }}
+          VERSION: ${{ needs.package-gate.outputs.version }}
         run: |
           cd "$RUNNER_TEMP/npm-provenance-verify"
           npm audit signatures --json --include-attestations > "$GITHUB_WORKSPACE/npm-signatures.json"
@@ -208,7 +227,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: npm-signatures-${{ needs.release-gates.outputs.version }}
+          name: npm-signatures-${{ needs.package-gate.outputs.version }}
           path: npm-signatures.json
           if-no-files-found: warn
           retention-days: 90

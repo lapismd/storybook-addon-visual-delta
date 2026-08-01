@@ -1,11 +1,9 @@
 import React, { useMemo, useState } from "react";
 import {
-  AppleIcon,
   BrowserIcon,
   CheckIcon,
   ChevronSmallDownIcon,
   LinuxIcon,
-  WindowsIcon,
 } from "@storybook/icons";
 import {
   ActionList,
@@ -50,6 +48,24 @@ const Segment = styled(Button)<{ $right?: boolean }>(({ theme, $right }) => ({
   },
 }));
 
+const ProfileSegment = styled.div(({ theme }) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  minWidth: 0,
+  height: 22,
+  padding: "0 6px",
+  gap: 4,
+  color: theme.color.defaultText,
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "help",
+  "& svg": {
+    width: 12,
+    height: 12,
+    flexShrink: 0,
+  },
+}));
+
 const TriggerLabel = styled.span({
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -58,12 +74,6 @@ const TriggerLabel = styled.span({
 
 function selectedLabel(options: EnvironmentOption[], value: string): string {
   return options.find((option) => option.value === value)?.label ?? value;
-}
-
-function PlatformIcon({ platform }: { platform: string }) {
-  if (platform === "linux") return <LinuxIcon />;
-  if (platform === "win32") return <WindowsIcon />;
-  return <AppleIcon />;
 }
 
 function EnvironmentMenu({
@@ -98,60 +108,30 @@ function EnvironmentMenu({
 
 export function EnvironmentSplitButton({
   browser,
-  platform,
   browsers,
-  platforms,
   onBrowserChange,
-  onPlatformChange,
+  captureProfileId = "visual-delta-linux-arm64-v1",
 }: {
   browser: string;
-  platform: string;
   browsers: EnvironmentOption[];
-  platforms: EnvironmentOption[];
   onBrowserChange: (value: string) => void;
-  onPlatformChange: (value: string) => void;
+  captureProfileId?: string;
 }) {
-  const [open, setOpen] = useState<"platform" | "browser" | null>(null);
-  const platformLabel = useMemo(
-    () => selectedLabel(platforms, platform),
-    [platform, platforms],
-  );
+  const [open, setOpen] = useState<"browser" | null>(null);
   const browserLabel = useMemo(
     () => selectedLabel(browsers, browser),
     [browser, browsers],
   );
 
   return (
-    <Split role="group" aria-label="Visual baseline environment">
-      <PopoverProvider
-        ariaLabel="Choose baseline operating system"
-        placement="top-start"
-        padding={0}
-        visible={open === "platform"}
-        onVisibleChange={(visible) => setOpen(visible ? "platform" : null)}
-        popover={() => (
-          <EnvironmentMenu
-            options={platforms}
-            value={platform}
-            onSelect={(value) => {
-              onPlatformChange(value);
-              setOpen(null);
-            }}
-          />
-        )}
+    <Split role="group" aria-label="Visual baseline target">
+      <ProfileSegment
+        aria-label="Canonical capture profile: Linux ARM64"
+        title={`Canonical capture profile: Linux · ARM64 (${captureProfileId})`}
       >
-        <Segment
-          size="small"
-          variant="ghost"
-          padding="small"
-          ariaLabel="Visual baseline operating system"
-          title={`Operating system: ${platformLabel}`}
-        >
-          <PlatformIcon platform={platform} />
-          <TriggerLabel>{platformLabel}</TriggerLabel>
-          <ChevronSmallDownIcon />
-        </Segment>
-      </PopoverProvider>
+        <LinuxIcon />
+        <TriggerLabel>Linux · ARM64</TriggerLabel>
+      </ProfileSegment>
       <PopoverProvider
         ariaLabel="Choose baseline browser"
         placement="top-end"

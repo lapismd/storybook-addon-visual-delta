@@ -277,13 +277,13 @@ describe("affected visual planner", () => {
     const fixture = createFixture();
     write(
       fixture.root,
-      "tests/visual/storybook.spec.ts-snapshots/button--primary-chromium-darwin.png",
+      "tests/visual/storybook.spec.ts-snapshots/button--primary-chromium.png",
       "baseline-one",
     );
     seed(fixture);
     write(
       fixture.root,
-      "tests/visual/storybook.spec.ts-snapshots/button--primary-chromium-darwin.png",
+      "tests/visual/storybook.spec.ts-snapshots/button--primary-chromium.png",
       "baseline-two",
     );
     expect(

@@ -81,16 +81,20 @@ import {
   type VisualDeltaHostOptions,
 } from "./options.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
-import { discoverSnapshotEnvironments } from "./snapshot-environments.js";
+import { discoverSnapshotBrowsers } from "./snapshot-environments.js";
 import type {
   VisualStoryDescriptor,
   VisualStoryFactsRequest,
   VisualStoryFactsResponse,
 } from "../shared/story-facts.js";
 import {
-  requiredVisualBaselineEnvironments,
+  requiredVisualBaselineBrowsers,
   resolveVisualStoryFacts,
 } from "./story-facts.js";
+import {
+  CANONICAL_VISUAL_CAPTURE_PROFILE,
+  validateVisualCaptureProfile,
+} from "../shared/capture-profile.js";
 import { createVisualDeltaRuntimeEndpoint } from "./runtime-instance.js";
 import {
   patchStorySkipVisual,
@@ -350,25 +354,23 @@ async function handleStoryFacts(
   }
   const snapshotDir = resolveSnapshotDir(options, root);
   const projectConfig = readVisualDeltaProjectConfig(root);
-  const availableEnvironments = discoverSnapshotEnvironments(snapshotDir);
-  const requiredEnvironments = requiredVisualBaselineEnvironments(
+  const availableBrowsers = discoverSnapshotBrowsers(snapshotDir);
+  const requiredBrowsers = requiredVisualBaselineBrowsers(
     projectConfig.browsers,
-    availableEnvironments,
-    process.platform,
   );
   const response: VisualStoryFactsResponse = {
     ok: true,
-    version: 3,
+    version: 4,
     generatedAt: Date.now(),
-    availableEnvironments,
-    requiredEnvironments,
+    availableBrowsers,
+    requiredBrowsers,
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     stories: resolveVisualStoryFacts(
       stories,
       snapshotDir,
       resolveBaselinePathMode(options),
       projectConfig.browsers,
-      process.platform,
-      availableEnvironments,
+      availableBrowsers,
     ),
   };
   writeJson(res, 200, response);
@@ -428,6 +430,8 @@ function walkSpecs(
       error: result?.error?.message,
       ...(isVisualDeltaBrowser(test?.projectName)
         ? {
+            target: { browser: test.projectName },
+            captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
             environment: {
               browser: test.projectName,
               platform: process.platform,
@@ -464,14 +468,12 @@ export function attachSidecars(
   const mode = resolveBaselinePathMode(options);
   return results.map((item) => {
     const browser = item.environment?.browser ?? "chromium";
-    const platform = item.environment?.platform ?? process.platform;
     const sidecar = loadSidecarForStoryId(
       item.storyId,
       packageRoot,
       snapshotDir,
       mode,
       browser,
-      platform,
     );
     const hasBaseline = baselinePngExistsForStoryId(
       item.storyId,
@@ -479,7 +481,6 @@ export function attachSidecars(
       snapshotDir,
       mode,
       browser,
-      platform,
     );
     const modeSidecars = loadModeSidecarsForStoryId(
       item.storyId,
@@ -487,7 +488,6 @@ export function attachSidecars(
       snapshotDir,
       mode,
       browser,
-      platform,
     );
     const modeResults: VisualModeRunResult[] = [
       ...(sidecar
@@ -505,7 +505,7 @@ export function attachSidecars(
           snapshotDir,
           modeSidecar.snapshotRel.replace(
             /\.png$/i,
-            `-${browser}-${platform}.png`,
+            `-${browser}.png`,
           ),
         );
         return {
@@ -536,7 +536,12 @@ export function attachSidecars(
           modeResults,
           outcome: sidecar.outcome,
           policyStatus,
-          environment: { browser, platform },
+          target: { browser },
+          captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+          environment: {
+            browser,
+            platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os,
+          },
         }
       : { ...item };
     if (!sidecar && modeResults.length > 0) {
@@ -1231,6 +1236,7 @@ async function handleRun(
         selectedStoryIds?.length ??
         0) * selectedBrowsers.length,
     affected,
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
   });
 
   try {
@@ -1368,6 +1374,8 @@ async function handleRun(
               storyId: item.storyId,
               status: item.status,
               title: item.storyId,
+              target: item.target,
+              captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
               environment: {
                 browser: item.browser,
                 platform: item.platform,
@@ -1389,6 +1397,8 @@ async function handleRun(
               warnings,
               storyId: item.storyId,
               status: item.status,
+              target: item.target,
+              captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
               environment: {
                 browser: item.browser,
                 platform: item.platform,
@@ -1446,6 +1456,7 @@ async function handleRun(
       logTail: log.slice(-6000),
       affected,
       browsers: selectedBrowsers,
+      captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1463,6 +1474,7 @@ async function handleRun(
       logTail: log.slice(-4000),
       affected,
       browsers: selectedBrowsers,
+      captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     });
   }
 }
@@ -1985,7 +1997,26 @@ function resolvedConfigPayload(
     projectDefaults: projectConfig.defaults,
     browsers: projectConfig.browsers,
     runtimePlatform: process.platform,
-    availableEnvironments: discoverSnapshotEnvironments(snapshotDir),
+    availableEnvironments: [],
+    availableBrowsers: discoverSnapshotBrowsers(snapshotDir),
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    captureRunner: {
+      kind: existsSync(path.join(root, ".visual-delta/runner.mjs"))
+        ? "custom"
+        : "docker",
+      available:
+        existsSync(path.join(root, ".visual-delta/runner.mjs")) ||
+        validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE).length ===
+          0,
+      ...(!existsSync(path.join(root, ".visual-delta/runner.mjs")) &&
+      validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE).length
+        ? {
+            reason: validateVisualCaptureProfile(
+              CANONICAL_VISUAL_CAPTURE_PROFILE,
+            ).join(" "),
+          }
+        : {}),
+    },
     workflow: projectConfig.workflow,
     vcs: {
       kind: vcsKind,
@@ -2304,6 +2335,8 @@ async function handleCaptureSubject(
   write({
     type: "start",
     storyId: body.storyId,
+    target: { browser },
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     environment: {
       browser,
       platform: process.platform,
@@ -2353,6 +2386,8 @@ async function handleCompareStory(
   write({
     type: "start",
     storyId: body.storyId,
+    target: { browser: body.browser ?? "chromium" },
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     environment: {
       browser: body.browser ?? "chromium",
       platform: process.platform,

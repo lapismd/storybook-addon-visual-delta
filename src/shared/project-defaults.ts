@@ -4,7 +4,7 @@ import type {
 } from "./config-types.js";
 
 export const BUILTIN_VISUAL_DELTA_DEFAULTS: VisualDeltaProjectDefaults = {
-  passThresholdPercent: 1,
+  passThresholdPercent: 1.5,
   diffThreshold: 0.2,
   diffIncludeAntiAliasing: false,
   delay: 0,

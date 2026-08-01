@@ -44,17 +44,17 @@ export const Light: Story = {
     const source = "export const Light: Story = {};\n";
     const next = patchStorySourceText(source, entry, {
       kind: "baseline",
-      url: "/visual-baselines/workspace-shell-demo--light-chromium-darwin.png",
+      url: "/visual-baselines/workspace-shell-demo--light-chromium.png",
     });
     expect(next).toContain("parameters:");
     expect(next).toContain("visualDelta:");
-    expect(next).toContain("workspace-shell-demo--light-chromium-darwin.png");
+    expect(next).toContain("workspace-shell-demo--light-chromium.png");
   });
 
   it("removes one exact primary image and keeps sibling images", () => {
-    const target = "/visual-baselines/workspace/demo/light-chromium-darwin.png";
+    const target = "/visual-baselines/workspace/demo/light-chromium.png";
     const sibling =
-      "/visual-baselines/workspace/demo/light--dark-chromium-darwin.png";
+      "/visual-baselines/workspace/demo/light--dark-chromium.png";
     const source = `export const Light: Story = {
   parameters: {
     visualDelta: {
@@ -74,11 +74,11 @@ export const Light: Story = {
 
   it("removes an exact named-mode image without dropping its globals", () => {
     const target =
-      "/visual-baselines/workspace/demo/light--dark-chromium-darwin.png";
+      "/visual-baselines/workspace/demo/light--dark-chromium.png";
     const source = `export const Light: Story = {
   parameters: {
     visualDelta: {
-      images: ["/visual-baselines/workspace/demo/light-chromium-darwin.png"],
+      images: ["/visual-baselines/workspace/demo/light-chromium.png"],
       modes: {
         dark: { src: ${JSON.stringify(target)}, globals: { colorMode: "dark" } },
       },
@@ -91,7 +91,7 @@ export const Light: Story = {
     });
     expect(next).not.toContain(target);
     expect(next).toContain('"globals":{"colorMode":"dark"}');
-    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain("light-chromium.png");
   });
 
   it("removes one exact Svelte interaction baseline", () => {
@@ -100,13 +100,13 @@ export const Light: Story = {
       name: "Light",
       importPath: "src/Demo.stories.svelte",
     };
-    const target = "/visual-baselines/demo/light--opens-chromium-darwin.png";
+    const target = "/visual-baselines/demo/light--opens-chromium.png";
     const source = `<Story name="Light" parameters={{
   visualDelta: {
-    images: ["/visual-baselines/demo/light-chromium-darwin.png"],
+    images: ["/visual-baselines/demo/light-chromium.png"],
     interactions: [
       { id: "opens", label: "Opens", src: ${JSON.stringify(target)} },
-      { id: "closes", label: "Closes", src: "/visual-baselines/demo/light--closes-chromium-darwin.png" },
+      { id: "closes", label: "Closes", src: "/visual-baselines/demo/light--closes-chromium.png" },
     ],
   },
 }}>\n`;
@@ -118,7 +118,7 @@ export const Light: Story = {
     expect(next).not.toContain(target);
     expect(next).not.toContain('"id":"opens"');
     expect(next).toContain('"id":"closes"');
-    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain("light-chromium.png");
   });
 
   it("updates only allow-listed Visual Delta values in a Svelte story", () => {
@@ -129,7 +129,7 @@ export const Light: Story = {
     };
     const source = `<Story name="Light" tags={["visual-ready"]} parameters={{
   visualDelta: {
-    images: ["/visual-baselines/demo/light-chromium-darwin.png"],
+    images: ["/visual-baselines/demo/light-chromium.png"],
     align: "canvas",
     opacity: 0.5,
   },
@@ -142,7 +142,7 @@ export const Light: Story = {
     expect(next).toContain('"align":"viewport"');
     expect(next).toContain('"delay":250');
     expect(next).not.toContain('"opacity"');
-    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain("light-chromium.png");
     expect(next).toContain('tags={["visual-ready"]}');
   });
 
@@ -151,7 +151,7 @@ export const Light: Story = {
   tags: ["visual-ready"],
   parameters: {
     visualDelta: {
-      images: ["/visual-baselines/demo/light-chromium-darwin.png"],
+      images: ["/visual-baselines/demo/light-chromium.png"],
       align: "canvas",
     },
   },
@@ -163,7 +163,7 @@ export const Light: Story = {
     });
     expect(next).toContain('"align":"viewport"');
     expect(next).toContain('"cropToViewport":true');
-    expect(next).toContain("light-chromium-darwin.png");
+    expect(next).toContain("light-chromium.png");
     expect(next).toContain('tags: ["visual-ready"]');
   });
 
@@ -210,7 +210,7 @@ export const Light: Story = {
     const source = `<Story name="Light" tags={["visual-pending", "visual-approved"]}>\n`;
     const next = patchStorySourceText(source, svelteEntry, {
       kind: "baseline",
-      url: "/visual-baselines/forms/demo/light-chromium-darwin.png",
+      url: "/visual-baselines/forms/demo/light-chromium.png",
       reviewStatus: "ready",
     });
     expect(next).toContain("visualDelta");
@@ -233,10 +233,10 @@ export const DarkMode: Story = { args: { theme: "dark" } };
       () => true,
     );
     expect(next).toContain(
-      "/visual-baselines/workspace-shell-demo--light-chromium-darwin.png",
+      "/visual-baselines/workspace-shell-demo--light-chromium.png",
     );
     expect(next).toContain(
-      "/visual-baselines/workspace-shell-demo--dark-mode-chromium-darwin.png",
+      "/visual-baselines/workspace-shell-demo--dark-mode-chromium.png",
     );
   });
 });

@@ -158,6 +158,7 @@ import {
 } from "./baseline-source-availability.js";
 import { resolveCapabilitiesFromEnvironment } from "../shared/capabilities.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 import {
   isVisualDeltaBrowser,
   type VisualBaselineEnvironment,
@@ -215,10 +216,19 @@ function normalizePanelConfig(
       Array.isArray(config.browsers) && config.browsers.length > 0
         ? config.browsers
         : ["chromium"],
-    runtimePlatform: config.runtimePlatform || "darwin",
+    runtimePlatform: config.runtimePlatform || "linux",
     availableEnvironments: Array.isArray(config.availableEnvironments)
       ? config.availableEnvironments
       : [],
+    availableBrowsers: Array.isArray(config.availableBrowsers)
+      ? config.availableBrowsers
+      : [],
+    captureProfile: config.captureProfile ?? CANONICAL_VISUAL_CAPTURE_PROFILE,
+    captureRunner: config.captureRunner ?? {
+      kind: "docker",
+      available: false,
+      reason: "The canonical capture profile is not locked.",
+    },
   };
 }
 
@@ -234,7 +244,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       : "chromium",
   );
   const [selectedPlatform, setSelectedPlatform] = useState(
-    initialEnvironment.current.platform || "darwin",
+    "linux",
   );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
@@ -373,15 +383,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           ...configuredInteractions.map((interaction) => interaction.environment),
         ],
         availableEnvironments: resolvedConfig?.availableEnvironments,
+        availableBrowsers: resolvedConfig?.availableBrowsers,
         configuredBrowsers: resolvedConfig?.browsers,
-        runtimePlatform: resolvedConfig?.runtimePlatform ?? "darwin",
+        runtimePlatform: "linux",
       }),
     [configuredInteractions, configuredPrimaryImages, resolvedConfig],
   );
   const environmentMutable = Boolean(
     resolvedConfig &&
       (resolvedConfig.browsers ?? ["chromium"]).includes(selectedBrowser) &&
-      resolvedConfig.runtimePlatform === selectedPlatform,
+      resolvedConfig.captureRunner.available,
   );
   const environmentCapabilities = useMemo(
     () => ({
@@ -401,9 +412,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         if (cancelled) return;
         const normalized = normalizePanelConfig(config);
         setResolvedConfig(normalized);
-        if (!initialEnvironment.current.platform) {
-          setSelectedPlatform(normalized.runtimePlatform);
-        }
+        setSelectedPlatform("linux");
       })
       .catch(() => {
         /* static/read-only surfaces retain discovered environment choices */
@@ -427,7 +436,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         (option) => option.value === selectedPlatform,
       )
     ) {
-      setSelectedPlatform(resolvedConfig.runtimePlatform || "darwin");
+      setSelectedPlatform("linux");
     }
   }, [
     environmentOptions.browsers,
@@ -681,7 +690,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               : undefined,
           tags: entry?.tags,
         },
-        { allowSkipVisual: true },
+        {
+          allowSkipVisual: true,
+          target: { browser: selectedBrowser },
+        },
       );
       const imageSrcs =
         fromParams.length > 0
@@ -883,7 +895,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const activeSectionId: BaselineSectionId = selectedInteractionId ?? "default";
   const activeDiffMeta = useMemo(() => {
     if (!diffResult) return null;
-    const threshold = diffResult.passThresholdPercent ?? 0.1;
+    const threshold =
+      diffResult.passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
     return {
       status: diffResult.passed ? ("pass" as const) : ("fail" as const),
       stats: `${diffResult.diffPercent.toFixed(4)}% · ${diffResult.diffPixels}/${diffResult.totalPixels} px · <${threshold}%`,
@@ -1060,7 +1073,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       if (!environmentMutable) {
         setCaptureError(
-          `Baselines can only be changed for an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"}.`,
+          "Baselines can only be changed for an enabled browser through an available canonical capture runner.",
         );
         return;
       }
@@ -1089,13 +1102,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           },
           {
             allowSkipVisual: true,
-            environment: {
-              browser: selectedBrowser,
-              platform: selectedPlatform,
-            },
+            target: { browser: selectedBrowser },
           },
         );
-        const suffix = `-${selectedBrowser}-${selectedPlatform}.png`;
+        const suffix = `-${selectedBrowser}.png`;
         const src = primary?.endsWith(suffix)
           ? primary.slice(0, -suffix.length) + `--${step.stepId}${suffix}`
           : undefined;
@@ -1303,10 +1313,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         },
         {
           allowSkipVisual: next.kind === "create",
-          environment: {
-            browser: selectedBrowser,
-            platform: selectedPlatform,
-          },
+          target: { browser: selectedBrowser },
         },
       );
       if (url) {
@@ -1344,7 +1351,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       }
       if (engine === "chromium" && !environmentMutable) {
         setCaptureError(
-          `Browser comparison is only available for an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"}.`,
+          "Browser comparison is only available for an enabled browser through an available canonical capture runner.",
         );
         return;
       }
@@ -2071,14 +2078,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     lastRun?.results?.find(
       (result) =>
         result.storyId === storyId &&
-        result.environment?.browser === selectedBrowser &&
-        result.environment.platform === selectedPlatform,
+        (result.target?.browser ?? result.environment?.browser) ===
+          selectedBrowser,
     ) ??
     lastRun?.results?.find(
       (result) => result.storyId === storyId && result.environment == null,
     );
   const latestStoryResult =
-    latestStoryResultCandidate?.sidecar?.version === 2 &&
+    latestStoryResultCandidate?.sidecar &&
+    latestStoryResultCandidate.sidecar.version >= 2 &&
     (!diffResult ||
       latestStoryResultCandidate.sidecar.baselineHash !==
         diffResult.baselineHash ||
@@ -2369,7 +2377,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                       }
                     />
                   ) : (
-                    <span title="Edit the official Chromium threshold in Configuration">
+                    <span title="Edit the official browser threshold in Configuration">
                       {passThresholdPercent}%
                     </span>
                   )}
@@ -2438,7 +2446,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           }
         : !environmentMutable
           ? {
-              description: `No baseline exists for ${selectedBrowser} on ${selectedPlatform}. This discovered environment is view-only; switch to an enabled browser on ${resolvedConfig?.runtimePlatform ?? "the runtime OS"} to capture.`,
+              description: `No canonical baseline exists for ${selectedBrowser}. This browser is view-only, or the Linux · ARM64 capture runner is unavailable.`,
             }
         : {
             description: skipVisual
@@ -2708,13 +2716,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 : null,
           environment: {
             browser: selectedBrowser,
-            platform: selectedPlatform,
             browsers: environmentOptions.browsers,
-            platforms: environmentOptions.platforms,
             onBrowserChange: (value) => {
               if (isVisualDeltaBrowser(value)) setSelectedBrowser(value);
             },
-            onPlatformChange: setSelectedPlatform,
+            captureProfileId: resolvedConfig?.captureProfile.id,
           },
         }}
       />

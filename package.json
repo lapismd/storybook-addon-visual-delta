@@ -42,6 +42,11 @@
       "import": "./dist/node/index.js",
       "default": "./dist/node/index.js"
     },
+    "./runner": {
+      "types": "./dist/runner/index.d.ts",
+      "import": "./dist/runner/index.js",
+      "default": "./dist/runner/index.js"
+    },
     "./src/*": "./src/*",
     "./src/stories/*": "./src/stories/*",
     "./src/stories/panel-fixtures": "./src/stories/panel-fixtures.tsx",

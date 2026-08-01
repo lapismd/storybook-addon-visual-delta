@@ -15,8 +15,8 @@ describe("visual delta settings", () => {
   it("returns defaults when storage is empty", () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
     expect(loadSettings().passThresholdByEngine).toEqual({
-      html: 1,
-      chromium: 0.1,
+      html: 1.5,
+      chromium: 1.5,
     });
   });
 

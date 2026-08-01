@@ -1,6 +1,10 @@
 /** Shared browser capture stream types (manager + middleware). */
 
-import type { VisualBaselineEnvironment } from "./environments.js";
+import type {
+  VisualBaselineEnvironment,
+  VisualBaselineTarget,
+} from "./environments.js";
+import type { VisualCaptureProfile } from "./capture-profile.js";
 
 export type CaptureSubjectPhase =
   | "launching"
@@ -21,11 +25,20 @@ export type CaptureSubjectResult = {
   pngBase64: string;
   width: number;
   height: number;
+  target: VisualBaselineTarget;
+  captureProfile: VisualCaptureProfile;
+  /** @deprecated Informational compatibility alias. */
   environment: VisualBaselineEnvironment;
 };
 
 export type CaptureSubjectStreamEvent =
-  | { type: "start"; storyId: string; environment?: VisualBaselineEnvironment }
+  | {
+      type: "start";
+      storyId: string;
+      target?: VisualBaselineTarget;
+      captureProfile?: VisualCaptureProfile;
+      environment?: VisualBaselineEnvironment;
+    }
   | ({ type: "progress" } & CaptureSubjectProgress)
   | ({ type: "done" } & CaptureSubjectResult)
   | { type: "error"; error: string };

@@ -52,10 +52,15 @@ import { resolveIgnoreSelectors } from "../shared/ignore.js";
 import { postBrowserStoryCompare } from "../panel/chromium-capture.js";
 import type {
   VisualBaselineEnvironment,
+  VisualBaselineTarget,
   VisualDeltaBrowser,
 } from "../shared/environments.js";
 import { parseVisualBaselineEnvironment } from "../shared/environments.js";
 import type { VisualComparisonPolicyStatus } from "../visual-diff-sidecar.js";
+import {
+  CANONICAL_VISUAL_CAPTURE_PROFILE,
+  type VisualCaptureProfile,
+} from "../shared/capture-profile.js";
 
 export type VisualRunResultItem = {
   storyId: string;
@@ -68,6 +73,9 @@ export type VisualRunResultItem = {
   missingBaseline?: boolean;
   /** Normalized outcome when restored from Storybook's status store. */
   outcome?: VisualComparisonOutcome;
+  target?: VisualBaselineTarget;
+  captureProfile?: VisualCaptureProfile;
+  /** @deprecated Canonical lookup uses target.browser only. */
   environment?: VisualBaselineEnvironment;
   policyStatus?: VisualComparisonPolicyStatus;
   /** Optional review mutation produced by authoritative live auto-approval. */
@@ -154,6 +162,7 @@ export type VisualRunResponse = {
   logTail: string;
   affected?: AffectedVisualSummary;
   browsers?: VisualDeltaBrowser[];
+  captureProfile?: VisualCaptureProfile;
   /** Set when `/run-events` reports no active or recent run. */
   idle?: boolean;
 };
@@ -166,13 +175,20 @@ export type VisualRunProgress = {
   warnings?: number;
   storyId?: string;
   status?: "passed" | "failed";
+  target?: VisualBaselineTarget;
+  captureProfile?: VisualCaptureProfile;
   environment?: VisualBaselineEnvironment;
   affected?: AffectedVisualSummary;
 };
 
 export type VisualRunStreamEvent =
   | { type: "idle" }
-  | { type: "start"; total: number; affected?: AffectedVisualSummary }
+  | {
+      type: "start";
+      total: number;
+      affected?: AffectedVisualSummary;
+      captureProfile?: VisualCaptureProfile;
+    }
   | ({ type: "progress" } & VisualRunProgress)
   | { type: "log"; line: string }
   | ({ type: "done" } & VisualRunResponse)
@@ -270,6 +286,7 @@ export type VisualLastRunSummary = {
   results?: VisualRunResultItem[];
   /** Affected selection details for zero-run and scoped summaries. */
   affected?: AffectedVisualSummary;
+  captureProfile?: VisualCaptureProfile;
 };
 
 /**
@@ -715,6 +732,8 @@ export async function compareExactStory(
     sidecar: compared.sidecar,
     outcome: compared.sidecar.outcome,
     policyStatus: compared.sidecar.policyStatus,
+    target: compared.target,
+    captureProfile: compared.captureProfile,
     environment: compared.environment,
     ...(compared.review ? { review: compared.review } : {}),
     ...(compared.sidecar.error ? { error: compared.sidecar.error } : {}),
@@ -861,6 +880,8 @@ async function readNdjsonRun(
               warnings: event.warnings,
               storyId: event.storyId,
               status: event.status,
+              target: event.target,
+              captureProfile: event.captureProfile,
               environment: event.environment,
             },
             onProgress,
@@ -1435,6 +1456,8 @@ export type VisualCreateProgress = {
   completed?: number;
   /** Total component targets in this write job. */
   total?: number;
+  target?: VisualBaselineTarget;
+  captureProfile?: VisualCaptureProfile;
 };
 
 export function visualCreateProgressAppliesToStory(
@@ -1585,6 +1608,10 @@ async function postVisualBaselineWrite(
     completed: options?.completed,
     total: options?.total,
   };
+  const provenance = {
+    target: { browser: body.browser ?? "chromium" } as VisualBaselineTarget,
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+  };
 
   emitVisualCreateProgress({
     running: true,
@@ -1593,6 +1620,7 @@ async function postVisualBaselineWrite(
     storyIds,
     logTail: "",
     ...fraction,
+    ...provenance,
   });
   try {
     const response = await fetch(path, {
@@ -1616,6 +1644,7 @@ async function postVisualBaselineWrite(
           storyIds,
           logTail: log.slice(-12_000),
           ...fraction,
+          ...provenance,
         });
       }
       log += decoder.decode();
@@ -1635,6 +1664,7 @@ async function postVisualBaselineWrite(
         storyIds,
         error,
         logTail: log || undefined,
+        ...provenance,
       });
       throw new Error(error);
     }
@@ -1657,6 +1687,7 @@ async function postVisualBaselineWrite(
         storyIds,
         error,
         logTail: log || undefined,
+        ...provenance,
       });
       throw new Error(error);
     }
@@ -1676,6 +1707,7 @@ async function postVisualBaselineWrite(
         storyIds,
         error,
         logTail: log || undefined,
+        ...provenance,
       });
       throw new Error(error);
     }
@@ -1708,6 +1740,7 @@ async function postVisualBaselineWrite(
       storyIds,
       logTail: log || undefined,
       ...fraction,
+      ...provenance,
     });
     invalidateVisualLastRun(
       body.storyIds ?? (body.storyId ? [body.storyId] : undefined),
@@ -1729,6 +1762,7 @@ async function postVisualBaselineWrite(
       storyIds,
       error: message,
       ...fraction,
+      ...provenance,
     });
     throw error instanceof Error ? error : new Error(message);
   }
@@ -1982,11 +2016,16 @@ export async function postVisualInteractionBaseline(body: {
   browser?: VisualDeltaBrowser;
 }): Promise<VisualCreateResponse> {
   const storyIds = [body.storyId];
+  const provenance = {
+    target: { browser: body.browser ?? "chromium" } as VisualBaselineTarget,
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+  };
   emitVisualCreateProgress({
     running: true,
     label: body.overwrite ? "Updating interaction…" : "Creating interaction…",
     kind: "interaction",
     storyIds,
+    ...provenance,
     logTail: "",
   });
   try {
@@ -2011,6 +2050,7 @@ export async function postVisualInteractionBaseline(body: {
             : "Creating interaction…",
           kind: "interaction",
           storyIds,
+          ...provenance,
           logTail: log.slice(-12_000),
         });
       }
@@ -2029,6 +2069,7 @@ export async function postVisualInteractionBaseline(body: {
         label: "Interaction failed",
         kind: "interaction",
         storyIds,
+        ...provenance,
         error,
         logTail: log || undefined,
       });
@@ -2042,6 +2083,7 @@ export async function postVisualInteractionBaseline(body: {
         label: "Interaction failed",
         kind: "interaction",
         storyIds,
+        ...provenance,
         error,
         logTail: log || undefined,
       });
@@ -2053,6 +2095,7 @@ export async function postVisualInteractionBaseline(body: {
       label: body.overwrite ? "Interaction updated" : "Interaction created",
       kind: "interaction",
       storyIds,
+      ...provenance,
       logTail: log || undefined,
     });
     return { ok: true, log, ...(changes ? { changes } : {}) };
@@ -2071,6 +2114,7 @@ export async function postVisualInteractionBaseline(body: {
       label: "Interaction failed",
       kind: "interaction",
       storyIds,
+      ...provenance,
       error: message,
     });
     throw error instanceof Error ? error : new Error(message);

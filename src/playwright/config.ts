@@ -152,6 +152,8 @@ export function defineVisualPlaywrightConfig(
     workers: process.env.CI ? 1 : undefined,
     updateSnapshots: visualUpdateSnapshotsMode(),
     reporter: [["list"], ["html", { open: "never" }]],
+    snapshotPathTemplate:
+      "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}",
     timeout: 30_000,
     expect: {
       toHaveScreenshot: { ...visualScreenshotExpect() },

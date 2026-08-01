@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: VisualDeltaSettings = {
   colorInversion: false,
   liveVisible: true,
   passThresholdByEngine: {
-    html: 1,
+    html: DEFAULT_PASS_THRESHOLD_PERCENT,
     chromium: DEFAULT_PASS_THRESHOLD_PERCENT,
   },
 };

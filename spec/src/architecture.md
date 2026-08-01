@@ -12,7 +12,8 @@ Each component owns a bounded part of the system:
 | Storybook preview       | Story decorators, render readiness, capture metadata, overlay and split layout, interaction parking  | Baseline mutation, static-build decisions, repository state               |
 | Dev middleware          | Request validation, exact scope, process coordination, change tracking, static-build policy, run hub | Product rendering, pixel algorithms, unapproved baseline writes           |
 | CLI and host writers    | Approved baseline capture, wiring changes, skip and include source edits, scaffolding                | Presentation state, implicit scope expansion                              |
-| Playwright suite        | Deterministic Chromium environment, capture targets, pixel comparison, sidecar evidence              | Review approval policy, repository commits                                |
+| Capture runner          | Transport a frozen capture manifest into the canonical Linux/ARM64 profile                            | Scope expansion, comparison policy, direct unapproved repository writes   |
+| Playwright suite        | Deterministic configured-browser capture, pixel comparison, staged artifacts, sidecar evidence        | Review approval policy, repository commits                                |
 | Artifact store          | Baseline PNGs, local sidecars, affected cache, static Storybook                                      | Business logic or inferred review state                                   |
 | Version-control adapter | Read-only history and guarded local commits                                                          | Push, amend, squash, branch creation, discard, remote mutation            |
 | Host repository         | Port policy, snapshot layout, custom writers, script gates, package registration                     | Redefining portable package behavior without a host-profile specification |
@@ -23,8 +24,8 @@ These requirements preserve ownership and trustworthy state across process bound
 
 | ID          | Requirement                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-ARCH-001 | The manager, preview, middleware, CLI, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface.                        |
-| VD-ARCH-002 | Authoritative visual data MUST flow from a settled preview through Chromium capture to PNG and sidecar artifacts. Presentation state MUST NOT substitute for capture evidence.                                               |
+| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface.         |
+| VD-ARCH-002 | Authoritative visual data MUST flow from a settled preview through a configured browser in the canonical Linux/ARM64 capture profile to staged PNG and sidecar artifacts. Presentation state MUST NOT substitute for capture evidence. |
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Sidecars, static output, run state, and affected caches are derived evidence and MUST be safe to regenerate.                                                       |
 | VD-ARCH-005 | Failure in one boundary MUST produce a typed or structured failure at its caller. It MUST NOT silently mutate another boundary, broaden scope, or report success.                                                            |
@@ -38,16 +39,19 @@ sequenceDiagram
   participant M as Manager
   participant P as Preview
   participant N as Middleware
-  participant B as Playwright
+  participant R as Capture runner
+  participant B as Playwright worker
   participant A as Artifacts
   M->>P: Select story and baseline
   P-->>M: Exact render ready and measured layout
   M->>N: Compare exact story and variant
-  N->>B: Capture request with resolved configuration
+  N->>R: Frozen manifest and resolved profile
+  R->>B: Execute package worker
   B->>P: Load iframe and wait for readiness
   B->>A: Read expected PNG
   B->>A: Write result sidecar and diagnostic images
-  B-->>N: Structured outcome
+  B-->>R: Structured outcome and staged artifacts
+  R-->>N: Streamed progress and terminal result
   N-->>M: Progress and final result
 ```
 

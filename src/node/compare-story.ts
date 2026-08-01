@@ -15,7 +15,8 @@ import {
 import { resolveVisualBaselinePath } from "./delete-baseline.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import { writeDiffArtifactsForBaseline } from "../playwright/write-diff-artifacts.js";
-import { parseVisualBaselineEnvironment } from "../shared/environments.js";
+import { parseVisualBaselineTarget } from "../shared/environments.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 /**
@@ -41,17 +42,11 @@ export async function compareLiveStoryWithBrowser(options: {
   if (!projectConfig.browsers.includes(browser)) {
     throw new Error(`Browser ${browser} is not enabled in project configuration.`);
   }
-  const requestedEnvironment = parseVisualBaselineEnvironment(
+  const requestedTarget = parseVisualBaselineTarget(
     options.request.baselineUrl,
   );
-  if (
-    !requestedEnvironment ||
-    requestedEnvironment.browser !== browser ||
-    requestedEnvironment.platform !== process.platform
-  ) {
-    throw new Error(
-      `Baseline environment must match ${browser}/${process.platform}.`,
-    );
+  if (!requestedTarget || requestedTarget.browser !== browser) {
+    throw new Error(`Baseline target must match ${browser}.`);
   }
   const requestEntry = options.request.story;
   if (requestEntry && requestEntry.id !== storyId) {
@@ -120,14 +115,15 @@ export async function compareLiveStoryWithBrowser(options: {
     includeAntiAliasing: options.request.includeAntiAliasing,
     captureConfig,
     browser,
-    platform: process.platform,
     failureMode: projectConfig.workflow.visualTestFailureMode,
   });
   return {
     ok: true,
     storyId,
     sidecar,
-    environment: { browser, platform: process.platform },
+    target: { browser },
+    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    environment: { browser, platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os },
   };
 }
 

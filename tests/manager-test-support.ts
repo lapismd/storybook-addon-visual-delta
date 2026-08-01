@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
-import type { VisualBaselineEnvironment } from "../src/shared/environments.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../src/shared/capture-profile.js";
+import type { VisualDeltaBrowser } from "../src/shared/environments.js";
 import type { VisualStoryFact } from "../src/shared/story-facts.js";
 
 export const MANAGER_FIXTURE =
@@ -32,15 +33,18 @@ const CONFIG = {
     visualTestArgs: ["playwright", "test"],
     addonSrcDir: null,
   },
-  playwrightPassThresholdPercent: 1,
+  playwrightPassThresholdPercent: 1.5,
   browsers: ["chromium", "firefox"],
   runtimePlatform: "darwin",
-  availableEnvironments: [
-    { browser: "chromium", platform: "darwin" },
-    { browser: "chromium", platform: "linux" },
-  ],
+  availableEnvironments: [],
+  availableBrowsers: ["chromium"],
+  captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+  captureRunner: {
+    kind: "custom",
+    available: true,
+  },
   projectDefaults: {
-    passThresholdPercent: 1,
+    passThresholdPercent: 1.5,
     diffThreshold: 0.2,
     diffIncludeAntiAliasing: false,
     delay: 0,
@@ -100,19 +104,17 @@ export async function mockVisualBackend(
   page: Page,
   options: {
     runtimeInstanceId?: () => string;
-    availableEnvironments?: VisualBaselineEnvironment[];
-    requiredEnvironments?: VisualBaselineEnvironment[];
+    availableBrowsers?: VisualDeltaBrowser[];
+    requiredBrowsers?: VisualDeltaBrowser[];
     storyFact?: (storyId: string) => Partial<VisualStoryFact>;
   } = {},
 ) {
   const writes: string[] = [];
-  const availableEnvironments =
-    options.availableEnvironments ?? CONFIG.availableEnvironments;
-  const requiredEnvironments = options.requiredEnvironments ?? [
-    { browser: "chromium" as const, platform: "darwin" },
-    { browser: "chromium" as const, platform: "linux" },
-    { browser: "firefox" as const, platform: "darwin" },
-    { browser: "firefox" as const, platform: "linux" },
+  const availableBrowsers =
+    options.availableBrowsers ?? CONFIG.availableBrowsers;
+  const requiredBrowsers = options.requiredBrowsers ?? [
+    "chromium" as const,
+    "firefox" as const,
   ];
   await page.route("**/__visual-delta/**", async (route) => {
     const request = route.request();
@@ -129,28 +131,24 @@ export async function mockVisualBackend(
         status: 200,
         json: {
           ok: true,
-          version: 3,
+          version: 4,
           generatedAt: Date.now(),
-          availableEnvironments,
-          requiredEnvironments,
+          availableBrowsers,
+          requiredBrowsers,
+          captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
           stories: (body.stories ?? []).flatMap((story) =>
             story.id
               ? [
                   {
                     storyId: story.id,
                     baseline: "present",
-                    environmentCoverage: requiredEnvironments.map(
-                      (environment) => ({
-                        ...environment,
-                        baseline: availableEnvironments.some(
-                          (available) =>
-                            available.browser === environment.browser &&
-                            available.platform === environment.platform,
-                        )
+                    browserCoverage: requiredBrowsers.map((browser) => ({
+                      target: { browser },
+                      browser,
+                      baseline: availableBrowsers.includes(browser)
                           ? ("present" as const)
                           : ("missing" as const),
-                      }),
-                    ),
+                    })),
                     ...options.storyFact?.(story.id),
                   },
                 ]
@@ -185,7 +183,7 @@ export async function mockVisualBackend(
         diffPixels: 0,
         totalPixels: 1,
         diffPercent: 0,
-        passThresholdPercent: 1,
+        passThresholdPercent: 1.5,
         passed: true,
       };
       await route.fulfill({

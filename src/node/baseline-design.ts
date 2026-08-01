@@ -2,7 +2,7 @@
  * Map catalog Storybook stories to committed Playwright visual baselines
  * served via staticDirs at `/visual-baselines`.
  *
- * On-disk filenames use the Playwright browser project + host platform suffix.
+ * On-disk filenames use only the Playwright browser project suffix.
  */
 
 import {
@@ -11,15 +11,10 @@ import {
 } from "../shared/baseline-url.js";
 import {
   VISUAL_DELTA_BROWSERS,
-  withVisualBaselineEnvironment,
+  withVisualBaselineTarget,
 } from "../shared/environments.js";
 
 export const VISUAL_BASELINE_SUFFIX = SHARED_SUFFIX;
-export const VISUAL_DELTA_BASELINE_PLATFORMS = [
-  "darwin",
-  "linux",
-  "win32",
-] as const;
 
 export type BaselineStoryRef = {
   title?: string;
@@ -74,7 +69,7 @@ export function baselineUrlForStory(
 
 /**
  * `parameters.visualDelta` for @lapismd/storybook-addon-visual-delta.
- * The first matching-environment baseline auto-selects on load; component-clipped PNGs pin to the
+ * The first matching-browser baseline auto-selects on load; component-clipped PNGs pin to the
  * story canvas; default split puts the baseline to the right of live.
  */
 export function visualBaselineVisualDeltaParameter(src: string | string[]) {
@@ -84,21 +79,18 @@ export function visualBaselineVisualDeltaParameter(src: string | string[]) {
     colorInversion: false,
     align: "canvas" as const,
     placement: "right" as const,
-    passThresholdPercent: 0.1,
   };
 }
 
-/** Discover every committed Browser × OS variant of a canonical baseline URL. */
+/** Discover every committed browser variant of a canonical baseline URL. */
 export function existingVisualBaselineUrls(
   canonicalUrl: string,
   baselineExists: (url: string) => boolean,
 ): string[] {
   const candidates = [
     canonicalUrl,
-    ...VISUAL_DELTA_BROWSERS.flatMap((browser) =>
-      VISUAL_DELTA_BASELINE_PLATFORMS.map((platform) =>
-        withVisualBaselineEnvironment(canonicalUrl, { browser, platform }),
-      ),
+    ...VISUAL_DELTA_BROWSERS.map((browser) =>
+      withVisualBaselineTarget(canonicalUrl, { browser }),
     ),
   ];
   return [...new Set(candidates)].filter(baselineExists);

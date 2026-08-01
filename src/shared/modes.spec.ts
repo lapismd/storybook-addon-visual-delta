@@ -44,12 +44,12 @@ describe("imagesFromModes", () => {
         explicit: { src: "/custom.png" },
       },
       {
-        primarySrc: "/visual-baselines/button-chromium-darwin.png",
+        primarySrc: "/visual-baselines/button-chromium.png",
       },
     );
     expect(images).toEqual([
       {
-        src: "/visual-baselines/button--dark-chromium-darwin.png",
+        src: "/visual-baselines/button--dark-chromium.png",
         mode: "dark",
       },
       { src: "/custom.png", mode: "explicit" },
@@ -61,24 +61,24 @@ describe("modeBaselineSrc", () => {
   it("preserves query strings and leaves unsupported sources alone", () => {
     expect(
       modeBaselineSrc(
-        "/visual-baselines/button-chromium-darwin.png?v=4",
+        "/visual-baselines/button-chromium.png?v=4",
         "Dark Desktop",
       ),
-    ).toBe("/visual-baselines/button--dark-desktop-chromium-darwin.png?v=4");
+    ).toBe("/visual-baselines/button--dark-desktop-chromium.png?v=4");
     expect(
       modeBaselineSrc("data:image/png;base64,abc", "Dark"),
     ).toBeUndefined();
   });
 
-  it("preserves Firefox and WebKit environment suffixes", () => {
+  it("preserves Firefox and WebKit browser suffixes", () => {
     expect(
       modeBaselineSrc(
-        "/visual-baselines/button-firefox-linux.png",
+        "/visual-baselines/button-firefox.png",
         "Dark Desktop",
       ),
-    ).toBe("/visual-baselines/button--dark-desktop-firefox-linux.png");
+    ).toBe("/visual-baselines/button--dark-desktop-firefox.png");
     expect(
-      modeBaselineSrc("/visual-baselines/button-webkit-win32.png", "Dark"),
-    ).toBe("/visual-baselines/button--dark-webkit-win32.png");
+      modeBaselineSrc("/visual-baselines/button-webkit.png", "Dark"),
+    ).toBe("/visual-baselines/button--dark-webkit.png");
   });
 });

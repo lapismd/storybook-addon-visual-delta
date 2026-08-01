@@ -1,7 +1,15 @@
 export type {
   VisualBaselineEnvironment,
+  VisualBaselineTarget,
   VisualDeltaBrowser,
 } from "../shared/environments.js";
+export {
+  CANONICAL_VISUAL_CAPTURE_PROFILE,
+  CANONICAL_VISUAL_CAPTURE_PROFILE_ID,
+  validateVisualCaptureProfile,
+  visualCaptureProfileImageReference,
+  type VisualCaptureProfile,
+} from "../shared/capture-profile.js";
 export type { VisualTestFailureMode } from "../shared/failure-mode.js";
 export type {
   AffectedVisualTestsOptions,
@@ -48,6 +56,21 @@ export {
   runSkipVisualTag,
   type BaselineCliOptions,
 } from "./baseline-cli.js";
+export {
+  VISUAL_DELTA_CAPTURE_WORKER_ENV,
+  VISUAL_DELTA_RUNNER_MODULE_REL,
+  createCaptureJobManifest,
+  createDockerVisualDeltaCaptureRunner,
+  resolveVisualDeltaCaptureRunner,
+  runVisualDeltaInCaptureRunner,
+} from "./capture-runner.js";
+export {
+  applyVisualBaselineMigration,
+  planVisualBaselineMigration,
+  type VisualBaselineMigrationItem,
+  type VisualBaselineMigrationPlan,
+  type VisualBaselineMigrationStatus,
+} from "./baseline-migration.js";
 export {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,

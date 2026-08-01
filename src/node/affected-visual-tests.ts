@@ -352,7 +352,7 @@ function baselineFilesForStories(
     }
     const directory = path.posix.dirname(primary);
     const fileName = path.posix.basename(primary);
-    const stem = fileName.replace(/-(?:chromium|firefox|webkit)-[^.]+\.png$/i, "");
+    const stem = fileName.replace(/-(?:chromium|firefox|webkit)\.png$/i, "");
     const owned = files
       .filter((file) => {
         const normalized = normalizeSlashes(file);
@@ -361,7 +361,7 @@ function baselineFilesForStories(
         return (
           candidate === `${stem}.png` ||
           new RegExp(
-            `^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--[^/]+)?-(?:chromium|firefox|webkit)-[^.]+\\.png$`,
+            `^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--[^/]+)?-(?:chromium|firefox|webkit)\\.png$`,
             "i",
           ).test(candidate)
         );

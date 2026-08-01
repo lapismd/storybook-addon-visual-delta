@@ -54,7 +54,7 @@ function fixtureRoot() {
     ["button--failed", "failed"],
   ] as const) {
     writeFileSync(
-      path.join(root, "snapshots", `${storyId}-chromium-darwin.json`),
+      path.join(root, "snapshots", `${storyId}-chromium.json`),
       JSON.stringify({
         version: 1,
         storyId,
@@ -83,6 +83,7 @@ describe("Playwright result normalization", () => {
         storyId: "button--passed",
         status: "passed",
         browser: "chromium",
+        target: { browser: "chromium" },
         platform: process.platform,
       },
       {
@@ -90,6 +91,7 @@ describe("Playwright result normalization", () => {
         storyId: "button--failed",
         status: "failed",
         browser: "firefox",
+        target: { browser: "firefox" },
         platform: process.platform,
       },
     ]);

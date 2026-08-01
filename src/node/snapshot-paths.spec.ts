@@ -20,18 +20,17 @@ describe("mode snapshot paths", () => {
         entry,
         "nested-import",
         "chromium",
-        "darwin",
         "Dark Desktop",
       ),
-    ).toBe("shadcn/button/primary--dark-desktop-chromium-darwin.png");
+    ).toBe("shadcn/button/primary--dark-desktop-chromium.png");
   });
 
   it("preserves the filename shape for Firefox and WebKit", () => {
-    expect(snapshotFileName(entry, "nested-import", "firefox", "linux")).toBe(
-      "shadcn/button/primary-firefox-linux.png",
+    expect(snapshotFileName(entry, "nested-import", "firefox")).toBe(
+      "shadcn/button/primary-firefox.png",
     );
-    expect(snapshotFileName(entry, "nested-import", "webkit", "win32")).toBe(
-      "shadcn/button/primary-webkit-win32.png",
+    expect(snapshotFileName(entry, "nested-import", "webkit")).toBe(
+      "shadcn/button/primary-webkit.png",
     );
   });
 

@@ -14,7 +14,7 @@ export type StoryIndexEntry = {
   tags?: string[];
 };
 
-export const VISUAL_BASELINE_SUFFIX = "-chromium-darwin";
+export const VISUAL_BASELINE_SUFFIX = "-chromium";
 
 export function snapshotDirFromImportPath(importPath: string): string {
   const normalized = importPath.replace(/\\/g, "/");
@@ -87,13 +87,12 @@ export function snapshotFileName(
   entry: StoryIndexEntry,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform | string = "darwin",
-  /** Optional Chromatic-style mode name → `--{slug}` before project/platform. */
+  /** Optional Chromatic-style mode name → `--{slug}` before the browser. */
   visualModeName?: string,
 ): string {
   return screenshotRelativePath(entry, mode, visualModeName).replace(
     /\.png$/,
-    `-${project}-${platform}.png`,
+    `-${project}.png`,
   );
 }
 
@@ -102,14 +101,10 @@ export function baselinePublicUrl(
   mode: BaselinePathMode = "nested-import",
   visualModeName?: string,
   project = "chromium",
-  platform: NodeJS.Platform | string = "darwin",
 ): string {
-  const file = snapshotFileName(
-    entry,
-    mode,
-    project,
-    platform,
-    visualModeName,
-  ).replaceAll(path.sep, "/");
+  const file = snapshotFileName(entry, mode, project, visualModeName).replaceAll(
+    path.sep,
+    "/",
+  );
   return `/visual-baselines/${file}`;
 }

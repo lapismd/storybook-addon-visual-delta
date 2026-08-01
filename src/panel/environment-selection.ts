@@ -1,5 +1,6 @@
 import {
   DEFAULT_VISUAL_DELTA_BROWSERS,
+  parseVisualBaselineTarget,
   parseVisualBaselineEnvironment,
   visualDeltaBrowserLabel,
   type VisualBaselineEnvironment,
@@ -26,6 +27,7 @@ export function discoverVisualEnvironments(options: {
   sources: readonly string[];
   declaredEnvironments?: readonly (VisualBaselineEnvironment | undefined)[];
   availableEnvironments?: readonly VisualBaselineEnvironment[];
+  availableBrowsers?: readonly VisualDeltaBrowser[];
   configuredBrowsers?: readonly VisualDeltaBrowser[];
   runtimePlatform: string;
 }): {
@@ -47,13 +49,11 @@ export function discoverVisualEnvironments(options: {
   const browsers = [
     ...new Set([
       ...configured,
+      ...(options.availableBrowsers ?? []),
       ...discovered.map((environment) => environment.browser),
-    ]),
-  ];
-  const platforms = [
-    ...new Set([
-      options.runtimePlatform,
-      ...discovered.map((environment) => environment.platform),
+      ...options.sources
+        .map((source) => parseVisualBaselineTarget(source)?.browser)
+        .filter((browser): browser is VisualDeltaBrowser => Boolean(browser)),
     ]),
   ];
   return {
@@ -62,11 +62,13 @@ export function discoverVisualEnvironments(options: {
       label: `${visualDeltaBrowserLabel(browser)}${configured.includes(browser) ? "" : " (view only)"}`,
       enabled: configured.includes(browser),
     })),
-    platforms: platforms.map((platform) => ({
-      value: platform,
-      label: `${platformLabel(platform)}${platform === options.runtimePlatform ? "" : " (view only)"}`,
-      enabled: platform === options.runtimePlatform,
-    })),
+    platforms: [
+      {
+        value: "linux",
+        label: "Linux · ARM64",
+        enabled: true,
+      },
+    ],
   };
 }
 
@@ -77,11 +79,10 @@ export function sourceMatchesEnvironment(
 ): boolean {
   // A canonical filename is authoritative. Explicit metadata only identifies
   // non-canonical, story-wired demo assets and cannot override that suffix.
-  const parsed = parseVisualBaselineEnvironment(source) ?? declaredEnvironment;
-  return (
-    parsed?.browser === environment.browser &&
-    parsed.platform === environment.platform
-  );
+  const target = parseVisualBaselineTarget(source);
+  if (target) return target.browser === environment.browser;
+  const legacy = parseVisualBaselineEnvironment(source) ?? declaredEnvironment;
+  return legacy?.browser === environment.browser;
 }
 
 export function loadVisualEnvironmentPreference(): Partial<VisualBaselineEnvironment> {

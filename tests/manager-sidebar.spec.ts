@@ -137,55 +137,31 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     expect(writes).toEqual([]);
   });
 
-  test("filters exact Browser × OS coverage and finds OS parity gaps", async ({
+  test("filters browser coverage and finds browser coverage gaps", async ({
     page,
   }) => {
     await mockFixtureTags(page, ["visual-ready"]);
     await mockVisualBackend(page, {
       storyFact: (storyId) => ({
-        environmentCoverage:
+        browserCoverage:
           storyId === SIDEBAR_LABEL_FIXTURE
             ? [
                 {
                   browser: "chromium",
-                  platform: "darwin",
                   baseline: "present",
                 },
                 {
-                  browser: "chromium",
-                  platform: "linux",
-                  baseline: "missing",
-                },
-                {
                   browser: "firefox",
-                  platform: "darwin",
                   baseline: "missing",
-                },
-                {
-                  browser: "firefox",
-                  platform: "linux",
-                  baseline: "present",
                 },
               ]
             : [
                 {
                   browser: "chromium",
-                  platform: "darwin",
-                  baseline: "present",
-                },
-                {
-                  browser: "chromium",
-                  platform: "linux",
                   baseline: "present",
                 },
                 {
                   browser: "firefox",
-                  platform: "darwin",
-                  baseline: "present",
-                },
-                {
-                  browser: "firefox",
-                  platform: "linux",
                   baseline: "present",
                 },
               ],
@@ -196,21 +172,12 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     await page.getByRole("button", { name: "Expand testing module" }).click();
     const module = page.getByTestId("visual-test-module-global");
     await module.getByRole("button", { name: "Filter visual stories" }).click();
-    await expect(page.getByText("Operating System", { exact: true })).toBeVisible();
-    await expect(page.getByText("Browser", { exact: true })).toBeVisible();
-    await page.getByRole("checkbox", { name: "Linux" }).check();
-    await expect(page).toHaveURL(/visualFilter=os\.linux/);
     await expect(
-      page.getByRole("button", {
-        name: "Empty Ready: Visual baseline is ready for review",
-        exact: true,
-      }),
-    ).toBeVisible();
-
-    await page.getByRole("checkbox", { name: "Chromium" }).check();
-    await expect(page).toHaveURL(
-      /visualFilter=os\.linux%2Cbrowser\.chromium|visualFilter=os\.linux,browser\.chromium/,
-    );
+      page.getByText("Operating System", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Browser", { exact: true })).toBeVisible();
+    await page.getByRole("checkbox", { name: "Firefox" }).check();
+    await expect(page).toHaveURL(/visualFilter=browser\.firefox/);
     await expect(
       page.getByRole("button", {
         name: "Empty Ready: Visual baseline is ready for review",
@@ -219,26 +186,23 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     ).toHaveCount(0);
 
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page).toHaveURL(/browser\.chromium/);
+    await expect(page).toHaveURL(/browser\.firefox/);
     await page.getByRole("button", { name: "Expand testing module" }).click();
     await page
       .getByTestId("visual-test-module-global")
-      .getByRole("button", { name: "Filter visual stories, 2 active" })
+      .getByRole("button", { name: "Filter visual stories, 1 active" })
       .click();
     await expect(
-      page.getByRole("checkbox", { name: "Linux" }),
-    ).toBeChecked();
-    await expect(
-      page.getByRole("checkbox", { name: "Chromium" }),
+      page.getByRole("checkbox", { name: "Firefox" }),
     ).toBeChecked();
 
     await page.getByRole("button", { name: "Clear", exact: true }).click();
-    const linuxRow = page
-      .getByRole("checkbox", { name: "Linux" })
+    const chromiumRow = page
+      .getByRole("checkbox", { name: "Chromium" })
       .locator("xpath=ancestor::li[1]");
-    await linuxRow.hover();
-    await linuxRow.getByRole("button", { name: "Exclude" }).click();
-    await expect(page).toHaveURL(/visualFilter=!os\.linux/);
+    await chromiumRow.hover();
+    await chromiumRow.getByRole("button", { name: "Exclude" }).click();
+    await expect(page).toHaveURL(/visualFilter=!browser\.chromium/);
     await expect(
       page.getByRole("button", {
         name: "Empty Ready: Visual baseline is ready for review",
@@ -247,8 +211,8 @@ test.describe("Visual Delta Storybook sidebar menus", () => {
     ).toHaveCount(0);
 
     await page.getByRole("button", { name: "Clear", exact: true }).click();
-    await page.getByRole("button", { name: "OS parity gaps" }).click();
-    await expect(page).toHaveURL(/visualFilter=quick\.os-parity-gaps/);
+    await page.getByRole("button", { name: "Browser coverage gaps" }).click();
+    await expect(page).toHaveURL(/visualFilter=quick\.browser-coverage-gaps/);
     await expect(
       page.getByRole("button", {
         name: "Empty Ready: Visual baseline is ready for review",

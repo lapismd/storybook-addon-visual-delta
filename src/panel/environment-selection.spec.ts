@@ -12,8 +12,8 @@ describe("panel environment selection", () => {
       configuredBrowsers: ["chromium", "firefox"],
       runtimePlatform: "darwin",
       sources: [
-        "/visual/story-chromium-darwin.png",
-        "/visual/story-webkit-linux.png",
+        "/visual/story-chromium.png",
+        "/visual/story-webkit.png",
       ],
     });
     expect(options.browsers).toEqual([
@@ -22,8 +22,7 @@ describe("panel environment selection", () => {
       { value: "webkit", label: "WebKit (view only)", enabled: false },
     ]);
     expect(options.platforms).toEqual([
-      { value: "darwin", label: "macOS", enabled: true },
-      { value: "linux", label: "Linux (view only)", enabled: false },
+      { value: "linux", label: "Linux · ARM64", enabled: true },
     ]);
   });
 
@@ -43,16 +42,21 @@ describe("panel environment selection", () => {
       { value: "webkit", label: "WebKit (view only)", enabled: false },
     ]);
     expect(options.platforms).toEqual([
-      { value: "darwin", label: "macOS", enabled: true },
-      { value: "linux", label: "Linux (view only)", enabled: false },
+      { value: "linux", label: "Linux · ARM64", enabled: true },
     ]);
   });
 
-  it("never falls back across environments", () => {
+  it("does not fall back across browsers", () => {
     expect(
-      sourceMatchesEnvironment("story-firefox-linux.png", {
+      sourceMatchesEnvironment("story-firefox.png", {
         browser: "firefox",
         platform: "darwin",
+      }),
+    ).toBe(true);
+    expect(
+      sourceMatchesEnvironment("story-firefox.png", {
+        browser: "chromium",
+        platform: "linux",
       }),
     ).toBe(false);
   });
@@ -74,7 +78,7 @@ describe("panel environment selection", () => {
     ).toBe(false);
     expect(
       sourceMatchesEnvironment(
-        "/visual/story-firefox-linux.png",
+        "/visual/story-firefox.png",
         { browser: "chromium", platform: "darwin" },
         { browser: "chromium", platform: "darwin" },
       ),
@@ -85,20 +89,17 @@ describe("panel environment selection", () => {
     const options = discoverVisualEnvironments({
       configuredBrowsers: ["chromium"],
       runtimePlatform: "darwin",
-      sources: ["/visual/story-firefox-linux.png"],
+      sources: ["/visual/story-firefox.png"],
       declaredEnvironments: [{ browser: "chromium", platform: "darwin" }],
     });
     expect(options.browsers.map((option) => option.value)).toEqual([
       "chromium",
       "firefox",
     ]);
-    expect(options.platforms.map((option) => option.value)).toEqual([
-      "darwin",
-      "linux",
-    ]);
+    expect(options.platforms.map((option) => option.value)).toEqual(["linux"]);
   });
 
-  it("persists the local Browser × OS preference", () => {
+  it("persists the local browser preference with deprecated platform data", () => {
     saveVisualEnvironmentPreference({ browser: "webkit", platform: "linux" });
     expect(loadVisualEnvironmentPreference()).toEqual({
       browser: "webkit",

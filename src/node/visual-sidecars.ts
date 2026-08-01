@@ -158,14 +158,13 @@ export function baselinePngPathForStoryId(
   snapshotDir: string,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform | string = "darwin",
 ): string | null {
   const entry = loadStoryIndex(packageRoot)[storyId];
   if (!entry) return null;
   try {
     return path.join(
       snapshotDir,
-      snapshotFileName(entry, mode, project, platform),
+      snapshotFileName(entry, mode, project),
     );
   } catch {
     return null;
@@ -179,7 +178,6 @@ export function baselinePngExistsForStoryId(
   snapshotDir: string,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform | string = "darwin",
 ): boolean {
   const png = baselinePngPathForStoryId(
     storyId,
@@ -187,7 +185,6 @@ export function baselinePngExistsForStoryId(
     snapshotDir,
     mode,
     project,
-    platform,
   );
   return Boolean(png && existsSync(png));
 }
@@ -198,7 +195,6 @@ export function loadSidecarForStoryId(
   snapshotDir: string,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform | string = process.platform,
 ): VisualDiffSidecar | null {
   const png = baselinePngPathForStoryId(
     storyId,
@@ -206,7 +202,6 @@ export function loadSidecarForStoryId(
     snapshotDir,
     mode,
     project,
-    platform,
   );
   if (!png) return null;
   const sidecar = readSidecar(png.replace(/\.png$/i, ".json"));
@@ -237,9 +232,9 @@ export function invalidateVisualResultArtifacts(options: {
     const directory = path.dirname(primary);
     if (!existsSync(directory)) continue;
     const primaryName = path.basename(primary);
-    const platformSuffix = `-chromium-${process.platform}.png`;
-    const stem = primaryName.endsWith(platformSuffix)
-      ? primaryName.slice(0, -platformSuffix.length)
+    const browserSuffix = `-chromium.png`;
+    const stem = primaryName.endsWith(browserSuffix)
+      ? primaryName.slice(0, -browserSuffix.length)
       : primaryName.replace(/\.png$/i, "");
     for (const name of readdirSync(directory)) {
       if (
@@ -263,7 +258,6 @@ export function loadModeSidecarsForStoryId(
   snapshotDir: string,
   mode: BaselinePathMode = "nested-import",
   project = "chromium",
-  platform: NodeJS.Platform | string = process.platform,
 ): VisualDiffSidecar[] {
   const primary = baselinePngPathForStoryId(
     storyId,
@@ -271,12 +265,11 @@ export function loadModeSidecarsForStoryId(
     snapshotDir,
     mode,
     project,
-    platform,
   );
   if (!primary) return [];
   const directory = path.dirname(primary);
   const primaryName = path.basename(primary);
-  const suffix = `-${project}-${platform}.png`;
+  const suffix = `-${project}.png`;
   if (!primaryName.endsWith(suffix) || !existsSync(directory)) return [];
   const stem = primaryName.slice(0, -suffix.length);
   const prefix = `${stem}--`;
@@ -284,7 +277,7 @@ export function loadModeSidecarsForStoryId(
     .filter(
       (name) =>
         name.startsWith(prefix) &&
-        name.endsWith(`-${project}-${platform}.json`),
+        name.endsWith(`-${project}.json`),
     )
     .map((name) => {
       const sidecar = readSidecar(path.join(directory, name));

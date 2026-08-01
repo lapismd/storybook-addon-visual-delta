@@ -156,7 +156,7 @@ export function BaselineAccordionFixture() {
         hint: "End of play · primary baseline",
         thumbSrc: SAMPLE_IMAGES[0]?.src,
         status: "pass" as const,
-        stats: "0.0000% · 0/100 px · <1%",
+        stats: "0.0000% · 0/100 px · <1.5%",
         history: {
           path: "forms/entry-actions/single-entry-chromium-darwin.png",
           label: "Default",

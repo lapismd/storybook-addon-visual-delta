@@ -14,6 +14,8 @@ const EXPECTED_DOCKERIGNORE = `*
 
 const REQUIRED_DOCKERFILE_SNIPPETS = [
   "FROM node:24.15.0-bookworm",
+  "fontconfig",
+  "jq",
   "npm install --global npm@12.0.2",
   "corepack prepare pnpm@10.32.1 --activate",
   "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
@@ -52,6 +54,19 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   'test "$audit_manifest" = "$latest_manifest"',
   "'\"architecture\":\"amd64\"'",
   "'\"architecture\":\"arm64\"'",
+  "arm64_digest=",
+  "browser.version()",
+  "fc-list --format='%{file}\\n'",
+  "fontManifestSha256",
+  "visual-delta-arm64-native-evidence",
+  "needs: [publish, smoke-x64, smoke-arm64]",
+  'id: "visual-delta-linux-arm64-v1"',
+  "arm64ImageDigest",
+  "visual-delta-capture-profile.json",
+  "Smoke published image on x64",
+  "Smoke published image on ARM64",
+  "runs-on: ubuntu-24.04-arm",
+  "image: ${{ needs.publish.outputs.image_reference }}",
 ];
 
 const EXPECTED_CONSUMER_WORKFLOWS = {
@@ -59,24 +74,40 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     jobs: 4,
     frozenInstalls: 4,
     packagesRead: 1,
+    x64Runners: 1,
+    arm64Runners: 3,
+    canaryJobs: 3,
+    pendingProfileLocks: 3,
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/visual-delta-spec-first.yml": {
     jobs: 1,
     frozenInstalls: 1,
     packagesRead: 1,
+    x64Runners: 1,
+    arm64Runners: 0,
+    canaryJobs: 0,
+    pendingProfileLocks: 0,
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/npm-publish.yml": {
-    jobs: 4,
-    frozenInstalls: 3,
+    jobs: 5,
+    frozenInstalls: 4,
     packagesRead: 4,
+    x64Runners: 4,
+    arm64Runners: 1,
+    canaryJobs: 0,
+    pendingProfileLocks: 1,
     allowedPermissions: new Set(["contents", "packages", "id-token"]),
   },
-  ".github/workflows/capture-linux-panel-baselines.yml": {
+  ".github/workflows/capture-canonical-panel-baselines.yml": {
     jobs: 1,
     frozenInstalls: 1,
     packagesRead: 1,
+    x64Runners: 0,
+    arm64Runners: 1,
+    canaryJobs: 1,
+    pendingProfileLocks: 1,
     allowedPermissions: new Set(["contents", "packages", "pull-requests"]),
   },
 };
@@ -146,6 +177,10 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
     ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
     ["packages: read", expected.packagesRead, "packages: read permission"],
+    ["runs-on: ubuntu-latest", expected.x64Runners, "x64 runner"],
+    ["runs-on: ubuntu-24.04-arm", expected.arm64Runners, "ARM64 runner"],
+    ["continue-on-error: true", expected.canaryJobs, "canary job"],
+    ["PROFILE_LOCK_PENDING", expected.pendingProfileLocks, "pending profile lock"],
   ]) {
     const actualCount = countOccurrences(source, needle);
     if (actualCount !== expectedCount) {
@@ -158,6 +193,21 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
   for (const [pattern, description] of PROHIBITED_CONSUMER_INSTALLS) {
     if (pattern.test(source)) {
       errors.push(`${label}: ${description} must come from the CI image`);
+    }
+  }
+
+  if (expected.arm64Runners > 0) {
+    const immutableReferences = countOccurrences(
+      source,
+      "@sha256:",
+    );
+    if (
+      immutableReferences === 0 &&
+      expected.pendingProfileLocks !== expected.arm64Runners
+    ) {
+      errors.push(
+        `${label}: every ARM64 visual job must use an immutable image reference or an explicit PROFILE_LOCK_PENDING canary marker`,
+      );
     }
   }
 
@@ -215,6 +265,42 @@ export function validateCiImageSources({
   }
   for (const snippet of REQUIRED_PUBLICATION_SNIPPETS) {
     requireSnippet(errors, "publish workflow", publishWorkflow, snippet);
+  }
+  const smokeArm64Index = publishWorkflow.indexOf("  smoke-arm64:");
+  const profileIndex = publishWorkflow.indexOf("  profile:");
+  if (smokeArm64Index < 0 || profileIndex <= smokeArm64Index) {
+    errors.push(
+      "publish workflow: capture profile must be assembled after native ARM64 smoke",
+    );
+  }
+
+
+  const releaseWorkflow = consumerWorkflows?.[".github/workflows/npm-publish.yml"];
+  if (typeof releaseWorkflow === "string") {
+    for (const snippet of [
+      "package-gate:",
+      "visual-gate:",
+      "needs: [package-gate, visual-gate]",
+      "needs.visual-gate.result == 'success'",
+    ]) {
+      requireSnippet(errors, "npm publish workflow", releaseWorkflow, snippet);
+    }
+  }
+  const captureWorkflow =
+    consumerWorkflows?.[".github/workflows/capture-canonical-panel-baselines.yml"];
+  if (typeof captureWorkflow === "string") {
+    for (const snippet of [
+      "BASELINE_WRITE_APPROVED",
+      'test "$BASELINE_WRITE_APPROVED" = "true"',
+      "VISUAL_DELTA_CANONICAL_PANEL_SNAPSHOTS: \"1\"",
+      "*-chromium.png",
+      "pnpm test:panel",
+    ]) {
+      requireSnippet(errors, "canonical capture workflow", captureWorkflow, snippet);
+    }
+    if (captureWorkflow.includes("-chromium-linux.png")) {
+      errors.push("canonical capture workflow: platform-qualified PNG names are prohibited");
+    }
   }
 
   const permissionMatch = publishWorkflow.match(

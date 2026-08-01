@@ -70,11 +70,9 @@ export type PanelStatusBarProps = {
   } | null;
   environment?: {
     browser: string;
-    platform: string;
     browsers: Array<{ value: string; label: string }>;
-    platforms: Array<{ value: string; label: string }>;
     onBrowserChange: (value: string) => void;
-    onPlatformChange: (value: string) => void;
+    captureProfileId?: string;
   };
 };
 

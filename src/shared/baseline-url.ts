@@ -3,7 +3,7 @@
  * HMR has not yet re-emitted INIT_IMAGE. Mirrors `src/node/baseline-design`.
  */
 
-export const VISUAL_BASELINE_SUFFIX = "-chromium-darwin";
+export const VISUAL_BASELINE_SUFFIX = "-chromium";
 
 export function snapshotDirFromImportPath(importPath: string): string {
   const normalized = importPath.replace(/\\/g, "/");
@@ -77,6 +77,8 @@ export function baselineUrlForStoryRef(
      * until HMR refreshes — still build the URL so the panel can hydrate.
      */
     allowSkipVisual?: boolean;
+    target?: import("./environments.js").VisualBaselineTarget;
+    /** @deprecated Use target. Platform is ignored for canonical lookup. */
     environment?: import("./environments.js").VisualBaselineEnvironment;
   },
 ): string | undefined {
@@ -91,8 +93,9 @@ export function baselineUrlForStoryRef(
     importPath: story.importPath,
   });
   if (!isSafeSnapshotDirectory(directory)) return undefined;
-  const suffix = options?.environment
-    ? `-${options.environment.browser}-${options.environment.platform}`
+  const target = options?.target ?? options?.environment;
+  const suffix = target
+    ? `-${target.browser}`
     : VISUAL_BASELINE_SUFFIX;
   return `/visual-baselines/${directory}/${storySlugFromId(id)}${suffix}.png`;
 }

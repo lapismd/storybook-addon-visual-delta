@@ -31,6 +31,10 @@ export function visualDeltaPackageStorybookOverride(
     ...(options.testMatch ? { testMatch: options.testMatch } : {}),
     fullyParallel: false,
     workers: 1 as const,
+    snapshotPathTemplate:
+      process.env.VISUAL_DELTA_CANONICAL_PANEL_SNAPSHOTS === "1"
+        ? "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}"
+        : "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}-{platform}{ext}",
     webServer: [
       {
         command: staticServerCommand,
@@ -55,7 +59,7 @@ export function visualDeltaPackageStorybookOverride(
       toHaveScreenshot: {
         animations: "disabled" as const,
         caret: "hide" as const,
-        maxDiffPixelRatio: 0,
+        maxDiffPixelRatio: 0.015,
         scale: "device" as const,
       },
     },

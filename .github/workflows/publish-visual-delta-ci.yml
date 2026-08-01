@@ -24,6 +24,11 @@ jobs:
     name: Build and publish CI image
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    outputs:
+      image_reference: ${{ steps.manifest.outputs.image_reference }}
+      manifest_digest: ${{ steps.manifest.outputs.manifest_digest }}
+      amd64_digest: ${{ steps.manifest.outputs.amd64_digest }}
+      arm64_digest: ${{ steps.manifest.outputs.arm64_digest }}
     steps:
       - name: Require the default branch
         env:
@@ -82,6 +87,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify both published tags and platforms
+        id: manifest
         env:
           AUDIT_IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}
           LATEST_IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}:latest
@@ -92,3 +98,208 @@ jobs:
           grep -q '"architecture":"amd64"' <<<"$audit_manifest"
           grep -q '"architecture":"arm64"' <<<"$audit_manifest"
           docker buildx imagetools inspect "$AUDIT_IMAGE"
+          manifest_digest="${{ steps.build.outputs.digest }}"
+          amd64_digest="$(jq -r '.manifests[] | select(.platform.architecture == "amd64" and .platform.os == "linux") | .digest' <<<"$audit_manifest")"
+          arm64_digest="$(jq -r '.manifests[] | select(.platform.architecture == "arm64" and .platform.os == "linux") | .digest' <<<"$audit_manifest")"
+          test -n "$manifest_digest"
+          test -n "$amd64_digest"
+          test -n "$arm64_digest"
+          image_reference="${AUDIT_IMAGE}@${manifest_digest}"
+          {
+            printf 'image_reference=%s\n' "$image_reference"
+            printf 'manifest_digest=%s\n' "$manifest_digest"
+            printf 'amd64_digest=%s\n' "$amd64_digest"
+            printf 'arm64_digest=%s\n' "$arm64_digest"
+          } >> "$GITHUB_OUTPUT"
+
+  smoke-x64:
+    name: Smoke published image on x64
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.publish.outputs.image_reference }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Verify native x64 tooling and browsers
+        run: |
+          test "$(uname -m)" = "x86_64"
+          cd /build
+          node --version
+          pnpm --version
+          mdbook --version
+          pnpm exec playwright --version
+          node --input-type=module <<'NODE'
+          import { chromium, firefox, webkit } from "playwright";
+          for (const browserType of [chromium, firefox, webkit]) {
+            const browser = await browserType.launch({ headless: true });
+            await browser.close();
+          }
+          NODE
+
+  smoke-arm64:
+    name: Smoke published image on ARM64
+    needs: publish
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      node_version: ${{ steps.provenance.outputs.node_version }}
+      npm_version: ${{ steps.provenance.outputs.npm_version }}
+      pnpm_version: ${{ steps.provenance.outputs.pnpm_version }}
+      playwright_version: ${{ steps.provenance.outputs.playwright_version }}
+      browser_versions: ${{ steps.provenance.outputs.browser_versions }}
+      font_manifest_sha256: ${{ steps.provenance.outputs.font_manifest_sha256 }}
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.publish.outputs.image_reference }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Verify native ARM64 tooling and browsers
+        id: provenance
+        run: |
+          test "$(uname -m)" = "aarch64"
+          cd /build
+          node_version="$(node -p 'process.versions.node')"
+          npm_version="$(npm --version)"
+          pnpm_version="$(pnpm --version)"
+          playwright_version="$(pnpm exec playwright --version | awk '{print $2}')"
+          mdbook_version="$(mdbook --version | awk '{print $2}')"
+          test "$node_version" = "24.15.0"
+          test "$npm_version" = "12.0.2"
+          test "$pnpm_version" = "10.32.1"
+          test "$playwright_version" = "1.61.1"
+          test "$mdbook_version" = "v0.5.4"
+          command -v fc-list >/dev/null
+          browser_metadata="$RUNNER_TEMP/visual-delta-arm64-browsers.json"
+          font_manifest="$RUNNER_TEMP/visual-delta-arm64-font-manifest.sha256"
+          export browser_metadata
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+          import { chromium, firefox, webkit } from "playwright";
+          const browserVersions = {};
+          for (const [name, browserType] of Object.entries({ chromium, firefox, webkit })) {
+            const browser = await browserType.launch({ headless: true });
+            browserVersions[name] = browser.version();
+            await browser.close();
+          }
+          writeFileSync(
+            process.env.browser_metadata,
+            `${JSON.stringify({ browserVersions }, null, 2)}\n`,
+          );
+          NODE
+          fc-list --format='%{file}\n' \
+            | LC_ALL=C sort -u \
+            | while IFS= read -r font_path; do
+                test -f "$font_path"
+                sha256sum "$font_path"
+              done \
+            > "$font_manifest"
+          test -s "$font_manifest"
+          browser_versions="$(jq -c '.browserVersions' "$browser_metadata")"
+          test "$(jq -r '.browserVersions | keys | sort | join(",")' "$browser_metadata")" = "chromium,firefox,webkit"
+          font_manifest_sha256="sha256:$(sha256sum "$font_manifest" | cut -d' ' -f1)"
+          jq -n \
+            --arg architecture "arm64" \
+            --arg nodeVersion "$node_version" \
+            --arg npmVersion "$npm_version" \
+            --arg pnpmVersion "$pnpm_version" \
+            --arg playwrightVersion "$playwright_version" \
+            --arg mdbookVersion "$mdbook_version" \
+            --argjson browserVersions "$browser_versions" \
+            --arg fontManifestSha256 "$font_manifest_sha256" \
+            '{architecture: $architecture, nodeVersion: $nodeVersion, npmVersion: $npmVersion, pnpmVersion: $pnpmVersion, playwrightVersion: $playwrightVersion, mdbookVersion: $mdbookVersion, browserVersions: $browserVersions, fontManifestSha256: $fontManifestSha256}' \
+            > "$RUNNER_TEMP/visual-delta-arm64-native-evidence.json"
+          {
+            printf 'node_version=%s\n' "$node_version"
+            printf 'npm_version=%s\n' "$npm_version"
+            printf 'pnpm_version=%s\n' "$pnpm_version"
+            printf 'playwright_version=%s\n' "$playwright_version"
+            printf 'browser_versions=%s\n' "$browser_versions"
+            printf 'font_manifest_sha256=%s\n' "$font_manifest_sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Retain native ARM64 profile evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: visual-delta-arm64-native-evidence-${{ inputs.tag }}
+          path: |
+            ${{ runner.temp }}/visual-delta-arm64-browsers.json
+            ${{ runner.temp }}/visual-delta-arm64-font-manifest.sha256
+            ${{ runner.temp }}/visual-delta-arm64-native-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+
+  profile:
+    name: Assemble reviewed capture profile
+    needs: [publish, smoke-x64, smoke-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Assemble profile from published and native ARM64 evidence
+        env:
+          IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.manifest_digest }}
+          ARM64_IMAGE_DIGEST: ${{ needs.publish.outputs.arm64_digest }}
+          NODE_VERSION: ${{ needs.smoke-arm64.outputs.node_version }}
+          NPM_VERSION: ${{ needs.smoke-arm64.outputs.npm_version }}
+          PNPM_VERSION: ${{ needs.smoke-arm64.outputs.pnpm_version }}
+          PLAYWRIGHT_VERSION: ${{ needs.smoke-arm64.outputs.playwright_version }}
+          BROWSER_VERSIONS: ${{ needs.smoke-arm64.outputs.browser_versions }}
+          FONT_MANIFEST_SHA256: ${{ needs.smoke-arm64.outputs.font_manifest_sha256 }}
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$ARM64_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$FONT_MANIFEST_SHA256" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "$(jq -r 'keys | sort | join(",")' <<<"$BROWSER_VERSIONS")" = "chromium,firefox,webkit"
+          jq -n \
+            --arg image "$IMAGE" \
+            --arg imageDigest "$IMAGE_DIGEST" \
+            --arg arm64ImageDigest "$ARM64_IMAGE_DIGEST" \
+            --arg nodeVersion "$NODE_VERSION" \
+            --arg npmVersion "$NPM_VERSION" \
+            --arg pnpmVersion "$PNPM_VERSION" \
+            --arg playwrightVersion "$PLAYWRIGHT_VERSION" \
+            --argjson browserVersions "$BROWSER_VERSIONS" \
+            --arg fontManifestSha256 "$FONT_MANIFEST_SHA256" \
+            '{
+              schemaVersion: 1,
+              id: "visual-delta-linux-arm64-v1",
+              os: "linux",
+              architecture: "arm64",
+              image: $image,
+              imageDigest: $imageDigest,
+              arm64ImageDigest: $arm64ImageDigest,
+              nodeVersion: $nodeVersion,
+              npmVersion: $npmVersion,
+              pnpmVersion: $pnpmVersion,
+              playwrightVersion: $playwrightVersion,
+              browsers: ["chromium", "firefox", "webkit"],
+              browserVersions: $browserVersions,
+              locale: "en-GB",
+              timezoneId: "Europe/London",
+              colorScheme: "light",
+              reducedMotion: "reduce",
+              viewport: {width: 1280, height: 900},
+              deviceScaleFactor: 1,
+              rendering: {animations: "disabled", caret: "hide", screenshotScale: "device"},
+              fontManifestSha256: $fontManifestSha256
+            }' > "$RUNNER_TEMP/visual-delta-capture-profile.json"
+          jq -e \
+            '.schemaVersion == 1 and .id == "visual-delta-linux-arm64-v1" and .browserVersions.chromium and .browserVersions.firefox and .browserVersions.webkit' \
+            "$RUNNER_TEMP/visual-delta-capture-profile.json" >/dev/null
+
+      - name: Retain complete capture profile for review
+        uses: actions/upload-artifact@v6
+        with:
+          name: visual-delta-capture-profile-${{ inputs.tag }}
+          path: ${{ runner.temp }}/visual-delta-capture-profile.json
+          if-no-files-found: error
+          retention-days: 90

@@ -19,7 +19,12 @@ export type VisualDeltaZoomDefault = "fit" | "100%";
 
 export type VisualDeltaVcsMode = "off" | "review" | "auto";
 
-export type { VisualBaselineEnvironment, VisualDeltaBrowser } from "./environments.js";
+export type {
+  VisualBaselineEnvironment,
+  VisualBaselineTarget,
+  VisualDeltaBrowser,
+} from "./environments.js";
+export type { VisualCaptureProfile } from "./capture-profile.js";
 export type { VisualTestFailureMode } from "./failure-mode.js";
 
 export type VisualDeltaWorkflowConfig = {
@@ -73,7 +78,7 @@ export type VisualDeltaResolvedConfig = {
   };
   /**
    * Package-wide Playwright pass threshold (% of pixels), from
-   * `.visual-delta/playwright.json` or the built-in default (1).
+   * `.visual-delta/playwright.json` or the built-in default (1.5).
    */
   playwrightPassThresholdPercent: number;
   /** Editable values resolved from project file → legacy fallback → built-ins. */
@@ -82,8 +87,17 @@ export type VisualDeltaResolvedConfig = {
   browsers: import("./environments.js").VisualDeltaBrowser[];
   /** Node platform hosting the development middleware. */
   runtimePlatform: string;
-  /** Canonical baseline environments found beneath the configured snapshotDir. */
+  /** @deprecated Legacy environment inventory; canonical responses return []. */
   availableEnvironments: import("./environments.js").VisualBaselineEnvironment[];
+  /** Canonical browser suffixes found beneath the configured snapshotDir. */
+  availableBrowsers: import("./environments.js").VisualDeltaBrowser[];
+  /** Canonical Linux/ARM64 capture provenance. */
+  captureProfile: import("./capture-profile.js").VisualCaptureProfile;
+  captureRunner: {
+    kind: "docker" | "custom";
+    available: boolean;
+    reason?: string;
+  };
   /** Project workflow policy. All mutation/commit automation defaults off. */
   workflow: VisualDeltaWorkflowConfig;
   /** Detected repository and effective host write capability. */

@@ -12,7 +12,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    fontconfig \
     git \
+    jq \
   && rm -rf /var/lib/apt/lists/* \
   && npm install --global npm@12.0.2 \
   && npm cache clean --force \

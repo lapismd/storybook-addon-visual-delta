@@ -27,9 +27,9 @@ export type VisualDiffSidecar = {
   /**
    * v1 readers used `status` and `passed` as overlapping sources of truth.
    * v2 keeps those compatibility fields but records runner and comparison
-   * outcomes independently.
+   * outcomes independently. v3 separates browser target from capture profile.
    */
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   storyId: string;
   title?: string;
   /** Named Storybook globals mode; omitted for the Default capture. */
@@ -44,6 +44,9 @@ export type VisualDiffSidecar = {
   /** Process-policy classification after applying warn/strict mode. */
   policyStatus?: VisualComparisonPolicyStatus;
   browser?: import("./shared/environments.js").VisualDeltaBrowser;
+  target?: import("./shared/environments.js").VisualBaselineTarget;
+  captureProfile?: import("./shared/capture-profile.js").VisualCaptureProfile;
+  /** @deprecated Capture provenance only; never part of lookup. */
   platform?: string;
   error?: string;
   generatedAt: string;
@@ -71,7 +74,7 @@ export type VisualDiffSidecar = {
   diffPercent?: number;
   /**
    * Pass threshold as percent of pixels (Playwright `maxDiffPixelRatio` × 100).
-   * Suite default is 1 (1%).
+   * Suite default is 1.5 (1.5%).
    */
   passThresholdPercent?: number;
   passed?: boolean;
@@ -92,7 +95,9 @@ export function isVisualDiffSidecar(
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<VisualDiffSidecar>;
   return (
-    (candidate.version === 1 || candidate.version === 2) &&
+    (candidate.version === 1 ||
+      candidate.version === 2 ||
+      candidate.version === 3) &&
     typeof candidate.storyId === "string" &&
     candidate.storyId.length > 0
   );
@@ -100,5 +105,5 @@ export function isVisualDiffSidecar(
 
 export const VISUAL_DIFF_HISTOGRAM_BINS = 32;
 
-/** Playwright `maxDiffPixelRatio: 0.01` → 1% of pixels. */
-export const PLAYWRIGHT_PASS_THRESHOLD_PERCENT = 1;
+/** Playwright `maxDiffPixelRatio: 0.015` → 1.5% of pixels. */
+export const PLAYWRIGHT_PASS_THRESHOLD_PERCENT = 1.5;

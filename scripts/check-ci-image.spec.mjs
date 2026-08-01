@@ -29,6 +29,44 @@ test("requires every package-tooling job to use the authenticated image", () => 
   assert.match(result.errors.join("\n"), /expected 4 job container/);
 });
 
+test("requires ARM64 visual jobs and explicit pending profile locks before publication", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath]
+        .replace("runs-on: ubuntu-24.04-arm", "runs-on: ubuntu-latest")
+        .replace("PROFILE_LOCK_PENDING", "profile lock omitted"),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /ARM64 runner/);
+  assert.match(result.errors.join("\n"), /pending profile lock/);
+});
+
+test("requires the split release gates and browser-only authorized capture workflow", () => {
+  const releasePath = ".github/workflows/npm-publish.yml";
+  const capturePath = ".github/workflows/capture-canonical-panel-baselines.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [releasePath]: sources.consumerWorkflows[releasePath].replace(
+        "visual-gate:",
+        "visual-check:",
+      ),
+      [capturePath]: sources.consumerWorkflows[capturePath]
+        .replace('test "$BASELINE_WRITE_APPROVED" = "true"', "true")
+        .replace("*-chromium.png", "*-chromium-linux.png"),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /visual-gate/);
+  assert.match(result.errors.join("\n"), /BASELINE_WRITE_APPROVED/);
+  assert.match(result.errors.join("\n"), /platform-qualified/);
+});
+
 test("rejects duplicated toolchain and browser installation", () => {
   const workflowPath = ".github/workflows/visual-delta-spec-first.yml";
   const result = validateCiImageSources({
@@ -108,4 +146,21 @@ test("rejects publication without default-branch and immutable-tag guards", () =
   assert.match(result.errors.join("\n"), /GITHUB_REF_NAME/);
   assert.match(result.errors.join("\n"), /IMAGE_TAG/);
   assert.match(result.errors.join("\n"), /imagetools inspect/);
+});
+
+test("requires complete profile provenance after both native smoke jobs", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    publishWorkflow: sources.publishWorkflow
+      .replace(
+        "needs: [publish, smoke-x64, smoke-arm64]",
+        "needs: publish",
+      )
+      .replace("browser.version()", '"declared"')
+      .replace("fc-list --format='%{file}\\n'", "printf '%s\\n'"),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /smoke-x64, smoke-arm64/);
+  assert.match(result.errors.join("\n"), /browser\.version/);
+  assert.match(result.errors.join("\n"), /fc-list/);
 });

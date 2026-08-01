@@ -61,7 +61,7 @@ describe("writeDiffArtifactsForBaseline", () => {
     });
 
     expect(sidecar).toMatchObject({
-      version: 2,
+      version: 3,
       runnerStatus: "failed",
       status: "failed",
       outcome: "mismatch",
@@ -82,7 +82,7 @@ describe("writeDiffArtifactsForBaseline", () => {
       passThresholdPercent: 100,
     });
 
-    expect(sidecar.version).toBe(2);
+    expect(sidecar.version).toBe(3);
     expect(sidecar.runnerStatus).toBe("passed");
     expect(sidecar.status).toBe("passed");
     expect(["passed", "changed-within-tolerance"]).toContain(sidecar.outcome);

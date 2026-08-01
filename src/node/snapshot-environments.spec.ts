@@ -7,7 +7,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { discoverSnapshotEnvironments } from "./snapshot-environments.js";
+import { discoverSnapshotBrowsers } from "./snapshot-environments.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -23,42 +23,38 @@ function temporarySnapshotDir(): string {
   return directory;
 }
 
-describe("snapshot environment discovery", () => {
-  it("finds unique canonical environments throughout the snapshot root", () => {
+describe("snapshot browser discovery", () => {
+  it("finds unique canonical browsers throughout the snapshot root", () => {
     const snapshotDir = temporarySnapshotDir();
     const nested = join(snapshotDir, "components", "button");
     mkdirSync(nested, { recursive: true });
     for (const name of [
-      "default-chromium-darwin.png",
-      "hover-chromium-linux.png",
-      "pressed-firefox-linux.png",
-      "duplicate-chromium-linux.png",
+      "default-chromium.png",
+      "hover-chromium.png",
+      "pressed-firefox.png",
+      "duplicate-chromium.png",
     ]) {
       writeFileSync(join(nested, name), "fixture");
     }
 
-    expect(discoverSnapshotEnvironments(snapshotDir)).toEqual([
-      { browser: "chromium", platform: "darwin" },
-      { browser: "chromium", platform: "linux" },
-      { browser: "firefox", platform: "linux" },
-    ]);
+    expect(discoverSnapshotBrowsers(snapshotDir)).toEqual(["chromium", "firefox"]);
   });
 
   it("ignores diagnostics, unrelated files, and unsupported browsers", () => {
     const snapshotDir = temporarySnapshotDir();
     for (const name of [
-      "button-chromium-linux.actual.png",
-      "button-chromium-linux.diff.png",
-      "button-chromium-linux.json",
+      "button-chromium.actual.png",
+      "button-chromium.diff.png",
+      "button-chromium.json",
       "button-edge-win32.png",
       "button.png",
     ]) {
       writeFileSync(join(snapshotDir, name), "fixture");
     }
 
-    expect(discoverSnapshotEnvironments(snapshotDir)).toEqual([]);
+    expect(discoverSnapshotBrowsers(snapshotDir)).toEqual([]);
     expect(
-      discoverSnapshotEnvironments(join(snapshotDir, "does-not-exist")),
+      discoverSnapshotBrowsers(join(snapshotDir, "does-not-exist")),
     ).toEqual([]);
   });
 });

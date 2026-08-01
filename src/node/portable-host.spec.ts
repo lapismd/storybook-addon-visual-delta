@@ -38,7 +38,7 @@ describe("portable Visual Delta host options", () => {
       "workspace-shell-tabs--top-light.png",
     );
     expect(baselinePublicUrl(entry, "story-id")).toBe(
-      "/visual-baselines/workspace-shell-tabs--top-light-chromium-darwin.png",
+      "/visual-baselines/workspace-shell-tabs--top-light-chromium.png",
     );
   });
 

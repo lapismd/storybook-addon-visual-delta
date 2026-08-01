@@ -606,7 +606,7 @@ export function BaselineHistoryView({
     void compareImages(before.imageUrl, after.imageUrl, {
       pixelThreshold: 0.2,
       includeAntiAliasing: false,
-      passThresholdPercent: 1,
+      passThresholdPercent: 1.5,
       deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
     })
       .then((result) => {

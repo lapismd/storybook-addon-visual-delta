@@ -19,7 +19,7 @@ export type { CaptureSubjectProgress, CaptureSubjectStreamEvent };
 
 /**
  * Ask Storybook middleware to capture the story subject with Playwright
- * Chromium. Streams NDJSON progress (launch → navigate → capture → done).
+ * the selected Playwright browser. Streams NDJSON progress.
  */
 export async function postBrowserSubjectCapture(
   body: {

@@ -2,18 +2,17 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   VISUAL_DELTA_BROWSERS,
-  parseVisualBaselineEnvironment,
-  visualBaselineEnvironmentKey,
-  type VisualBaselineEnvironment,
+  parseVisualBaselineTarget,
+  type VisualDeltaBrowser,
 } from "../shared/environments.js";
 
 const DIAGNOSTIC_PNG_RE = /\.(?:actual|diff)\.png$/i;
 
-/** Discover canonical Browser × OS identities beneath one snapshot root. */
-export function discoverSnapshotEnvironments(
+/** Discover canonical browser identities beneath one snapshot root. */
+export function discoverSnapshotBrowsers(
   snapshotDir: string,
-): VisualBaselineEnvironment[] {
-  const environments = new Map<string, VisualBaselineEnvironment>();
+): VisualDeltaBrowser[] {
+  const browsers = new Set<VisualDeltaBrowser>();
   const directories = [snapshotDir];
 
   while (directories.length > 0) {
@@ -39,20 +38,14 @@ export function discoverSnapshotEnvironments(
       ) {
         continue;
       }
-      const environment = parseVisualBaselineEnvironment(entry.name);
-      if (environment) {
-        environments.set(
-          visualBaselineEnvironmentKey(environment),
-          environment,
-        );
-      }
+      const target = parseVisualBaselineTarget(entry.name);
+      if (target) browsers.add(target.browser);
     }
   }
 
-  return [...environments.values()].sort((left, right) => {
-    const browserOrder =
-      VISUAL_DELTA_BROWSERS.indexOf(left.browser) -
-      VISUAL_DELTA_BROWSERS.indexOf(right.browser);
-    return browserOrder || left.platform.localeCompare(right.platform);
-  });
+  return [...browsers].sort(
+    (left, right) =>
+      VISUAL_DELTA_BROWSERS.indexOf(left) -
+      VISUAL_DELTA_BROWSERS.indexOf(right),
+  );
 }

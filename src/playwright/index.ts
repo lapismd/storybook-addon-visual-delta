@@ -37,8 +37,10 @@ export {
 export type { BaselinePathMode } from "../node/options.js";
 export type {
   VisualBaselineEnvironment,
+  VisualBaselineTarget,
   VisualDeltaBrowser,
 } from "../shared/environments.js";
+export type { VisualCaptureProfile } from "../shared/capture-profile.js";
 export type { VisualTestFailureMode } from "../shared/failure-mode.js";
 export {
   baselinePublicUrl,

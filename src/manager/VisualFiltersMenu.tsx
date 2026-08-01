@@ -159,7 +159,7 @@ const LABELS: Record<string, string> = {
   "quick.needs-attention": "Needs attention",
   "quick.review-queue": "Review queue",
   "quick.coverage-gaps": "Coverage gaps",
-  "quick.os-parity-gaps": "OS parity gaps",
+  "quick.browser-coverage-gaps": "Browser coverage gaps",
   "review.ready": "Ready for review",
   "review.pending": "Pending review",
   "review.approved": "Approved",
@@ -191,7 +191,7 @@ export type VisualFiltersMenuProps = {
   optionCounts?: Readonly<Record<string, number>>;
   /** Stories matching the current selection vs catalog total. */
   matchingSummary?: { matching: number; total: number };
-  /** Dynamic project Browser × OS facet sections from story facts. */
+  /** Dynamic project Browser facet section from story facts. */
   environmentGroups?: readonly VisualFilterGroupDescriptor[];
   onChange: (ids: string[]) => void;
 };
@@ -345,8 +345,7 @@ export function VisualFiltersMenu({
             ) : null}
             <Footer>
               <Note>
-                Includes OR within a group; Browser × OS includes require one
-                exact baseline pair. Groups combine with AND. Exclude uses{" "}
+                Browser includes use OR. Groups combine with AND. Exclude uses{" "}
                 <code>!</code> in the URL.
               </Note>
               <Button

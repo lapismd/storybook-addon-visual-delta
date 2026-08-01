@@ -1,5 +1,8 @@
 import type { VisualDeltaHostOptions } from "./options.js";
-import type { VisualDeltaBrowser } from "../shared/environments.js";
+import type {
+  VisualBaselineTarget,
+  VisualDeltaBrowser,
+} from "../shared/environments.js";
 import { isVisualDeltaBrowser } from "../shared/environments.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
@@ -10,6 +13,7 @@ export type PlaywrightListResult = {
   storyId: string;
   status: "passed" | "failed";
   browser: VisualDeltaBrowser;
+  target: VisualBaselineTarget;
   platform: string;
 };
 
@@ -44,6 +48,7 @@ export function parseListReporterProgress(
       storyId,
       status: failed ? "failed" : "passed",
       browser,
+      target: { browser },
       platform: process.platform,
     });
   }
@@ -67,6 +72,7 @@ export function successfulStoryIdsFromPlaywrightResults(options: {
     storyId: string;
     status: "passed" | "failed" | "skipped" | "timedOut";
     browser?: VisualDeltaBrowser;
+    target?: VisualBaselineTarget;
     platform?: string;
     environment?: { browser: VisualDeltaBrowser; platform: string };
     policyStatus?: string;
@@ -91,7 +97,10 @@ export function successfulStoryIdsFromPlaywrightResults(options: {
     const allPassed = browsers.every((browser) => {
       const result = results.find(
         (candidate) =>
-          (candidate.environment?.browser ?? candidate.browser ?? "chromium") ===
+          (candidate.target?.browser ??
+            candidate.environment?.browser ??
+            candidate.browser ??
+            "chromium") ===
           browser,
       );
       if (
@@ -115,7 +124,6 @@ export function successfulStoryIdsFromPlaywrightResults(options: {
           snapshotDir,
           mode,
           browser,
-          result.environment?.platform ?? result.platform ?? process.platform,
         );
       return sidecar?.policyStatus !== "warning" && sidecar?.passed !== false;
     });

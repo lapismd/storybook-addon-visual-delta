@@ -36,7 +36,7 @@ describe("baselinePngExistsForStoryId", () => {
       "nested-import",
     );
     expect(png).toBe(
-      path.join(snapshotDir, "shadcn/button/default-chromium-darwin.png"),
+      path.join(snapshotDir, "shadcn/button/default-chromium.png"),
     );
     expect(
       baselinePngExistsForStoryId(

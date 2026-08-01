@@ -41,7 +41,7 @@ describe("baselineUrlForStoryRef", () => {
         importPath: "./src/shared/shadcn/button/Button.stories.svelte",
         tags: [],
       }),
-    ).toBe("/visual-baselines/shadcn/button/default-chromium-darwin.png");
+    ).toBe("/visual-baselines/shadcn/button/default-chromium.png");
   });
 
   it("builds nested-import URLs for filter stories", () => {
@@ -52,7 +52,7 @@ describe("baselineUrlForStoryRef", () => {
           "./src/shared/filter/power-search/PowerSearch.stories.svelte",
       }),
     ).toBe(
-      "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium-darwin.png",
+      "/visual-baselines/filter/power-search/add-filter-via-combobox-chromium.png",
     );
   });
 
@@ -62,7 +62,7 @@ describe("baselineUrlForStoryRef", () => {
         id: "ai-chat-composer--states",
         importPath: "./src/shared/ai/composer/Composer.stories.svelte",
       }),
-    ).toBe("/visual-baselines/ai/composer/states-chromium-darwin.png");
+    ).toBe("/visual-baselines/ai/composer/states-chromium.png");
   });
 
   it("skips skip-visual unless allowSkipVisual", () => {
@@ -73,7 +73,7 @@ describe("baselineUrlForStoryRef", () => {
     };
     expect(baselineUrlForStoryRef(story)).toBeUndefined();
     expect(baselineUrlForStoryRef(story, { allowSkipVisual: true })).toContain(
-      "default-chromium-darwin.png",
+      "default-chromium.png",
     );
   });
 

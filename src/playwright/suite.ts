@@ -501,17 +501,16 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         const actualPng = await captureActualPng(page, target).catch(
           () => null,
         );
-        // `{slug}--{stepId}-{browser}-{platform}.png` beside the primary baseline.
+        // `{slug}--{stepId}-{browser}.png` beside the primary baseline.
         const baselinePngAbsPath = baselinePngAbs(
           entry,
           packageRoot,
           snapshotDir,
           mode,
           browser,
-          process.platform,
         ).replace(
-          `-${browser}-${process.platform}.png`,
-          `--${interactionRequest.stepId}-${browser}-${process.platform}.png`,
+          `-${browser}.png`,
+          `--${interactionRequest.stepId}-${browser}.png`,
         );
         const sidecar = writeDiffArtifactsForBaseline({
           entry,
@@ -529,7 +528,6 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           includeAntiAliasing: target.captureConfig.includeAntiAliasing,
           captureConfig: target.captureConfig,
           browser,
-          platform: process.platform,
           failureMode,
         });
         applyFailurePolicy({
@@ -616,7 +614,6 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
                 snapshotDir,
                 mode,
                 browser,
-                process.platform,
                 capture.modeName,
               ),
               status,
@@ -636,7 +633,6 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
                 globals: capture.globals ?? null,
               },
               browser,
-              platform: process.platform,
               failureMode,
             });
             applyFailurePolicy({

@@ -53,7 +53,7 @@ export function diffResultFixture(
     diffPixels: 128,
     totalPixels: imageWidth * imageHeight,
     diffPercent: (128 / (imageWidth * imageHeight)) * 100,
-    passThresholdPercent: 1,
+    passThresholdPercent: 1.5,
     passed: true,
     sizeNote:
       `html-to-image · viewport requested ${cssWidth}×${cssHeight}, ` +

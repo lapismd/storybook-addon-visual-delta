@@ -48,7 +48,7 @@ Visual Delta is a local, offline-capable Storybook integration. Its contract cov
 
 The contract also covers a **static read-only preview** surface: a built Storybook (no Vite middleware) MAY present wired baselines from `/visual-baselines`, overlay and split comparison, Diff HTML, and Diff Result hydration when sidecars exist. That surface MUST NOT enable middleware writes, Diff Browser, visual runs, accept/review mutations, configuration saves, change-set or VCS operations, init scaffolding, or the Testing Module. See [Panel and preview](./panel-and-preview.md) and [Configuration](./configuration.md).
 
-The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a multi-browser cloud farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. The local capture matrix is the configured subset of Chromium, Firefox, and WebKit on the runtime platform plus explicitly configured Storybook modes. Branded browser channels, device projects, remote execution, and operating-system emulation remain out of scope.
+The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a hosted multi-browser farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. The canonical capture matrix is the configured subset of Chromium, Firefox, and WebKit inside the pinned Linux/ARM64 capture profile plus explicitly configured Storybook modes. Branded browser channels and device projects remain out of scope. Docker is the default transport; a project-owned runner adapter MAY transport the same frozen package worker through Podman, a VM, SSH, or a remote service without changing capture identity or comparison semantics.
 
 Comparisons with third-party products are research evidence only. They do not define Visual Delta behavior or create a parity obligation.
 
@@ -81,7 +81,7 @@ These invariants apply across all component specifications:
 - The primary baseline, each configured mode baseline, and each wired interaction baseline MUST be treated as independent comparison targets
 - Review metadata, comparison outcome, baseline coverage, and skip eligibility MUST remain independent state dimensions
 - Live HTML comparison MAY aid diagnosis, but only a configured Playwright browser capture and Playwright comparison are authoritative
-- Browser and operating-system baselines MUST remain independent; no environment may silently fall back to another environment's PNG
+- Browser baselines MUST remain independent; capture platform and CPU architecture are provenance and MUST NOT create or select another baseline
 - Baseline path resolution MUST use one canonical contract across capture, injection, serving, sidecars, history, deletion, and hydration
 - Automation MUST default to off, and repository commits MUST require both project opt-in and host permission
 - Missing or unreliable affected-run evidence MUST select all eligible stories
@@ -107,7 +107,8 @@ The specification uses these terms consistently:
 - **Interaction baseline**: a PNG captured at one wired play-function capture point
 - **Sidecar**: local JSON, actual PNG, or diff PNG evidence beside a baseline
 - **Authoritative comparison**: a configured Playwright-browser comparison that can establish official result state
-- **Baseline environment**: one configured browser and one operating-system platform that identify an independent baseline
+- **Baseline target**: one configured browser that identifies an independent baseline
+- **Capture profile**: the pinned operating system, CPU architecture, image digest, browser/tool versions, fonts, locale, time zone, viewport, and rendering settings used to produce authoritative evidence
 - **Live HTML comparison**: an in-browser DOM-to-image approximation used only for diagnosis
 - **Review status**: one of pending, ready, approved, or failed
 - **Coverage**: whether the expected baseline variants exist and are wired

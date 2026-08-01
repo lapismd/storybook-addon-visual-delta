@@ -198,7 +198,7 @@ describe("PanelStatusBar", () => {
     vi.unstubAllGlobals();
   });
 
-  it("surfaces an icon-led OS-left and Browser-right split control", () => {
+  it("surfaces a read-only Profile-left and Browser-right split control", () => {
     class ResizeObserverStub {
       observe() {}
       disconnect() {}
@@ -210,7 +210,6 @@ describe("PanelStatusBar", () => {
       ({ right: 800, bottom: 600, width: 400 }) as DOMRect;
     document.body.appendChild(container);
     const onBrowserChange = vi.fn();
-    const onPlatformChange = vi.fn();
 
     renderWithTheme(
       <PanelStatusBar
@@ -218,46 +217,35 @@ describe("PanelStatusBar", () => {
         running={false}
         environment={{
           browser: "chromium",
-          platform: "darwin",
           browsers: [
             { value: "chromium", label: "Chromium" },
             { value: "webkit", label: "WebKit (view only)" },
           ],
-          platforms: [
-            { value: "darwin", label: "macOS" },
-            { value: "linux", label: "Linux (view only)" },
-          ],
           onBrowserChange,
-          onPlatformChange,
         }}
       />,
     );
 
     const environmentGroup = screen.getByRole("group", {
-      name: "Visual baseline environment",
+      name: "Visual baseline target",
     });
     const environmentButtons = within(environmentGroup).getAllByRole("button");
-    expect(environmentButtons[0]).toHaveAccessibleName(
-      "Visual baseline operating system",
+    const profile = within(environmentGroup).getByLabelText(
+      "Canonical capture profile: Linux ARM64",
     );
-    expect(environmentButtons[0]).toHaveTextContent("macOS");
-    expect(environmentButtons[0]?.querySelector("svg")).not.toBeNull();
-    expect(environmentButtons[1]).toHaveAccessibleName(
+    expect(profile).toHaveTextContent("Linux · ARM64");
+    expect(profile.querySelector("svg")).not.toBeNull();
+    expect(environmentButtons[0]).toHaveAccessibleName(
       "Visual baseline browser",
     );
-    expect(environmentButtons[1]).toHaveTextContent("Chromium");
-    expect(environmentButtons[1]?.querySelector("svg")).not.toBeNull();
+    expect(environmentButtons[0]).toHaveTextContent("Chromium");
+    expect(environmentButtons[0]?.querySelector("svg")).not.toBeNull();
 
     fireEvent.click(environmentButtons[0]!);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Linux (view only)" }),
-    );
-    fireEvent.click(environmentButtons[1]!);
     fireEvent.click(
       screen.getByRole("button", { name: "WebKit (view only)" }),
     );
     expect(onBrowserChange).toHaveBeenCalledWith("webkit");
-    expect(onPlatformChange).toHaveBeenCalledWith("linux");
     expect(screen.getByRole("status")).toHaveStyle({ width: "400px" });
 
     container.remove();

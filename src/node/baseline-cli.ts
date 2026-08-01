@@ -177,11 +177,10 @@ function interactionSnapshotFileName(
   stepId: string,
   mode: BaselinePathMode,
   browser: VisualDeltaBrowser,
-  platform: string,
 ): string {
-  return snapshotFileName(entry, mode, browser, platform).replace(
-    `-${browser}-${platform}.png`,
-    `--${stepId}-${browser}-${platform}.png`,
+  return snapshotFileName(entry, mode, browser).replace(
+    `-${browser}.png`,
+    `--${stepId}-${browser}.png`,
   );
 }
 
@@ -262,7 +261,7 @@ export async function runBaselineUpdate(
           !existsSync(
             path.join(
               snapshotDir,
-              snapshotFileName(entry, mode, browser, process.platform),
+              snapshotFileName(entry, mode, browser),
             ),
           ),
       )
@@ -314,7 +313,7 @@ export async function runBaselineUpdate(
   for (const entry of targets) {
     const png = path.join(
       snapshotDir,
-      snapshotFileName(entry, mode, browser, process.platform),
+      snapshotFileName(entry, mode, browser),
     );
     if (!existsSync(png)) continue;
     const url = baselinePublicUrl(
@@ -322,7 +321,6 @@ export async function runBaselineUpdate(
       mode,
       undefined,
       browser,
-      process.platform,
     );
     patchStoryBaselineImages({
       packageRoot: root,
@@ -338,7 +336,7 @@ export async function runBaselineUpdate(
         !existsSync(
           path.join(
             snapshotDir,
-            snapshotFileName(entry, mode, browser, process.platform),
+            snapshotFileName(entry, mode, browser),
           ),
         ),
     );
@@ -395,7 +393,6 @@ export async function runInteractionUpdate(
       stepId,
       mode,
       browser,
-      process.platform,
     ),
   );
   const publicRel = path
@@ -407,7 +404,7 @@ export async function runInteractionUpdate(
     interactionScreenshotRelativePath(
       screenshotRelativePath(entry, mode),
       stepId,
-    ).replace(/\.png$/i, `-${browser}-${process.platform}.png`),
+    ).replace(/\.png$/i, `-${browser}.png`),
   );
   const interactionPngExists = () =>
     existsSync(interactionPng) || existsSync(fallbackInteractionPng);

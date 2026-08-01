@@ -138,7 +138,7 @@ function fitRgba(src: PNG, width: number, height: number): Uint8Array {
 
 /**
  * Compare a baseline PNG on disk to an actual PNG buffer (from Playwright screenshot).
- * Threshold matches Playwright `maxDiffPixelRatio: 0.01` (1% of pixels) by default.
+ * Threshold matches Playwright `maxDiffPixelRatio: 0.015` (1.5% of pixels) by default.
  */
 export function compareBaselineToActualPng(
   baselinePath: string,

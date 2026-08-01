@@ -15,6 +15,15 @@ import {
   isVisualTestFailureMode,
   type VisualTestFailureMode,
 } from "../shared/failure-mode.js";
+import {
+  VISUAL_DELTA_CAPTURE_WORKER_ENV,
+  resolveVisualDeltaCaptureRunner,
+  runVisualDeltaInCaptureRunner,
+} from "./capture-runner.js";
+import {
+  applyVisualBaselineMigration,
+  planVisualBaselineMigration,
+} from "./baseline-migration.js";
 
 function readFlag(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(name);
@@ -66,6 +75,8 @@ Usage:
   visual-delta test --affected|--all [--browser <id> …] [--failure-mode warn|strict] [--dry-run] [--explain]
   visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
+  visual-delta harness doctor
+  visual-delta migrate-baselines [--snapshot-dir <path> …] [--dry-run|--apply --approved]
   visual-delta skip --story-id <id>|--component <name>
   visual-delta include --story-id <id>|--component <name>
 
@@ -76,6 +87,8 @@ Commands:
   interaction-update        Mid-play interaction baseline
   skip                      Add skip-visual (exclude from Playwright visual runs)
   include                   Remove skip-visual
+  harness doctor            Validate Docker/custom runner and capture profile
+  migrate-baselines         Inventory or apply browser-only filename cutover
 
 Flags:
   --force                   Overwrite existing scaffold files (init)
@@ -101,6 +114,7 @@ Flags:
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
   --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)
+  --apply                   Apply a migration plan after canonical recapture
 `);
 }
 
@@ -112,6 +126,51 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const rest = argv.slice(1);
+
+  if (command === "harness") {
+    if (rest[0] !== "doctor") {
+      throw new Error("Usage: visual-delta harness doctor");
+    }
+    const runner = await resolveVisualDeltaCaptureRunner(process.cwd());
+    const result = runner.doctor
+      ? await runner.doctor()
+      : { ok: true, diagnostics: [] };
+    console.log(
+      JSON.stringify(
+        {
+          ok: result.ok,
+          runner: { id: runner.id, kind: runner.kind },
+          profile: runner.profile,
+          diagnostics: result.diagnostics,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+
+  if (command === "migrate-baselines") {
+    if (hasFlag(rest, "--apply") && hasFlag(rest, "--dry-run")) {
+      throw new Error("Choose --dry-run or --apply, not both.");
+    }
+    const plan = planVisualBaselineMigration({
+      root: process.cwd(),
+      snapshotDirs: readFlags(rest, "--snapshot-dir"),
+      cacheDirs: readFlags(rest, "--cache-dir"),
+    });
+    if (!hasFlag(rest, "--apply")) {
+      console.log(JSON.stringify(plan, null, 2));
+      process.exitCode = plan.canApply ? 0 : 2;
+      return;
+    }
+    const result = applyVisualBaselineMigration(plan, {
+      approved: hasFlag(rest, "--approved"),
+    });
+    console.log(JSON.stringify({ ok: true, ...result }, null, 2));
+    return;
+  }
 
   if (command === "init") {
     const result = runVisualDeltaInit({
@@ -138,6 +197,39 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const options = parseShared(rest);
+
+  if (
+    process.env[VISUAL_DELTA_CAPTURE_WORKER_ENV] !== "1" &&
+    (command === "test" ||
+      command === "update" ||
+      command === "visual-update" ||
+      command === "interaction-update" ||
+      command === "visual-interaction-update")
+  ) {
+    const operation = command === "test"
+      ? "test"
+      : command === "update" || command === "visual-update"
+        ? "update"
+        : "interaction-update";
+    const browserValues = readFlags(rest, "--browser").filter(
+      isVisualDeltaBrowser,
+    );
+    const exitCode = await runVisualDeltaInCaptureRunner({
+      root: process.cwd(),
+      argv,
+      operation,
+      storyIds: readFlags(rest, "--story-id"),
+      browsers: browserValues,
+      failureMode: readFlag(rest, "--failure-mode") as
+        | VisualTestFailureMode
+        | undefined,
+      mutationApproved:
+        hasFlag(rest, "--approved") ||
+        process.env.VISUAL_UPDATE_APPROVED === "1",
+    });
+    process.exitCode = exitCode;
+    return;
+  }
 
   if (command === "test") {
     const affected = hasFlag(rest, "--affected");

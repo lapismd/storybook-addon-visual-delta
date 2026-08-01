@@ -2,18 +2,14 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type {
-  VisualEnvironmentCoverage,
+  VisualBrowserCoverage,
   VisualStoryDescriptor,
   VisualStoryFact,
 } from "../shared/story-facts.js";
 import type { BaselinePathMode } from "./options.js";
 import { snapshotFileName } from "./snapshot-paths.js";
 import { isVisualDiffSidecar } from "../visual-diff-sidecar.js";
-import {
-  visualBaselineEnvironmentKey,
-  type VisualBaselineEnvironment,
-  type VisualDeltaBrowser,
-} from "../shared/environments.js";
+import type { VisualDeltaBrowser } from "../shared/environments.js";
 
 function sha256(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
@@ -27,28 +23,16 @@ function isInsideDirectory(directory: string, candidate: string): boolean {
   );
 }
 
-function uniqueEnvironments(
-  environments: readonly VisualBaselineEnvironment[],
-): VisualBaselineEnvironment[] {
-  const unique = new Map<string, VisualBaselineEnvironment>();
-  for (const environment of environments) {
-    unique.set(visualBaselineEnvironmentKey(environment), environment);
-  }
-  return [...unique.values()];
+function uniqueBrowsers(
+  browsers: readonly VisualDeltaBrowser[],
+): VisualDeltaBrowser[] {
+  return [...new Set(browsers)];
 }
 
-export function requiredVisualBaselineEnvironments(
+export function requiredVisualBaselineBrowsers(
   browsers: readonly VisualDeltaBrowser[],
-  availableEnvironments: readonly VisualBaselineEnvironment[],
-  runtimePlatform: string,
-): VisualBaselineEnvironment[] {
-  const platforms = new Set<string>([runtimePlatform]);
-  for (const environment of availableEnvironments) {
-    platforms.add(environment.platform);
-  }
-  return browsers.flatMap((browser) =>
-    [...platforms].map((platform) => ({ browser, platform })),
-  );
+): VisualDeltaBrowser[] {
+  return uniqueBrowsers(browsers);
 }
 
 export function resolveVisualStoryFacts(
@@ -56,76 +40,49 @@ export function resolveVisualStoryFacts(
   snapshotDir: string,
   baselinePathMode: BaselinePathMode,
   browsers: readonly VisualDeltaBrowser[] = ["chromium"],
-  platform = "darwin",
-  availableEnvironments: readonly VisualBaselineEnvironment[] = [],
+  availableBrowsers: readonly VisualDeltaBrowser[] = [],
 ): VisualStoryFact[] {
   const resolvedSnapshotDir = path.resolve(snapshotDir);
-  const requiredEnvironments = requiredVisualBaselineEnvironments(
-    browsers,
-    availableEnvironments,
-    platform,
-  );
-  const relevantEnvironments = uniqueEnvironments([
-    ...requiredEnvironments,
-    ...availableEnvironments,
+  const requiredBrowsers = requiredVisualBaselineBrowsers(browsers);
+  const relevantBrowsers = uniqueBrowsers([
+    ...requiredBrowsers,
+    ...availableBrowsers,
   ]);
+
   return stories.map((story) => {
     try {
-      const baselinePathByEnvironment = new Map(
-        relevantEnvironments.map((environment) => [
-          visualBaselineEnvironmentKey(environment),
+      const baselinePathByBrowser = new Map(
+        relevantBrowsers.map((browser) => [
+          browser,
           path.resolve(
             resolvedSnapshotDir,
-            snapshotFileName(
-              story,
-              baselinePathMode,
-              environment.browser,
-              environment.platform,
-            ),
+            snapshotFileName(story, baselinePathMode, browser),
           ),
         ]),
       );
       if (
-        [...baselinePathByEnvironment.values()].some(
+        [...baselinePathByBrowser.values()].some(
           (baselinePath) =>
             !isInsideDirectory(resolvedSnapshotDir, baselinePath),
         )
       ) {
         throw new Error("Resolved baseline path escapes snapshotDir");
       }
-      const environmentCoverage: VisualEnvironmentCoverage[] =
-        relevantEnvironments.map((environment) => ({
-          ...environment,
-          baseline: existsSync(
-            baselinePathByEnvironment.get(
-              visualBaselineEnvironmentKey(environment),
-            )!,
-          )
+
+      const browserCoverage: VisualBrowserCoverage[] = relevantBrowsers.map(
+        (browser) => ({
+          target: { browser },
+          browser,
+          baseline: existsSync(baselinePathByBrowser.get(browser)!)
             ? "present"
             : "missing",
-        }));
-      const baselinePaths = browsers.map(
-        (browser) =>
-          baselinePathByEnvironment.get(
-            visualBaselineEnvironmentKey({ browser, platform }),
-          ) ??
-          path.resolve(
-            resolvedSnapshotDir,
-            snapshotFileName(story, baselinePathMode, browser, platform),
-          ),
+        }),
       );
-      if (
-        baselinePaths.some(
-          (baselinePath) =>
-            !isInsideDirectory(resolvedSnapshotDir, baselinePath),
-        )
-      ) {
-        throw new Error("Resolved runtime baseline path escapes snapshotDir");
-      }
+      const baselinePaths = requiredBrowsers.map(
+        (browser) => baselinePathByBrowser.get(browser)!,
+      );
       const baselinePresent = baselinePaths.every(existsSync);
-      const baselineHashes = baselinePresent
-        ? baselinePaths.map(sha256)
-        : [];
+      const baselineHashes = baselinePresent ? baselinePaths.map(sha256) : [];
       const baselineHash = baselinePresent
         ? baselineHashes.length === 1
           ? baselineHashes[0]
@@ -149,7 +106,7 @@ export function resolveVisualStoryFacts(
           })
         : [];
       const allResultsMatch =
-        matchingSidecars.length === browsers.length &&
+        matchingSidecars.length === requiredBrowsers.length &&
         matchingSidecars.every(Boolean);
       const resultBaselineHash = allResultsMatch ? baselineHash : undefined;
       const resultCaptureConfigHash = allResultsMatch
@@ -166,7 +123,7 @@ export function resolveVisualStoryFacts(
       return {
         storyId: story.id,
         baseline: baselinePresent ? "present" : "missing",
-        environmentCoverage,
+        browserCoverage,
         ...(baselineHash ? { baselineHash } : {}),
         ...(resultBaselineHash ? { resultBaselineHash } : {}),
         ...(resultCaptureConfigHash ? { resultCaptureConfigHash } : {}),
@@ -175,8 +132,9 @@ export function resolveVisualStoryFacts(
       return {
         storyId: story.id,
         baseline: "unresolved",
-        environmentCoverage: relevantEnvironments.map((environment) => ({
-          ...environment,
+        browserCoverage: relevantBrowsers.map((browser) => ({
+          target: { browser },
+          browser,
           baseline: "unresolved",
         })),
       };

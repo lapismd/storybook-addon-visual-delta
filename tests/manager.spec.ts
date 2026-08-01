@@ -29,39 +29,29 @@ const FIXTURE_BASELINE_PNG = Buffer.from(
 );
 
 test.describe("Visual Delta manager integration", () => {
-  test("surfaces the configured browser and runtime OS", async ({ page }) => {
+  test("surfaces the canonical profile and configured browser", async ({
+    page,
+  }) => {
     await mockVisualBackend(page);
     await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
 
     const panel = page.getByTestId("visual-delta-panel");
     const environment = panel.getByRole("group", {
-      name: "Visual baseline environment",
+      name: "Visual baseline target",
     });
+    await expect(
+      environment.getByLabel("Canonical capture profile: Linux ARM64"),
+    ).toContainText("Linux · ARM64");
     const controls = environment.getByRole("button");
+    await expect(controls).toHaveCount(1);
     await expect(controls.nth(0)).toHaveAccessibleName(
-      "Visual baseline operating system",
-    );
-    await expect(controls.nth(0)).toContainText("macOS");
-    await expect(controls.nth(1)).toHaveAccessibleName(
       "Visual baseline browser",
     );
-    await expect(controls.nth(1)).toContainText("Chromium");
+    await expect(controls.nth(0)).toContainText("Chromium");
 
     await controls.nth(0).click();
-    await page
-      .getByRole("button", { name: "Linux (view only)", exact: true })
-      .click();
-    await expect(controls.nth(0)).toContainText("Linux");
-    await expect(
-      panel.getByRole("status", { name: /Baseline missing/i }),
-    ).toBeVisible();
-
-    await controls.nth(0).click();
-    await page.getByRole("button", { name: "macOS", exact: true }).click();
-
-    await controls.nth(1).click();
     await page.getByRole("button", { name: "Firefox", exact: true }).click();
-    await expect(controls.nth(1)).toContainText("Firefox");
+    await expect(controls.nth(0)).toContainText("Firefox");
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible();
@@ -70,54 +60,29 @@ test.describe("Visual Delta manager integration", () => {
     ).toHaveCount(0);
   });
 
-  test("swaps the overlay to the selected exact OS baseline", async ({
+  test("keeps the canonical profile fixed when browser coverage is missing", async ({
     page,
   }) => {
-    let linuxBaselineRequests = 0;
-    await page.route(
-      "**/visual-baselines/shadcn/button/default-chromium-linux.png*",
-      async (route) => {
-        linuxBaselineRequests += 1;
-        await route.fulfill({
-          status: 200,
-          contentType: "image/png",
-          body: FIXTURE_BASELINE_PNG,
-        });
-      },
-    );
     await mockVisualBackend(page);
     await openManager(page, MANAGER_FIXTURE, DEV_STORYBOOK);
 
     const panel = page.getByTestId("visual-delta-panel");
-    const operatingSystem = panel.getByRole("button", {
-      name: "Visual baseline operating system",
+    const target = panel.getByRole("group", {
+      name: "Visual baseline target",
     });
-    const frame = previewFrame(page);
-    await expect(
-      frame.locator('img[src*="default-chromium-darwin.png"]'),
-    ).toBeVisible();
-
-    await operatingSystem.click();
-    await page
-      .getByRole("button", { name: "Linux (view only)", exact: true })
+    await target
+      .getByRole("button", { name: "Visual baseline browser" })
       .click();
-    await expect(operatingSystem).toContainText("Linux");
-    await expect.poll(() => linuxBaselineRequests).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Firefox", exact: true }).click();
     await expect(
-      panel.getByRole("status", { name: /Baseline ready/i }),
-    ).toBeVisible({ timeout: 15_000 });
+      target.getByLabel("Canonical capture profile: Linux ARM64"),
+    ).toContainText("Linux · ARM64");
     await expect(
-      frame.locator('img[src*="default-chromium-linux.png"]'),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      frame.locator('img[src*="default-chromium-darwin.png"]'),
-    ).toHaveCount(0);
-
-    await operatingSystem.click();
-    await page.getByRole("button", { name: "macOS", exact: true }).click();
-    await expect(
-      frame.locator('img[src*="default-chromium-darwin.png"]'),
+      panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible();
+    await expect(
+      previewFrame(page).getByText("Baseline", { exact: true }),
+    ).toHaveCount(0);
   });
 
   test("keeps explicit demo coverage aligned with the displayed overlay", async ({
@@ -847,7 +812,7 @@ test.describe("Visual Delta manager integration", () => {
             Number(
               sessionStorage.getItem("visual-delta-manager-load-count") ?? "0",
             ),
-          ),
+          ).catch(() => initialLoadCount),
         { timeout: 5_000 },
       )
       .toBe(initialLoadCount + 1);

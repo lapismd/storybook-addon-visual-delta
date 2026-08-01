@@ -12,10 +12,10 @@ These requirements give every comparison target one safe and durable identity.
 | VD-BASE-002 | One canonical path resolver MUST determine baseline paths for writers, Playwright, Vite injection, static serving, panel hydration, history, sidecars, and deletion.                                                                                                           |
 | VD-BASE-003 | `story-id` and `nested-import` path modes MUST be deterministic, traversal-safe, and collision-resistant. Missing identity data or an unresolved collision MUST fail rather than select another story’s file.                                                                  |
 | VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists. Optimistic post-write hydration MUST attach only the successfully written target to its originating story. |
-| VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                                            |
+| VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the browser target, capture profile, baseline, and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                   |
 | VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                                                                                              |
-| VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser, platform }` identity. Resolution MUST use the exact selected environment and MUST NOT fall back to another browser or platform. Canonical baseline artifacts MUST encode that identity in their filename; an explicitly wired non-canonical demo asset MAY instead declare the same exact environment as story metadata, and an unqualified source without that metadata MUST NOT match any environment. Existing Chromium/Darwin filenames remain valid without migration. |
-| VD-BASE-008 | Project OS parity for a story's primary baseline MUST require every configured browser combined with every platform observed anywhere beneath the configured `snapshotDir`, plus the runtime platform. Observed environments for disabled browsers MUST remain discoverable and filterable but MUST NOT add that browser to the required matrix. Missing or unresolved primary paths MUST remain distinct coverage values. Modes and interactions MUST NOT affect a story's primary parity result. |
+| VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser }` identity. Resolution MUST use the exact selected browser and MUST NOT fall back to another browser. Canonical baseline artifacts MUST encode only that identity in their filename; platform and architecture are capture provenance and MUST NOT participate in lookup. Legacy platform-qualified filenames MUST be rejected after the coordinated migration rather than silently read or rewritten. |
+| VD-BASE-008 | Browser coverage for a story's primary baseline MUST require every configured browser. Observed baselines for disabled browsers MUST remain discoverable and filterable but MUST NOT add that browser to the required set. Missing or unresolved primary paths MUST remain distinct coverage values. Modes and interactions MUST NOT affect primary browser coverage. |
 
 ## Story eligibility and coverage
 
@@ -29,12 +29,10 @@ Coverage has three independent dimensions:
 
 Missing coverage reports `missing-baseline` for the missing target. It does not classify an existing target as mismatched and does not infer review status.
 
-The project-wide parity platform set is the union of the runtime platform and
-platforms parsed from canonical baseline PNG filenames beneath `snapshotDir`.
-The required matrix combines that set with configured browsers only. Per-story
-environment coverage checks the primary path for the union of required and
-observed exact environments; additional environments require file-existence
-checks only and do not replace the runtime aggregate or its result hashes.
+Project browser coverage is the configured browser set. Per-story coverage
+checks the primary path for the union of configured browsers and canonical
+browser suffixes observed beneath `snapshotDir`; additional disabled browsers
+require file-existence checks only and do not enter the required set.
 
 ## Canonical baseline identity
 
@@ -46,8 +44,7 @@ A baseline identity contains:
 | `variant`   | Primary, named mode, or interaction                                  |
 | `variantId` | Mode slug or interaction `id`, absent for primary                    |
 | `pathMode`  | `story-id` or `nested-import`                                        |
-| `browser`   | Playwright browser project: `chromium`, `firefox`, or `webkit`        |
-| `platform`  | Node platform that produced the baseline, such as `darwin`, `linux`, or `win32` |
+| `browser`   | Playwright browser project: `chromium`, `firefox`, or `webkit`       |
 
 The resolver MUST normalize path separators to `/` for public URLs. It MUST reject `..`, absolute paths outside the snapshot root, missing story-ID separators, and malformed variant IDs.
 
@@ -56,13 +53,13 @@ The resolver MUST normalize path separators to `/` for public URLs. It MUST reje
 `story-id` stores a flat path:
 
 ```text
-{story-id}{variant-infix}-{browser}-{platform}.png
+{story-id}{variant-infix}-{browser}.png
 ```
 
 `nested-import` derives a directory from the normalized story import path and a filename from the story slug:
 
 ```text
-{import-derived-directory}/{story-slug}{variant-infix}-{browser}-{platform}.png
+{import-derived-directory}/{story-slug}{variant-infix}-{browser}.png
 ```
 
 The variant infix is:
@@ -88,12 +85,12 @@ type VisualDeltaInteraction = {
 `id` is the stable filename and replay identifier. `label` is human-facing text. `src` is the `/visual-baselines` URL.
 
 An image entry MAY include the capture viewport, device scale factor, alignment,
-placement, mode, offsets, anchor, and an explicit baseline environment. A story
-parameter MAY declare one environment inherited by its explicitly wired primary,
-mode, and interaction demo assets. Explicit environment metadata exists for
+placement, mode, offsets, anchor, and an explicit browser target. A story
+parameter MAY declare one target inherited by its explicitly wired primary,
+mode, and interaction demo assets. Explicit target metadata exists for
 non-canonical teaching fixtures whose URLs do not use baseline filenames; it
-MUST NOT override a browser/platform suffix on a canonical baseline artifact or
-authorize cross-environment fallback. A mode definition MAY contain globals
+MUST NOT override a browser suffix on a canonical baseline artifact or authorize
+cross-browser fallback. A mode definition MAY contain globals
 without a baseline `src`; such a mode is selectable but does not create coverage
 until a baseline is wired.
 
@@ -118,9 +115,9 @@ Each comparison target MAY have:
 | `.actual.png`   | Captured image used for diagnosis         | Local, derived            |
 | `.diff.png`     | Changed-pixel visualization               | Local, derived            |
 
-Version 2 sidecars MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`.
+Version 3 sidecars MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`.
 
-When available, a sidecar records `operationId`, browser, platform, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, policy status, and diagnostic artifact paths.
+When available, a sidecar records `operationId`, browser target, capture-profile identity and provenance, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, policy status, and diagnostic artifact paths. Deprecated platform fields MAY be emitted for compatibility but MUST NOT affect freshness or lookup.
 
 ## Freshness
 
