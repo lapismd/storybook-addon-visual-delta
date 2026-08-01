@@ -440,6 +440,7 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                       section.label
                     )}
                   </Label>
+                  {" "}
                   <Hint title={section.hint}>{section.hint}</Hint>
                 </Meta>
                 <SummaryRight>

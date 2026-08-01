@@ -78,6 +78,10 @@ function px(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function paintedBorderWidth(width: string, style: string): number {
+  return style === "none" || style === "hidden" ? 0 : px(width);
+}
+
 function rectSnapshot(rect: DOMRect): RectSnapshot {
   return {
     x: rect.x,
@@ -101,10 +105,13 @@ function boxSides(style: CSSStyleDeclaration, prefix: "padding" | "border") {
     };
   }
   return {
-    top: px(style.borderTopWidth),
-    right: px(style.borderRightWidth),
-    bottom: px(style.borderBottomWidth),
-    left: px(style.borderLeftWidth),
+    top: paintedBorderWidth(style.borderTopWidth, style.borderTopStyle),
+    right: paintedBorderWidth(style.borderRightWidth, style.borderRightStyle),
+    bottom: paintedBorderWidth(
+      style.borderBottomWidth,
+      style.borderBottomStyle,
+    ),
+    left: paintedBorderWidth(style.borderLeftWidth, style.borderLeftStyle),
   };
 }
 

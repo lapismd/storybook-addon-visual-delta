@@ -106,11 +106,11 @@ describe("PanelStatusBar", () => {
       "1",
     );
     expect(screen.getByText("1/2")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveStyle({
-      width: "400px",
-      borderLeft: "none",
-      borderTopLeftRadius: "0",
-    });
+    const status = screen.getByRole("status");
+    const computedStatus = getComputedStyle(status);
+    expect(status.style.width).toBe("400px");
+    expect(computedStatus.borderLeftStyle).toBe("none");
+    expect(Number.parseFloat(computedStatus.borderTopLeftRadius)).toBe(0);
     expect(screen.getByTestId("status-popover")).toHaveAttribute(
       "data-aria-label",
       "Visual Delta progress log",
@@ -157,12 +157,12 @@ describe("PanelStatusBar", () => {
     );
 
     expect(screen.queryByRole("progressbar")).toBeNull();
-    expect(screen.getByRole("status")).toHaveStyle({
-      width: "400px",
-      borderLeft: "none",
-      borderTopLeftRadius: "0",
-      pointerEvents: "auto",
-    });
+    const status = screen.getByRole("status");
+    const computedStatus = getComputedStyle(status);
+    expect(status.style.width).toBe("400px");
+    expect(status.style.pointerEvents).toBe("auto");
+    expect(computedStatus.borderLeftStyle).toBe("none");
+    expect(Number.parseFloat(computedStatus.borderTopLeftRadius)).toBe(0);
 
     view.rerender(
       <PanelStatusBar
@@ -173,9 +173,7 @@ describe("PanelStatusBar", () => {
         error={null}
       />,
     );
-    expect(screen.getByRole("status")).toHaveStyle({
-      pointerEvents: "none",
-    });
+    expect(status.style.pointerEvents).toBe("none");
 
     view.rerender(
       <PanelStatusBar

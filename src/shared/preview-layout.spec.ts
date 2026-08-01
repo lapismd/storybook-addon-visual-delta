@@ -114,6 +114,27 @@ describe("PreviewLayoutSnapshot", () => {
     });
   });
 
+  it("ignores CSSOM widths for border sides that are not painted", () => {
+    const snapshot = installFixture({
+      bodyStyle: "border-style: none; border-width: 16px",
+      rootStyle:
+        "border-style: hidden solid none dotted; border-width: 16px 3px 20px 5px",
+    });
+
+    expect(snapshot.body.border).toEqual({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+    expect(snapshot.root.border).toEqual({
+      top: 0,
+      right: 3,
+      bottom: 0,
+      left: 5,
+    });
+  });
+
   it("includes body-level padding for component captures", () => {
     const snapshot = installFixture({ bodyStyle: "padding: 7px 11px" });
     expect(

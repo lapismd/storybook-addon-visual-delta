@@ -248,6 +248,12 @@ install, complete static artifact, Node 24 action allowlist, and stable README
 link. Repository Pages settings MUST select GitHub Actions as the publishing
 source before the first deployment.
 
+`src/shared/preview-layout.spec.ts` MUST prove that CSSOM border widths for
+non-painted `none` and `hidden` sides do not alter reconstructed geometry under
+the supported DOM test runtime. `scripts/check-ci-image.spec.mjs` MUST prove
+that each `pnpm test:browsers` run step restores `HOME=/root` inside its job
+container, without introducing workflow- or job-scoped root HOME.
+
 ### Manual CI-image publication
 
 `.github/workflows/publish-visual-delta-ci.yml` runs only through manual
@@ -264,11 +270,12 @@ Firefox, and WebKit versions required by repository workflows.
 The native smoke runs with container-scoped `HOME=/root` and still
 requires pnpm `10.32.1` from the fixed image-owned Corepack cache. Every
 publication command uses Bash, matching the workflow syntax being checked. The
-native smoke jobs and every repository consumer workflow explicitly restore
-`HOME=/root` inside its container; Firefox MUST launch rather than inherit
-GitHub's uid-1001-owned `/github/home` mount while the container process runs as
-root. Checker coverage also rejects workflow- or job-scoped root HOME values so
-host Docker setup retains its accessible runner-owned configuration directory.
+native smoke jobs and every repository run step that launches Firefox
+explicitly restore `HOME=/root` inside its container; Firefox MUST launch rather
+than inherit GitHub's uid-1001-owned `/github/home` mount while the container
+process runs as root. Checker coverage also rejects workflow- or job-scoped root
+HOME values so host Docker setup retains its accessible runner-owned
+configuration directory.
 The ARM64 smoke records the actual tool and browser versions plus a sorted,
 content-derived font-manifest hash. A final profile job depends on both native
 smokes, combines that ARM64 evidence with the published multi-platform and ARM64

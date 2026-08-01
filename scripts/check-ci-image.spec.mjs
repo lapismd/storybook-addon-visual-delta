@@ -100,6 +100,22 @@ test("rejects root-owned HOME leaking into host workflow or job scope", () => {
   assert.match(result.errors.join("\n"), /workflow or job scope/);
 });
 
+test("restores root-owned HOME in every browser-matrix run step", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "      - name: Run browser-matrix acceptance\n        env:\n          HOME: /root\n        run: pnpm test:browsers",
+        "      - name: Run browser-matrix acceptance\n        run: pnpm test:browsers",
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /browser-matrix.*HOME.*Firefox/);
+});
+
 test("requires every referenced JavaScript action to use an audited Node 24 release", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({
