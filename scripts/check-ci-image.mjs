@@ -56,6 +56,8 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   'test "$audit_manifest" = "$latest_manifest"',
   'test "$amd64_count" = "1"',
   'test "$arm64_count" = "1"',
+  'anonymous_docker_config="$(mktemp -d)"',
+  'DOCKER_CONFIG="$anonymous_docker_config"',
   "arm64_digest=",
   "browser.version()",
   "fc-list --format='%{file}\\n'",

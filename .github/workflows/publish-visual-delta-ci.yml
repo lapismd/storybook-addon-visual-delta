@@ -110,6 +110,9 @@ jobs:
           test -n "$manifest_digest"
           test -n "$amd64_digest"
           test -n "$arm64_digest"
+          anonymous_docker_config="$(mktemp -d)"
+          DOCKER_CONFIG="$anonymous_docker_config" \
+            docker buildx imagetools inspect "$AUDIT_IMAGE" >/dev/null
           image_reference="${AUDIT_IMAGE}@${manifest_digest}"
           {
             printf 'image_reference=%s\n' "$image_reference"

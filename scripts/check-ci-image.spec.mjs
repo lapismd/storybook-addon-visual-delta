@@ -274,3 +274,15 @@ test("requires semantic verification of both published architectures", () => {
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /arm64_count/);
 });
+
+test("requires anonymous inspection of every newly published audit image", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    publishWorkflow: sources.publishWorkflow
+      .replace('anonymous_docker_config="$(mktemp -d)"', "true")
+      .replace('DOCKER_CONFIG="$anonymous_docker_config"', "DOCKER_CONFIG=default"),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /anonymous_docker_config/);
+  assert.match(result.errors.join("\n"), /DOCKER_CONFIG/);
+});

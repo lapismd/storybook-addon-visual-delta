@@ -256,6 +256,12 @@ browser inventory matched the ARM64 inventory, and hashing the retained
 visual jobs therefore lock the ARM64 child digest from that run; general x64
 tooling jobs continue to consume the mutable `latest` alias.
 
+After the linked GHCR package was made public, a fresh Docker configuration
+without credentials pulled the locked ARM64 digest, and
+`visual-delta harness doctor` completed the Linux/ARM64 container probe with no
+diagnostics. The publication workflow repeats an anonymous audit-tag inspection
+so later package-visibility regressions fail before a new profile is reviewed.
+
 Pull-request canary run
 [`30713852205`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30713852205)
 confirmed that checkout's temporary HOME does not retain its safe-directory
