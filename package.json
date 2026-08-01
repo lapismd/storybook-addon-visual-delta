@@ -1,12 +1,16 @@
 {
   "name": "@lapismd/storybook-addon-visual-delta",
   "version": "0.0.1",
-  "description": "Local Visual Delta Storybook addon (reimplemented from npm storybook-addon-visual-delta@0.1.5). Overlay / heatmap diff against baseline images.",
+  "description": "Local-first visual regression testing for Storybook with Playwright baselines, pixel diffs, and in-Storybook review.",
   "keywords": [
+    "storybook",
     "storybook-addon",
-    "visual",
-    "overlay",
-    "diff"
+    "visual-regression",
+    "visual-testing",
+    "screenshot-testing",
+    "playwright",
+    "pixel-diff",
+    "baseline"
   ],
   "license": "MIT",
   "author": "Steve Juma<help@lapis.md>",
