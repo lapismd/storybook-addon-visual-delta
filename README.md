@@ -1,916 +1,142 @@
-# @lapismd/storybook-addon-visual-delta
+# Visual Delta for Storybook
 
-Storybook addon for comparing stories to committed baseline PNGs: placement pad,
-overlay / heatmap Live Diff, Create / Update baselines, Run visual tests, and
-review tags. In development, each concrete baseline also has read-only VCS
-history with revision-to-revision comparison.
+Visual Delta is a local-first visual regression testing addon for Storybook. It compares stories with committed Playwright screenshots and adds baseline review, overlays, diffs, and visual test controls to Storybook.
 
-The [`Visual Delta system specification`](./spec/src/index.md) is the normative
-contract for behavior and acceptance. This README is an integration guide and
-command reference.
+## Requirements
 
-**Browse the Spec, Examples, and story Guidance in package Storybook**
-(human-facing docs site; live mirror of `spec/src`, not a second contract):
+- A Storybook project using Vite
+- React, which renders the addon panel
+- Playwright for browser capture
+- Docker for the default authoritative Linux ARM64 capture runner
 
-```bash
-# from this package (standalone)
-pnpm storybook
-# → Examples / … (realistic demos)
-# → Visual Delta / Specification / …
-# → Visual Delta / Panel Shell / Guidance (and sibling families)
+Visual Delta supports Chromium, Firefox, and WebKit. New projects enable Chromium only.
 
-# monorepo root alias
-pnpm visual-delta:storybook
-```
+## Install
 
-Deploy a **static read-only** catalog (baselines + Diff HTML; no middleware
-writes):
+From your Storybook project, install and register the addon:
 
 ```bash
-pnpm build-storybook
-# serve ./storybook-static
-```
-
-Canonical Spec lint/build (package scripts; root `pnpm visual-delta:spec:*`
-aliases):
-
-```bash
-pnpm spec:check
-pnpm spec:serve
-```
-
-The complete check lints and validates the canonical source, builds the book,
-runs checker tests, and rejects protected implementation changes without a
-canonical content update. Generated `spec/book/` output is ignored and
-non-normative.
-
-Storybook loads TypeScript/`tsx` from `src/` (no committed manager/preview
-`dist/`). The Node CLI builds to `dist/node/` (`visual-delta` bin).
-
-## Provenance and maintenance
-
-This local package was reimplemented from the
-`storybook-addon-visual-delta@0.1.5` npm tarball. The original package author is
-houjinlong and the package is MIT licensed; see [`package.json`](./package.json)
-and [`LICENSE`](./LICENSE) for retained metadata.
-
-The upstream GitHub source was unavailable when the package was adopted.
-Maintain the workspace implementation under `src/` and judge behavior against
-the [canonical specification](./spec/src/index.md).
-
-## Quick start (portable host)
-
-### Option A — Storybook add + init (recommended)
-
-```bash
-# From a Vite Storybook project that already has react
 npx storybook add @lapismd/storybook-addon-visual-delta
-pnpm add -D playwright
+pnpm add -D playwright react
 pnpm exec playwright install chromium
 pnpm exec visual-delta init
 ```
 
-`storybook add` registers the addon in `.storybook/main.ts`. `visual-delta init`
-writes the thin suite, Playwright config, snapshot dir, and package scripts.
-Peers: `storybook`, `react`, `vite` (for `viteFinal`), and `playwright` for the
-suite / Diff Browser / CLI.
+`visual-delta init` creates the Playwright suite, Playwright configuration, snapshot directory, and package scripts. It preserves existing files unless you pass `--force`.
 
-Then open Storybook → **Visual Delta** → **Create visual** on a story.
+The generated files are:
 
-If the panel empty state says the suite is missing, click **Set up Visual Delta**
-(same as `visual-delta init` via `/__visual-delta/init`).
-
-### Option B — Manual three files
-
-```bash
-pnpm add -D @lapismd/storybook-addon-visual-delta playwright react
-pnpm exec playwright install chromium
+```text
+playwright.config.ts
+tests/visual/storybook.spec.ts
+tests/visual/storybook.spec.ts-snapshots/
 ```
+
+It also adds `build-storybook`, `test:visual`, `test:visual:affected`, and `visual-delta` scripts when they do not already exist.
+
+## Register the addon manually
+
+If the Storybook CLI did not update your configuration, add the package to the existing `addons` array in `.storybook/main.ts`:
 
 ```ts
-// .storybook/main.ts
-addons: ["@lapismd/storybook-addon-visual-delta"],
+export default {
+  addons: ["@lapismd/storybook-addon-visual-delta"],
+};
 ```
+
+If you do not want to use `visual-delta init`, create the suite and Playwright configuration yourself.
 
 ```ts
 // tests/visual/storybook.spec.ts
-import { defineVisualSuite } from "@lapismd/storybook-addon-visual-delta/playwright";
+import {
+  defineVisualSuite,
+} from "@lapismd/storybook-addon-visual-delta/playwright";
+
 defineVisualSuite();
 ```
 
 ```ts
 // playwright.config.ts
-import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
+import {
+  defineVisualPlaywrightConfig,
+} from "@lapismd/storybook-addon-visual-delta/playwright";
+
 export default defineVisualPlaywrightConfig();
 ```
 
-```json
-{
-  "scripts": {
-    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta",
-    "test:visual": "visual-delta test --all",
-    "test:visual:affected": "visual-delta test --affected",
-    "visual-delta": "visual-delta"
-  }
-}
-```
+## Create a baseline
 
-What bare package registration + the preset wire for you:
-
-| Hook / export                     | Effect                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| Package `./manager` + `./preview` | Panel, Testing Module, overlay (Storybook 10 auto-loads these)           |
-| Preset `staticDirs`               | Serves `tests/visual/storybook.spec.ts-snapshots` at `/visual-baselines` |
-| Preset `viteFinal`                | `/__visual-delta/*` middleware + CSF baseline inject                     |
-
-The packaged preset does **not** re-append `managerEntries` /
-`previewAnnotations` — Storybook already resolves `@lapismd/storybook-addon-visual-delta/manager`
-and `…/preview` when the package is listed in `addons`.
-
-Defaults (override via `options.visualDelta`):
-
-| Concern             | Default                                           |
-| ------------------- | ------------------------------------------------- |
-| Snapshot directory  | `tests/visual/storybook.spec.ts-snapshots`        |
-| Path mode           | `story-id` (flat `{storyId}-chromium.png`)        |
-| Create / update CLI | `pnpm exec visual-delta update …`                 |
-| Interaction CLI     | `pnpm exec visual-delta interaction-update …`     |
-| Compare run         | `pnpm exec playwright test`                       |
-
-Baseline URLs look like `/visual-baselines/<story-id>-chromium.png`.
-
-## Requirements
-
-| Peer         | Notes                                                                     |
-| ------------ | ------------------------------------------------------------------------- |
-| `storybook`  | Manager + preview annotations                                             |
-| `react`      | Manager / panel UI                                                        |
-| `vite`       | Needed for `viteFinal` (middleware + CSF inject) on Vite Storybook hosts  |
-| `playwright` | Optional peer — required for Diff Browser, suite, and `visual-delta` CLI  |
-
-You still commit PNGs under the snapshot dir and keep a thin Playwright entry
-(or a custom suite). Tag-badge chrome for review tags is optional host polish.
-
-## Install
+Start Storybook and open a story:
 
 ```bash
-pnpm add -D @lapismd/storybook-addon-visual-delta
+pnpm storybook
 ```
 
-### Package exports
+Open the **Visual Delta** panel, select the browser, and choose **Create visual**. Review the captured PNG before committing it to your repository.
 
-| Import                                        | Purpose                                                         |
-| --------------------------------------------- | --------------------------------------------------------------- |
-| `@lapismd/storybook-addon-visual-delta`                | Package root                                                    |
-| `@lapismd/storybook-addon-visual-delta/preset`         | `staticDirs`, `viteFinal` (manager/preview via package exports) |
-| `@lapismd/storybook-addon-visual-delta/preview`        | Overlay + `runStep` / park                                      |
-| `@lapismd/storybook-addon-visual-delta/manager`        | Panel + Testing Module + review-layout tool                     |
-| `@lapismd/storybook-addon-visual-delta/playwright`     | `defineVisualSuite` + Playwright config helpers                 |
-| `@lapismd/storybook-addon-visual-delta/node`           | Middleware, inject plugins, CLI runners (Node)                  |
-| `@lapismd/storybook-addon-visual-delta/visual-capture` | Mid-play capture helper                                         |
+The default snapshot directory is `tests/visual/storybook.spec.ts-snapshots`. Baseline names contain the story and browser, for example `components-button--primary-chromium.png`.
 
-Bin: `visual-delta` → `init` / `test` / `update` /
-`interaction-update`.
+## Run visual tests
 
-## Storybook configuration
-
-### Register the addon
-
-Bare registration (recommended for new projects):
-
-```ts
-// .storybook/main.ts
-addons: ["@lapismd/storybook-addon-visual-delta"],
-```
-
-With options:
-
-```ts
-addons: [
-  {
-    name: "@lapismd/storybook-addon-visual-delta",
-    options: {
-      visualDelta: {
-        // optional — see Options
-        snapshotDir: "tests/visual/storybook.spec.ts-snapshots",
-        baselinePathMode: "story-id",
-        affectedTests: {
-          // optional: files that Storybook does not import but can change rendering
-          externals: ["public/**"],
-        },
-        // second safety gate for review/automatic VCS commits
-        allowVcsWrites: false,
-      },
-    },
-  },
-],
-```
-
-`staticDirs` for `/visual-baselines` is registered by the preset. You only need
-a host `staticDirs` entry if you map a different snapshot path yourself (the
-preset skips when `/visual-baselines` is already mapped).
-
-### Preview
-
-No host preview changes are required for Visual Delta. The addon’s `preview`
-annotation installs the overlay channel, `RUN_UNTIL_STEP` / `runStep`, and
-decorators. Keep theme / a11y / globals in your own `.storybook/preview.ts`.
-
-Selecting a top-level row in Storybook’s **Interactions** panel selects the
-same capture point in Visual Delta. Its accordion exposes **Create baseline**
-from both the add button and kebab menu; the capture replays through that exact
-deterministic instrumenter call. Named `step("…")` groups remain supported by
-the existing `visualCaptureUntil` park contract. Visual Delta initially shows
-only interaction accordions with baselines; use **Show all** to reveal new
-capture points. Discovered calls use Storybook-style resolved, syntax-highlighted
-titles, including the final `expect(target).matcher(…)` expression.
-
-### What `viteFinal` registers
-
-1. **Baseline CSF inject** — adds `parameters.visualDelta` when matching PNGs exist under `snapshotDir`
-2. **Dev middleware** — `/__visual-delta/*` (create / update / interaction / run / cancel / review)
-3. **Source watch** — when `addonSrcDir` is set (preview HMR while editing the addon)
-
-Skipped when `process.env.VITEST` is set (Storybook Vitest browser runs).
-
-### Middleware routes
-
-| Method       | Path                                          | Action                                                    |
-| ------------ | --------------------------------------------- | --------------------------------------------------------- |
-| `GET`        | `/__visual-delta/runtime`                     | Read the current development-server identity              |
-| `GET`, `PUT` | `/__visual-delta/config`                      | Read resolved settings or write project defaults          |
-| `PUT`        | `/__visual-delta/story-configuration`         | Write allow-listed overrides for one story                |
-| `POST`       | `/__visual-delta/playwright-threshold`        | Write the host Playwright threshold                       |
-| `POST`       | `/__visual-delta/story-facts`                 | Resolve coverage and source facts for exact story IDs     |
-| `POST`       | `/__visual-delta/init`                        | Scaffold portable integration files                       |
-| `POST`       | `/__visual-delta/rebuild-static`              | Build static Storybook without capture                    |
-| `POST`       | `/__visual-delta/create-baseline`             | Create missing baselines + CSF wiring                     |
-| `POST`       | `/__visual-delta/update-baseline`             | Overwrite baselines                                       |
-| `POST`       | `/__visual-delta/delete-baseline`             | Remove one exact CSF/local screenshot + sidecars          |
-| `POST`       | `/__visual-delta/create-interaction-baseline` | Mid-play step capture                                     |
-| `POST`       | `/__visual-delta/compare-story`               | Authoritative exact-story browser compare + sidecar       |
-| `POST`       | `/__visual-delta/capture-subject`             | Legacy Chromium subject capture (NDJSON progress)         |
-| `POST`       | `/__visual-delta/run-tests`                   | Compare-only Playwright run (NDJSON stream)               |
-| `GET`        | `/__visual-delta/affected-plan`               | Read the current affected-story selection and reason      |
-| `POST`       | `/__visual-delta/action-scope`                | Stream preflight progress, then freeze Testing Module IDs |
-| `GET`        | `/__visual-delta/run-events`                  | Replay / continue an in-flight or recent run              |
-| `GET`        | `/__visual-delta/run-status`                  | Lightweight phase/progress for active/last run            |
-| `POST`       | `/__visual-delta/cancel-tests`                | Abort an in-flight run                                    |
-| `POST`       | `/__visual-delta/review-status`               | Set CSF review tags (`storyId`+`status` or `updates[]`)   |
-| `POST`       | `/__visual-delta/skip-visual`                 | Add or remove `skip-visual` on a story                    |
-| `GET`        | `/__visual-delta/baseline-history`            | Paginated JJ/Git history for one baseline PNG             |
-| `GET`        | `/__visual-delta/baseline-history/image`      | Validated PNG bytes from one reachable revision           |
-| `GET`        | `/__visual-delta/baseline-history/diff`       | Component-folder source diff between two revisions        |
-| `GET`        | `/__visual-delta/change-sets`                 | Pending and committed UI mutation groups                  |
-| `GET`        | `/__visual-delta/change-set-file`             | Stable before/after bytes for one changed file            |
-| `POST`       | `/__visual-delta/change-set-commit`           | Commit one complete, revalidated change set               |
-
-Create / update spawn `pnpm <visualUpdateArgs…>` with appended flags:
-
-- `--create-only` on create
-- `--component <name>` or repeated exact `--story-id <id>` values
-
-Interaction writes spawn `pnpm <visualInteractionUpdateArgs…>` with:
-
-- `--create-only` unless overwrite
-- `--story-id`, `--step-label`, and optional `--step-id`
-
-Run-tests uses `pnpm <visualTestArgs…>` (optional escaped, end-anchored `-g`
-grep from exact story IDs). All static consumers share one rebuild service. It
-checks static output health, source/import freshness, effective configuration,
-affected graph/cache validity, and skip/include changes before optionally
-calling `pnpm build-storybook`. A single-flight lock and short-lived freshness
-token prevent affected preflight and its following run from rebuilding twice.
-The stream opens before that decision, emits the explicit rebuild reason and
-periodic heartbeats, and always terminates with success or error. Progress is
-reported with a **list-only** Playwright reporter so the Testing Module can show
-live `Testing N/M` counts.
-The global Testing Module resolves its visible story IDs before the first
-enabled action. An affected preflight first reads the cached graph, returns
-immediately when every fingerprint is current, or rebuilds static Storybook
-and recomputes the plan before freezing `visible ∩ affected`. The action-scope
-response is NDJSON: it reports resolving, rebuilding (with a one-second elapsed
-heartbeat), and freezing phases before the final exact-ID result. The Testing
-Module therefore does not present the comparison row as running until
-`/run-tests` actually begins. Responses and run events include the selection,
-selected and unchanged counts, no-change status, and any conservative fallback
-reason.
-After HMR remounts the Testing Module (e.g. Update status), the client
-reconnects via `/run-status` + `/run-events` instead of losing progress.
-
-### Baseline actions and history
-
-In Storybook development, each baseline accordion ends with a kebab containing
-**History**, **Update baseline**, and **Delete screenshot** for that concrete
-Default, named mode, or interaction PNG. Delete validates that the path belongs
-to the open story, removes its exact CSF image/interaction, then deletes the
-local PNG plus derived sidecar/diff artifacts. It invalidates only the selected
-comparison and geometry evidence; review metadata and sibling stories remain
-unchanged.
-
-The history view is scoped to the concrete PNG currently selected. Choose any
-**Before** and **After** revisions to use the same 2-up, Diff, Focus, Swipe,
-Blink, zoom, and lightbox tools as the live comparison.
-
-The revision timeline and image comparison remain equal-height panes. Beneath
-them, **Component diff** shows an aligned source diff for files in the current
-story/component folder, excluding binary baseline files. Existing PNG history
-does not contain historical DOM snapshots, so this is the VCS-backed source
-equivalent rather than reconstructed DOM.
-
-Visual Delta prefers Jujutsu when `jj root` succeeds, including colocated
-JJ/Git checkouts, and otherwise falls back to Git. JJ shows the stable change
-ID with its commit ID secondarily and reads committed data with
-`--ignore-working-copy`; Git shows commit SHAs and follows renames. A changed
-PNG in the filesystem appears as **Working copy**. History is read-only and
-does not change baselines or visual review status.
-
-## Options (`VisualDeltaHostOptions`)
-
-Pass under addon `options.visualDelta`. Types from
-`@lapismd/storybook-addon-visual-delta/preset` or `…/node`.
-
-| Option                        | Default                                    | Purpose                                                                |
-| ----------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
-| `showToolbarStatusLabels`     | `true`                                     | Show the current story's named visual-review status in the toolbar     |
-| `root`                        | Vite `config.root` / `process.cwd()`       | Spawn cwd and path resolution                                          |
-| `snapshotDir`                 | `tests/visual/storybook.spec.ts-snapshots` | Absolute or root-relative PNG directory                                |
-| `baselinePathMode`            | `story-id`                                 | Flat story-id PNGs, or `nested-import` for folder layouts              |
-| `addonSrcDir`                 | Addon `src/`                               | Vite watch root for addon preview HMR                                  |
-| `visualUpdateArgs`            | `exec visual-delta update …`               | Argv after `pnpm` for primary baseline writes                          |
-| `visualInteractionUpdateArgs` | `exec visual-delta interaction-update …`   | Argv after `pnpm` for mid-play captures                                |
-| `visualTestArgs`              | `exec playwright test`                     | Argv after `pnpm` for compare-only runs                                |
-| `visualServerPort`            | Storybook port + 1                         | Static Storybook port (`STORYBOOK_PORT+1` / `VISUAL_SERVER_PORT`)      |
-| `allowRebuild`                | `true` (unless set `false`)                | Allow `build-storybook` before run-tests                               |
-| `allowVcsWrites`              | `false`                                    | Second safety gate for plugin-managed Git/Jujutsu commits              |
-| `affectedTests`               | `false`                                    | Enable affected selection; accepts `cacheDir`, `externals`, `untraced` |
-
-The middleware, story-index reader, sidecar resolver, source patchers, and
-Playwright-server readiness checks are package-owned. A packed or file-linked
-consumer does not need the UI repository's `scripts/` tree.
-
-The source patcher supports both Svelte CSF (`.stories.svelte`) and object-style
-TypeScript/JavaScript CSF (`.stories.ts`, `.tsx`, `.js`, `.jsx`). Review and
-skip actions preserve the rest of the exported story object.
-
-## Affected visual tests
-
-Affected mode compares the current project to the last locally passing visual
-run. It uses `preview-stats.json` plus `storybook-static/index.json` to build
-each story's transitive dependency closure, fingerprints the closure and owned
-baseline PNGs, and stores passing fingerprints under
-`.cache/visual-delta/affected-state-v1.json`.
+Check the capture environment before the first authoritative run:
 
 ```bash
-# Always capture the complete suite and seed the local cache.
-pnpm exec visual-delta test --all
-
-# No-op, capture only affected stories, or conservatively fall back to all.
-pnpm exec visual-delta test --affected
-
-# Inspect the decision without rebuilding or launching Playwright.
-pnpm exec visual-delta test --affected --dry-run --explain
+pnpm exec visual-delta harness doctor
 ```
 
-Authoritative `test`, `update`, and `interaction-update` commands run through
-the resolved Linux/ARM64 capture runner. The built-in runner uses Docker;
-consumers may export a runner with `defineVisualDeltaCaptureRunner(...)` from
-`.visual-delta/runner.mjs`. Diagnose the profile and transport with
-`pnpm exec visual-delta harness doctor`. Inventory the breaking browser-only
-filename cutover with `pnpm exec visual-delta migrate-baselines --dry-run`;
-applying it requires both canonical recapture and `--apply --approved`, removes
-legacy and canonical derived artifacts, and invalidates `.cache/visual-delta`.
-Pass a repeatable `--cache-dir` when affected evidence lives elsewhere.
+Run every eligible story:
 
-Static builds must emit Storybook's Vite stats:
+```bash
+pnpm test:visual
+```
+
+Run only stories affected by local changes:
+
+```bash
+pnpm test:visual:affected
+```
+
+Missing baselines and visual mismatches are warnings by default. Use strict mode when they should fail CI:
+
+```bash
+pnpm exec visual-delta test --all --failure-mode strict
+```
+
+Compare-only commands never create or update baselines.
+
+## Configure browsers and comparison defaults
+
+Add `.visual-delta/config.json` when the built-in defaults are not suitable:
 
 ```json
 {
-  "scripts": {
-    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta"
-  }
-}
-```
-
-The cache is disposable and machine-local. Missing or invalid cache/graph data,
-unsupported builders, unresolved new stories, Storybook configuration or
-preview dependencies, capture infrastructure, Playwright configuration,
-package metadata, lockfiles, configured static assets, and `externals` all
-select the full suite. A changed baseline PNG selects its owning story.
-`skip-visual` stories are always excluded. Only stories Playwright successfully
-exercises receive updated fingerprints, so failures and timeouts remain
-affected.
-
-`externals` are root-relative globs for rendering inputs outside Storybook's
-module graph and deliberately force a full run when changed. `untraced` globs
-are optional root-relative globs for known non-rendering files:
-
-```ts
-affectedTests: {
-  cacheDir: ".cache/visual-delta",
-  externals: ["public/**"],
-  untraced: ["docs/**"],
-}
-```
-
-`untraced` is disabled by default because every configured glob reduces visual
-coverage. Prefer leaving a file traced unless it is demonstrably unrelated to
-rendering.
-
-The Visual Delta panel retains Story, Component, and All scopes and adds
-Affected. The global Testing Module defaults to Affected when the feature is
-enabled and shows either **Up to date** or
-**N affected · M unchanged** before and during a run.
-
-An image entry can override the capture metadata used by overlay sizing and
-live diff:
-
-```ts
-parameters: {
-  visualDelta: {
-    images: [
-      "/visual-baselines/current-chromium.png",
-      {
-        src: "/lapis-reference/workspace-shell-light.png",
-        deviceScaleFactor: 1,
-        viewport: { width: 1440, height: 960 },
-      },
-    ],
-  },
-}
-```
-
-### Default CLI argv
-
-Portable defaults use the packaged bin:
-
-```ts
-visualUpdateArgs: [
-  "exec",
-  "visual-delta",
-  "update",
-  "--allow-dirty",
-  "--approved",
-  "--skip-build",
-];
-
-visualInteractionUpdateArgs: [
-  "exec",
-  "visual-delta",
-  "interaction-update",
-  "--allow-dirty",
-  "--approved",
-  "--skip-build",
-];
-```
-
-Playwright captures `storybook-static`, not live Storybook. Hosts default to
-`--skip-build` for speed. Use the panel kebab **Rebuild storybook static** or
-pass `--rebuild` for an explicit force rebuild. Affected-plan refreshes and
-missing/incomplete static output still rebuild automatically for correctness.
-Override these argv lists to point at host scripts when needed (see Advanced
-host below). The middleware appends `--create-only`, `--component` or repeated
-exact `--story-id` values, `--step-label`, `--step-id`, and sets
-`VISUAL_UPDATE_APPROVED=1` in the child environment.
-
-## Story CSF
-
-```ts
-parameters: {
-  visualDelta: {
-    images: [
-      {
-        src: "/visual-baselines/shadcn/button/default-chromium.png",
-        align: "canvas", // pin to story subject; or "viewport"
-        placement: "center",
-      },
-    ],
-    /** Chromatic-style modes (globals + optional per-mode baseline `src`). */
-    modes: {
-      dark: {
-        globals: { colorMode: "dark" },
-        src: "/visual-baselines/…/default--dark-chromium.png",
-      },
-    },
-    /** pixelmatch color threshold 0–1 (Live Diff). */
-    diffThreshold: 0.2,
-    diffIncludeAntiAliasing: false,
-    /** Extra settle ms before capture (Live Diff + Playwright). */
-    delay: 0,
-    /** Fine-tune the absolute Baseline chip inside its 6px top-start anchor. */
-    baselineLabelOffset: { x: 0, y: 0 },
-    /** Hide these CSS regions during capture (plus data-visual-delta-ignore). */
-    ignoreSelectors: [".toast"],
-    cropToViewport: false,
-    interactions: [
-      {
-        id: "opens-chooser",
-        label: "Opens chooser",
-        src: "/visual-baselines/…/default--opens-chooser-chromium.png",
-      },
-    ],
-  },
-},
-```
-
-Ignore markers in the DOM (highlighted via toolbar **Highlight ignored**):
-`data-visual-delta-ignore`, `data-chromatic="ignore"`, `.chromatic-ignore`.
-
-Panel **More → Configuration** opens a scrolling, tabbed settings surface.
-**Story** is the first tab for a selected story. It shows the effective
-capture/overlay values and whether each value comes from the story, project, or
-built-in settings. Edits write only changed, allow-listed
-`parameters.visualDelta` properties to that exact story; **Remove story
-overrides** restores inheritance without touching its PNG or review tag.
-When the measured baseline geometry confidently disagrees with the configured
-alignment, the tab flags the mismatch and offers an exact-story repair (for
-example, **Use viewport** for a viewport-sized baseline). The regular comparison
-view shows the same alignment warning beside the existing geometry warning and
-links directly to the Story configuration tab, so the problem is visible during
-review.
-
-**Defaults** edits the allow-listed project defaults in
-`.visual-delta/config.json`: pass and pixel thresholds, anti-aliasing,
-capture delay, device scale factor (built-in `1`), cropping, placement/opacity,
-Baseline-label offsets, and the opening zoom for preview splits and Diff
-results. **Resolved** keeps the
-read-only host paths, commands, diagnostics, setting sources, and raw JSON.
-Preview splits open with Fit by default; Diff results open at native 100% so
-component-clipped captures remain readable, with Fit still available as an
-explicit project setting or toolbar action.
-Stories/components may override capture and overlay values through
-`parameters.visualDelta`; resolution order is story/component parameters →
-project defaults → built-ins.
-
-**Workflow** contains two opt-in policies. **Auto-accept passing Diff Browser,
-Story, and Run Diff** marks stories `visual-approved` after a fresh
-authoritative selected-browser pass (including a tolerance pass), for exact-story Diff
-Browser / Story and for Testing Module **Run Diff** last-run passes. It does
-not apply to Diff HTML, ordinary Run visual tests without Run Diff, baseline
-writes, or Update status. The VCS mode is `off`, `review`, or `auto`; legacy
-and new configurations default to off.
-
-The project file remains a backward-compatible flat capture configuration:
-
-```json
-{
-  "browsers": ["chromium"],
-  "passThresholdPercent": 1.5,
-  "diffThreshold": 0.2,
-  "deviceScaleFactor": 1,
+  "browsers": ["chromium", "firefox", "webkit"],
   "workflow": {
-    "autoAcceptLiveStoryComparisons": false,
-    "visualTestFailureMode": "warn",
-    "vcs": {
-      "mode": "off",
-      "commitMessageTemplate": "Visual Delta: {action} {scope}"
-    }
+    "visualTestFailureMode": "strict"
   }
 }
 ```
 
-Commit templates support `{action}`, `{scope}`, `{storyId}`, `{storyName}`, and
-`{count}`. Enabling VCS in project configuration is insufficient by itself:
-the Storybook host must also set `allowVcsWrites: true`.
-
-`GET /__visual-delta/config` returns both editable defaults and resolved host
-configuration. Validated `PUT` updates are written atomically, broadcast to the
-manager and preview, and invalidate the next static build. The legacy
-`.visual-delta/playwright.json` threshold remains a fallback when no project
-config exists.
-
-Testing Module **Run tests** (global runner and sidebar story/component
-context menu) freezes one scope and runs checked actions in order:
-create/update baselines (**Create missing** mode default; baselines row off by
-default), compare (on by default), then **Update status** (off by default;
-pass → `visual-ready`, fail → `visual-failed`; existing `visual-approved` is
-kept on pass / within-tolerance). A story context is exactly that
-story, a component context is every descendant story, and the global runner is
-the leaf stories currently visible in the filtered sidebar. **Affected only**
-uses the intersection of those visible IDs and the refreshed affected plan.
-Empty scopes report **No visible stories** or **Up to date** and never broaden.
-
-Cloud product parity is outside the package contract; see
-[Scope and non-goals](./spec/src/index.md#scope-and-non-goals).
-
-### Review tags (Accept vs Ready / Failed)
-
-Review tags are mutually exclusive CSF tags on the story. Visual Delta owns the
-sidebar labels for `skip-visual`, failed, ready, pending, and approved, while
-Storybook's native status store continues to show transient run results. Set
-review tags from the panel or by editing `tags={…}` / posting
-`POST /__visual-delta/review-status` (single `{ storyId, status }` or batched
-`{ updates: [{ storyId, status }] }`). Patchers keep **exactly one** review tag:
-setting `ready` clears `failed` / `pending` / `approved` even when the desired
-tag was already present alongside a sibling. Skip/include eligibility is
-independent and preserves the review tag. **Update status** / middleware refuse
-`visual-failed` when no committed baseline PNG exists for the story
-(missing-baseline Playwright failures are skipped, not stamped failed).
-
-| Tag               | Meaning                                                | How it is set                                  |
-| ----------------- | ------------------------------------------------------ | ---------------------------------------------- |
-| `visual-pending`  | Baseline exists; awaiting review                       | Baseline write or **Unaccept**                 |
-| `visual-ready`    | Agent/dev finished visual work; ready for human review | Explicit status update or panel **Ready** pad  |
-| `visual-approved` | Human accepted the baseline                            | **Accept** (story/component, or current-run passes) |
-| `visual-failed`   | Review rejected / known bad                            | Explicit status update, **Failed** pad, or current-run Unaccept on mismatches |
-
-#### Panel controls
-
-- **Accept / Unaccept** — human sign-off. Story/component: Accept →
-  `visual-approved`; Unaccept → `visual-pending`. Current run: Accept approves
-  only last-run passes (and within-tolerance); Unaccept stamps `visual-failed`
-  only on last-run mismatches. These actions and the Ready / Failed pad do not
-  read Testing Module preferences.
-- **Ready / Failed** pad — agent/dev signals only (pending/approved are _not_
-  on this pad; use Accept/Unaccept for those).
-
-**Agent guidance:** Create / Update baselines reset exactly the written stories
-to `visual-pending` and invalidate their prior comparison evidence. A baseline
-write is not a passing comparison. Run Story, Diff Browser, or the static
-suite, then explicitly update status to map pass/tolerance → `visual-ready` and
-mismatch → `visual-failed` (Update status does not demote an existing
-`visual-approved` when the story still passes). Do **not** set
-`visual-approved` from agent work — leave Accept to a human unless the project
-has explicitly enabled the user-triggered live-comparison auto-accept workflow
-described below.
-
-### `skip-visual` from the panel
-
-When a story has **no baseline**, the header shows **Skip visual tests** next
-to Create visual. When the story is already skipped, the header shows
-**Include in visual tests**. Stories that already have baselines keep skip /
-include under **More** as well. Both paths patch CSF via
-`POST /__visual-delta/skip-visual`:
-
-| Action                      | Effect                |
-| --------------------------- | --------------------- |
-| **Skip visual tests**       | Adds `skip-visual`    |
-| **Include in visual tests** | Removes `skip-visual` |
-
-Skipped stories are excluded from Playwright visual runs and from Visual Delta
-Testing Module scope. Their last result becomes ineligible/stale and the next
-static consumer rebuilds, but the independent review tag is retained. Review
-controls and Update baselines stay disabled while skipped. Prefer this over
-hand-editing tags when flake cannot be stabilized (document why in the story if
-the skip is permanent). CLI:
-`pnpm ui visual:tag skip|include` or `visual-delta skip|include`.
-
-### Review layout (canvas + panel)
-
-Toggle **Review layout** from the preview toolbar, the panel header control, or
-the panel **More** menu to:
-
-1. Hide the sidebar
-2. Dock the addon panel **bottom**, full width
-3. Select the Visual Delta panel
-4. Size the bottom panel to ~42% of the viewport height
-
-The preview toolbar stays visible so the toolbar control remains a reliable
-exit affordance (hiding it remounts Storybook landmark regions and can crash
-the manager). Exit restores the prior sidebar, panel position, and sizes;
-Visual Delta stays selected.
-
-### Diff capture engines
-
-Diff is its own split button (separate from Story / Component / All runs):
-
-| Mode              | Capture                                                     | State effect                         |
-| ----------------- | ----------------------------------------------------------- | ------------------------------------ |
-| **Diff HTML**     | `html-to-image` in the live preview iframe                  | Preview-only diagnostic              |
-| **Diff Browser**  | Selected Playwright browser via `/__visual-delta/compare-story` | Official exact-story result       |
-| **Story**         | The same `/__visual-delta/compare-story` request and config | The same official exact-story result |
-
-**Diff Browser** and **Story** resolve the same effective story configuration,
-wait for the play function, capture the same baseline/mode/interaction key, and
-persist the same v2 sidecar. They stream NDJSON progress (`launching` →
-`navigating` → `settling` → `capturing` → `comparing` → `persisting`) and
-never build `storybook-static`. Diff Stop aborts a Diff-triggered fetch
-mid-capture.
-
-When workflow auto-accept is enabled, a fresh `passed` or
-`changed-within-tolerance` result triggers a separate exact-story review
-mutation. The comparison result remains authoritative even if that review or a
-subsequent VCS commit fails, and the panel reports the approval failure
-independently.
-
-`html-to-image` rasterizes through SVG `foreignObject`, so variable fonts
-(e.g. DM Sans Variable) can paint at different glyph widths than Playwright’s
-native screenshots. Prefer the authoritative Chromium actions when diagnosing
-baseline parity. Diff HTML cannot update an official result or review state.
-Chromium comparison requires `playwright` installed in the host (optional peer
-of this package).
-
-### Changes and VCS commits
-
-Visual Delta’s kebab opens a top-level **Changes** screen with a pending-count
-badge. It groups UI-driven baseline, interaction, review/status, skip/include,
-story/project configuration, threshold, and initialization mutations against
-one VCS base revision. Source/config/sidecar files render as unified text
-diffs; PNG additions, changes, and deletions render before/after/difference
-previews. History/config reads, comparisons themselves, affected preflight,
-and static rebuilds create no change set.
-
-In `review` mode, a completed mutation opens Changes with an editable rendered
-commit message. In `auto` mode, each safe successful group is committed and
-the result is reported without navigating away. Configuration policy changes
-are always review-only. Commits are atomic and exact-path: Visual Delta never
-pushes, amends, squashes, creates a branch, or partially selects files.
-
-Jujutsu is preferred when available, with Git as the fallback. Unrelated dirty
-or staged files remain untouched. A plugin-touched file that was already
-dirty, an unexpected changed path, a partial/failed mutation, a changed file
-hash, or a changed repository base revision blocks the whole commit. Pending
-change metadata and stable before/after bytes live under the ignored
-`.cache/visual-delta/change-sets/` directory and survive manager HMR or a dev
-server restart.
-
-Before Diff HTML rasterizes, Visual Delta hides its overlay and establishes the
-selected image’s CSS `viewport` (default 1280×900) in the preview iframe. The
-transaction verifies the iframe layout is stable for two frames, the current
-story has finished, preparation chrome is gone, fonts are ready, and the
-explicit story delay has elapsed exactly once. If Storybook replaces the
-preview iframe during that transaction, Visual Delta discards the detached
-frame and retries once against the current preview. It fails instead of
-silently padding a viewport mismatch, then restores iframe geometry, scroll,
-and focus before revealing the overlay. Capture diagnostics record
-requested/observed viewport, device scale, and bitmap dimensions in the Diff
-result.
-
-For placement, an image whose CSS dimensions match its declared capture
-viewport is treated as a viewport capture even when older metadata says
-`align: "canvas"`. Center mode anchors that image to the preview viewport
-origin and suppresses the otherwise false canvas-geometry warning.
-
-Geometry/alignment diagnostics are keyed to the selected baseline revision and
-effective capture configuration. Baseline create/update/delete and config
-changes clear the old diagnostic immediately, reload a cache-busted image, and
-remeasure only after the story, fonts, and layout settle. If measurement cannot
-complete, the panel reports a retryable **Baseline geometry unavailable** state
-instead of retaining a stale mismatch.
-
-Official comparisons write a backwards-compatible sidecar v2 with independent
-runner status and classified outcome, original captured dimensions, baseline
-and effective-config hashes, metrics, and operation ID. Passing fitted pixels
-cannot override a runner failure or dimension mismatch. The panel selects only
-fresh evidence whose baseline/config hashes match; review tags never affect
-Playwright pass/fail semantics.
-
-Storybook’s built-in fullscreen (F) control is unchanged (canvas-only).
-
-## Addon vs host
-
-| This package                                      | Your project                                     |
-| ------------------------------------------------- | ------------------------------------------------ |
-| Panel, Testing Module, overlay, Live Diff         | Committed PNGs under the snapshot dir            |
-| Preset `staticDirs` → `/visual-baselines`         | Thin Playwright entry (`defineVisualSuite`)      |
-| `viteFinal` middleware + CSF inject               | Project capture/compare defaults                 |
-| Packaged `visual-delta` CLI (create / update / …) | Custom suites (reference captures, extra masks)  |
-| `@lapismd/storybook-addon-visual-delta/playwright` helpers | Approval policy is `--approved` / env (built-in) |
-
----
-
-## Advanced host: `@stevejuma/ui` catalog
-
-The UI catalog uses the packaged Playwright config helper and preset
-`staticDirs`, but keeps catalog-specific overrides:
-
-- `baselinePathMode: "nested-import"`
-- create/update via `scripts/ui-generator/cli.ts` (host approval gates and recipes)
-- custom `tests/visual/storybook.spec.ts` (not `defineVisualSuite`)
-
-```ts
-// playwright.config.ts
-import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
-export default defineVisualPlaywrightConfig();
-// Optional: defineVisualPlaywrightConfig({ port: 9010 }) to pin the static port.
-```
-
-### `package.json` scripts
-
-```json
-{
-  "scripts": {
-    "storybook": "storybook dev -p 9009",
-    "build-storybook": "node -e \"require('node:fs').mkdirSync('.cache/visual-delta',{recursive:true})\" && storybook build --stats-json .cache/visual-delta",
-    "test:visual": "visual-delta test --all",
-    "test:visual:affected": "visual-delta test --affected",
-    "test:visual:update": "tsx scripts/ui-generator/cli.ts visual-update",
-    "visual-delta": "node packages/storybook-addon-visual-delta/dist/node/cli.js"
-  }
-}
-```
-
-### CLI entrypoints
-
-| Command                                                        | Role                                                                                  |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `tsx scripts/ui-generator/cli.ts visual-update`                | Create missing or overwrite primary baselines; patches CSF `parameters.visualDelta`   |
-| `tsx scripts/ui-generator/cli.ts visual-interaction-update`    | Mid-play step PNG + CSF `interactions` entry                                          |
-| `pnpm ui visual:tag …`                                         | Bulk `skip-visual` / mutually exclusive review tags (component, story, or prefix)     |
-| `pnpm exec visual-delta skip` / `include`                      | Packaged-CLI skip-visual add/remove (`--story-id` / `--component`)                    |
-| `pnpm visual-delta:storybook`                                  | Package-owned React Storybook for Visual Delta self-test stories                      |
-| `pnpm test:visual-delta-panel`                                 | Panel/manager acceptance against the package Storybook (never writes)                 |
-| `VISUAL_UPDATE_APPROVED=1 pnpm test:visual-delta-panel:update` | Gated update for the isolated panel self-test baseline directory                      |
-| `pnpm test:visual`                                             | Full compare and affected-cache seed; never writes baselines                          |
-| `pnpm test:visual:affected`                                    | No-op, affected-only compare, or conservative full fallback                           |
-| `pnpm visual-delta test --affected --dry-run --explain`        | Explain the selection without rebuilding or capturing                                 |
-
-Useful flags on those CLIs: `--approved`, `--allow-dirty`, `--create-only`,
-`--skip-build`, `--rebuild`, `--component <name>`, `--story-id <id>`,
-`--step-label`, `--step-id`. For `visual:tag`: `--status`, `--prefix`.
-
-Skip / include examples (requires `storybook-static/index.json`):
+Install the corresponding local browser binaries when you use live browser comparison:
 
 ```bash
-pnpm ui visual:tag skip --story-id shadcn-button--default
-pnpm ui visual:tag include --component button
-pnpm exec visual-delta skip --story-id shadcn-button--default
-pnpm exec visual-delta include --component button
-pnpm ui visual:tag review --status ready --component button
-pnpm ui visual:tag --help
+pnpm exec playwright install chromium firefox webkit
 ```
 
-Prefer the panel for one-off edits; use `visual:tag` for bulk/scripted updates.
+The built-in comparison allows up to `1.5%` differing pixels and uses a `0.2` per-pixel color threshold. Project and story settings can override these values.
 
-### `.storybook/main.ts`
+The default runner executes authoritative comparisons and writes in the pinned Linux ARM64 capture profile. Projects that cannot use Docker can provide `.visual-delta/runner.mjs` to transport the same capture job through another environment.
 
-```ts
-addons: [
-  {
-    name: "./visual-delta-preset.ts", // or package name when published
-    options: {
-      visualDelta: {
-        baselinePathMode: "nested-import",
-        // visualServerPort defaults to Storybook port + 1
-        visualTestArgs: ["exec", "playwright", "test"],
-        visualUpdateArgs: [
-          "exec",
-          "tsx",
-          "scripts/ui-generator/cli.ts",
-          "visual-update",
-          "--allow-dirty",
-          "--approved",
-          "--skip-build",
-        ],
-        visualInteractionUpdateArgs: [
-          "exec",
-          "tsx",
-          "scripts/ui-generator/cli.ts",
-          "visual-interaction-update",
-          "--allow-dirty",
-          "--approved",
-          "--skip-build",
-        ],
-      },
-    },
-  },
-],
-// `/visual-baselines` is mounted by the addon preset `staticDirs`.
-```
+## Further documentation
 
-### Developing the addon from source (optional)
+- [System specification](./spec/src/index.md)
+- [Configuration reference](./spec/src/configuration.md)
+- [Baseline names and artifacts](./spec/src/baseline-model.md)
+- [Capture and comparison behavior](./spec/src/capture-and-comparison.md)
+- [CLI and public interfaces](./spec/src/interfaces.md)
+- [Mutation and review safety](./spec/src/mutations-and-review.md)
+- [Contributor guide](./DEVELOPMENT.md)
 
-When editing this package’s `src/` next to Storybook, Storybook’s manager
-builder may not pick up `node_modules` changes. A small local preset that
-points `manager` / `preview` at absolute `src/` files (and re-exports
-`staticDirs` / `viteFinal` from the package) avoids that. Those entry hooks
-are required on the local preset because registering a file path does not
-trigger Storybook’s package `./manager` / `./preview` auto-load:
+## License
 
-```ts
-// .storybook/visual-delta-preset.ts
-import { fileURLToPath } from "node:url";
-
-const addonSrc = (entry: string) =>
-  fileURLToPath(
-    import.meta.resolve(
-      `../packages/storybook-addon-visual-delta/src/${entry}`,
-    ),
-  );
-
-export function previewAnnotations(entry: string[] = []) {
-  return [...entry, addonSrc("preview.ts")];
-}
-
-export function managerEntries(entry: string[] = []) {
-  return [...entry, addonSrc("manager.tsx")];
-}
-
-export {
-  staticDirs,
-  viteFinal,
-  webpack,
-} from "../packages/storybook-addon-visual-delta/src/preset.js";
-```
-
-```ts
-addons: [import.meta.resolve("./visual-delta-preset.ts")],
-```
-
-Published / installed consumers can use the package name instead.
-
-## Further reading
-
-- [Visual Delta system specification](./spec/src/index.md)
-- [Development reload behavior](./DEVELOPMENT.md)
-- Package Vitest project: `pnpm exec vitest run --project visual-delta`
+[MIT](./LICENSE)
