@@ -47,11 +47,9 @@ jobs:
 
   panel:
     name: Panel browser acceptance
-    # PROFILE_LOCK_PENDING: replace :latest with the published immutable ARM64 digest.
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -68,11 +66,9 @@ jobs:
 
   browser-matrix:
     name: Chromium, Firefox, and WebKit acceptance
-    # PROFILE_LOCK_PENDING: replace :latest with the published immutable ARM64 digest.
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -89,11 +85,9 @@ jobs:
 
   manager:
     name: Manager browser acceptance
-    # PROFILE_LOCK_PENDING: replace :latest with the published immutable ARM64 digest.
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

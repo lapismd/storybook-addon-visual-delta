@@ -6,20 +6,27 @@ import {
 } from "./capture-profile.js";
 
 describe("canonical capture profile", () => {
-  it("is Linux ARM64 and remains safely unlocked before publication", () => {
+  it("locks the reviewed Linux ARM64 publication profile", () => {
     expect(CANONICAL_VISUAL_CAPTURE_PROFILE).toMatchObject({
       os: "linux",
       architecture: "arm64",
       playwrightVersion: "1.61.1",
+      imageDigest:
+        "sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a",
+      arm64ImageDigest:
+        "sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
+      browserVersions: {
+        chromium: "149.0.7827.0",
+        firefox: "151.0",
+        webkit: "26.5",
+      },
+      fontManifestSha256:
+        "sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3",
     });
-    expect(visualCaptureProfileImageReference()).toBeNull();
-    expect(validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("image digest is not locked"),
-        expect.stringContaining("ARM64 child-manifest digest is not locked"),
-        expect.stringContaining("font manifest is not locked"),
-      ]),
+    expect(visualCaptureProfileImageReference()).toBe(
+      "ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
     );
+    expect(validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE)).toEqual([]);
   });
 
   it("builds an immutable reference for a locked profile", () => {

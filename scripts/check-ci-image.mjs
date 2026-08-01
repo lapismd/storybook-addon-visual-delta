@@ -76,16 +76,20 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
 const EXPECTED_CONSUMER_WORKFLOWS = {
   ".github/workflows/visual-delta-ci.yml": {
     jobs: 4,
+    mutableImageJobs: 1,
+    immutableImageJobs: 3,
     frozenInstalls: 4,
     packagesRead: 1,
     x64Runners: 1,
     arm64Runners: 3,
-    canaryJobs: 3,
-    pendingProfileLocks: 3,
+    canaryJobs: 0,
+    pendingProfileLocks: 0,
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/visual-delta-spec-first.yml": {
     jobs: 1,
+    mutableImageJobs: 1,
+    immutableImageJobs: 0,
     frozenInstalls: 1,
     packagesRead: 1,
     x64Runners: 1,
@@ -96,29 +100,43 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
   },
   ".github/workflows/npm-publish.yml": {
     jobs: 5,
+    mutableImageJobs: 4,
+    immutableImageJobs: 1,
     frozenInstalls: 4,
     packagesRead: 4,
     x64Runners: 4,
     arm64Runners: 1,
     canaryJobs: 0,
-    pendingProfileLocks: 1,
+    pendingProfileLocks: 0,
     allowedPermissions: new Set(["contents", "packages", "id-token"]),
   },
   ".github/workflows/capture-canonical-panel-baselines.yml": {
     jobs: 1,
+    mutableImageJobs: 0,
+    immutableImageJobs: 1,
     frozenInstalls: 1,
     packagesRead: 1,
     x64Runners: 0,
     arm64Runners: 1,
-    canaryJobs: 1,
-    pendingProfileLocks: 1,
+    canaryJobs: 0,
+    pendingProfileLocks: 0,
     allowedPermissions: new Set(["contents", "packages", "pull-requests"]),
   },
 };
 
-const CI_IMAGE =
+const TOOLCHAIN_CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
-const CONSUMER_IMAGE_LINE = `      image: ${CI_IMAGE}`;
+const CANONICAL_ARM64_IMAGE_DIGEST =
+  "sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705";
+const CANONICAL_IMAGE_DIGEST =
+  "sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a";
+const CANONICAL_FONT_MANIFEST_DIGEST =
+  "sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3";
+const CANONICAL_ARM64_CI_IMAGE =
+  `ghcr.io/lapismd/storybook-addon-visual-delta-ci@${CANONICAL_ARM64_IMAGE_DIGEST}`;
+const TOOLCHAIN_IMAGE_LINE = `      image: ${TOOLCHAIN_CI_IMAGE}`;
+const CANONICAL_IMAGE_LINE = `      image: ${CANONICAL_ARM64_CI_IMAGE}`;
+const CANARY_JOB_LINE = "    continue-on-error: true";
 const CONSUMER_HOME_LINE = "  HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
 const CONSUMER_PASSWORD_LINE =
@@ -140,6 +158,10 @@ function requireSnippet(errors, label, source, snippet) {
 
 function countOccurrences(source, needle) {
   return source.split(needle).length - 1;
+}
+
+function countExactLines(source, line) {
+  return source.split("\n").filter((candidate) => candidate === line).length;
 }
 
 function permissionKeys(source) {
@@ -172,19 +194,27 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     errors,
     label,
     source,
-    `  VISUAL_DELTA_CI_IMAGE: ${CI_IMAGE}`,
+    `  VISUAL_DELTA_CI_IMAGE: ${TOOLCHAIN_CI_IMAGE}`,
   );
   requireSnippet(errors, label, source, "defaults:\n  run:\n    shell: bash");
 
   for (const [needle, expectedCount, description] of [
-    [CONSUMER_IMAGE_LINE, expected.jobs, "job container"],
+    [
+      TOOLCHAIN_IMAGE_LINE,
+      expected.mutableImageJobs,
+      "mutable toolchain job container",
+    ],
+    [
+      CANONICAL_IMAGE_LINE,
+      expected.immutableImageJobs,
+      "immutable ARM64 job container",
+    ],
     [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
     ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
     ["packages: read", expected.packagesRead, "packages: read permission"],
     ["runs-on: ubuntu-latest", expected.x64Runners, "x64 runner"],
     ["runs-on: ubuntu-24.04-arm", expected.arm64Runners, "ARM64 runner"],
-    ["continue-on-error: true", expected.canaryJobs, "canary job"],
     ["PROFILE_LOCK_PENDING", expected.pendingProfileLocks, "pending profile lock"],
   ]) {
     const actualCount = countOccurrences(source, needle);
@@ -193,6 +223,12 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
         `${label}: expected ${expectedCount} ${description} occurrence(s), found ${actualCount}`,
       );
     }
+  }
+  const canaryJobCount = countExactLines(source, CANARY_JOB_LINE);
+  if (canaryJobCount !== expected.canaryJobs) {
+    errors.push(
+      `${label}: expected ${expected.canaryJobs} canary job occurrence(s), found ${canaryJobCount}`,
+    );
   }
   if (countOccurrences(source, CONSUMER_HOME_LINE) !== 1) {
     errors.push(
@@ -206,19 +242,13 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     }
   }
 
-  if (expected.arm64Runners > 0) {
-    const immutableReferences = countOccurrences(
-      source,
-      "@sha256:",
+  const ownedImageLines =
+    countOccurrences(source, TOOLCHAIN_IMAGE_LINE) +
+    countOccurrences(source, CANONICAL_IMAGE_LINE);
+  if (ownedImageLines !== expected.jobs) {
+    errors.push(
+      `${label}: every job must use the expected mutable toolchain or immutable ARM64 image`,
     );
-    if (
-      immutableReferences === 0 &&
-      expected.pendingProfileLocks !== expected.arm64Runners
-    ) {
-      errors.push(
-        `${label}: every ARM64 visual job must use an immutable image reference or an explicit PROFILE_LOCK_PENDING canary marker`,
-      );
-    }
   }
 
   for (const permission of permissionKeys(source)) {
@@ -234,6 +264,7 @@ export function validateCiImageSources({
   packageJson,
   publishWorkflow,
   consumerWorkflows,
+  captureProfile,
 }) {
   const errors = [];
   let manifest;
@@ -251,6 +282,17 @@ export function validateCiImageSources({
         );
       }
     }
+  }
+
+  for (const snippet of [
+    `imageDigest:\n    "${CANONICAL_IMAGE_DIGEST}"`,
+    `arm64ImageDigest:\n    "${CANONICAL_ARM64_IMAGE_DIGEST}"`,
+    'chromium: "149.0.7827.0"',
+    'firefox: "151.0"',
+    'webkit: "26.5"',
+    `fontManifestSha256:\n    "${CANONICAL_FONT_MANIFEST_DIGEST}"`,
+  ]) {
+    requireSnippet(errors, "capture profile", captureProfile ?? "", snippet);
   }
 
   for (const snippet of REQUIRED_DOCKERFILE_SNIPPETS) {
@@ -349,6 +391,7 @@ export function loadCiImageSources(repoRoot = DEFAULT_REPO_ROOT) {
     dockerignore: read(".dockerignore"),
     packageJson: read("package.json"),
     publishWorkflow: read(".github/workflows/publish-visual-delta-ci.yml"),
+    captureProfile: read("src/shared/capture-profile.ts"),
     consumerWorkflows: Object.fromEntries(
       Object.keys(EXPECTED_CONSUMER_WORKFLOWS).map((relativePath) => [
         relativePath,

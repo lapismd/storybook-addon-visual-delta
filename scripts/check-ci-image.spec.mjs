@@ -26,7 +26,11 @@ test("requires every package-tooling job to use the authenticated image", () => 
     },
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /expected 4 job container/);
+  assert.match(
+    result.errors.join("\n"),
+    /expected 1 mutable toolchain job container/,
+  );
+  assert.match(result.errors.join("\n"), /every job must use the expected/);
 });
 
 test("requires root-owned HOME in every repository job container", () => {
@@ -50,7 +54,7 @@ test("requires root-owned HOME in every repository job container", () => {
   assert.match(result.errors.join("\n"), /native smoke containers/);
 });
 
-test("requires ARM64 visual jobs and explicit pending profile locks before publication", () => {
+test("requires ARM64 visual jobs to use the reviewed immutable profile", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({
     ...sources,
@@ -58,12 +62,44 @@ test("requires ARM64 visual jobs and explicit pending profile locks before publi
       ...sources.consumerWorkflows,
       [workflowPath]: sources.consumerWorkflows[workflowPath]
         .replace("runs-on: ubuntu-24.04-arm", "runs-on: ubuntu-latest")
-        .replace("PROFILE_LOCK_PENDING", "profile lock omitted"),
+        .replace(
+          "@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
+          "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
     },
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /ARM64 runner/);
-  assert.match(result.errors.join("\n"), /pending profile lock/);
+  assert.match(result.errors.join("\n"), /immutable ARM64 job container/);
+});
+
+test("rejects restoring non-blocking ARM64 canary jobs after profile lock", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "    runs-on: ubuntu-24.04-arm",
+        "    runs-on: ubuntu-24.04-arm\n    continue-on-error: true",
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /expected 0 canary job/);
+});
+
+test("requires the capture-profile source to match the reviewed publication", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    captureProfile: sources.captureProfile.replace(
+      'chromium: "149.0.7827.0"',
+      'chromium: "unreviewed"',
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /capture profile/);
+  assert.match(result.errors.join("\n"), /chromium/);
 });
 
 test("requires the split release gates and browser-only authorized capture workflow", () => {

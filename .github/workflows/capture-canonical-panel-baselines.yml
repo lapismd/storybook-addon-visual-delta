@@ -27,10 +27,9 @@ concurrency:
 jobs:
   capture:
     name: Capture canonical ARM64 panel references
-    # PROFILE_LOCK_PENDING: replace :latest with the published immutable ARM64 digest.
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
