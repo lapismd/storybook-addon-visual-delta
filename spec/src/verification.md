@@ -256,6 +256,14 @@ browser inventory matched the ARM64 inventory, and hashing the retained
 visual jobs therefore lock the ARM64 child digest from that run; general x64
 tooling jobs continue to consume the mutable `latest` alias.
 
+Pull-request canary run
+[`30713852205`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30713852205)
+confirmed that checkout's temporary HOME does not retain its safe-directory
+entry once the root-owned container HOME is restored. The spec-first workflow
+therefore fetches complete history and explicitly registers
+`$GITHUB_WORKSPACE` under `/root` before its exact base-to-head diff; the CI
+image checker rejects removal of either prerequisite.
+
 ### Manual canonical panel-baseline capture
 
 `.github/workflows/capture-canonical-panel-baselines.yml` runs only when manually

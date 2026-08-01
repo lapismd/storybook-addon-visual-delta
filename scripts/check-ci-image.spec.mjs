@@ -54,6 +54,25 @@ test("requires root-owned HOME in every repository job container", () => {
   assert.match(result.errors.join("\n"), /native smoke containers/);
 });
 
+test("requires a complete and trusted checkout for the exact PR change set", () => {
+  const workflowPath = ".github/workflows/visual-delta-spec-first.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath]
+        .replace("fetch-depth: 0", "fetch-depth: 1")
+        .replace(
+          'git config --global --add safe.directory "$GITHUB_WORKSPACE"',
+          'echo "$GITHUB_WORKSPACE"',
+        ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /fetch-depth/);
+  assert.match(result.errors.join("\n"), /safe.directory/);
+});
+
 test("requires ARM64 visual jobs to use the reviewed immutable profile", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({

@@ -343,6 +343,16 @@ export function validateCiImageSources({
       requireSnippet(errors, "npm publish workflow", releaseWorkflow, snippet);
     }
   }
+  const specFirstWorkflow =
+    consumerWorkflows?.[".github/workflows/visual-delta-spec-first.yml"];
+  if (typeof specFirstWorkflow === "string") {
+    for (const snippet of [
+      "fetch-depth: 0",
+      'git config --global --add safe.directory "$GITHUB_WORKSPACE"',
+    ]) {
+      requireSnippet(errors, "spec-first workflow", specFirstWorkflow, snippet);
+    }
+  }
   const captureWorkflow =
     consumerWorkflows?.[".github/workflows/capture-canonical-panel-baselines.yml"];
   if (typeof captureWorkflow === "string") {
