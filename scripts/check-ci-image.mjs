@@ -147,6 +147,7 @@ const CANARY_JOB_LINE = "    continue-on-error: true";
 const TRUST_CHECKOUT_LINE =
   '        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"';
 const CONTAINER_HOME_LINE = "        HOME: /root";
+const STEP_HOME_LINE = "          HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
 const CONSUMER_PASSWORD_LINE = "        password: ${{ secrets.GITHUB_TOKEN }}";
 const PROHIBITED_CONSUMER_INSTALLS = [
@@ -205,6 +206,19 @@ function workflowContainerBlocks(source) {
     const end = lines.findIndex(
       (line, candidate) =>
         candidate > index && (/^    \S/.test(line) || /^  \S/.test(line)),
+    );
+    blocks.push(lines.slice(index, end === -1 ? undefined : end).join("\n"));
+  }
+  return blocks;
+}
+
+function workflowStepSections(source) {
+  const lines = source.split("\n");
+  const blocks = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!lines[index].startsWith("      - ")) continue;
+    const end = lines.findIndex(
+      (line, candidate) => candidate > index && line.startsWith("      - "),
     );
     blocks.push(lines.slice(index, end === -1 ? undefined : end).join("\n"));
   }
@@ -322,6 +336,16 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     if (countExactLines(source, lowerScopeHome) !== 0) {
       errors.push(
         `${label}: root-owned HOME must not be set at workflow or job scope`,
+      );
+    }
+  }
+  for (const step of workflowStepSections(source)) {
+    if (
+      step.includes("        run: pnpm test:browsers") &&
+      countExactLines(step, STEP_HOME_LINE) !== 1
+    ) {
+      errors.push(
+        `${label}: every browser-matrix run step must restore root-owned HOME for Firefox`,
       );
     }
   }
