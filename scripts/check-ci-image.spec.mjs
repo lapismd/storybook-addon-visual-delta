@@ -36,17 +36,17 @@ test("requires root-owned HOME in every repository job container", () => {
     consumerWorkflows: {
       ...sources.consumerWorkflows,
       [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
-        "        HOME: /root",
-        "        HOME: /github/home",
+        "  HOME: /root",
+        "  HOME: /github/home",
       ),
     },
     publishWorkflow: sources.publishWorkflow.replace(
-      "        HOME: /root",
-      "        HOME: /github/home",
+      "      HOME: /root",
+      "      HOME: /github/home",
     ),
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /root-owned container HOME/);
+  assert.match(result.errors.join("\n"), /workflow-level root-owned HOME/);
   assert.match(result.errors.join("\n"), /native smoke containers/);
 });
 

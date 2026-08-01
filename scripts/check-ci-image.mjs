@@ -118,7 +118,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
 const CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
 const CONSUMER_IMAGE_LINE = `      image: ${CI_IMAGE}`;
-const CONSUMER_HOME_LINE = "        HOME: /root";
+const CONSUMER_HOME_LINE = "  HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
 const CONSUMER_PASSWORD_LINE =
   "        password: ${{ secrets.GITHUB_TOKEN }}";
@@ -177,7 +177,6 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
 
   for (const [needle, expectedCount, description] of [
     [CONSUMER_IMAGE_LINE, expected.jobs, "job container"],
-    [CONSUMER_HOME_LINE, expected.jobs, "root-owned container HOME"],
     [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
     ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
@@ -193,6 +192,11 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
         `${label}: expected ${expectedCount} ${description} occurrence(s), found ${actualCount}`,
       );
     }
+  }
+  if (countOccurrences(source, CONSUMER_HOME_LINE) !== 1) {
+    errors.push(
+      `${label}: every container job must inherit one workflow-level root-owned HOME`,
+    );
   }
 
   for (const [pattern, description] of PROHIBITED_CONSUMER_INSTALLS) {
@@ -278,7 +282,7 @@ export function validateCiImageSources({
       "publish workflow: capture profile must be assembled after native ARM64 smoke",
     );
   }
-  if (countOccurrences(publishWorkflow, "        HOME: /root") !== 2) {
+  if (countOccurrences(publishWorkflow, "      HOME: /root") !== 2) {
     errors.push(
       "publish workflow: both native smoke containers must use root-owned HOME",
     );

@@ -122,13 +122,13 @@ jobs:
     name: Smoke published image on x64
     needs: publish
     runs-on: ubuntu-latest
+    env:
+      HOME: /root
     permissions:
       contents: read
       packages: read
     container:
       image: ${{ needs.publish.outputs.image_reference }}
-      env:
-        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -153,6 +153,8 @@ jobs:
     name: Smoke published image on ARM64
     needs: publish
     runs-on: ubuntu-24.04-arm
+    env:
+      HOME: /root
     outputs:
       node_version: ${{ steps.provenance.outputs.node_version }}
       npm_version: ${{ steps.provenance.outputs.npm_version }}
@@ -165,8 +167,6 @@ jobs:
       packages: read
     container:
       image: ${{ needs.publish.outputs.image_reference }}
-      env:
-        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

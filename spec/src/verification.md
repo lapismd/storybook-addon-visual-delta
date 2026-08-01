@@ -228,8 +228,8 @@ Firefox, and WebKit versions required by repository workflows.
 The native smoke runs with GitHub's job-container `HOME` override and still
 requires pnpm `10.32.1` from the fixed image-owned Corepack cache. Every
 publication command uses Bash, matching the workflow syntax being checked. The
-native smoke and every repository consumer container explicitly restore
-`HOME=/root`; Firefox MUST launch rather than inherit GitHub's uid-1001-owned
+native smoke jobs and every repository consumer workflow explicitly restore
+`HOME=/root` at job-step scope; Firefox MUST launch rather than inherit GitHub's uid-1001-owned
 `/github/home` mount while the container process runs as root.
 The ARM64 smoke records the actual tool and browser versions plus a sorted,
 content-derived font-manifest hash. A final profile job depends on both native
