@@ -8,9 +8,39 @@ import {
 
 const sources = loadCiImageSources();
 
-test("accepts the repository CI-image publication configuration", () => {
+test("accepts the repository CI-image publication and reuse configuration", () => {
   const result = validateCiImageSources(sources);
   assert.equal(result.ok, true, result.errors.join("\n"));
+});
+
+test("requires every package-tooling job to use the authenticated image", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest",
+        "      image: node:latest",
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /expected 4 job container/);
+});
+
+test("rejects duplicated toolchain and browser installation", () => {
+  const workflowPath = ".github/workflows/visual-delta-spec-first.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: `${sources.consumerWorkflows[workflowPath]}\n# cargo install mdbook\n# pnpm exec playwright install chromium\n`,
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /mdBook compilation/);
+  assert.match(result.errors.join("\n"), /Playwright browser installation/);
 });
 
 test("rejects drift in pinned runtime and browser versions", () => {

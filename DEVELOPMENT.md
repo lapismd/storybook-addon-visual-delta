@@ -83,7 +83,12 @@ Monorepo `pnpm checks` runs the panel suite via the root alias.
 
 Repository workflows use a manually published toolchain image at
 `ghcr.io/lapismd/storybook-addon-visual-delta-ci`. The canonical publication
-policy is [VD-GOV-012](./spec/src/spec-governance.md#normative-requirements).
+and consumption policies are
+[VD-GOV-012 and VD-GOV-013](./spec/src/spec-governance.md#normative-requirements).
+Package-tooling jobs pull `:latest` with the repository `GITHUB_TOKEN`, then run
+`pnpm install --frozen-lockfile` to link the checkout. They do not compile
+mdBook or reinstall Node.js, npm, pnpm, Playwright browsers, or Linux browser
+dependencies during the workflow.
 
 After merging an image, dependency, or pinned-tool change, dispatch **Publish
 Visual Delta CI image** from the default branch with a new audit tag. Audit tags
@@ -109,12 +114,12 @@ docker buildx build --load \
   .
 ```
 
-Smoke-test the installed browser without mounting the checkout:
+Smoke-test every installed browser without mounting the checkout:
 
 ```bash
 docker run --rm --workdir /build visual-delta-ci:local \
   node --input-type=module -e \
-  "import { chromium } from 'playwright'; const browser = await chromium.launch({ headless: true }); console.log(await browser.version()); await browser.close();"
+  "import { chromium, firefox, webkit } from 'playwright'; for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) { const browser = await engine.launch({ headless: true }); console.log(name, await browser.version()); await browser.close(); }"
 ```
 
 ## npm release administration

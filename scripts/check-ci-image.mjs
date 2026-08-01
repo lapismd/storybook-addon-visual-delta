@@ -54,9 +54,117 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   "'\"architecture\":\"arm64\"'",
 ];
 
+const EXPECTED_CONSUMER_WORKFLOWS = {
+  ".github/workflows/visual-delta-ci.yml": {
+    jobs: 4,
+    frozenInstalls: 4,
+    packagesRead: 1,
+    allowedPermissions: new Set(["contents", "packages"]),
+  },
+  ".github/workflows/visual-delta-spec-first.yml": {
+    jobs: 1,
+    frozenInstalls: 1,
+    packagesRead: 1,
+    allowedPermissions: new Set(["contents", "packages"]),
+  },
+  ".github/workflows/npm-publish.yml": {
+    jobs: 4,
+    frozenInstalls: 3,
+    packagesRead: 4,
+    allowedPermissions: new Set(["contents", "packages", "id-token"]),
+  },
+  ".github/workflows/capture-linux-panel-baselines.yml": {
+    jobs: 1,
+    frozenInstalls: 1,
+    packagesRead: 1,
+    allowedPermissions: new Set(["contents", "packages", "pull-requests"]),
+  },
+};
+
+const CI_IMAGE =
+  "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
+const CONSUMER_IMAGE_LINE = `      image: ${CI_IMAGE}`;
+const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
+const CONSUMER_PASSWORD_LINE =
+  "        password: ${{ secrets.GITHUB_TOKEN }}";
+const PROHIBITED_CONSUMER_INSTALLS = [
+  [/actions\/setup-node@/, "actions/setup-node"],
+  [/\bcorepack\s+(?:enable|prepare|install|use)\b/, "Corepack setup"],
+  [/\bnpm\s+(?:install|i)\s+(?:--global|-g)\b/, "global npm installation"],
+  [/\bcargo\s+install\s+mdbook\b/i, "mdBook compilation"],
+  [/\bplaywright\s+install\b/, "Playwright browser installation"],
+  [/\bapt(?:-get)?\s+install\b/, "Linux package installation"],
+];
+
 function requireSnippet(errors, label, source, snippet) {
   if (!source.includes(snippet)) {
     errors.push(`${label}: missing required text ${JSON.stringify(snippet)}`);
+  }
+}
+
+function countOccurrences(source, needle) {
+  return source.split(needle).length - 1;
+}
+
+function permissionKeys(source) {
+  const lines = source.split("\n");
+  const keys = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(?<indent>\s*)permissions:\s*$/);
+    if (!match?.groups) continue;
+    const permissionIndent = match.groups.indent.length;
+    for (index += 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!line.trim()) continue;
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= permissionIndent) {
+        index -= 1;
+        break;
+      }
+      if (indent === permissionIndent + 2) {
+        const key = line.trim().match(/^(?<key>[a-z-]+):/)?.groups?.key;
+        if (key) keys.push(key);
+      }
+    }
+  }
+  return keys;
+}
+
+function validateConsumerWorkflow(errors, pathLabel, source, expected) {
+  const label = `consumer workflow ${pathLabel}`;
+  requireSnippet(
+    errors,
+    label,
+    source,
+    `  VISUAL_DELTA_CI_IMAGE: ${CI_IMAGE}`,
+  );
+  requireSnippet(errors, label, source, "defaults:\n  run:\n    shell: bash");
+
+  for (const [needle, expectedCount, description] of [
+    [CONSUMER_IMAGE_LINE, expected.jobs, "job container"],
+    [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
+    [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
+    ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
+    ["packages: read", expected.packagesRead, "packages: read permission"],
+  ]) {
+    const actualCount = countOccurrences(source, needle);
+    if (actualCount !== expectedCount) {
+      errors.push(
+        `${label}: expected ${expectedCount} ${description} occurrence(s), found ${actualCount}`,
+      );
+    }
+  }
+
+  for (const [pattern, description] of PROHIBITED_CONSUMER_INSTALLS) {
+    if (pattern.test(source)) {
+      errors.push(`${label}: ${description} must come from the CI image`);
+    }
+  }
+
+  for (const permission of permissionKeys(source)) {
+    if (!expected.allowedPermissions.has(permission)) {
+      errors.push(`${label}: unexpected ${permission} permission`);
+    }
   }
 }
 
@@ -65,6 +173,7 @@ export function validateCiImageSources({
   dockerignore,
   packageJson,
   publishWorkflow,
+  consumerWorkflows,
 }) {
   const errors = [];
   let manifest;
@@ -117,6 +226,17 @@ export function validateCiImageSources({
     );
   }
 
+  for (const [pathLabel, expected] of Object.entries(
+    EXPECTED_CONSUMER_WORKFLOWS,
+  )) {
+    const source = consumerWorkflows?.[pathLabel];
+    if (typeof source !== "string") {
+      errors.push(`consumer workflow ${pathLabel}: source is missing`);
+      continue;
+    }
+    validateConsumerWorkflow(errors, pathLabel, source, expected);
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -128,6 +248,12 @@ export function loadCiImageSources(repoRoot = DEFAULT_REPO_ROOT) {
     dockerignore: read(".dockerignore"),
     packageJson: read("package.json"),
     publishWorkflow: read(".github/workflows/publish-visual-delta-ci.yml"),
+    consumerWorkflows: Object.fromEntries(
+      Object.keys(EXPECTED_CONSUMER_WORKFLOWS).map((relativePath) => [
+        relativePath,
+        read(relativePath),
+      ]),
+    ),
   };
 }
 
@@ -139,7 +265,7 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  console.log("Visual Delta CI-image publication configuration is valid.");
+  console.log("Visual Delta CI-image publication and reuse are valid.");
 }
 
 if (

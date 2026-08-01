@@ -7,6 +7,14 @@ on:
 
 permissions:
   contents: read
+  packages: read
+
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: npm-publish-${{ github.repository }}
@@ -16,6 +24,11 @@ jobs:
   release-gates:
     name: Validate release and package
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 90
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -23,22 +36,6 @@ jobs:
     steps:
       - name: Check out the release tag
         uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up npm and pnpm
-        run: |
-          npm install --global npm@12.0.2
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
-          npm --version
-          pnpm --version
-
-      - name: Install mdBook
-        run: cargo install mdbook --version 0.5.4 --locked
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -73,9 +70,6 @@ jobs:
       - name: Verify npm package contents
         run: pnpm pack --dry-run
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
       - name: Run compare-only panel acceptance
         run: pnpm test:panel
 
@@ -87,26 +81,21 @@ jobs:
     needs: release-gates
     if: needs.release-gates.outputs.bootstrap == 'true'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
       id-token: write
     environment:
       name: npm-bootstrap
     steps:
       - name: Check out the release tag
         uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up npm and pnpm
-        run: |
-          npm install --global npm@12.0.2
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -126,26 +115,21 @@ jobs:
     needs: release-gates
     if: needs.release-gates.outputs.bootstrap != 'true'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
       id-token: write
     environment:
       name: npm
     steps:
       - name: Check out the release tag
         uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up npm and pnpm
-        run: |
-          npm install --global npm@12.0.2
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -167,22 +151,18 @@ jobs:
       needs.release-gates.result == 'success' &&
       (needs.publish-bootstrap.result == 'success' || needs.publish-oidc.result == 'success')
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
     steps:
       - name: Check out the release tag
         uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up npm
-        run: |
-          npm install --global npm@12.0.2
-          npm --version
 
       - name: Wait for the exact npm version
         env:

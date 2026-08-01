@@ -5,6 +5,13 @@ on:
 
 permissions: {}
 
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: capture-linux-panel-baselines-${{ github.ref }}
   cancel-in-progress: false
@@ -13,9 +20,15 @@ jobs:
   capture:
     name: Capture missing Linux panel references
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 60
     permissions:
       contents: write
+      packages: read
       pull-requests: write
     steps:
       - name: Require the default branch
@@ -28,22 +41,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
-          pnpm --version
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
 
       - name: Capture only missing Linux panel references
         # Playwright exits 1 after writing an absent expected snapshot.

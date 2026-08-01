@@ -3,28 +3,31 @@ name: Visual Delta Spec First
 on:
   pull_request:
 
+permissions:
+  contents: read
+  packages: read
+
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate:
     name: Validate Visual Delta specification
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out the pull request
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-
-      - name: Set up pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
-
-      - name: Install mdBook
-        run: cargo install mdbook --version 0.5.4 --locked
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

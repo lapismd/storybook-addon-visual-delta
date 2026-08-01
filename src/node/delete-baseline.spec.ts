@@ -18,7 +18,7 @@ function fixture() {
     root,
     "tests/visual/storybook.spec.ts-snapshots",
   );
-  const baselineRelative = "shadcn/demo/default-chromium-darwin.png";
+  const baselineRelative = `shadcn/demo/default-chromium-${process.platform}.png`;
   const baselinePath = path.join(snapshotDir, baselineRelative);
   const baselineUrl = `/visual-baselines/${baselineRelative}`;
   mkdirSync(path.dirname(storyPath), { recursive: true });
@@ -101,7 +101,7 @@ describe("deleteVisualBaseline", () => {
         {
           storyId: "shadcn-demo--default",
           baselineUrl:
-            "/visual-baselines/shadcn/demo/another-story-chromium-darwin.png",
+            `/visual-baselines/shadcn/demo/another-story-chromium-${process.platform}.png`,
         },
       ),
     ).toThrow("does not belong to story");
