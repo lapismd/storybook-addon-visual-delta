@@ -187,8 +187,10 @@ jobs:
           test "$playwright_version" = "1.61.1"
           test "$mdbook_version" = "v0.5.4"
           command -v fc-list >/dev/null
-          browser_metadata="$RUNNER_TEMP/visual-delta-arm64-browsers.json"
-          font_manifest="$RUNNER_TEMP/visual-delta-arm64-font-manifest.sha256"
+          evidence_dir="$GITHUB_WORKSPACE/visual-delta-arm64-native-evidence"
+          mkdir -p "$evidence_dir"
+          browser_metadata="$evidence_dir/browsers.json"
+          font_manifest="$evidence_dir/font-manifest.sha256"
           export browser_metadata
           node --input-type=module <<'NODE'
           import { writeFileSync } from "node:fs";
@@ -225,7 +227,7 @@ jobs:
             --argjson browserVersions "$browser_versions" \
             --arg fontManifestSha256 "$font_manifest_sha256" \
             '{architecture: $architecture, nodeVersion: $nodeVersion, npmVersion: $npmVersion, pnpmVersion: $pnpmVersion, playwrightVersion: $playwrightVersion, mdbookVersion: $mdbookVersion, browserVersions: $browserVersions, fontManifestSha256: $fontManifestSha256}' \
-            > "$RUNNER_TEMP/visual-delta-arm64-native-evidence.json"
+            > "$evidence_dir/native-evidence.json"
           {
             printf 'node_version=%s\n' "$node_version"
             printf 'npm_version=%s\n' "$npm_version"
@@ -239,10 +241,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: visual-delta-arm64-native-evidence-${{ inputs.tag }}
-          path: |
-            ${{ runner.temp }}/visual-delta-arm64-browsers.json
-            ${{ runner.temp }}/visual-delta-arm64-font-manifest.sha256
-            ${{ runner.temp }}/visual-delta-arm64-native-evidence.json
+          path: visual-delta-arm64-native-evidence/
           if-no-files-found: error
           retention-days: 90
 

@@ -237,6 +237,9 @@ smokes, combines that ARM64 evidence with the published multi-platform and ARM64
 child digests and canonical rendering context, and retains the complete profile
 JSON and native ARM64 evidence for review. A profile artifact produced before a
 native smoke, or populated only from declared package versions, is invalid.
+The native evidence upload uses one staged evidence directory and MUST contain
+the browser-version JSON, content-addressed font manifest, and native summary;
+an artifact containing only one of those files is incomplete.
 
 ### Manual canonical panel-baseline capture
 

@@ -61,6 +61,7 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   "fc-list --format='%{file}\\n'",
   "fontManifestSha256",
   "visual-delta-arm64-native-evidence",
+  "path: visual-delta-arm64-native-evidence/",
   "needs: [publish, smoke-x64, smoke-arm64]",
   'id: "visual-delta-linux-arm64-v1"',
   "arm64ImageDigest",

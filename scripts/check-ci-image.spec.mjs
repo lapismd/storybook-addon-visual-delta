@@ -195,12 +195,17 @@ test("requires complete profile provenance after both native smoke jobs", () => 
         "needs: publish",
       )
       .replace("browser.version()", '"declared"')
-      .replace("fc-list --format='%{file}\\n'", "printf '%s\\n'"),
+      .replace("fc-list --format='%{file}\\n'", "printf '%s\\n'")
+      .replace(
+        "path: visual-delta-arm64-native-evidence/",
+        "path: visual-delta-arm64-browsers.json",
+      ),
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /smoke-x64, smoke-arm64/);
   assert.match(result.errors.join("\n"), /browser\.version/);
   assert.match(result.errors.join("\n"), /fc-list/);
+  assert.match(result.errors.join("\n"), /native-evidence/);
 });
 
 test("requires semantic verification of both published architectures", () => {
