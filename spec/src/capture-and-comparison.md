@@ -16,6 +16,12 @@ These requirements make authoritative captures deterministic and distinguish the
 | VD-CAP-006 | Live HTML comparison MUST remain diagnostic. Exact-story configured-browser and static Playwright comparisons are authoritative and MUST share one outcome classifier and the canonical Linux/ARM64 capture profile. Baselines MUST be compared only with captures for the same browser target and matching profile; platform and architecture are provenance rather than baseline dimensions. |
 | VD-CAP-007 | Missing baselines and pixel mismatches MUST be recorded as non-passing comparison outcomes. In `warn` mode they MUST log/annotate warnings and allow a successful process exit; in `strict` mode they MUST fail the comparison process. Capture, readiness, configuration, browser-launch, decoding, and baseline-write errors remain fatal in both modes. |
 
+`VD-CAP-001` also applies to repository-owned baseline generators. They MUST
+apply the shared deterministic story settlement before writing a baseline so
+incidental post-interaction focus is blurred consistently with authoritative
+comparison captures. A focus state MAY remain only when it is the explicit
+subject under test.
+
 ## Deterministic browser environment
 
 The authoritative environment is:

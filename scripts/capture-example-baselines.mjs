@@ -1,14 +1,15 @@
 /**
  * Capture Example baselines from a running package Storybook (Vite).
  * Usage:
- *   VISUAL_DELTA_STORYBOOK_PORT=9109 node ./scripts/capture-example-baselines.mjs
+ *   VISUAL_DELTA_STORYBOOK_PORT=9109 pnpm examples:baselines:capture
  *
  * Requires `pnpm storybook` (or storybook:ci) on that port.
  */
 import { chromium } from "@playwright/test";
+import { settleVisualStoryPage } from "../dist/playwright/index.js";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const outRoot = path.join(packageRoot, "tests/examples-snapshots/examples");
@@ -123,18 +124,30 @@ const CAPTURES = [
   { id: "examples-form-field--default", out: "form-field/default.png" },
 ];
 
-async function captureOne(page, spec) {
+export async function captureOne(
+  page,
+  spec,
+  {
+    baseUrl = base,
+    outputRoot = outRoot,
+    settle = settleVisualStoryPage,
+  } = {},
+) {
   const extras = spec.urlExtras ?? "";
-  const url = `${base}/iframe.html?id=${spec.id}&viewMode=story${extras}`;
+  const url = `${baseUrl}/iframe.html?id=${spec.id}&viewMode=story${extras}`;
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForSelector("[data-testid=example-stage]", { timeout: 15_000 });
   await page.waitForTimeout(300);
   if (spec.prepare) await spec.prepare(page);
-  await page.waitForTimeout(100);
+  await settle(page, { delay: 100 });
   const stage = page.locator("[data-testid=example-stage]");
-  const out = path.join(outRoot, spec.out);
+  const out = path.join(outputRoot, spec.out);
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  await stage.screenshot({ path: out, animations: "disabled" });
+  await stage.screenshot({
+    path: out,
+    animations: "disabled",
+    caret: "hide",
+  });
   const box = await stage.boundingBox();
   console.log(
     "wrote",
@@ -143,15 +156,22 @@ async function captureOne(page, spec) {
   );
 }
 
-const browser = await chromium.launch();
-const page = await browser.newPage({
-  viewport: { width: 1280, height: 900 },
-  deviceScaleFactor: 1,
-});
-try {
-  for (const spec of CAPTURES) {
-    await captureOne(page, spec);
+async function main() {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+    deviceScaleFactor: 1,
+  });
+  try {
+    for (const spec of CAPTURES) {
+      await captureOne(page, spec);
+    }
+  } finally {
+    await browser.close();
   }
-} finally {
-  await browser.close();
 }
+
+const invokedPath = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : null;
+if (import.meta.url === invokedPath) await main();
