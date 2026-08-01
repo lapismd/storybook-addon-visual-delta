@@ -802,13 +802,29 @@ test.describe("Visual Delta manager integration", () => {
       name: "Visual baselines and interactions",
     });
     await expect(list).toBeVisible();
-    const metrics = await list.evaluate((element) => ({
-      clientHeight: element.clientHeight,
-      overflowY: getComputedStyle(element).overflowY,
-      scrollHeight: element.scrollHeight,
-    }));
+    const metrics = await list.evaluate((element) => {
+      const panelShell = element.closest(
+        '[data-testid="visual-delta-panel"]',
+      );
+      const body = element.querySelector(
+        "[data-visual-delta-accordion-body]",
+      );
+      const tail = element.querySelector("[data-visual-delta-scroll-tail]");
+      return {
+        clientHeight: element.clientHeight,
+        overflowY: getComputedStyle(element).overflowY,
+        scrollHeight: element.scrollHeight,
+        panelHeight: panelShell?.getBoundingClientRect().height ?? 0,
+        bodyHeight: body?.getBoundingClientRect().height ?? 0,
+        tailHeight: tail?.getBoundingClientRect().height ?? 0,
+      };
+    });
     expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
     expect(metrics.overflowY).toBe("auto");
+    expect(metrics.bodyHeight).toBeGreaterThanOrEqual(400);
+    expect(metrics.tailHeight).toBeGreaterThanOrEqual(
+      metrics.panelHeight * 0.5 - 1,
+    );
 
     await list.hover();
     await page.mouse.wheel(0, 420);
@@ -1307,6 +1323,67 @@ test.describe("Visual Delta manager integration", () => {
       )
       .toBe(true);
     await page.getByRole("button", { name: "Close modal" }).click();
+    expect(writes).toEqual([]);
+  });
+});
+
+test.describe("Visual Delta mobile review layout", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("opens the native addon drawer and restores its closed state", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await page.goto(
+      `${DEV_STORYBOOK}/?path=/story/${MANAGER_FIXTURE}&panel=visual-delta%2Fpanel`,
+      { waitUntil: "networkidle" },
+    );
+
+    const openAddonPanel = page.getByRole("button", {
+      name: "Open addon panel",
+    });
+    await expect(openAddonPanel).toBeVisible();
+    await page.getByRole("switch", { name: "Review layout" }).click();
+
+    const drawer = page.locator("#storybook-mobile-addon-panel");
+    await expect(drawer).toBeVisible();
+    const panel = drawer.getByTestId("visual-delta-panel");
+    const exit = panel.getByRole("switch", { name: "Exit review layout" });
+    await expect(exit).toBeVisible();
+    await exit.click();
+
+    await expect(drawer).toBeHidden();
+    await expect(openAddonPanel).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "Review layout" }),
+    ).toBeVisible();
+    expect(writes).toEqual([]);
+  });
+
+  test("keeps the native addon drawer open when review began inside it", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await page.goto(
+      `${DEV_STORYBOOK}/?path=/story/${MANAGER_FIXTURE}&panel=visual-delta%2Fpanel`,
+      { waitUntil: "networkidle" },
+    );
+
+    await page.getByRole("button", { name: "Open addon panel" }).click();
+    const drawer = page.locator("#storybook-mobile-addon-panel");
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("tab", { name: /Visual Delta/ }).click();
+    const panel = drawer.getByTestId("visual-delta-panel");
+
+    await panel.getByRole("switch", { name: "Review layout" }).click();
+    const exit = panel.getByRole("switch", { name: "Exit review layout" });
+    await expect(exit).toBeVisible();
+    await exit.click();
+
+    await expect(drawer).toBeVisible();
+    await expect(
+      panel.getByRole("switch", { name: "Review layout" }),
+    ).toBeVisible();
     expect(writes).toEqual([]);
   });
 });

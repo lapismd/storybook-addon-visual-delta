@@ -64,7 +64,7 @@ export function ReviewLayoutTool() {
       title={
         active
           ? "Exit review layout (restore sidebar and panel)"
-          : "Review layout — canvas on top, Visual Delta full width below"
+          : "Review layout — dock Visual Delta below the canvas or open its mobile drawer"
       }
       onClick={toggle}
     >

@@ -2,6 +2,13 @@ import { PANEL_ID } from "../constants.js";
 
 /** Fraction of viewport height for the bottom Visual Delta panel in review layout. */
 export const REVIEW_LAYOUT_BOTTOM_RATIO = 0.42;
+export const STORYBOOK_MOBILE_REVIEW_QUERY = "(max-width: 599px)";
+
+const STORYBOOK_MOBILE_ADDON_PANEL_ID = "storybook-mobile-addon-panel";
+const STORYBOOK_MOBILE_ADDON_DIALOG =
+  '[role="dialog"][aria-label="Addon panel"]';
+const MOBILE_DRAWER_RETRY_MS = 50;
+const MOBILE_DRAWER_MAX_ATTEMPTS = 6;
 
 export type ReviewLayoutSource = {
   navSize: number;
@@ -37,11 +44,57 @@ type ReviewLayoutSnapshot = {
   navSize: number;
   bottomPanelHeight: number;
   rightPanelWidth: number;
+  mobileAddonDrawerOpen: boolean | null;
 };
 
 let saved: ReviewLayoutSnapshot | null = null;
 /** DOM timer id (`window.setTimeout`); avoid NodeJS.Timeout from @types/node. */
 let applyTimer: number | null = null;
+let mobileDrawerTimer: number | null = null;
+
+function isMobileReviewViewport(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(STORYBOOK_MOBILE_REVIEW_QUERY).matches
+  );
+}
+
+function isMobileAddonDrawerOpen(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.querySelector(STORYBOOK_MOBILE_ADDON_DIALOG) != null
+  );
+}
+
+function mobileAddonDrawerButton(open: boolean): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const selector = open
+    ? `[aria-controls="${STORYBOOK_MOBILE_ADDON_PANEL_ID}"][aria-expanded="false"]`
+    : `${STORYBOOK_MOBILE_ADDON_DIALOG} button[aria-label="Close addon panel"]`;
+  const element = document.querySelector(selector);
+  return element instanceof HTMLElement ? element : null;
+}
+
+function scheduleMobileAddonDrawer(open: boolean, attempt = 0): void {
+  if (typeof window === "undefined" || !isMobileReviewViewport()) return;
+  if (mobileDrawerTimer != null) {
+    window.clearTimeout(mobileDrawerTimer);
+    mobileDrawerTimer = null;
+  }
+  mobileDrawerTimer = window.setTimeout(() => {
+    mobileDrawerTimer = null;
+    if (!isMobileReviewViewport() || isMobileAddonDrawerOpen() === open) return;
+    const button = mobileAddonDrawerButton(open);
+    if (button) {
+      button.click();
+      return;
+    }
+    if (attempt + 1 < MOBILE_DRAWER_MAX_ATTEMPTS) {
+      scheduleMobileAddonDrawer(open, attempt + 1);
+    }
+  }, attempt === 0 ? 0 : MOBILE_DRAWER_RETRY_MS);
+}
 
 function visibleSize(current: number, recent: number): number {
   return current > 0 ? current : recent;
@@ -55,6 +108,7 @@ function isPanelShown(layout: ReviewLayoutSource): boolean {
 }
 
 function captureSnapshot(layout: ReviewLayoutSource): ReviewLayoutSnapshot {
+  const mobile = isMobileReviewViewport();
   return {
     showNav: layout.navSize > 0,
     showPanel: isPanelShown(layout),
@@ -68,6 +122,7 @@ function captureSnapshot(layout: ReviewLayoutSource): ReviewLayoutSnapshot {
       layout.rightPanelWidth,
       layout.recentVisibleSizes.rightPanelWidth,
     ),
+    mobileAddonDrawerOpen: mobile ? isMobileAddonDrawerOpen() : null,
   };
 }
 
@@ -122,6 +177,9 @@ export function enterReviewLayout(
       REVIEW_LAYOUT_BOTTOM_RATIO,
   );
   api.setSizes({ bottomPanelHeight: Math.max(height, 200) });
+  if (saved.mobileAddonDrawerOpen != null) {
+    scheduleMobileAddonDrawer(true);
+  }
 }
 
 /**
@@ -152,6 +210,9 @@ export function exitReviewLayout(api: ReviewLayoutApi): void {
         : snap.rightPanelWidth,
   });
   if (!snap.showPanel) api.togglePanel(false);
+  if (snap.mobileAddonDrawerOpen != null) {
+    scheduleMobileAddonDrawer(snap.mobileAddonDrawerOpen);
+  }
 
   const restoreNav = () => {
     if (snap.showNav) {

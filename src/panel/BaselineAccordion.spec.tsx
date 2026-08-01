@@ -51,6 +51,16 @@ describe("BaselineAccordion", () => {
 
     expect(screen.getByText("Body for Default")).toBeInTheDocument();
     expect(screen.getByText("0%")).toBeInTheDocument();
+    const expandedBody = document.querySelector(
+      '[data-visual-delta-accordion-body="default"]',
+    );
+    expect(expandedBody).toBeInstanceOf(HTMLElement);
+    expect(getComputedStyle(expandedBody as HTMLElement).minHeight).toBe(
+      "400px",
+    );
+    expect(
+      document.querySelector("[data-visual-delta-scroll-tail]"),
+    ).toHaveAttribute("aria-hidden", "true");
 
     const moreButton = screen.getByRole("button", {
       name: "More Default baseline actions",

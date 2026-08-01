@@ -13,6 +13,9 @@ export const VISUAL_DELTA_HEADER_HEIGHT = 40;
 /** CSS custom property for accordion sticky `top` (px length). */
 export const VD_HEADER_STICKY_TOP_VAR = "--vd-header-sticky-top";
 
+/** CSS custom property for the baseline-list trailing scroll runway. */
+export const VD_PANEL_SCROLL_TAIL_VAR = "--vd-panel-scroll-tail";
+
 /**
  * Same fill as accordion `SectionBody` — Storybook/Tailwind canvas white in
  * light mode (not `theme.background.app` chrome grey).
@@ -474,6 +477,10 @@ export const PanelShell = styled.div(({ theme }) => ({
   flexDirection: "column",
   minHeight: 0,
   boxSizing: "border-box",
+  // A definite, externally sized container lets descendants express the
+  // scroll runway as a fraction of the live addon-panel height.
+  containerType: "size",
+  [VD_PANEL_SCROLL_TAIL_VAR]: "50cqh",
   background: panelCanvasBackground(theme),
 }));
 

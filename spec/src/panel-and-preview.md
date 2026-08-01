@@ -19,6 +19,8 @@ These requirements keep interactive state recoverable and separate from durable 
 | VD-UI-009 | The panel MUST expose one joined Profile × Browser control with a read-only canonical-profile indicator on the left and the browser selector on the right, each with a recognizable icon. The profile indicator MUST present Linux/ARM64 and expose detailed provenance in its accessible tooltip. Chromium is the initial browser; the option set combines configured and canonically discovered browsers. Disabled discovered browsers remain view-only. Selection MUST resolve exact browser images, history, and sidecars, persist only as presentation state, and never fall back to another browser. |
 | VD-UI-010 | The persistent bottom status footer MUST span the full visible Visual Delta panel width in idle, logging, environment-selection, and running states. Its top edge MUST meet the panel's left edge without a rounded top-left corner or an inset left border. |
 | VD-UI-011 | Development sidebar filters MUST derive a dynamic Browser facet from story-facts and persist `browser.<id>` include/exclude tokens in `visualFilter`. Multiple browser includes use OR; an excluded browser removes a story carrying that primary baseline. Browser filtering combines with existing groups using AND. `Browser coverage gaps` MUST include only non-skipped story leaves with a missing or unresolved required primary browser. Component folders remain visible when at least one child matches. Static/read-only managers without `/story-facts` MUST NOT advertise project-wide sidebar filtering. |
+| VD-UI-012 | Every expanded primary or interaction accordion section MUST reserve at least 400 CSS pixels for its body. The bounded baseline list MUST remain the vertical scroll owner and MUST append non-interactive trailing scroll space equal to half the current visible Visual Delta panel height, so the final row and its body can scroll clear of the fixed status footer. |
+| VD-UI-013 | Review layout MUST use Storybook's desktop dock at viewports 600 CSS pixels wide or greater and its native addon drawer below that breakpoint. Mobile entry MUST select Visual Delta and open the drawer; exit MUST restore whether that drawer was open or closed before entry, in addition to restoring the prior Storybook navigation, panel position, visibility, and sizes. |
 
 ## Panel structure
 
@@ -86,6 +88,9 @@ When the interaction filter exposes more rows than fit in the available addon
 panel height, the baseline list is the vertical scroll owner. Real wheel,
 trackpad, keyboard, and scrollbar input MUST reach every discovered or wired
 interaction without moving or clipping the fixed panel status surface.
+An expanded row body retains at least 400 CSS pixels of inspection space. The
+list ends with a non-interactive scroll runway equal to half the live panel
+height so even the last interaction can move away from the fixed footer.
 
 ## Comparison views
 
@@ -125,7 +130,12 @@ included stories whose configured browser coverage is incomplete. The filter men
 per-option story counts and, when any filter is active, the number of matching
 story leaves.
 
-Review layout MAY expand the preview and panel for inspection. It MUST restore the prior Storybook layout when disabled or when the addon unmounts.
+Review layout MAY expand the preview and panel for inspection. Desktop review
+uses the full-width bottom dock. Below Storybook's 600 CSS pixel breakpoint,
+review uses the native addon drawer and selects Visual Delta before opening it.
+Disabling review MUST restore the drawer's prior open or closed state as well as
+the prior Storybook layout. The prior layout MUST also be restored when the
+addon unmounts.
 
 ## Persistence and reload behavior
 

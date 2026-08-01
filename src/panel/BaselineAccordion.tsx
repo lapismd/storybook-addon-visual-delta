@@ -19,7 +19,12 @@ import {
 import { styled, type Theme } from "storybook/theming";
 import type { VisualDeltaInteraction } from "../constants.js";
 import type { InteractionCallTokenKind, PlayStepInfo } from "./usePlaySteps.js";
-import { panelCanvasBackground } from "./styled.js";
+import {
+  panelCanvasBackground,
+  VD_PANEL_SCROLL_TAIL_VAR,
+} from "./styled.js";
+
+export const BASELINE_ACCORDION_BODY_MIN_HEIGHT = 400;
 
 const List = styled.div({
   display: "flex",
@@ -46,8 +51,9 @@ const InteractionFilter = styled.div(({ theme }) => ({
 const Section = styled.div<{ $expanded?: boolean }>(({ $expanded }) => ({
   display: "flex",
   flexDirection: "column",
-  // Expanded section consumes remaining panel height; collapsed stays content-sized.
-  ...($expanded ? { flex: 1, minHeight: 0 } : null),
+  // Expanded sections consume spare height but never shrink below the body's
+  // 400px inspection contract. Collapsed rows stay content-sized.
+  ...($expanded ? { flex: "1 0 auto", minHeight: 0 } : null),
 }));
 
 const SummaryRow = styled.div<{ $expanded?: boolean }>(
@@ -209,8 +215,8 @@ const SummaryActions = styled.div({
 });
 
 const SectionBody = styled.div(({ theme }) => ({
-  flex: 1,
-  minHeight: 0,
+  flex: `1 0 ${BASELINE_ACCORDION_BODY_MIN_HEIGHT}px`,
+  minHeight: BASELINE_ACCORDION_BODY_MIN_HEIGHT,
   overflow: "auto",
   padding: "12px 16px 16px",
   borderBottom: `1px solid ${theme.appBorderColor}`,
@@ -219,6 +225,12 @@ const SectionBody = styled.div(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
 }));
+
+const ScrollTail = styled.div({
+  flex: `0 0 var(${VD_PANEL_SCROLL_TAIL_VAR}, 0px)`,
+  minHeight: `var(${VD_PANEL_SCROLL_TAIL_VAR}, 0px)`,
+  pointerEvents: "none",
+});
 
 export type BaselineSectionId = "default" | string;
 
@@ -591,10 +603,15 @@ export const BaselineAccordion = memo(function BaselineAccordion({
                 ) : null}
               </SummaryActions>
             </SummaryRow>
-            {expanded ? <SectionBody>{renderBody(section)}</SectionBody> : null}
+            {expanded ? (
+              <SectionBody data-visual-delta-accordion-body={section.id}>
+                {renderBody(section)}
+              </SectionBody>
+            ) : null}
           </Section>
         );
       })}
+      <ScrollTail data-visual-delta-scroll-tail aria-hidden="true" />
     </List>
   );
 });

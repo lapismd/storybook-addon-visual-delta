@@ -57,10 +57,51 @@ function mockApi(): ReviewLayoutApi & {
   };
 }
 
+function installMobileAddonDrawer(initiallyOpen: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockReturnValue({
+      matches: true,
+      media: "(max-width: 599px)",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  );
+
+  const openButton = document.createElement("button");
+  openButton.setAttribute("aria-controls", "storybook-mobile-addon-panel");
+  openButton.setAttribute("aria-expanded", "false");
+
+  const openDrawer = () => {
+    openButton.remove();
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-label", "Addon panel");
+    const closeButton = document.createElement("button");
+    closeButton.setAttribute("aria-label", "Close addon panel");
+    closeButton.addEventListener("click", () => {
+      dialog.remove();
+      document.body.append(openButton);
+    });
+    dialog.append(closeButton);
+    document.body.append(dialog);
+  };
+
+  openButton.addEventListener("click", openDrawer);
+  if (initiallyOpen) openDrawer();
+  else document.body.append(openButton);
+}
+
 afterEach(() => {
   if (isReviewLayoutActive()) {
     exitReviewLayout(mockApi());
   }
+  vi.useRealTimers();
+  document.body.innerHTML = "";
   vi.unstubAllGlobals();
 });
 
@@ -152,5 +193,43 @@ describe("review-layout", () => {
     expect(isReviewLayoutActive()).toBe(true);
     expect(toggleReviewLayout(api, layout())).toBe(false);
     expect(isReviewLayoutActive()).toBe(false);
+  });
+
+  it("opens and restores a mobile addon drawer that started closed", () => {
+    vi.useFakeTimers();
+    installMobileAddonDrawer(false);
+
+    enterReviewLayout(mockApi(), layout());
+    vi.runAllTimers();
+
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Addon panel"]'),
+    ).not.toBeNull();
+
+    exitReviewLayout(mockApi());
+    vi.runAllTimers();
+
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Addon panel"]'),
+    ).toBeNull();
+    expect(
+      document.querySelector(
+        '[aria-controls="storybook-mobile-addon-panel"][aria-expanded="false"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it("leaves a mobile addon drawer open when it was open before review", () => {
+    vi.useFakeTimers();
+    installMobileAddonDrawer(true);
+
+    enterReviewLayout(mockApi(), layout());
+    vi.runAllTimers();
+    exitReviewLayout(mockApi());
+    vi.runAllTimers();
+
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Addon panel"]'),
+    ).not.toBeNull();
   });
 });
