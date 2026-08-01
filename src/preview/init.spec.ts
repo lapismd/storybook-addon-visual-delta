@@ -60,4 +60,25 @@ describe("buildInitPayload", () => {
     });
     expect(story.images[0]?.deviceScaleFactor).toBe(3);
   });
+
+  it("inherits an explicit demo environment across images and interactions", () => {
+    const environment = { browser: "chromium" as const, platform: "darwin" };
+    const payload = buildInitPayload(
+      { id: "example", name: "Example" },
+      {
+        images: "/examples/default.png",
+        interactions: [
+          {
+            id: "opened",
+            label: "Opened",
+            src: "/examples/opened.png",
+          },
+        ],
+        environment,
+      },
+    );
+
+    expect(payload.images[0]?.environment).toEqual(environment);
+    expect(payload.interactions[0]?.environment).toEqual(environment);
+  });
 });

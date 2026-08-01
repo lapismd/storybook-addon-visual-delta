@@ -24,6 +24,7 @@ export function platformLabel(platform: string): string {
 
 export function discoverVisualEnvironments(options: {
   sources: readonly string[];
+  declaredEnvironments?: readonly (VisualBaselineEnvironment | undefined)[];
   configuredBrowsers?: readonly VisualDeltaBrowser[];
   runtimePlatform: string;
 }): {
@@ -33,9 +34,14 @@ export function discoverVisualEnvironments(options: {
   const configured = options.configuredBrowsers?.length
     ? [...options.configuredBrowsers]
     : [...DEFAULT_VISUAL_DELTA_BROWSERS];
-  const discovered = options.sources
-    .map(parseVisualBaselineEnvironment)
-    .filter((value): value is VisualBaselineEnvironment => Boolean(value));
+  const declared = options.declaredEnvironments ?? [];
+  const discovered = [
+    ...options.sources.map(
+      (source, index) =>
+        parseVisualBaselineEnvironment(source) ?? declared[index],
+    ),
+    ...declared.slice(options.sources.length),
+  ].filter((value): value is VisualBaselineEnvironment => Boolean(value));
   const browsers = [
     ...new Set([
       ...configured,
@@ -65,8 +71,11 @@ export function discoverVisualEnvironments(options: {
 export function sourceMatchesEnvironment(
   source: string,
   environment: VisualBaselineEnvironment,
+  declaredEnvironment?: VisualBaselineEnvironment,
 ): boolean {
-  const parsed = parseVisualBaselineEnvironment(source);
+  // A canonical filename is authoritative. Explicit metadata only identifies
+  // non-canonical, story-wired demo assets and cannot override that suffix.
+  const parsed = parseVisualBaselineEnvironment(source) ?? declaredEnvironment;
   return (
     parsed?.browser === environment.browser &&
     parsed.platform === environment.platform

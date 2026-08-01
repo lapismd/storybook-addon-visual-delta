@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { renderWithTheme } from "../test/render.js";
 import { lastMeaningfulLogLine, PanelStatusBar } from "./PanelStatusBar.js";
 
@@ -192,7 +192,7 @@ describe("PanelStatusBar", () => {
     vi.unstubAllGlobals();
   });
 
-  it("surfaces independent Browser and OS selectors", () => {
+  it("surfaces an icon-led OS-left and Browser-right split control", () => {
     class ResizeObserverStub {
       observe() {}
       disconnect() {}
@@ -227,12 +227,28 @@ describe("PanelStatusBar", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Visual baseline browser"), {
-      target: { value: "webkit" },
+    const environmentGroup = screen.getByRole("group", {
+      name: "Visual baseline environment",
     });
-    fireEvent.change(
-      screen.getByLabelText("Visual baseline operating system"),
-      { target: { value: "linux" } },
+    const environmentButtons = within(environmentGroup).getAllByRole("button");
+    expect(environmentButtons[0]).toHaveAccessibleName(
+      "Visual baseline operating system",
+    );
+    expect(environmentButtons[0]).toHaveTextContent("macOS");
+    expect(environmentButtons[0]?.querySelector("svg")).not.toBeNull();
+    expect(environmentButtons[1]).toHaveAccessibleName(
+      "Visual baseline browser",
+    );
+    expect(environmentButtons[1]).toHaveTextContent("Chromium");
+    expect(environmentButtons[1]?.querySelector("svg")).not.toBeNull();
+
+    fireEvent.click(environmentButtons[0]!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Linux (view only)" }),
+    );
+    fireEvent.click(environmentButtons[1]!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "WebKit (view only)" }),
     );
     expect(onBrowserChange).toHaveBeenCalledWith("webkit");
     expect(onPlatformChange).toHaveBeenCalledWith("linux");

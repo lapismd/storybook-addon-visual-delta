@@ -1,4 +1,5 @@
 import type { VisualDeltaModes } from "./shared/modes.js";
+import type { VisualBaselineEnvironment } from "./shared/environments.js";
 
 export type { VisualDeltaModeDef, VisualDeltaModes } from "./shared/modes.js";
 
@@ -92,6 +93,8 @@ export function isSplitPlacement(placement: PlacementMode): boolean {
 
 export type VisualDeltaImage = {
   src: string;
+  /** Exact environment for explicitly wired non-canonical demo assets. */
+  environment?: VisualBaselineEnvironment;
   anchor?: string;
   offsetX: number;
   offsetY: number;
@@ -116,6 +119,8 @@ export type VisualDeltaInteraction = {
   id: string;
   label: string;
   src: string;
+  /** Exact environment for explicitly wired non-canonical demo assets. */
+  environment?: VisualBaselineEnvironment;
 };
 
 /** CSF / params image entry before `normalizeImages` (allows legacy placement). */
@@ -129,6 +134,11 @@ export type VisualDeltaImageInput = Omit<
 
 export type VisualDeltaParams = {
   images?: string | Array<string | VisualDeltaImageInput>;
+  /**
+   * Exact environment inherited by explicitly wired demo images, modes, and
+   * interactions whose URLs are not canonical environment-qualified baselines.
+   */
+  environment?: VisualBaselineEnvironment;
   /**
    * Opted-in play-step captures. Created from the Visual Delta Interactions tab;
    * compared by Playwright in addition to the primary end-of-play baseline.

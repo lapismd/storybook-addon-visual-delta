@@ -72,6 +72,20 @@ describe("normalizeImages", () => {
       },
     ]);
   });
+
+  it("applies an explicit demo environment to primary and mode images", () => {
+    const environment = { browser: "chromium" as const, platform: "darwin" };
+    expect(
+      normalizeImagesWithModes({
+        images: "/examples/default.png",
+        modes: { Compact: { src: "/examples/compact.png" } },
+        environment,
+      }).map((image) => ({ src: image.src, environment: image.environment })),
+    ).toEqual([
+      { src: "/examples/default.png", environment },
+      { src: "/examples/compact.png", environment },
+    ]);
+  });
 });
 
 describe("normalizeImagesWithModes", () => {

@@ -14,7 +14,7 @@ These requirements give every comparison target one safe and durable identity.
 | VD-BASE-004 | Story wiring MUST use `parameters.visualDelta.images`, `modes`, and `interactions`. Middleware MAY inject missing primary wiring only when the matching PNG exists. Optimistic post-write hydration MUST attach only the successfully written target to its originating story. |
 | VD-BASE-005 | Sidecars MUST separate runner status from comparison outcome and MUST identify the baseline and capture configuration used. Stale sidecars MUST NOT establish current result state.                                                                                            |
 | VD-BASE-006 | `/visual-baselines` MUST expose only files under the configured snapshot directory. Baseline and sidecar URLs MUST remain relative to that mount.                                                                                                                              |
-| VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser, platform }` identity. Resolution MUST use the exact selected environment and MUST NOT fall back to another browser or platform. Existing Chromium/Darwin filenames remain valid without migration. |
+| VD-BASE-007 | Every primary, mode, and interaction target MUST have an independent `{ browser, platform }` identity. Resolution MUST use the exact selected environment and MUST NOT fall back to another browser or platform. Canonical baseline artifacts MUST encode that identity in their filename; an explicitly wired non-canonical demo asset MAY instead declare the same exact environment as story metadata, and an unqualified source without that metadata MUST NOT match any environment. Existing Chromium/Darwin filenames remain valid without migration. |
 
 ## Story eligibility and coverage
 
@@ -79,7 +79,15 @@ type VisualDeltaInteraction = {
 
 `id` is the stable filename and replay identifier. `label` is human-facing text. `src` is the `/visual-baselines` URL.
 
-An image entry MAY include the capture viewport, device scale factor, alignment, placement, mode, offsets, and anchor. A mode definition MAY contain globals without a baseline `src`; such a mode is selectable but does not create coverage until a baseline is wired.
+An image entry MAY include the capture viewport, device scale factor, alignment,
+placement, mode, offsets, anchor, and an explicit baseline environment. A story
+parameter MAY declare one environment inherited by its explicitly wired primary,
+mode, and interaction demo assets. Explicit environment metadata exists for
+non-canonical teaching fixtures whose URLs do not use baseline filenames; it
+MUST NOT override a browser/platform suffix on a canonical baseline artifact or
+authorize cross-environment fallback. A mode definition MAY contain globals
+without a baseline `src`; such a mode is selectable but does not create coverage
+until a baseline is wired.
 
 The Vite injector MUST preserve explicit `parameters.visualDelta`. It MAY inject primary metadata only for a matching file on disk and MUST ignore `skip-visual` stories.
 

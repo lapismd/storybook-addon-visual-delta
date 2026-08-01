@@ -12,6 +12,7 @@ import {
   useCopyButton,
 } from "storybook/internal/components";
 import { lastMeaningfulLogLine } from "../shared/status-log.js";
+import { EnvironmentSplitButton } from "./EnvironmentSplitButton.js";
 import {
   StatusBar,
   StatusLogBody,
@@ -224,49 +225,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           />
         </StatusProgressTrack>
       ) : null}
-      {environment ? (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            flex: "0 0 auto",
-          }}
-        >
-          <label>
-            Browser{" "}
-            <select
-              aria-label="Visual baseline browser"
-              value={environment.browser}
-              onChange={(event) =>
-                environment.onBrowserChange(event.currentTarget.value)
-              }
-            >
-              {environment.browsers.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            OS{" "}
-            <select
-              aria-label="Visual baseline operating system"
-              value={environment.platform}
-              onChange={(event) =>
-                environment.onPlatformChange(event.currentTarget.value)
-              }
-            >
-              {environment.platforms.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      ) : null}
+      {environment ? <EnvironmentSplitButton {...environment} /> : null}
       <PopoverProvider
         ariaLabel="Visual Delta progress log"
         placement="top-start"

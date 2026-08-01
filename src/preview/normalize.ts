@@ -6,6 +6,7 @@ import type {
 } from "../constants.js";
 import { DEFAULT_PLACEMENT, normalizePlacement } from "../constants.js";
 import { imagesFromModes, type VisualDeltaModes } from "../shared/modes.js";
+import type { VisualBaselineEnvironment } from "../shared/environments.js";
 
 export function normalizeImages(
   images: NonNullable<VisualDeltaParams["images"]>,
@@ -14,6 +15,7 @@ export function normalizeImages(
   globalOffsetY?: number,
   globalAlign?: AlignMode,
   globalPlacement?: VisualDeltaParams["placement"],
+  globalEnvironment?: VisualBaselineEnvironment,
 ): VisualDeltaImage[] {
   const imagesArray = Array.isArray(images) ? images : [images];
   const defaultAlign: AlignMode = globalAlign ?? "viewport";
@@ -24,6 +26,7 @@ export function normalizeImages(
     if (typeof item === "string") {
       return {
         src: item,
+        ...(globalEnvironment ? { environment: globalEnvironment } : {}),
         anchor: globalAnchor,
         offsetX: globalOffsetX ?? 0,
         offsetY: globalOffsetY ?? 0,
@@ -33,6 +36,9 @@ export function normalizeImages(
     }
     return {
       src: item.src,
+      ...(item.environment ?? globalEnvironment
+        ? { environment: item.environment ?? globalEnvironment }
+        : {}),
       anchor: item.anchor ?? globalAnchor,
       offsetX: item.offsetX ?? globalOffsetX ?? 0,
       offsetY: item.offsetY ?? globalOffsetY ?? 0,
@@ -59,6 +65,7 @@ export function normalizeImagesWithModes(
         params.offsetY,
         params.align,
         params.placement,
+        params.environment,
       )
     : [];
   const fromModes = imagesFromModes(
@@ -87,6 +94,7 @@ export function normalizeImagesWithModes(
     params?.offsetY,
     params?.align,
     params?.placement,
+    params?.environment,
   );
   const seen = new Set(primary.map((img) => img.src));
   const merged = [...primary];

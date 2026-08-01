@@ -21,6 +21,8 @@ const DIALOG_INTERACTION_FIXTURE = "shadcn-overlays-dialog--opens-and-closes";
 const FILTER_INTERACTION_FIXTURE =
   "filter-power-search--add-filter-via-combobox";
 const FILTER_MISSING_FIXTURE = "filter-power-search--edit-remove-and-clear";
+const EXAMPLE_DIFFERENCE_FIXTURE =
+  "examples-card--intentional-difference";
 const FIXTURE_BASELINE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -32,20 +34,47 @@ test.describe("Visual Delta manager integration", () => {
     await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
 
     const panel = page.getByTestId("visual-delta-panel");
-    const browser = panel.getByLabel("Visual baseline browser");
-    const platform = panel.getByLabel("Visual baseline operating system");
-    await expect(browser).toHaveValue("chromium");
-    await expect(browser.locator("option")).toHaveText([
-      "Chromium",
-      "Firefox",
-    ]);
-    await expect(platform).toHaveValue("darwin");
-    await expect(platform.locator("option")).toHaveText(["macOS"]);
+    const environment = panel.getByRole("group", {
+      name: "Visual baseline environment",
+    });
+    const controls = environment.getByRole("button");
+    await expect(controls.nth(0)).toHaveAccessibleName(
+      "Visual baseline operating system",
+    );
+    await expect(controls.nth(0)).toContainText("macOS");
+    await expect(controls.nth(1)).toHaveAccessibleName(
+      "Visual baseline browser",
+    );
+    await expect(controls.nth(1)).toContainText("Chromium");
 
-    await browser.selectOption("firefox");
-    await expect(browser).toHaveValue("firefox");
+    await controls.nth(1).click();
+    await page.getByRole("button", { name: "Firefox", exact: true }).click();
+    await expect(controls.nth(1)).toContainText("Firefox");
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+    await expect(
+      previewFrame(page).getByText("Baseline", { exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("keeps explicit demo coverage aligned with the displayed overlay", async ({
+    page,
+  }) => {
+    await mockVisualBackend(page);
+    await openManager(page, EXAMPLE_DIFFERENCE_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(
+      panel.getByRole("status", { name: /Baseline ready/i }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: /Create .*baseline/i }),
+    ).toHaveCount(0);
+    await expect(
+      previewFrame(page).locator(
+        'img[src^="/visual-baselines/examples/card/drift.png"]',
+      ),
     ).toBeVisible();
   });
 

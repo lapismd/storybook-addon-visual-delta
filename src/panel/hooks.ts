@@ -23,6 +23,7 @@ import {
 import type { OverlayInfo } from "../types.js";
 import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import type { BaselineAlignmentMismatch } from "../shared/story-config.js";
+import type { VisualBaselineEnvironment } from "../shared/environments.js";
 import {
   compareZoomFromDefault,
   resolveSplitZoomOnInit,
@@ -1284,8 +1285,9 @@ export function useStoryData(currentStoryId?: string) {
       storyName: string;
       imageSrcs?: string[];
       align?: AlignMode;
+      environment?: VisualBaselineEnvironment;
     }) => {
-      const { storyId, storyName, imageSrcs, align } = args;
+      const { storyId, storyName, imageSrcs, align, environment } = args;
       if (!storyId) return;
       setStoryData((prev) => {
         if (
@@ -1302,6 +1304,7 @@ export function useStoryData(currentStoryId?: string) {
                   const base = src.split("?")[0] ?? src;
                   return {
                     src: `${base}?${bust}`,
+                    ...(environment ? { environment } : {}),
                     offsetX: 0,
                     offsetY: 0,
                     align: align ?? prev.effectiveAlign,
@@ -1418,23 +1421,27 @@ export function useStoryData(currentStoryId?: string) {
   );
 
   /** Restore end-of-play gallery images (Default tab). */
-  const restorePrimaryBaselines = useCallback(() => {
-    pinInteractionSrc(activeInteractionSrcRef, null);
-    setStoryData((prev) => {
-      const images = withPlacement(primaryImagesRef.current, prev.placement);
-      const hasImages = images.length > 0;
-      const next: StoryData = {
-        ...prev,
-        images,
-        index: hasImages ? 0 : -1,
-        overlayOn: hasImages,
-      };
-      persist(next);
-      emitStyle(next);
-      void selectImage(next.index, images);
-      return next;
-    });
-  }, [emitStyle, persist, selectImage]);
+  const restorePrimaryBaselines = useCallback(
+    (availablePrimaryImages: VisualDeltaImage[] = primaryImagesRef.current) => {
+      pinInteractionSrc(activeInteractionSrcRef, null);
+      setStoryData((prev) => {
+        const images = withPlacement(availablePrimaryImages, prev.placement);
+        const hasImages = images.length > 0;
+        const next: StoryData = {
+          ...prev,
+          images,
+          index: hasImages ? 0 : -1,
+          overlayOn: hasImages,
+          selectedMode: null,
+        };
+        persist(next);
+        emitStyle(next);
+        void selectImage(next.index, images);
+        return next;
+      });
+    },
+    [emitStyle, persist, selectImage],
+  );
 
   const hydrateInteractions = useCallback((next: VisualDeltaInteraction[]) => {
     setStoryData((prev) => ({ ...prev, interactions: next }));
@@ -1445,11 +1452,14 @@ export function useStoryData(currentStoryId?: string) {
    * store the mode name so the panel can apply Storybook globals.
    */
   const setSelectedMode = useCallback(
-    (modeName: string | null) => {
+    (
+      modeName: string | null,
+      availablePrimaryImages: VisualDeltaImage[] = primaryImagesRef.current,
+    ) => {
       setStoryData((prev) => {
         if (modeName == null) {
           const images = withPlacement(
-            primaryImagesRef.current,
+            availablePrimaryImages,
             prev.placement,
           );
           const index = images.length > 0 ? 0 : -1;
@@ -1463,7 +1473,7 @@ export function useStoryData(currentStoryId?: string) {
           void selectImage(index, images);
           return next;
         }
-        const primary = primaryImagesRef.current;
+        const primary = availablePrimaryImages;
         const modeIndex = primary.findIndex((img) => img.mode === modeName);
         if (modeIndex >= 0) {
           const next: StoryData = {

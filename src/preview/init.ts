@@ -70,7 +70,11 @@ export function buildInitPayload(
   return {
     images: normalizedImages,
     deviceScaleFactor,
-    interactions: visualDeltaParams?.interactions ?? [],
+    interactions: (visualDeltaParams?.interactions ?? []).map((interaction) =>
+      interaction.environment ?? !visualDeltaParams?.environment
+        ? interaction
+        : { ...interaction, environment: visualDeltaParams.environment },
+    ),
     modes,
     modeNames: modeNames(modes),
     storyId: context.id,

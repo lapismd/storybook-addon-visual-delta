@@ -160,6 +160,7 @@ import { resolveCapabilitiesFromEnvironment } from "../shared/capabilities.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import {
   isVisualDeltaBrowser,
+  type VisualBaselineEnvironment,
   type VisualDeltaBrowser,
 } from "../shared/environments.js";
 import {
@@ -298,10 +299,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     () =>
       configuredImages.filter(
         (image) =>
-          sourceMatchesEnvironment(image.src, {
-            browser: selectedBrowser,
-            platform: selectedPlatform,
-          }) &&
+          sourceMatchesEnvironment(
+            image.src,
+            {
+              browser: selectedBrowser,
+              platform: selectedPlatform,
+            },
+            image.environment,
+          ) &&
           !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
     [
@@ -315,10 +320,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     () =>
       configuredPrimaryImages.filter(
         (image) =>
-          sourceMatchesEnvironment(image.src, {
-            browser: selectedBrowser,
-            platform: selectedPlatform,
-          }) &&
+          sourceMatchesEnvironment(
+            image.src,
+            {
+              browser: selectedBrowser,
+              platform: selectedPlatform,
+            },
+            image.environment,
+          ) &&
           !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
     [
@@ -332,10 +341,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     () =>
       configuredInteractions.filter(
         (interaction) =>
-          sourceMatchesEnvironment(interaction.src, {
-            browser: selectedBrowser,
-            platform: selectedPlatform,
-          }) &&
+          sourceMatchesEnvironment(
+            interaction.src,
+            {
+              browser: selectedBrowser,
+              platform: selectedPlatform,
+            },
+            interaction.environment,
+          ) &&
           !unavailableBaselineSources.has(baselineSourceStem(interaction.src)),
       ),
     [
@@ -349,13 +362,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     () =>
       discoverVisualEnvironments({
         sources: [
-          ...configuredImages.map((image) => image.src),
+          ...configuredPrimaryImages.map((image) => image.src),
           ...configuredInteractions.map((interaction) => interaction.src),
+        ],
+        declaredEnvironments: [
+          ...configuredPrimaryImages.map((image) => image.environment),
+          ...configuredInteractions.map((interaction) => interaction.environment),
         ],
         configuredBrowsers: resolvedConfig?.browsers,
         runtimePlatform: resolvedConfig?.runtimePlatform ?? "darwin",
       }),
-    [configuredImages, configuredInteractions, resolvedConfig],
+    [configuredInteractions, configuredPrimaryImages, resolvedConfig],
   );
   const environmentMutable = Boolean(
     resolvedConfig &&
@@ -421,8 +438,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       browser: selectedBrowser,
       platform: selectedPlatform,
     });
-    setIndex(0);
-  }, [selectedBrowser, selectedPlatform, setIndex]);
+  }, [selectedBrowser, selectedPlatform]);
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
@@ -555,6 +571,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     pinTimersRef.current = [];
   }, []);
 
+  useEffect(() => {
+    restorePrimaryBaselines(primaryImages);
+  }, [primaryImages, restorePrimaryBaselines]);
+
+  useEffect(() => {
+    parkedStepRef.current = null;
+    setSelectedInteractionId(null);
+    setExpandedId("default");
+  }, [selectedBrowser, selectedPlatform]);
+
   const emit = useChannel({
     [EVENTS.VISUAL_CAPTURE_PARKED]: (payload: {
       storyId?: string;
@@ -635,6 +661,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 images?: Array<string | { src?: string }>;
                 interactions?: VisualDeltaInteraction[];
                 align?: "viewport" | "canvas";
+                environment?: VisualBaselineEnvironment;
               };
             })
           : undefined;
@@ -663,9 +690,21 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         storyName,
         imageSrcs,
         align: params?.visualDelta?.align,
+        environment: params?.visualDelta?.environment,
       });
       const interactions = params?.visualDelta?.interactions;
-      if (interactions?.length) hydrateInteractions(interactions);
+      if (interactions?.length) {
+        hydrateInteractions(
+          interactions.map((interaction) =>
+            interaction.environment ?? !params?.visualDelta?.environment
+              ? interaction
+              : {
+                  ...interaction,
+                  environment: params.visualDelta.environment,
+                },
+          ),
+        );
+      }
     };
     const initial = window.setTimeout(requestOrSeed, 300);
     const interval = window.setInterval(requestOrSeed, 700);
@@ -946,7 +985,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (id === "default") {
         const alreadyDefault = parkedStepRef.current === null;
         setSelectedInteractionId(null);
-        restorePrimaryBaselines();
+        restorePrimaryBaselines(primaryImages);
         // Skip END remount when we're already on the primary end-of-play park.
         if (storyId && !alreadyDefault) {
           parkedStepRef.current = null;
@@ -1580,10 +1619,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         if (section.id === "default") {
           removeBaselineImage(baselineUrl);
           setSelectedInteractionId(null);
-          setSelectedMode(null);
           const remaining = primaryImages.filter(
             (image) => (image.src.split("?")[0] ?? image.src) !== baselineUrl,
           );
+          setSelectedMode(null, remaining);
           setExpandedId(
             remaining.length > 0
               ? "default"
@@ -1595,7 +1634,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           );
           setSelectedInteractionId(null);
           setExpandedId(primaryImages.length > 0 ? "default" : null);
-          restorePrimaryBaselines();
+          restorePrimaryBaselines(primaryImages);
         }
         setDiffResult(null);
         setDiffEpoch(Date.now());
@@ -1822,14 +1861,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
 
   const handleModeChange = useCallback(
     (mode: string | null) => {
-      setSelectedMode(mode);
+      setSelectedMode(mode, primaryImages);
       if (mode == null) return;
       const globals = modes[mode]?.globals;
       if (globals && typeof api.updateGlobals === "function") {
         api.updateGlobals(globals);
       }
     },
-    [api, modes, setSelectedMode],
+    [api, modes, primaryImages, setSelectedMode],
   );
 
   const handleToggleSkipVisual = useCallback(async () => {

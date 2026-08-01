@@ -36,6 +36,47 @@ describe("panel environment selection", () => {
     ).toBe(false);
   });
 
+  it("uses explicit identity only for unqualified demo assets", () => {
+    expect(
+      sourceMatchesEnvironment(
+        "/visual-baselines/examples/card/drift.png",
+        { browser: "chromium", platform: "darwin" },
+        { browser: "chromium", platform: "darwin" },
+      ),
+    ).toBe(true);
+    expect(
+      sourceMatchesEnvironment(
+        "/visual-baselines/examples/card/drift.png",
+        { browser: "firefox", platform: "darwin" },
+        { browser: "chromium", platform: "darwin" },
+      ),
+    ).toBe(false);
+    expect(
+      sourceMatchesEnvironment(
+        "/visual/story-firefox-linux.png",
+        { browser: "chromium", platform: "darwin" },
+        { browser: "chromium", platform: "darwin" },
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps canonical filename identity authoritative during discovery", () => {
+    const options = discoverVisualEnvironments({
+      configuredBrowsers: ["chromium"],
+      runtimePlatform: "darwin",
+      sources: ["/visual/story-firefox-linux.png"],
+      declaredEnvironments: [{ browser: "chromium", platform: "darwin" }],
+    });
+    expect(options.browsers.map((option) => option.value)).toEqual([
+      "chromium",
+      "firefox",
+    ]);
+    expect(options.platforms.map((option) => option.value)).toEqual([
+      "darwin",
+      "linux",
+    ]);
+  });
+
   it("persists the local Browser × OS preference", () => {
     saveVisualEnvironmentPreference({ browser: "webkit", platform: "linux" });
     expect(loadVisualEnvironmentPreference()).toEqual({
