@@ -3,9 +3,12 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  DOCKER_VISUAL_DELTA_WORKER_ROOT,
   createCaptureJobManifest,
+  dockerVisualDeltaWorkerCommand,
   resolveVisualDeltaCaptureRunner,
   runVisualDeltaInCaptureRunner,
+  stageVisualDeltaPackageWorker,
 } from "./capture-runner.js";
 
 describe("capture runner", () => {
@@ -22,6 +25,39 @@ describe("capture runner", () => {
     expect(manifest.root).toBe(path.resolve("."));
     expect(Object.isFrozen(manifest)).toBe(true);
     expect(Object.isFrozen(manifest.storyIds)).toBe(true);
+  });
+
+  it("stages and invokes the initiating package worker independently of workspace bins", async () => {
+    const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-worker-"));
+    const stagingParent = path.join(root, "stage");
+    const { mkdirSync, readFileSync } = await import("node:fs");
+    mkdirSync(path.join(root, "dist", "node"), { recursive: true });
+    mkdirSync(stagingParent, { recursive: true });
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "@lapismd/storybook-addon-visual-delta",
+        type: "module",
+      }),
+    );
+    writeFileSync(path.join(root, "dist", "node", "cli.js"), "export {};\n");
+    try {
+      const workerRoot = stageVisualDeltaPackageWorker({
+        packageRoot: root,
+        stagingParent,
+      });
+      expect(
+        readFileSync(path.join(workerRoot, "dist", "node", "cli.js"), "utf8"),
+      ).toBe("export {};\n");
+      expect(dockerVisualDeltaWorkerCommand(["update", "--approved"])).toEqual([
+        "node",
+        `${DOCKER_VISUAL_DELTA_WORKER_ROOT}/dist/node/cli.js`,
+        "update",
+        "--approved",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("loads a project-owned custom module", async () => {

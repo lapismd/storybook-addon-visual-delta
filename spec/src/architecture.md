@@ -24,7 +24,7 @@ These requirements preserve ownership and trustworthy state across process bound
 
 | ID          | Requirement                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface.         |
+| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. |
 | VD-ARCH-002 | Authoritative visual data MUST flow from a settled preview through a configured browser in the canonical Linux/ARM64 capture profile to staged PNG and sidecar artifacts. Presentation state MUST NOT substitute for capture evidence. |
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Sidecars, static output, run state, and affected caches are derived evidence and MUST be safe to regenerate.                                                       |
@@ -54,6 +54,14 @@ sequenceDiagram
   R-->>N: Streamed progress and terminal result
   N-->>M: Progress and final result
 ```
+
+The built-in runner transports an immutable staged copy of the initiating
+package worker into the capture container. Workspace installation remains
+responsible for the consumer's Storybook and project dependencies, but worker
+selection does not resolve through the staged workspace's scripts,
+`node_modules/.bin`, or local-link topology. Source-checkout development builds
+the worker before staging it; published consumers use the package's shipped
+worker.
 
 Baseline mutation adds a write gate before Playwright starts and an invalidation step after the requested files are written. Repository automation occurs after the mutation succeeds and cannot affect capture semantics.
 

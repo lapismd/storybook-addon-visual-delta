@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import {
   copyFileSync,
   cpSync,
@@ -14,7 +15,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import {
   CANONICAL_VISUAL_CAPTURE_PROFILE,
@@ -35,6 +36,17 @@ import {
 export const VISUAL_DELTA_RUNNER_MODULE_REL = ".visual-delta/runner.mjs";
 export const VISUAL_DELTA_CAPTURE_WORKER_ENV =
   "VISUAL_DELTA_CAPTURE_WORKER";
+export const DOCKER_VISUAL_DELTA_WORKER_ROOT =
+  "/build/visual-delta-worker";
+
+const currentPackageModulePath = fileURLToPath(import.meta.url);
+const currentPackageRequire = createRequire(import.meta.url);
+const currentPackageRoot = path.resolve(
+  path.dirname(currentPackageModulePath),
+  "../..",
+);
+const runningPackageFromSource =
+  path.basename(path.dirname(path.dirname(currentPackageModulePath))) === "src";
 
 function commandAvailable(command: string): boolean {
   try {
@@ -88,6 +100,36 @@ function createStagedWorkspace(root: string): {
     },
   });
   return { parent, workspace };
+}
+
+export function stageVisualDeltaPackageWorker(options: {
+  packageRoot: string;
+  stagingParent: string;
+}): string {
+  const packageRoot = path.resolve(options.packageRoot);
+  const packageJson = path.join(packageRoot, "package.json");
+  const distRoot = path.join(packageRoot, "dist");
+  const workerCli = path.join(distRoot, "node", "cli.js");
+  if (!existsSync(packageJson) || !existsSync(workerCli)) {
+    throw new Error(
+      "Visual Delta package worker is unavailable. Build the package worker before capture.",
+    );
+  }
+  const workerRoot = path.join(options.stagingParent, "visual-delta-worker");
+  mkdirSync(workerRoot, { recursive: true });
+  copyFileSync(packageJson, path.join(workerRoot, "package.json"));
+  cpSync(distRoot, path.join(workerRoot, "dist"), { recursive: true });
+  return workerRoot;
+}
+
+export function dockerVisualDeltaWorkerCommand(
+  argv: readonly string[],
+): string[] {
+  return [
+    "node",
+    `${DOCKER_VISUAL_DELTA_WORKER_ROOT}/dist/node/cli.js`,
+    ...argv,
+  ];
 }
 
 function regularFiles(root: string): string[] {
@@ -157,6 +199,43 @@ function runProcess(
   });
 }
 
+async function prepareVisualDeltaPackageWorker(
+  stagingParent: string,
+  context: VisualCaptureRunnerContext,
+): Promise<string> {
+  if (runningPackageFromSource) {
+    context.onEvent?.({
+      type: "log",
+      message: "Preparing the Visual Delta package worker…\n",
+    });
+    let typescriptCli: string;
+    try {
+      typescriptCli = currentPackageRequire.resolve("typescript/bin/tsc");
+    } catch {
+      throw new Error(
+        "Visual Delta package worker cannot be built because TypeScript is unavailable.",
+      );
+    }
+    const buildExit = await runProcess(
+      process.execPath,
+      [
+        typescriptCli,
+        "-p",
+        path.join(currentPackageRoot, "tsconfig.node-build.json"),
+      ],
+      { cwd: currentPackageRoot },
+      context,
+    );
+    if (buildExit !== 0) {
+      throw new Error(`Visual Delta package worker build exited ${buildExit}.`);
+    }
+  }
+  return stageVisualDeltaPackageWorker({
+    packageRoot: currentPackageRoot,
+    stagingParent,
+  });
+}
+
 export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner {
   const profile = CANONICAL_VISUAL_CAPTURE_PROFILE;
   return defineVisualDeltaCaptureRunner({
@@ -222,27 +301,33 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
       const staged = createStagedWorkspace(manifest.root);
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
       const storeVolume = `visual-delta-pnpm-store-${key}`;
-      const commonArgs = [
-        "run",
-        "--rm",
-        "--init",
-        "--ipc=host",
-        "--platform",
-        "linux/arm64",
-        "--workdir",
-        "/workspace",
-        "--mount",
-        `type=bind,src=${staged.workspace},dst=/workspace`,
-        "--mount",
-        `type=volume,src=${nodeModulesVolume},dst=/workspace/node_modules`,
-        "--mount",
-        `type=volume,src=${storeVolume},dst=/pnpm/store`,
-        "--env",
-        `${VISUAL_DELTA_CAPTURE_WORKER_ENV}=1`,
-        image,
-      ];
       try {
         context.onEvent?.({ type: "start", profile });
+        const packageWorkerRoot = await prepareVisualDeltaPackageWorker(
+          staged.parent,
+          context,
+        );
+        const commonArgs = [
+          "run",
+          "--rm",
+          "--init",
+          "--ipc=host",
+          "--platform",
+          "linux/arm64",
+          "--workdir",
+          "/workspace",
+          "--mount",
+          `type=bind,src=${staged.workspace},dst=/workspace`,
+          "--mount",
+          `type=bind,src=${packageWorkerRoot},dst=${DOCKER_VISUAL_DELTA_WORKER_ROOT},readonly`,
+          "--mount",
+          `type=volume,src=${nodeModulesVolume},dst=/workspace/node_modules`,
+          "--mount",
+          `type=volume,src=${storeVolume},dst=/pnpm/store`,
+          "--env",
+          `${VISUAL_DELTA_CAPTURE_WORKER_ENV}=1`,
+          image,
+        ];
         const installExit = await runProcess(
           "docker",
           [...commonArgs, "pnpm", "install", "--frozen-lockfile"],
@@ -255,13 +340,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         }
         const exitCode = await runProcess(
           "docker",
-          [
-            ...commonArgs,
-            "pnpm",
-            "exec",
-            "visual-delta",
-            ...manifest.argv,
-          ],
+          [...commonArgs, ...dockerVisualDeltaWorkerCommand(manifest.argv)],
           { cwd: manifest.root },
           context,
         );
