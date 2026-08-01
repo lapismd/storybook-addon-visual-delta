@@ -33,6 +33,10 @@ const CONFIG = {
   playwrightPassThresholdPercent: 1,
   browsers: ["chromium", "firefox"],
   runtimePlatform: "darwin",
+  availableEnvironments: [
+    { browser: "chromium", platform: "darwin" },
+    { browser: "chromium", platform: "linux" },
+  ],
   projectDefaults: {
     passThresholdPercent: 1,
     diffThreshold: 0.2,

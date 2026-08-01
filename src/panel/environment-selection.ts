@@ -25,6 +25,7 @@ export function platformLabel(platform: string): string {
 export function discoverVisualEnvironments(options: {
   sources: readonly string[];
   declaredEnvironments?: readonly (VisualBaselineEnvironment | undefined)[];
+  availableEnvironments?: readonly VisualBaselineEnvironment[];
   configuredBrowsers?: readonly VisualDeltaBrowser[];
   runtimePlatform: string;
 }): {
@@ -36,6 +37,7 @@ export function discoverVisualEnvironments(options: {
     : [...DEFAULT_VISUAL_DELTA_BROWSERS];
   const declared = options.declaredEnvironments ?? [];
   const discovered = [
+    ...(options.availableEnvironments ?? []),
     ...options.sources.map(
       (source, index) =>
         parseVisualBaselineEnvironment(source) ?? declared[index],

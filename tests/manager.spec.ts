@@ -47,6 +47,18 @@ test.describe("Visual Delta manager integration", () => {
     );
     await expect(controls.nth(1)).toContainText("Chromium");
 
+    await controls.nth(0).click();
+    await page
+      .getByRole("button", { name: "Linux (view only)", exact: true })
+      .click();
+    await expect(controls.nth(0)).toContainText("Linux");
+    await expect(
+      panel.getByRole("status", { name: /Baseline missing/i }),
+    ).toBeVisible();
+
+    await controls.nth(0).click();
+    await page.getByRole("button", { name: "macOS", exact: true }).click();
+
     await controls.nth(1).click();
     await page.getByRole("button", { name: "Firefox", exact: true }).click();
     await expect(controls.nth(1)).toContainText("Firefox");

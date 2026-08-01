@@ -80,6 +80,7 @@ const SAMPLE_CONFIG: VisualDeltaResolvedConfig = {
     addonSrcDir: "src",
   },
   playwrightPassThresholdPercent: 1,
+  availableEnvironments: [{ browser: "chromium", platform: "darwin" }],
   workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,
   vcs: {
     kind: "jj",

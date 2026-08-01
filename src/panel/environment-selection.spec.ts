@@ -27,6 +27,27 @@ describe("panel environment selection", () => {
     ]);
   });
 
+  it("keeps project-wide environments available without current-story wiring", () => {
+    const options = discoverVisualEnvironments({
+      configuredBrowsers: ["chromium"],
+      runtimePlatform: "darwin",
+      availableEnvironments: [
+        { browser: "chromium", platform: "darwin" },
+        { browser: "webkit", platform: "linux" },
+      ],
+      sources: [],
+    });
+
+    expect(options.browsers).toEqual([
+      { value: "chromium", label: "Chromium", enabled: true },
+      { value: "webkit", label: "WebKit (view only)", enabled: false },
+    ]);
+    expect(options.platforms).toEqual([
+      { value: "darwin", label: "macOS", enabled: true },
+      { value: "linux", label: "Linux (view only)", enabled: false },
+    ]);
+  });
+
   it("never falls back across environments", () => {
     expect(
       sourceMatchesEnvironment("story-firefox-linux.png", {

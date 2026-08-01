@@ -216,6 +216,9 @@ function normalizePanelConfig(
         ? config.browsers
         : ["chromium"],
     runtimePlatform: config.runtimePlatform || "darwin",
+    availableEnvironments: Array.isArray(config.availableEnvironments)
+      ? config.availableEnvironments
+      : [],
   };
 }
 
@@ -369,6 +372,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           ...configuredPrimaryImages.map((image) => image.environment),
           ...configuredInteractions.map((interaction) => interaction.environment),
         ],
+        availableEnvironments: resolvedConfig?.availableEnvironments,
         configuredBrowsers: resolvedConfig?.browsers,
         runtimePlatform: resolvedConfig?.runtimePlatform ?? "darwin",
       }),

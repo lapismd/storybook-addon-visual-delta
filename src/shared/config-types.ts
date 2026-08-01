@@ -82,6 +82,8 @@ export type VisualDeltaResolvedConfig = {
   browsers: import("./environments.js").VisualDeltaBrowser[];
   /** Node platform hosting the development middleware. */
   runtimePlatform: string;
+  /** Canonical baseline environments found beneath the configured snapshotDir. */
+  availableEnvironments: import("./environments.js").VisualBaselineEnvironment[];
   /** Project workflow policy. All mutation/commit automation defaults off. */
   workflow: VisualDeltaWorkflowConfig;
   /** Detected repository and effective host write capability. */

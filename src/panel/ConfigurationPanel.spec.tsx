@@ -29,6 +29,7 @@ const config: VisualDeltaResolvedConfig = {
     addonSrcDir: null,
   },
   playwrightPassThresholdPercent: 1,
+  availableEnvironments: [{ browser: "chromium", platform: "darwin" }],
   projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
   workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,
   vcs: {

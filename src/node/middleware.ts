@@ -81,6 +81,7 @@ import {
   type VisualDeltaHostOptions,
 } from "./options.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
+import { discoverSnapshotEnvironments } from "./snapshot-environments.js";
 import type {
   VisualStoryDescriptor,
   VisualStoryFactsRequest,
@@ -1970,6 +1971,7 @@ function resolvedConfigPayload(
     projectDefaults: projectConfig.defaults,
     browsers: projectConfig.browsers,
     runtimePlatform: process.platform,
+    availableEnvironments: discoverSnapshotEnvironments(snapshotDir),
     workflow: projectConfig.workflow,
     vcs: {
       kind: vcsKind,
