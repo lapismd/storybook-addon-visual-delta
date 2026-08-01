@@ -249,14 +249,16 @@ test.describe("Visual Delta manager overlay placement", () => {
 
           const horizontalRail = frame.locator("#visual-delta-scroll-rail-h");
           await expect(horizontalRail).toBeVisible();
-          const expectedScrollLeft = await horizontalRail.evaluate((rail) =>
-            Math.min(80, rail.scrollWidth - rail.clientWidth),
-          );
+          const expectedScrollLeft = await horizontalRail.evaluate((rail) => {
+            // A zoom transition can trigger one final ResizeObserver refresh.
+            // Derive and apply the target in one preview-frame task so a stale
+            // pre-refresh overflow measurement cannot be asserted afterward.
+            const left = Math.min(80, rail.scrollWidth - rail.clientWidth);
+            rail.scrollLeft = left;
+            rail.dispatchEvent(new Event("scroll"));
+            return rail.scrollLeft;
+          });
           if (expectedScrollLeft > 0) {
-            await horizontalRail.evaluate((rail, left) => {
-              rail.scrollLeft = left;
-              rail.dispatchEvent(new Event("scroll"));
-            }, expectedScrollLeft);
             await expect
               .poll(
                 async () => {
