@@ -691,6 +691,32 @@ test.describe("Visual Delta manager integration", () => {
     });
   });
 
+  test("keeps non-canonical teaching baselines compare-only", async ({ page }) => {
+    await mockVisualBackend(page);
+    await openManager(
+      page,
+      "examples-interactions--with-interaction-baseline",
+      DEV_STORYBOOK,
+    );
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await panel
+      .getByRole("button", { name: "More Default baseline actions" })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Update Default baseline" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Delete Default screenshot" }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(
+      panel.getByRole("button", {
+        name: "Choose Diff HTML or Diff Browser",
+      }),
+    ).toBeVisible();
+  });
+
   test("creates a baseline for the exact Storybook interaction selected by the user", async ({
     page,
   }) => {

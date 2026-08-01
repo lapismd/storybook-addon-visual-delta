@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  baselineSourcesAllowMutation,
   discoverVisualEnvironments,
   loadVisualEnvironmentPreference,
   saveVisualEnvironmentPreference,
@@ -97,6 +98,21 @@ describe("panel environment selection", () => {
       "firefox",
     ]);
     expect(options.platforms.map((option) => option.value)).toEqual(["linux"]);
+  });
+
+  it("keeps non-canonical teaching fixtures compare-only", () => {
+    expect(
+      baselineSourcesAllowMutation([
+        "/visual-baselines/forms/default-chromium.png",
+        "/visual-baselines/forms/default--opened-chromium.png",
+      ]),
+    ).toBe(true);
+    expect(baselineSourcesAllowMutation([])).toBe(true);
+    expect(
+      baselineSourcesAllowMutation([
+        "/visual-baselines/examples/interactions/opened.png",
+      ]),
+    ).toBe(false);
   });
 
   it("persists the local browser preference with deprecated platform data", () => {

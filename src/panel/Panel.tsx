@@ -165,6 +165,7 @@ import {
   type VisualDeltaBrowser,
 } from "../shared/environments.js";
 import {
+  baselineSourcesAllowMutation,
   discoverVisualEnvironments,
   loadVisualEnvironmentPreference,
   saveVisualEnvironmentPreference,
@@ -483,6 +484,14 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [configuredInteractions, configuredPrimaryImages],
   );
   const baselineSourcesKey = baselineSources.join("\0");
+  const hasNonCanonicalTeachingBaseline = !baselineSourcesAllowMutation(
+    baselineSources,
+  );
+  const baselineMutationsAllowed =
+    environmentCapabilities.writes && !hasNonCanonicalTeachingBaseline;
+  const baselineMutationError = hasNonCanonicalTeachingBaseline
+    ? "Story-wired teaching baselines are compare-only and cannot be updated from the panel."
+    : "Baselines can only be changed for an enabled browser through an available canonical capture runner.";
   useEffect(() => {
     setUnavailableBaselineSources(new Set());
   }, [currentStoryId]);
@@ -1071,10 +1080,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError("No story selected");
         return;
       }
-      if (!environmentMutable) {
-        setCaptureError(
-          "Baselines can only be changed for an enabled browser through an available canonical capture runner.",
-        );
+      if (!baselineMutationsAllowed) {
+        setCaptureError(baselineMutationError);
         return;
       }
       setCaptureError(null);
@@ -1132,7 +1139,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     },
     [
       api,
-      environmentMutable,
+      baselineMutationError,
+      baselineMutationsAllowed,
       hydrateInteractions,
       interactions,
       markBaselineSourceAvailable,
@@ -1583,8 +1591,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError("No story selected");
       return;
     }
-    if (!environmentMutable) {
-      setCaptureError("The selected browser and OS are view-only.");
+    if (!baselineMutationsAllowed) {
+      setCaptureError(baselineMutationError);
       return;
     }
     setCaptureError(null);
@@ -1597,7 +1605,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [environmentMutable, selectedBrowser, storyId]);
+  }, [baselineMutationError, baselineMutationsAllowed, selectedBrowser, storyId]);
 
   const handleDeleteBaseline = useCallback(
     async (section: BaselineSection) => {
@@ -1605,8 +1613,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         setCaptureError("No story selected");
         return;
       }
-      if (!environmentMutable) {
-        setCaptureError("The selected browser and OS are view-only.");
+      if (!baselineMutationsAllowed) {
+        setCaptureError(baselineMutationError);
         return;
       }
       const baselineUrl = (
@@ -1675,7 +1683,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       interactions,
       clearBaselineDiagnostics,
       primaryImages,
-      environmentMutable,
+      baselineMutationError,
+      baselineMutationsAllowed,
       removeBaselineImage,
       restorePrimaryBaselines,
       setSelectedMode,
@@ -1698,8 +1707,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       setCaptureError("No story selected");
       return;
     }
-    if (!environmentMutable) {
-      setCaptureError("The selected browser and OS are view-only.");
+    if (!baselineMutationsAllowed) {
+      setCaptureError(baselineMutationError);
       return;
     }
     setCaptureError(null);
@@ -1712,7 +1721,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [environmentMutable, selectedBrowser, storyId]);
+  }, [baselineMutationError, baselineMutationsAllowed, selectedBrowser, storyId]);
 
   const refreshOnboarding = useCallback(async () => {
     try {
@@ -2647,31 +2656,31 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               showInteractionFilter
               onExpand={selectSection}
               onCreateDefault={
-                environmentCapabilities.writes
+                baselineMutationsAllowed
                   ? () => void handleCreateBaselines()
                   : undefined
               }
               onCreate={
-                environmentCapabilities.writes
+                baselineMutationsAllowed
                   ? (step) => void handleCreateInteraction(step, false)
                   : () => undefined
               }
               onUpdate={
-                environmentCapabilities.writes
+                baselineMutationsAllowed
                   ? (step) => void handleCreateInteraction(step, true)
                   : () => undefined
               }
               onUpdateDefault={
-                environmentCapabilities.writes
+                baselineMutationsAllowed
                   ? () => void handleUpdateBaselines()
                   : () => undefined
               }
               onDelete={
-                environmentCapabilities.writes
+                baselineMutationsAllowed
                   ? (section) => void handleDeleteBaseline(section)
                   : () => undefined
               }
-              allowMutations={environmentCapabilities.writes}
+              allowMutations={baselineMutationsAllowed}
               onToggleDistribution={() =>
                 setShowDistribution((value) => !value)
               }
