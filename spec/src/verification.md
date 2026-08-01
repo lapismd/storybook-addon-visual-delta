@@ -225,6 +225,9 @@ change that outcome.
 The Dockerfile warms the pnpm store without running project lifecycle scripts
 and installs the exact Node.js, npm, pnpm, mdBook, and Playwright Chromium,
 Firefox, and WebKit versions required by repository workflows.
+The native smoke runs with GitHub's job-container `HOME` override and still
+requires pnpm `10.32.1` from the fixed image-owned Corepack cache. Every
+publication command uses Bash, matching the workflow syntax being checked.
 The ARM64 smoke records the actual tool and browser versions plus a sorted,
 content-derived font-manifest hash. A final profile job depends on both native
 smokes, combines that ARM64 evidence with the published multi-platform and ARM64

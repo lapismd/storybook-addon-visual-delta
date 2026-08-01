@@ -97,6 +97,9 @@ smoke jobs pass. Browser and tool versions and the content-derived font-manifest
 hash come from the ARM64 job rather than the build host or declared dependency
 metadata; the artifact also records the canonical capture context required by
 `VisualCaptureProfile`.
+The image's package-manager cache MUST use a fixed image-owned path so GitHub's
+job-container `HOME` override cannot change the resolved pnpm version. Image
+publication and native smoke commands use Bash explicitly.
 Rebuild the image and update the reviewed capture-profile lock after a merged
 dependency, Dockerfile, Node.js, npm, pnpm, mdBook, Playwright, browser, or font
 change. Publish the image before enabling jobs that reference its digest because

@@ -98,6 +98,23 @@ test("rejects drift in pinned runtime and browser versions", () => {
   assert.match(result.errors.join("\n"), /devDependencies\.playwright/);
 });
 
+test("requires fixed Corepack storage and Bash in publication containers", () => {
+  const result = validateCiImageSources({
+    ...sources,
+    dockerfile: sources.dockerfile.replace(
+      "COREPACK_HOME=/corepack",
+      "COREPACK_HOME=/root/.cache/node/corepack",
+    ),
+    publishWorkflow: sources.publishWorkflow.replace(
+      "defaults:\n  run:\n    shell: bash",
+      "defaults:\n  run:\n    shell: sh",
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /COREPACK_HOME/);
+  assert.match(result.errors.join("\n"), /shell: bash/);
+});
+
 test("rejects a broad Docker context", () => {
   const result = validateCiImageSources({
     ...sources,

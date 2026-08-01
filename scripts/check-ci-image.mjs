@@ -17,6 +17,7 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
   "fontconfig",
   "jq",
   "npm install --global npm@12.0.2",
+  "COREPACK_HOME=/corepack",
   "corepack prepare pnpm@10.32.1 --activate",
   "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
   "pnpm config set store-dir /pnpm/store",
@@ -39,6 +40,7 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
 
 const REQUIRED_PUBLICATION_SNIPPETS = [
   "workflow_dispatch:",
+  "defaults:\n  run:\n    shell: bash",
   "contents: read",
   "packages: write",
   "cancel-in-progress: false",

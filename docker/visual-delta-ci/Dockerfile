@@ -4,6 +4,7 @@ LABEL org.opencontainers.image.source="https://github.com/lapismd/storybook-addo
 
 ENV CI=true \
     DEBIAN_FRONTEND=noninteractive \
+    COREPACK_HOME=/corepack \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright

@@ -19,6 +19,10 @@ concurrency:
 env:
   VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   publish:
     name: Build and publish CI image
