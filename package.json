@@ -64,7 +64,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:node": "tsc -p tsconfig.node-build.json",
+    "build:node": "tsc -p tsconfig.node-build.json && node ./scripts/prepare-cli-bin.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node-build.json --noEmit",
     "prepare": "pnpm build:node",
     "prepack": "pnpm build:node",

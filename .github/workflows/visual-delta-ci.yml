@@ -9,7 +9,6 @@ permissions:
 
 env:
   VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
-  HOME: /root
 
 defaults:
   run:
@@ -25,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      env:
+        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -50,6 +51,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
+      env:
+        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -69,6 +72,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
+      env:
+        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -88,6 +93,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
+      env:
+        HOME: /root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

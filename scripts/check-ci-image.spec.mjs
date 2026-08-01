@@ -40,18 +40,92 @@ test("requires root-owned HOME in every repository job container", () => {
     consumerWorkflows: {
       ...sources.consumerWorkflows,
       [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
-        "  HOME: /root",
-        "  HOME: /github/home",
+        "        HOME: /root",
+        "        HOME: /github/home",
       ),
     },
     publishWorkflow: sources.publishWorkflow.replace(
-      "      HOME: /root",
-      "      HOME: /github/home",
+      "        HOME: /root",
+      "        HOME: /github/home",
     ),
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /workflow-level root-owned HOME/);
+  assert.match(
+    result.errors.join("\n"),
+    /job container must set root-owned HOME/,
+  );
   assert.match(result.errors.join("\n"), /native smoke containers/);
+});
+
+test("rejects root-owned HOME leaking into host workflow or job scope", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "env:\n  VISUAL_DELTA_CI_IMAGE:",
+        "env:\n  HOME: /root\n  VISUAL_DELTA_CI_IMAGE:",
+      ),
+    },
+    publishWorkflow: sources.publishWorkflow.replace(
+      "    permissions:\n      contents: read",
+      "    env:\n      HOME: /root\n    permissions:\n      contents: read",
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /workflow or job scope/);
+});
+
+test("requires every referenced JavaScript action to use an audited Node 24 release", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "actions/checkout@v5",
+        "actions/checkout@v4",
+      ),
+    },
+    publishWorkflow: sources.publishWorkflow.replace(
+      "docker/login-action@v4",
+      "docker/login-action@v3",
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /actions\/checkout@v4/);
+  assert.match(result.errors.join("\n"), /docker\/login-action@v3/);
+  assert.match(result.errors.join("\n"), /Node\.js 24 allowlist/);
+});
+
+test("requires executable package integrity and scoped bootstrap npm authentication", () => {
+  const workflowPath = ".github/workflows/npm-publish.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath]
+        .replace("test -x dist/node/cli.js", "true")
+        .replace(
+          'select(.path? == "dist/node/cli.js" and .mode? == 493)',
+          'select(.path? == "dist/node/cli.js")',
+        )
+        .replace(
+          'bootstrap_npmrc="$RUNNER_TEMP/visual-delta-bootstrap.npmrc"',
+          "bootstrap_npmrc=/dev/null",
+        )
+        .replace(
+          "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}",
+          "//registry.npmjs.org/:_authToken=missing",
+        ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /test -x/);
+  assert.match(result.errors.join("\n"), /mode/);
+  assert.match(result.errors.join("\n"), /bootstrap_npmrc/);
+  assert.match(result.errors.join("\n"), /NODE_AUTH_TOKEN/);
 });
 
 test("requires a complete and trusted checkout for the exact PR change set", () => {
@@ -281,10 +355,7 @@ test("requires complete profile provenance after both native smoke jobs", () => 
   const result = validateCiImageSources({
     ...sources,
     publishWorkflow: sources.publishWorkflow
-      .replace(
-        "needs: [publish, smoke-x64, smoke-arm64]",
-        "needs: publish",
-      )
+      .replace("needs: [publish, smoke-x64, smoke-arm64]", "needs: publish")
       .replace("browser.version()", '"declared"')
       .replace("fc-list --format='%{file}\\n'", "printf '%s\\n'")
       .replace(
@@ -316,7 +387,10 @@ test("requires anonymous inspection of every newly published audit image", () =>
     ...sources,
     publishWorkflow: sources.publishWorkflow
       .replace('anonymous_docker_config="$(mktemp -d)"', "true")
-      .replace('DOCKER_CONFIG="$anonymous_docker_config"', "DOCKER_CONFIG=default"),
+      .replace(
+        'DOCKER_CONFIG="$anonymous_docker_config"',
+        "DOCKER_CONFIG=default",
+      ),
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /anonymous_docker_config/);

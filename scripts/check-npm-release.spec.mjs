@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CLI_BIN,
   NPM_REGISTRY,
   PACKAGE_NAME,
   REPOSITORY_URL,
@@ -19,6 +20,9 @@ function manifest(overrides = {}) {
     publishConfig: {
       access: "public",
       registry: NPM_REGISTRY,
+    },
+    bin: {
+      "visual-delta": CLI_BIN,
     },
     ...overrides,
   };
@@ -60,4 +64,13 @@ test("rejects prereleases and private or malformed public metadata", () => {
   assert.match(result.errors.join("\n"), /publishConfig\.access/);
   assert.match(result.errors.join("\n"), /publishConfig\.registry/);
   assert.match(result.errors.join("\n"), /repository\.url/);
+});
+
+test("rejects a missing or redirected executable command", () => {
+  const result = validateNpmRelease(
+    manifest({ bin: { "visual-delta": "./src/node/cli.ts" } }),
+    { tag: "v0.0.1" },
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /bin\.visual-delta/);
 });

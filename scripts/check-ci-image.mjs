@@ -34,8 +34,8 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
   'test "$(pnpm --version)" = "10.32.1"',
   'mdbook --version | grep -Fx "mdbook v0.5.4"',
   'pnpm exec playwright --version | grep -Fx "Version 1.61.1"',
-  'find /ms-playwright -type f -name firefox',
-  'find /ms-playwright -type f -name MiniBrowser',
+  "find /ms-playwright -type f -name firefox",
+  "find /ms-playwright -type f -name MiniBrowser",
 ];
 
 const REQUIRED_PUBLICATION_SNIPPETS = [
@@ -44,10 +44,13 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   "contents: read",
   "packages: write",
   "cancel-in-progress: false",
-  "test \"$GITHUB_REF_NAME\" = \"$DEFAULT_BRANCH\"",
+  'test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"',
   'test "$IMAGE_TAG" != "latest"',
   'if docker buildx imagetools inspect "$AUDIT_IMAGE" >/dev/null 2>&1; then',
-  "docker/build-push-action@v6",
+  "docker/login-action@v4",
+  "docker/setup-qemu-action@v4",
+  "docker/setup-buildx-action@v4",
+  "docker/build-push-action@v7",
   "platforms: linux/amd64,linux/arm64",
   "${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}",
   "${{ env.VISUAL_DELTA_CI_IMAGE }}:latest",
@@ -70,7 +73,6 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
   "visual-delta-capture-profile.json",
   "Smoke published image on x64",
   "Smoke published image on ARM64",
-  "HOME: /root",
   "runs-on: ubuntu-24.04-arm",
   "image: ${{ needs.publish.outputs.image_reference }}",
 ];
@@ -138,17 +140,15 @@ const CANONICAL_IMAGE_DIGEST =
   "sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a";
 const CANONICAL_FONT_MANIFEST_DIGEST =
   "sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3";
-const CANONICAL_ARM64_CI_IMAGE =
-  `ghcr.io/lapismd/storybook-addon-visual-delta-ci@${CANONICAL_ARM64_IMAGE_DIGEST}`;
+const CANONICAL_ARM64_CI_IMAGE = `ghcr.io/lapismd/storybook-addon-visual-delta-ci@${CANONICAL_ARM64_IMAGE_DIGEST}`;
 const TOOLCHAIN_IMAGE_LINE = `      image: ${TOOLCHAIN_CI_IMAGE}`;
 const CANONICAL_IMAGE_LINE = `      image: ${CANONICAL_ARM64_CI_IMAGE}`;
 const CANARY_JOB_LINE = "    continue-on-error: true";
 const TRUST_CHECKOUT_LINE =
   '        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"';
-const CONSUMER_HOME_LINE = "  HOME: /root";
+const CONTAINER_HOME_LINE = "        HOME: /root";
 const CONSUMER_USERNAME_LINE = "        username: ${{ github.actor }}";
-const CONSUMER_PASSWORD_LINE =
-  "        password: ${{ secrets.GITHUB_TOKEN }}";
+const CONSUMER_PASSWORD_LINE = "        password: ${{ secrets.GITHUB_TOKEN }}";
 const PROHIBITED_CONSUMER_INSTALLS = [
   [/actions\/setup-node@/, "actions/setup-node"],
   [/\bcorepack\s+(?:enable|prepare|install|use)\b/, "Corepack setup"],
@@ -157,6 +157,15 @@ const PROHIBITED_CONSUMER_INSTALLS = [
   [/\bplaywright\s+install\b/, "Playwright browser installation"],
   [/\bapt(?:-get)?\s+install\b/, "Linux package installation"],
 ];
+const AUDITED_NODE24_ACTIONS = new Set([
+  "actions/checkout@v5",
+  "actions/upload-artifact@v6",
+  "peter-evans/create-pull-request@v8",
+  "docker/login-action@v4",
+  "docker/setup-qemu-action@v4",
+  "docker/setup-buildx-action@v4",
+  "docker/build-push-action@v7",
+]);
 
 function requireSnippet(errors, label, source, snippet) {
   if (!source.includes(snippet)) {
@@ -180,6 +189,26 @@ function workflowJobSection(source, jobName) {
     (line, index) => index > start && /^  [a-zA-Z0-9_-]+:\s*$/.test(line),
   );
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
+}
+
+function workflowContainerBlocks(source) {
+  const lines = source.split("\n");
+  const blocks = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index] !== "    container:") continue;
+    const end = lines.findIndex(
+      (line, candidate) =>
+        candidate > index && (/^    \S/.test(line) || /^  \S/.test(line)),
+    );
+    blocks.push(lines.slice(index, end === -1 ? undefined : end).join("\n"));
+  }
+  return blocks;
+}
+
+function actionReferences(source) {
+  return [...source.matchAll(/^\s+uses:\s+(?<reference>[^\s#]+)\s*$/gm)].map(
+    (match) => match.groups?.reference,
+  );
 }
 
 function permissionKeys(source) {
@@ -229,11 +258,19 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     ],
     [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
-    ["pnpm install --frozen-lockfile", expected.frozenInstalls, "frozen install"],
+    [
+      "pnpm install --frozen-lockfile",
+      expected.frozenInstalls,
+      "frozen install",
+    ],
     ["packages: read", expected.packagesRead, "packages: read permission"],
     ["runs-on: ubuntu-latest", expected.x64Runners, "x64 runner"],
     ["runs-on: ubuntu-24.04-arm", expected.arm64Runners, "ARM64 runner"],
-    ["PROFILE_LOCK_PENDING", expected.pendingProfileLocks, "pending profile lock"],
+    [
+      "PROFILE_LOCK_PENDING",
+      expected.pendingProfileLocks,
+      "pending profile lock",
+    ],
   ]) {
     const actualCount = countOccurrences(source, needle);
     if (actualCount !== expectedCount) {
@@ -256,16 +293,31 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
   }
   for (const jobName of expected.trustedCheckoutJobs) {
     if (
-      countExactLines(workflowJobSection(source, jobName), TRUST_CHECKOUT_LINE) !==
-      1
+      countExactLines(
+        workflowJobSection(source, jobName),
+        TRUST_CHECKOUT_LINE,
+      ) !== 1
     ) {
       errors.push(`${label}: ${jobName} must trust its checkout history`);
     }
   }
-  if (countOccurrences(source, CONSUMER_HOME_LINE) !== 1) {
+  const containerBlocks = workflowContainerBlocks(source);
+  if (containerBlocks.length !== expected.jobs) {
     errors.push(
-      `${label}: every container job must inherit one workflow-level root-owned HOME`,
+      `${label}: expected ${expected.jobs} job container block(s), found ${containerBlocks.length}`,
     );
+  }
+  for (const block of containerBlocks) {
+    if (countExactLines(block, CONTAINER_HOME_LINE) !== 1) {
+      errors.push(`${label}: every job container must set root-owned HOME`);
+    }
+  }
+  for (const lowerScopeHome of ["  HOME: /root", "      HOME: /root"]) {
+    if (countExactLines(source, lowerScopeHome) !== 0) {
+      errors.push(
+        `${label}: root-owned HOME must not be set at workflow or job scope`,
+      );
+    }
   }
 
   for (const [pattern, description] of PROHIBITED_CONSUMER_INSTALLS) {
@@ -314,6 +366,14 @@ export function validateCiImageSources({
         );
       }
     }
+    if (
+      manifest.scripts?.["build:node"] !==
+      "tsc -p tsconfig.node-build.json && node ./scripts/prepare-cli-bin.mjs"
+    ) {
+      errors.push(
+        "package.json: build:node must prepare the executable CLI bin",
+      );
+    }
   }
 
   for (const snippet of [
@@ -334,7 +394,9 @@ export function validateCiImageSources({
     errors.push("Dockerfile: broad COPY . is prohibited");
   }
   if (/\bcargo\s+(?:install|build)\b/.test(dockerfile)) {
-    errors.push("Dockerfile: mdBook must use verified binaries, not Cargo compilation");
+    errors.push(
+      "Dockerfile: mdBook must use verified binaries, not Cargo compilation",
+    );
   }
   if (dockerignore !== EXPECTED_DOCKERIGNORE) {
     errors.push(
@@ -345,7 +407,9 @@ export function validateCiImageSources({
   const triggerEnd = publishWorkflow.indexOf("\npermissions:");
   const triggerBlock = publishWorkflow.slice(0, triggerEnd);
   if (/^\s{2}(?:push|pull_request|schedule):/m.test(triggerBlock)) {
-    errors.push("publish workflow: only workflow_dispatch may trigger publication");
+    errors.push(
+      "publish workflow: only workflow_dispatch may trigger publication",
+    );
   }
   for (const snippet of REQUIRED_PUBLICATION_SNIPPETS) {
     requireSnippet(errors, "publish workflow", publishWorkflow, snippet);
@@ -357,20 +421,38 @@ export function validateCiImageSources({
       "publish workflow: capture profile must be assembled after native ARM64 smoke",
     );
   }
-  if (countOccurrences(publishWorkflow, "      HOME: /root") !== 2) {
+  const publicationContainers = workflowContainerBlocks(publishWorkflow);
+  if (
+    publicationContainers.length !== 2 ||
+    publicationContainers.some(
+      (block) => countExactLines(block, CONTAINER_HOME_LINE) !== 1,
+    )
+  ) {
     errors.push(
       "publish workflow: both native smoke containers must use root-owned HOME",
     );
   }
+  for (const lowerScopeHome of ["  HOME: /root", "      HOME: /root"]) {
+    if (countExactLines(publishWorkflow, lowerScopeHome) !== 0) {
+      errors.push(
+        "publish workflow: root-owned HOME must not be set at workflow or job scope",
+      );
+    }
+  }
 
-
-  const releaseWorkflow = consumerWorkflows?.[".github/workflows/npm-publish.yml"];
+  const releaseWorkflow =
+    consumerWorkflows?.[".github/workflows/npm-publish.yml"];
   if (typeof releaseWorkflow === "string") {
     for (const snippet of [
       "package-gate:",
       "visual-gate:",
       "needs: [package-gate, visual-gate]",
       "needs.visual-gate.result == 'success'",
+      "test -x dist/node/cli.js",
+      'select(.path? == "dist/node/cli.js" and .mode? == 493)',
+      'bootstrap_npmrc="$RUNNER_TEMP/visual-delta-bootstrap.npmrc"',
+      "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}",
+      'NPM_CONFIG_USERCONFIG="$bootstrap_npmrc"',
     ]) {
       requireSnippet(errors, "npm publish workflow", releaseWorkflow, snippet);
     }
@@ -386,26 +468,37 @@ export function validateCiImageSources({
     }
   }
   const captureWorkflow =
-    consumerWorkflows?.[".github/workflows/capture-canonical-panel-baselines.yml"];
+    consumerWorkflows?.[
+      ".github/workflows/capture-canonical-panel-baselines.yml"
+    ];
   if (typeof captureWorkflow === "string") {
     for (const snippet of [
       "BASELINE_WRITE_APPROVED",
       'test "$BASELINE_WRITE_APPROVED" = "true"',
-      "VISUAL_DELTA_CANONICAL_PANEL_SNAPSHOTS: \"1\"",
+      'VISUAL_DELTA_CANONICAL_PANEL_SNAPSHOTS: "1"',
       "*-chromium.png",
       "pnpm test:panel",
     ]) {
-      requireSnippet(errors, "canonical capture workflow", captureWorkflow, snippet);
+      requireSnippet(
+        errors,
+        "canonical capture workflow",
+        captureWorkflow,
+        snippet,
+      );
     }
     if (captureWorkflow.includes("-chromium-linux.png")) {
-      errors.push("canonical capture workflow: platform-qualified PNG names are prohibited");
+      errors.push(
+        "canonical capture workflow: platform-qualified PNG names are prohibited",
+      );
     }
   }
 
   const permissionMatch = publishWorkflow.match(
     /permissions:\n(?<body>(?: {2}[^\n]+\n)+)/,
   );
-  if (permissionMatch?.groups?.body !== "  contents: read\n  packages: write\n") {
+  if (
+    permissionMatch?.groups?.body !== "  contents: read\n  packages: write\n"
+  ) {
     errors.push(
       "publish workflow: permissions must be exactly contents: read and packages: write",
     );
@@ -420,6 +513,19 @@ export function validateCiImageSources({
       continue;
     }
     validateConsumerWorkflow(errors, pathLabel, source, expected);
+  }
+
+  for (const [pathLabel, source] of Object.entries({
+    ".github/workflows/publish-visual-delta-ci.yml": publishWorkflow,
+    ...consumerWorkflows,
+  })) {
+    for (const reference of actionReferences(source ?? "")) {
+      if (!reference || !AUDITED_NODE24_ACTIONS.has(reference)) {
+        errors.push(
+          `${pathLabel}: action ${reference ?? "<unknown>"} is not in the audited Node.js 24 allowlist`,
+        );
+      }
+    }
   }
 
   return { ok: errors.length === 0, errors };

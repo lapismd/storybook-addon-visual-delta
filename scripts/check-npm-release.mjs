@@ -5,11 +5,16 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_PACKAGE_JSON = path.resolve(SCRIPT_DIR, "..", "package.json");
+export const DEFAULT_PACKAGE_JSON = path.resolve(
+  SCRIPT_DIR,
+  "..",
+  "package.json",
+);
 export const PACKAGE_NAME = "@lapismd/storybook-addon-visual-delta";
 export const REPOSITORY_URL =
   "https://github.com/lapismd/storybook-addon-visual-delta.git";
 export const NPM_REGISTRY = "https://registry.npmjs.org";
+export const CLI_BIN = "./dist/node/cli.js";
 
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
@@ -37,6 +42,9 @@ export function validateNpmRelease(manifest, { tag } = {}) {
   }
   if (manifest?.repository?.url !== REPOSITORY_URL) {
     errors.push(`repository.url must be ${REPOSITORY_URL}`);
+  }
+  if (manifest?.bin?.["visual-delta"] !== CLI_BIN) {
+    errors.push(`bin.visual-delta must be ${CLI_BIN}`);
   }
   if (!tag) {
     errors.push("--tag is required");
