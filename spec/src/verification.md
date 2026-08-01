@@ -288,6 +288,16 @@ jobs therefore register the safe checkout explicitly, while focused and full
 Linux manager acceptance must prove that active shared scroll survives chrome
 rebuilds before the ARM lane is accepted.
 
+Release run
+[`30718693799`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30718693799)
+verified the x64 checkout-trust correction, package gate, and panel acceptance,
+then exposed five manager mutation regressions. The teaching-fixture guard had
+treated retained platform-qualified host acceptance PNGs as unqualified demo
+assets and removed their Create, Update, and Delete controls. Focused local
+manager acceptance reproduced the missing action. Environment-selection unit
+coverage and the five affected manager scenarios therefore distinguish the
+temporary legacy host fixtures from compare-only teaching assets.
+
 The combined primary, mode, and interaction VCS-history manager test remains
 temporarily skipped because its mode-popover sequence is unstable only within
 the full ARM64 manager suite. Focused execution against the immutable ARM64

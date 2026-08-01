@@ -85,11 +85,16 @@ export function sourceMatchesEnvironment(
   return legacy?.browser === environment.browser;
 }
 
-/** Non-canonical teaching fixtures are exact compare targets, not write paths. */
+/** Allow canonical targets and retained migration fixtures, not teaching assets. */
 export function baselineSourcesAllowMutation(
   sources: readonly string[],
 ): boolean {
-  return sources.every((source) => Boolean(parseVisualBaselineTarget(source)));
+  return sources.every((source) =>
+    Boolean(
+      parseVisualBaselineTarget(source) ??
+        parseVisualBaselineEnvironment(source),
+    ),
+  );
 }
 
 export function loadVisualEnvironmentPreference(): Partial<VisualBaselineEnvironment> {

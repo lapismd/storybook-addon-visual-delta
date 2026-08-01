@@ -107,6 +107,12 @@ describe("panel environment selection", () => {
         "/visual-baselines/forms/default--opened-chromium.png",
       ]),
     ).toBe(true);
+    expect(
+      baselineSourcesAllowMutation([
+        "/visual-baselines/forms/default-chromium-darwin.png",
+        "/visual-baselines/forms/default--opened-chromium-linux.png",
+      ]),
+    ).toBe(true);
     expect(baselineSourcesAllowMutation([])).toBe(true);
     expect(
       baselineSourcesAllowMutation([
