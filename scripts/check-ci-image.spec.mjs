@@ -93,6 +93,22 @@ test("requires manager acceptance jobs to trust checkout history", () => {
   assert.match(result.errors.join("\n"), /manager must trust/);
 });
 
+test("requires the release package gate to trust specification history", () => {
+  const workflowPath = ".github/workflows/npm-publish.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        '        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"',
+        '        run: echo "untrusted"',
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /package-gate must trust/);
+});
+
 test("requires ARM64 visual jobs to use the reviewed immutable profile", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
   const result = validateCiImageSources({

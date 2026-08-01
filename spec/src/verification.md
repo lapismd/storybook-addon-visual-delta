@@ -270,6 +270,15 @@ therefore fetches complete history and explicitly registers
 `$GITHUB_WORKSPACE` under `/root` before its exact base-to-head diff; the CI
 image checker rejects removal of either prerequisite.
 
+Release run
+[`30716393339`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30716393339)
+confirmed that the same boundary applies to the x64 npm package gate. Its
+lint, structure, build, checker tests, and CI-image validation passed, but
+`spec:first` failed closed when Git could not inspect the checkout after
+Actions restored `HOME=/root`. The release package gate therefore registers
+`$GITHUB_WORKSPACE` after checkout, and CI-image checker coverage requires both
+release gates that read VCS history to retain that step.
+
 ARM64 canary run
 [`30714115219`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30714115219)
 then exposed checkout-history access under the same root HOME in manager
