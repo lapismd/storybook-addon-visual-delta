@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SETTINGS_STORAGE_KEY } from "../src/panel/settings.js";
 import {
   AI_SEND_BUTTON_STATES,
   COMPONENT_OVERLAY_FIXTURE,
@@ -1310,6 +1311,292 @@ test.describe("Visual Delta manager integration", () => {
       )
       .toBe(true);
     await page.getByRole("button", { name: "Close modal" }).click();
+    expect(writes).toEqual([]);
+  });
+
+  test("persists hidden overlays and split zoom across stories, reloads, and delayed image hydration", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const partialPaintKey = "visual-delta-partial-image-paints";
+    await page.addInitScript(
+      ({ settingsKey, paintKey }) => {
+        if (window === window.top) {
+          if (!localStorage.getItem(settingsKey)) {
+            localStorage.setItem(
+              settingsKey,
+              JSON.stringify({
+                overlayOn: true,
+                splitZoom: null,
+                placement: "right",
+                opacity: 1,
+                colorInversion: false,
+                liveVisible: true,
+                passThresholdByEngine: { html: 1.5, chromium: 1.5 },
+              }),
+            );
+          }
+          return;
+        }
+        sessionStorage.setItem(paintKey, "[]");
+        const inspect = () => {
+          const overlay = document.getElementById("visual-delta-overlay");
+          const pane = document.getElementById(
+            "visual-delta-baseline-pane",
+          );
+          const visible = (element: HTMLElement | null) =>
+            Boolean(
+              element &&
+                getComputedStyle(element).display !== "none" &&
+                getComputedStyle(element).visibility !== "hidden" &&
+                element.getBoundingClientRect().width > 0 &&
+                element.getBoundingClientRect().height > 0,
+            );
+          if (
+            (visible(overlay) || visible(pane)) &&
+            overlay?.dataset.visualDeltaReady !== "true"
+          ) {
+            const paints = JSON.parse(
+              sessionStorage.getItem(paintKey) ?? "[]",
+            ) as string[];
+            paints.push("unready baseline chrome became visible");
+            sessionStorage.setItem(paintKey, JSON.stringify(paints));
+          }
+        };
+        const observe = () => {
+          if (!document.body) return;
+          new MutationObserver(inspect).observe(document.body, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+          inspect();
+        };
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", observe, {
+            once: true,
+          });
+        } else {
+          observe();
+        }
+      },
+      { settingsKey: SETTINGS_STORAGE_KEY, paintKey: partialPaintKey },
+    );
+    await page.route(
+      "**/visual-baselines/shadcn/tabs/preview-chromium-darwin.png*",
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        await route.continue();
+      },
+    );
+    const writes = await mockVisualBackend(page);
+    const readSettings = () =>
+      page.evaluate((key) => {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      }, SETTINGS_STORAGE_KEY);
+    const ensurePanel = async () => {
+      const tab = page.getByRole("tab", { name: "Visual Delta" });
+      await expect(tab).toBeVisible();
+      if ((await tab.getAttribute("aria-selected")) !== "true") {
+        await tab.click();
+      }
+      await expect(page.getByTestId("visual-delta-panel")).toBeVisible();
+    };
+
+    await openManager(page, RESPONSIVE_CANVAS_FIT_FIXTURE, DEV_STORYBOOK);
+    const panel = page.getByTestId("visual-delta-panel");
+    const frame = previewFrame(page);
+    await expect(frame.locator("#visual-delta-overlay > img")).toBeVisible({
+      timeout: 15_000,
+    });
+    expect(
+      await frame.locator("html").evaluate((_, key) => {
+        return JSON.parse(sessionStorage.getItem(key) ?? "[]");
+      }, partialPaintKey),
+    ).toEqual([]);
+
+    const baselineRight = panel.getByRole("switch", {
+      name: "Baseline right of live",
+    });
+    if ((await baselineRight.getAttribute("aria-checked")) !== "true") {
+      await baselineRight.click();
+    }
+    await baselineRight.click();
+    await expect(frame.locator("#visual-delta-overlay")).toHaveCount(0);
+    await expect(frame.locator("#visual-delta-split")).toHaveCount(0);
+    await expect.poll(async () => (await readSettings()).overlayOn).toBe(false);
+
+    await openManager(page, CUSTOM_VIEWPORT_MANAGER_FIXTURE, DEV_STORYBOOK);
+    await page.waitForTimeout(2_800);
+    await expect(
+      page.getByRole("button", { name: "Open Default baseline full image" }),
+    ).toBeVisible();
+    await expect(previewFrame(page).locator("#visual-delta-overlay")).toHaveCount(
+      0,
+    );
+    await expect.poll(async () => (await readSettings()).overlayOn).toBe(false);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await ensurePanel();
+    await expect(previewFrame(page).locator("#visual-delta-overlay")).toHaveCount(
+      0,
+    );
+    await page.evaluate(() => {
+      const iframe = document.querySelector(
+        'iframe[title="storybook-preview-iframe"]',
+      );
+      if (!(iframe instanceof HTMLIFrameElement) || !iframe.contentWindow) {
+        throw new Error("Storybook preview iframe is unavailable");
+      }
+      iframe.contentWindow.location.reload();
+    });
+    await expect(previewFrame(page).locator("html")).toHaveAttribute(
+      "data-visual-delta-story-finished",
+      CUSTOM_VIEWPORT_MANAGER_FIXTURE,
+      { timeout: 45_000 },
+    );
+    await expect(previewFrame(page).locator("#visual-delta-overlay")).toHaveCount(
+      0,
+    );
+
+    const reloadedPanel = page.getByTestId("visual-delta-panel");
+    await reloadedPanel
+      .getByRole("switch", { name: "Baseline right of live" })
+      .click();
+    await reloadedPanel
+      .getByRole("switch", { name: "Show split comparison at 100%" })
+      .click();
+    await expect
+      .poll(async () => (await readSettings()).splitZoom)
+      .toEqual({ mode: "custom", scale: 1 });
+
+    await openManager(page, RESPONSIVE_CANVAS_FIT_FIXTURE, DEV_STORYBOOK);
+    const nativeFrame = previewFrame(page);
+    const native100 = page.getByRole("switch", {
+      name: "Show split comparison at 100%",
+    });
+    await expect(native100).toHaveAttribute("aria-checked", "true");
+    const nativeGeometry = await nativeFrame.locator("body").evaluate((body) => {
+      const image = body.querySelector(
+        "#visual-delta-baseline-pane #visual-delta-overlay img",
+      );
+      const pane = body.querySelector("#visual-delta-baseline-pane");
+      if (!(image instanceof HTMLImageElement) || !(pane instanceof HTMLElement)) {
+        return null;
+      }
+      const rect = image.getBoundingClientRect();
+      return {
+        rendered: { width: rect.width, height: rect.height },
+        css: {
+          width: image.naturalWidth / 3,
+          height: image.naturalHeight / 3,
+        },
+        completeScroll: {
+          width: pane.scrollWidth,
+          height: pane.scrollHeight,
+          clientWidth: pane.clientWidth,
+          clientHeight: pane.clientHeight,
+        },
+      };
+    });
+    expect(nativeGeometry?.rendered.width).toBeCloseTo(
+      nativeGeometry?.css.width ?? 0,
+      0,
+    );
+    expect(nativeGeometry?.rendered.height).toBeCloseTo(
+      nativeGeometry?.css.height ?? 0,
+      0,
+    );
+    expect(nativeGeometry?.completeScroll.width).toBeGreaterThan(
+      nativeGeometry?.completeScroll.clientWidth ?? Number.POSITIVE_INFINITY,
+    );
+
+    await page
+      .getByRole("switch", { name: /Fit split comparison/ })
+      .click();
+    await expect
+      .poll(async () => (await readSettings()).splitZoom)
+      .toEqual({ mode: "fit", scale: 1 });
+    await openManager(page, CUSTOM_VIEWPORT_MANAGER_FIXTURE, DEV_STORYBOOK);
+    await openManager(page, RESPONSIVE_CANVAS_FIT_FIXTURE, DEV_STORYBOOK);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await ensurePanel();
+
+    const fitFrame = previewFrame(page);
+    await expect(
+      page.getByRole("switch", { name: /Fit split comparison/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect
+      .poll(() =>
+        fitFrame.locator("body").evaluate((body) => {
+          const subject = body.querySelector(
+            "[data-testid='responsive-canvas-fit-fixture']",
+          );
+          const image = body.querySelector(
+            "#visual-delta-baseline-pane #visual-delta-overlay img",
+          );
+          const pane = body.querySelector("#visual-delta-baseline-pane");
+          if (
+            !(subject instanceof HTMLElement) ||
+            !(image instanceof HTMLImageElement) ||
+            !(pane instanceof HTMLElement)
+          ) {
+            return null;
+          }
+          const subjectRect = subject.getBoundingClientRect();
+          const imageRect = image.getBoundingClientRect();
+          const paneRect = pane.getBoundingClientRect();
+          return {
+            viewportWidth: window.innerWidth,
+            subjectWidth: subjectRect.width,
+            subjectHeight: subjectRect.height,
+            imageWidth: imageRect.width,
+            imageHeight: imageRect.height,
+            contained:
+              imageRect.left >= paneRect.left - 1 &&
+              imageRect.top >= paneRect.top - 1 &&
+              imageRect.right <= paneRect.right + 1 &&
+              imageRect.bottom <= paneRect.bottom + 1,
+          };
+        }),
+      )
+      .not.toBeNull();
+    const finalGeometry = await fitFrame.locator("body").evaluate((body) => {
+      const subject = body.querySelector(
+        "[data-testid='responsive-canvas-fit-fixture']",
+      ) as HTMLElement;
+      const image = body.querySelector(
+        "#visual-delta-baseline-pane #visual-delta-overlay img",
+      ) as HTMLImageElement;
+      const pane = body.querySelector(
+        "#visual-delta-baseline-pane",
+      ) as HTMLElement;
+      const subjectRect = subject.getBoundingClientRect();
+      const imageRect = image.getBoundingClientRect();
+      const paneRect = pane.getBoundingClientRect();
+      return {
+        viewportWidth: window.innerWidth,
+        subjectRect: { width: subjectRect.width, height: subjectRect.height },
+        imageRect: { width: imageRect.width, height: imageRect.height },
+        contained:
+          imageRect.left >= paneRect.left - 1 &&
+          imageRect.top >= paneRect.top - 1 &&
+          imageRect.right <= paneRect.right + 1 &&
+          imageRect.bottom <= paneRect.bottom + 1,
+      };
+    });
+    expect(finalGeometry.viewportWidth).not.toBe(1280);
+    expect(finalGeometry.subjectRect.width).toBeCloseTo(
+      finalGeometry.imageRect.width,
+      0,
+    );
+    expect(finalGeometry.subjectRect.height).toBeCloseTo(
+      finalGeometry.imageRect.height,
+      0,
+    );
+    expect(finalGeometry.contained).toBe(true);
+    await expect(page.getByTestId("baseline-geometry-warning")).toHaveCount(0);
     expect(writes).toEqual([]);
   });
 

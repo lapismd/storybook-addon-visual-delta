@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeImages, normalizeImagesWithModes } from "./normalize.js";
+import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
+import {
+  normalizeImages,
+  normalizeImagesWithModes,
+  resolveVisualDeltaImages,
+} from "./normalize.js";
 
 describe("normalizeImages", () => {
   it("normalizes a single string src with globals", () => {
@@ -102,5 +107,44 @@ describe("normalizeImagesWithModes", () => {
       { src: "/primary.png", mode: undefined },
       { src: "/dark.png", mode: "dark" },
     ]);
+  });
+});
+
+describe("resolveVisualDeltaImages", () => {
+  it("retains image metadata and resolves story values over project defaults", () => {
+    const result = resolveVisualDeltaImages(
+      {
+        images: [
+          {
+            src: "/baseline.png",
+            viewport: { width: 1440, height: 960 },
+            deviceScaleFactor: 2,
+            align: "canvas",
+            placement: "below",
+          },
+        ],
+        modes: { Compact: { src: "/compact.png" } },
+        environment: { browser: "chromium", platform: "darwin" },
+        deviceScaleFactor: 3,
+      },
+      { ...BUILTIN_VISUAL_DELTA_DEFAULTS, placement: "left" },
+    );
+
+    expect(result.deviceScaleFactor).toBe(3);
+    expect(result.images[0]).toMatchObject({
+      src: "/baseline.png",
+      viewport: { width: 1440, height: 960 },
+      deviceScaleFactor: 2,
+      align: "canvas",
+      placement: "below",
+      environment: { browser: "chromium", platform: "darwin" },
+    });
+    expect(result.images[1]).toMatchObject({
+      src: "/compact.png",
+      mode: "Compact",
+      deviceScaleFactor: 3,
+      placement: "left",
+      environment: { browser: "chromium", platform: "darwin" },
+    });
   });
 });

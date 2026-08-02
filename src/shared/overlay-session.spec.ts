@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hardClearStoryGallerySession,
   initImageSelection,
+  managerSeedPresentation,
   opacityForPlacementChange,
   placementToggleAction,
   revealCenteredOverlayPatch,
@@ -116,6 +117,42 @@ describe("initImageSelection", () => {
         interactionPinned: false,
       }),
     ).toEqual({ index: -1, overlayOn: false, previewIndex: -1 });
+  });
+});
+
+describe("managerSeedPresentation", () => {
+  it("hydrates a hidden gallery without revealing or discarding preferences", () => {
+    expect(
+      managerSeedPresentation({
+        imageCount: 1,
+        overlayOnPref: false,
+        liveVisible: true,
+        interactionPinned: false,
+        placement: "below",
+        splitZoomPreference: { mode: "custom", scale: 1.4 },
+        projectZoomDefault: "fit",
+      }),
+    ).toEqual({
+      index: 0,
+      overlayOn: false,
+      previewIndex: -1,
+      placement: "below",
+      splitZoom: { mode: "custom", scale: 1.4 },
+    });
+  });
+
+  it("uses the project zoom only when no saved zoom exists", () => {
+    expect(
+      managerSeedPresentation({
+        imageCount: 1,
+        overlayOnPref: true,
+        liveVisible: true,
+        interactionPinned: false,
+        placement: "right",
+        splitZoomPreference: null,
+        projectZoomDefault: "100%",
+      }).splitZoom,
+    ).toEqual({ mode: "custom", scale: 1 });
   });
 });
 

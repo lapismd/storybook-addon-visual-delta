@@ -53,6 +53,7 @@ import {
   type BoxSidesPx,
   type PreviewLayoutSnapshot,
 } from "../shared/preview-layout.js";
+import { baselineImageReady } from "../shared/baseline-image-readiness.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
 const SPLIT_ID = "visual-delta-split";
@@ -1776,13 +1777,14 @@ function applySelection(attempt: number, generation = selectionGeneration) {
   const overlay = ensureOverlayElement();
   styleOverlayForMode(overlay, currentPlacement);
   updateOverlayStyle(overlay);
-  overlay.style.visibility = "";
-  overlay.style.pointerEvents = isSplitPlacement(currentPlacement)
-    ? "none"
-    : "auto";
+  // Attachment is transactional: keep both bitmap and chrome hidden until the
+  // selected source has decoded dimensions and final compare layout is applied.
+  overlay.dataset.visualDeltaReady = "false";
+  overlay.style.visibility = "hidden";
+  overlay.style.pointerEvents = "none";
   const baselinePane = document.getElementById(BASELINE_PANE_ID);
   if (baselinePane instanceof HTMLElement) {
-    baselinePane.style.visibility = "";
+    baselinePane.style.visibility = "hidden";
   }
   // Hide Baseline chrome until the PNG loads so story switches never show a
   // chip without a bitmap.
@@ -1794,20 +1796,34 @@ function applySelection(attempt: number, generation = selectionGeneration) {
   }
 
   const img = overlay.querySelector("img");
-  if (img) {
+  if (img instanceof HTMLImageElement) {
+    img.style.visibility = "hidden";
     const onFailed = () => {
       if (!selectionStillCurrent(generation, selectedImageItem)) return;
       // Failed/404 URL must not leave Baseline chrome without a bitmap.
       clearOverlay();
     };
     const onReady = () => {
-      if (!selectionStillCurrent(generation, selectedImageItem)) return;
-      if (img.naturalWidth === 0) {
+      const activeSource =
+        lastSelection?.images[lastSelection.index]?.src;
+      if (
+        !baselineImageReady({
+          generation,
+          activeGeneration: selectionGeneration,
+          source: selectedImageItem.src,
+          activeSource,
+          complete: img.complete,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+        })
+      ) {
+        if (selectionStillCurrent(generation, selectedImageItem)) onFailed();
+        return;
+      }
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
         onFailed();
         return;
       }
-      const chip = syncOverlayChip(overlay);
-      chip.style.visibility = "";
       sizeOverlayImageToCss(img, selectedImageItem);
       const sizes = baselineCompareSizesFromNatural(
         img.naturalWidth,
@@ -1816,6 +1832,19 @@ function applySelection(attempt: number, generation = selectionGeneration) {
         deviceScaleFactorForImage(selectedImageItem),
       );
       scheduleOverlayPosition(overlay, selectedImageItem, sizes, generation);
+      if (!selectionStillCurrent(generation, selectedImageItem)) return;
+      img.style.visibility = "";
+      overlay.style.visibility = "";
+      overlay.style.pointerEvents = isSplitPlacement(currentPlacement)
+        ? "none"
+        : "auto";
+      const readyBaselinePane = document.getElementById(BASELINE_PANE_ID);
+      if (readyBaselinePane instanceof HTMLElement) {
+        readyBaselinePane.style.visibility = "";
+      }
+      const chip = syncOverlayChip(overlay);
+      chip.style.visibility = "";
+      overlay.dataset.visualDeltaReady = "true";
       watchLayout(overlay);
     };
     img.addEventListener("error", onFailed, { once: true });
@@ -1826,8 +1855,6 @@ function applySelection(attempt: number, generation = selectionGeneration) {
       img.src = selectedImageItem.src;
     }
   }
-  scheduleOverlayPosition(overlay, selectedImageItem, null, generation);
-  watchLayout(overlay);
 }
 
 function syncOverlayChannelApi(): void {
@@ -1873,7 +1900,13 @@ function syncOverlayChannelApi(): void {
   };
   overlayChannelApi.onResetOverlay = () => {
     const overlay = document.getElementById(OVERLAY_ID);
-    if (!overlay || !lastSelection) return;
+    if (
+      !overlay ||
+      overlay.dataset.visualDeltaReady !== "true" ||
+      !lastSelection
+    ) {
+      return;
+    }
     const imageItem = lastSelection.images[lastSelection.index];
     if (!imageItem) return;
     scheduleOverlayPosition(overlay, imageItem, null, selectionGeneration);
@@ -1909,8 +1942,14 @@ function syncOverlayChannelApi(): void {
     if (overlay) {
       styleOverlayForMode(overlay, currentPlacement);
       updateOverlayStyle(overlay);
+      if (overlay.dataset.visualDeltaReady !== "true") {
+        overlay.style.visibility = "hidden";
+      }
     }
-    if (overlay && lastSelection) {
+    if (
+      overlay?.dataset.visualDeltaReady === "true" &&
+      lastSelection
+    ) {
       const imageItem = lastSelection.images[lastSelection.index];
       if (imageItem) {
         scheduleOverlayPosition(overlay, imageItem, null, selectionGeneration);

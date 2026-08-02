@@ -115,6 +115,8 @@ import { ChangeSetOutcomeNotice, ChangeSetsView } from "./ChangeSetsView.js";
 import { ModeSelector } from "./ModeSelector.js";
 import { baselineUrlForStoryRef } from "../shared/baseline-url.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
+import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
+import { resolveVisualDeltaImages } from "../preview/normalize.js";
 import {
   aggregateModeResultStatus,
   type VisualModeResultStatus,
@@ -676,20 +678,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         entry && "name" in entry && entry.name
           ? String(entry.name)
           : currentStoryId;
-      const params =
+      const visualDeltaParams =
         entry && "parameters" in entry
-          ? (entry.parameters as {
-              visualDelta?: {
-                images?: Array<string | { src?: string }>;
-                interactions?: VisualDeltaInteraction[];
-                align?: "viewport" | "canvas";
-                environment?: VisualBaselineEnvironment;
-              };
-            })
+          ? (entry.parameters as { visualDelta?: VisualDeltaParams }).visualDelta
           : undefined;
-      const fromParams = (params?.visualDelta?.images ?? [])
-        .map((image) => (typeof image === "string" ? image : image?.src))
-        .filter((src): src is string => Boolean(src));
       const fromConvention = baselineUrlForStoryRef(
         {
           id: currentStoryId,
@@ -704,28 +696,37 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           target: { browser: selectedBrowser },
         },
       );
-      const imageSrcs =
-        fromParams.length > 0
-          ? fromParams
-          : fromConvention
-            ? [fromConvention]
-            : undefined;
+      const projectDefaults =
+        resolvedConfig?.projectDefaults ?? BUILTIN_VISUAL_DELTA_DEFAULTS;
+      const normalized = resolveVisualDeltaImages(
+        visualDeltaParams,
+        projectDefaults,
+      );
+      const imageSet =
+        normalized.images.length > 0 || !fromConvention
+          ? normalized
+          : resolveVisualDeltaImages(
+              { ...visualDeltaParams, images: [fromConvention] },
+              projectDefaults,
+            );
       seedStoryFromManager({
         storyId: currentStoryId,
         storyName,
-        imageSrcs,
-        align: params?.visualDelta?.align,
-        environment: params?.visualDelta?.environment,
+        images: imageSet.images,
+        modes: imageSet.modes,
+        modeNames: Object.keys(imageSet.modes),
+        previewSplitZoomDefault: projectDefaults.previewSplitZoomDefault,
       });
-      const interactions = params?.visualDelta?.interactions;
+      const interactions = visualDeltaParams?.interactions;
       if (interactions?.length) {
+        const environment = visualDeltaParams?.environment;
         hydrateInteractions(
           interactions.map((interaction) =>
-            interaction.environment ?? !params?.visualDelta?.environment
+            interaction.environment ?? !environment
               ? interaction
               : {
                   ...interaction,
-                  environment: params.visualDelta.environment,
+                  environment,
                 },
           ),
         );
@@ -742,8 +743,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     currentStoryId,
     emit,
     hydrateInteractions,
-    seedStoryFromManager,
     previewReady,
+    resolvedConfig,
+    seedStoryFromManager,
+    selectedBrowser,
   ]);
 
   const { getOverlayInfo } = useOverlayInfo();
@@ -1011,7 +1014,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (id === "default") {
         const alreadyDefault = parkedStepRef.current === null;
         setSelectedInteractionId(null);
-        restorePrimaryBaselines(primaryImages);
+        restorePrimaryBaselines(primaryImages, true);
         // Skip END remount when we're already on the primary end-of-play park.
         if (storyId && !alreadyDefault) {
           parkedStepRef.current = null;
@@ -1653,7 +1656,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           );
           setSelectedInteractionId(null);
           setExpandedId(primaryImages.length > 0 ? "default" : null);
-          restorePrimaryBaselines(primaryImages);
+          restorePrimaryBaselines(primaryImages, true);
         }
         setDiffResult(null);
         setDiffEpoch(Date.now());
@@ -2301,7 +2304,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               primaryImages.length > 1 ? (
                 <ImageGallery
                   images={primaryImages}
-                  selectedIndex={selectedInteractionId ? 0 : Math.max(0, index)}
+                  selectedIndex={
+                    selectedInteractionId
+                      ? 0
+                      : overlayOn
+                        ? Math.max(0, index)
+                        : -1
+                  }
                   onSelect={setIndex}
                 />
               ) : null}

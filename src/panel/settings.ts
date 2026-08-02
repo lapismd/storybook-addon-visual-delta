@@ -5,6 +5,11 @@ import {
   normalizePlacement,
   type PlacementMode,
 } from "../constants.js";
+import {
+  COMPARE_ZOOM_MAX,
+  COMPARE_ZOOM_MIN,
+  type CompareZoomState,
+} from "../shared/compare-zoom.js";
 
 export const SETTINGS_STORAGE_KEY = "storybook-addon-visual-delta/settings";
 
@@ -17,6 +22,8 @@ export type PassThresholdByEngine = {
 export type VisualDeltaSettings = {
   /** Whether a baseline overlay is shown (gallery thumb selected). */
   overlayOn: boolean;
+  /** Explicit user zoom choice. Null delegates to the project default. */
+  splitZoom: CompareZoomState | null;
   placement: PlacementMode;
   opacity: number;
   colorInversion: boolean;
@@ -31,6 +38,7 @@ export type VisualDeltaSettings = {
 
 export const DEFAULT_SETTINGS: VisualDeltaSettings = {
   overlayOn: true,
+  splitZoom: null,
   placement: DEFAULT_PLACEMENT,
   opacity: 1,
   colorInversion: false,
@@ -68,6 +76,25 @@ function cloneDefaults(): VisualDeltaSettings {
   };
 }
 
+function loadSplitZoom(value: unknown): CompareZoomState | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { mode?: unknown; scale?: unknown };
+  if (candidate.mode === "fit") {
+    // Fit scale is viewport-derived state; persist only the user's mode.
+    return { mode: "fit", scale: 1 };
+  }
+  if (
+    candidate.mode === "custom" &&
+    typeof candidate.scale === "number" &&
+    Number.isFinite(candidate.scale) &&
+    candidate.scale >= COMPARE_ZOOM_MIN &&
+    candidate.scale <= COMPARE_ZOOM_MAX
+  ) {
+    return { mode: "custom", scale: candidate.scale };
+  }
+  return null;
+}
+
 export function loadSettings(): VisualDeltaSettings {
   if (typeof localStorage === "undefined") return cloneDefaults();
   try {
@@ -91,6 +118,7 @@ export function loadSettings(): VisualDeltaSettings {
         typeof parsed.overlayOn === "boolean"
           ? parsed.overlayOn
           : DEFAULT_SETTINGS.overlayOn,
+      splitZoom: loadSplitZoom(parsed.splitZoom),
       placement,
       opacity,
       colorInversion:

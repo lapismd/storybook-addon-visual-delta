@@ -5,7 +5,12 @@ import type {
   VisualDeltaParams,
 } from "../constants.js";
 import { DEFAULT_PLACEMENT, normalizePlacement } from "../constants.js";
-import { imagesFromModes, type VisualDeltaModes } from "../shared/modes.js";
+import type { VisualDeltaProjectDefaults } from "../shared/config-types.js";
+import {
+  imagesFromModes,
+  stackModes,
+  type VisualDeltaModes,
+} from "../shared/modes.js";
 import type { VisualBaselineEnvironment } from "../shared/environments.js";
 
 export function normalizeImages(
@@ -104,4 +109,34 @@ export function normalizeImagesWithModes(
     merged.push(img);
   }
   return merged;
+}
+
+/**
+ * Canonical image normalization shared by preview INIT and manager fallback.
+ * Manager recovery must retain capture density, viewport, modes, alignment,
+ * placement, and environment instead of reducing an image to its URL.
+ */
+export function resolveVisualDeltaImages(
+  params: VisualDeltaParams | undefined,
+  projectDefaults: Pick<
+    VisualDeltaProjectDefaults,
+    "placement" | "deviceScaleFactor"
+  >,
+): {
+  images: VisualDeltaImage[];
+  modes: VisualDeltaModes;
+  deviceScaleFactor: number;
+} {
+  const modes = stackModes(params?.modes);
+  const deviceScaleFactor =
+    params?.deviceScaleFactor ?? projectDefaults.deviceScaleFactor;
+  const images = normalizeImagesWithModes({
+    placement: projectDefaults.placement,
+    ...params,
+    modes,
+  }).map((image) => ({
+    ...image,
+    deviceScaleFactor: image.deviceScaleFactor ?? deviceScaleFactor,
+  }));
+  return { images, modes, deviceScaleFactor };
 }

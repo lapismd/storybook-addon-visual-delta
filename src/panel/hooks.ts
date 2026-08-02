@@ -16,6 +16,7 @@ import {
 import {
   hardClearStoryGallerySession,
   initImageSelection,
+  managerSeedPresentation,
   opacityForPlacementChange,
   placementToggleAction,
   revealCenteredOverlayPatch,
@@ -23,7 +24,6 @@ import {
 import type { OverlayInfo } from "../types.js";
 import type { VisualDeltaZoomDefault } from "../shared/config-types.js";
 import type { BaselineAlignmentMismatch } from "../shared/story-config.js";
-import type { VisualBaselineEnvironment } from "../shared/environments.js";
 import {
   compareZoomFromDefault,
   resolveSplitZoomOnInit,
@@ -126,6 +126,8 @@ type StoryData = {
   effectiveAlign: AlignMode;
   previewSplitZoomDefault: VisualDeltaZoomDefault;
   diffResultZoomDefault: VisualDeltaZoomDefault;
+  /** Explicit stored choice; null delegates to the project default. */
+  splitZoomPreference: CompareZoomState | null;
   splitZoom: CompareZoomState;
   baselineGeometryMismatch: BaselineGeometryMismatch | null;
   baselineAlignmentMismatch: BaselineAlignmentMismatch | null;
@@ -254,7 +256,8 @@ export function useStoryData(currentStoryId?: string) {
       effectiveAlign: "viewport",
       previewSplitZoomDefault: "fit",
       diffResultZoomDefault: "100%",
-      splitZoom: compareZoomFromDefault("fit"),
+      splitZoomPreference: prefs.splitZoom,
+      splitZoom: prefs.splitZoom ?? compareZoomFromDefault("fit"),
       baselineGeometryMismatch: null,
       baselineAlignmentMismatch: null,
       baselineGeometryUnavailable: null,
@@ -285,25 +288,20 @@ export function useStoryData(currentStoryId?: string) {
   const measuringLayoutRef = useRef(false);
   const layoutMeasurementCountRef = useRef(0);
 
-  const persist = useCallback((next: StoryData) => {
-    const priorStyle = styleBeforeImageOnlyRef.current;
-    const settings: VisualDeltaSettings = {
-      overlayOn: next.overlayOn,
-      placement: next.liveVisible
-        ? next.placement
-        : (placementBeforeImageOnlyRef.current ?? next.placement),
-      opacity: next.liveVisible
-        ? next.opacity
-        : (priorStyle?.opacity ?? next.opacity),
-      colorInversion: next.liveVisible
-        ? next.colorInversion
-        : (priorStyle?.colorInversion ?? next.colorInversion),
-      liveVisible: next.liveVisible,
-      passThresholdByEngine: { ...next.passThresholdByEngine },
-    };
-    prefsRef.current = settings;
-    saveSettings(settings);
-  }, []);
+  const persistPreferencePatch = useCallback(
+    (patch: Partial<VisualDeltaSettings>) => {
+      const settings: VisualDeltaSettings = {
+        ...prefsRef.current,
+        ...patch,
+        passThresholdByEngine: patch.passThresholdByEngine
+          ? { ...patch.passThresholdByEngine }
+          : { ...prefsRef.current.passThresholdByEngine },
+      };
+      prefsRef.current = settings;
+      saveSettings(settings);
+    },
+    [],
+  );
 
   const waitForOverlayTeardown = useCallback((): Promise<void> => {
     if (!previewContainsVisualDeltaDom()) return Promise.resolve();
@@ -632,12 +630,15 @@ export function useStoryData(currentStoryId?: string) {
             data.align ?? primaryImages[0]?.align ?? prev.effectiveAlign,
           previewSplitZoomDefault: data.previewSplitZoomDefault ?? "fit",
           diffResultZoomDefault: data.diffResultZoomDefault ?? "100%",
-          splitZoom: resolveSplitZoomOnInit({
-            resetDefaults,
-            previousDefault: prev.previewSplitZoomDefault,
-            nextDefault: data.previewSplitZoomDefault ?? "fit",
-            current: prev.splitZoom,
-          }),
+          splitZoomPreference: prefs.splitZoom,
+          splitZoom:
+            prefs.splitZoom ??
+            resolveSplitZoomOnInit({
+              resetDefaults,
+              previousDefault: prev.previewSplitZoomDefault,
+              nextDefault: data.previewSplitZoomDefault ?? "fit",
+              current: prev.splitZoom,
+            }),
           baselineGeometryMismatch:
             prev.storyId === data.storyId && !diagnosticsStale
               ? prev.baselineGeometryMismatch
@@ -847,13 +848,15 @@ export function useStoryData(currentStoryId?: string) {
   const setIndex = useCallback(
     (index: number) => {
       setStoryData((prev) => {
-        const next = { ...prev, index, overlayOn: index >= 0 };
-        persist(next);
-        void selectImage(index, prev.images);
+        const overlayOn = index >= 0;
+        const nextIndex = overlayOn ? index : prev.index;
+        const next = { ...prev, index: nextIndex, overlayOn };
+        persistPreferencePatch({ overlayOn });
+        void selectImage(overlayOn ? nextIndex : -1, prev.images);
         return next;
       });
     },
-    [persist, selectImage],
+    [persistPreferencePatch, selectImage],
   );
 
   const hideOverlay = useCallback(() => {
@@ -894,35 +897,44 @@ export function useStoryData(currentStoryId?: string) {
     (opacity: number) => {
       setStoryData((prev) => {
         const next = { ...prev, opacity };
-        persist(next);
+        persistPreferencePatch({ opacity });
         emitStyle(next);
         return next;
       });
     },
-    [emitStyle, persist],
+    [emitStyle, persistPreferencePatch],
   );
 
   const setColorInversion = useCallback(
     (colorInversion: boolean) => {
       setStoryData((prev) => {
         const next = { ...prev, colorInversion };
-        persist(next);
+        persistPreferencePatch({ colorInversion });
         emitStyle(next);
         return next;
       });
     },
-    [emitStyle, persist],
+    [emitStyle, persistPreferencePatch],
   );
 
   const setSplitZoom = useCallback(
     (splitZoom: CompareZoomState) => {
       setStoryData((prev) => {
-        const next = { ...prev, splitZoom };
+        const preference: CompareZoomState =
+          splitZoom.mode === "fit"
+            ? { mode: "fit", scale: 1 }
+            : { ...splitZoom };
+        const next = {
+          ...prev,
+          splitZoom: preference,
+          splitZoomPreference: preference,
+        };
+        persistPreferencePatch({ splitZoom: preference });
         emitStyle(next);
         return next;
       });
     },
-    [emitStyle],
+    [emitStyle, persistPreferencePatch],
   );
 
   const setPlacement = useCallback(
@@ -939,15 +951,14 @@ export function useStoryData(currentStoryId?: string) {
           placement,
           images,
           opacity,
-          splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
         };
-        persist(next);
+        persistPreferencePatch({ placement, opacity });
         emitStyle(next);
         void selectImage(prev.index, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, persistPreferencePatch, selectImage],
   );
 
   /**
@@ -974,7 +985,7 @@ export function useStoryData(currentStoryId?: string) {
           // unlocks to natural size (no forced center). Do not emitStyle:
           // an UPDATE after HIDE can resurrect a ghost overlay.
           const next = { ...prev, overlayOn: false };
-          persist(next);
+          persistPreferencePatch({ overlayOn: false });
           hideOverlay();
           return next;
         }
@@ -987,9 +998,12 @@ export function useStoryData(currentStoryId?: string) {
           opacity: action.opacity,
           index: action.index,
           overlayOn: action.index >= 0,
-          splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
         };
-        persist(next);
+        persistPreferencePatch({
+          overlayOn: action.index >= 0,
+          placement: action.placement,
+          opacity: action.opacity,
+        });
         emitStyle(next);
         // Always re-SELECT (not bare SHOW) so soft-show still works after
         // remount / HMR cleared preview lastSelection.
@@ -997,7 +1011,7 @@ export function useStoryData(currentStoryId?: string) {
         return next;
       });
     },
-    [emitStyle, hideOverlay, persist, selectImage],
+    [emitStyle, hideOverlay, persistPreferencePatch, selectImage],
   );
 
   /**
@@ -1028,7 +1042,7 @@ export function useStoryData(currentStoryId?: string) {
             opacity: 1,
             colorInversion: false,
           };
-          persist(next);
+          persistPreferencePatch({ liveVisible: false });
           emitStyle(next);
           void selectImage(index, images);
           return next;
@@ -1051,13 +1065,13 @@ export function useStoryData(currentStoryId?: string) {
           colorInversion: priorStyle?.colorInversion ?? prev.colorInversion,
           overlayOn: prev.index >= 0,
         };
-        persist(next);
+        persistPreferencePatch({ liveVisible: true });
         emitStyle(next);
         void selectImage(prev.index, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, persistPreferencePatch, selectImage],
   );
 
   const setPassThresholdPercent = useCallback(
@@ -1070,11 +1084,13 @@ export function useStoryData(currentStoryId?: string) {
             [engine]: passThresholdPercent,
           },
         };
-        persist(next);
+        persistPreferencePatch({
+          passThresholdByEngine: next.passThresholdByEngine,
+        });
         return next;
       });
     },
-    [persist],
+    [persistPreferencePatch],
   );
 
   const resetOverlay = useCallback(() => {
@@ -1083,7 +1099,10 @@ export function useStoryData(currentStoryId?: string) {
 
   const resetSettings = useCallback(() => {
     clearSettings();
-    const defaults = { ...DEFAULT_SETTINGS };
+    const defaults: VisualDeltaSettings = {
+      ...DEFAULT_SETTINGS,
+      passThresholdByEngine: { ...DEFAULT_SETTINGS.passThresholdByEngine },
+    };
     prefsRef.current = defaults;
     setStoryData((prev) => {
       const images = withPlacement(prev.images, defaults.placement);
@@ -1105,6 +1124,7 @@ export function useStoryData(currentStoryId?: string) {
         placement: defaults.placement,
         liveVisible: defaults.liveVisible,
         passThresholdByEngine: { ...defaults.passThresholdByEngine },
+        splitZoomPreference: null,
         splitZoom: compareZoomFromDefault(prev.previewSplitZoomDefault),
       };
       emitStyle(next);
@@ -1148,8 +1168,8 @@ export function useStoryData(currentStoryId?: string) {
 
   /**
    * After create/update: bust image cache, force center overlay on, and show
-   * the live story under it for review. When images are not loaded yet (create
-   * empty-state), still persist center + overlayOn for the next INIT_IMAGE.
+   * the live story under it for this review. This derived reveal never changes
+   * the user's saved overlay, placement, or live-visibility preferences.
    */
   const revealCenteredOverlay = useCallback(() => {
     const bust = `t=${Date.now()}`;
@@ -1168,7 +1188,6 @@ export function useStoryData(currentStoryId?: string) {
           baselineAlignmentMismatch: null,
           baselineGeometryUnavailable: null,
         };
-        persist(next);
         return next;
       }
       const images = withPlacement(
@@ -1186,12 +1205,11 @@ export function useStoryData(currentStoryId?: string) {
         baselineAlignmentMismatch: null,
         baselineGeometryUnavailable: null,
       };
-      persist(next);
       emitStyle(next);
       void selectImage(patch.index, images);
       return next;
     });
-  }, [emitStyle, persist, selectImage]);
+  }, [emitStyle, selectImage]);
 
   /**
    * Seed gallery/overlay from known baseline URLs when CSF HMR has not yet
@@ -1211,6 +1229,7 @@ export function useStoryData(currentStoryId?: string) {
               offsetY: 0,
               align: prev.effectiveAlign,
               placement: "center" as const,
+              deviceScaleFactor: prev.deviceScaleFactor,
             };
           }),
           "center",
@@ -1231,13 +1250,12 @@ export function useStoryData(currentStoryId?: string) {
           baselineAlignmentMismatch: null,
           baselineGeometryUnavailable: null,
         };
-        persist(next);
         emitStyle(next);
         void selectImage(patch.index, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, selectImage],
   );
 
   /** Remove one exact primary image from the live gallery after local delete. */
@@ -1265,13 +1283,12 @@ export function useStoryData(currentStoryId?: string) {
           baselineAlignmentMismatch: null,
           baselineGeometryUnavailable: null,
         };
-        persist(next);
         emitStyle(next);
         void selectImage(index, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, selectImage],
   );
 
   /**
@@ -1283,83 +1300,84 @@ export function useStoryData(currentStoryId?: string) {
     (args: {
       storyId: string;
       storyName: string;
-      imageSrcs?: string[];
-      align?: AlignMode;
-      environment?: VisualBaselineEnvironment;
+      images?: VisualDeltaImage[];
+      modes?: VisualDeltaModes;
+      modeNames?: string[];
+      previewSplitZoomDefault?: VisualDeltaZoomDefault;
     }) => {
-      const { storyId, storyName, imageSrcs, align, environment } = args;
+      const { storyId, storyName } = args;
       if (!storyId) return;
       setStoryData((prev) => {
         if (
           prev.storyId === storyId &&
-          (prev.images.length > 0 || !imageSrcs?.length)
+          (prev.images.length > 0 || !args.images?.length)
         ) {
           return prev.storyName === storyName ? prev : { ...prev, storyName };
         }
+        const prefs = prefsRef.current;
         const bust = `t=${Date.now()}`;
-        const images =
-          imageSrcs && imageSrcs.length > 0
-            ? withPlacement(
-                imageSrcs.map((src) => {
-                  const base = src.split("?")[0] ?? src;
-                  return {
-                    src: `${base}?${bust}`,
-                    ...(environment ? { environment } : {}),
-                    offsetX: 0,
-                    offsetY: 0,
-                    align: align ?? prev.effectiveAlign,
-                    placement: "center" as const,
-                  };
-                }),
-                "center",
-              )
+        const sourceImages =
+          args.images && args.images.length > 0
+            ? args.images.map((image) => {
+                const base = image.src.split("?")[0] ?? image.src;
+                return { ...image, src: `${base}?${bust}` };
+              })
             : prev.storyId === storyId
               ? prev.images
               : [];
+        const presentation = managerSeedPresentation({
+          imageCount: sourceImages.length,
+          overlayOnPref: prefs.overlayOn,
+          liveVisible: prefs.liveVisible,
+          interactionPinned: false,
+          placement: prefs.placement,
+          splitZoomPreference: prefs.splitZoom,
+          projectZoomDefault:
+            args.previewSplitZoomDefault ?? prev.previewSplitZoomDefault,
+        });
+        const images = withPlacement(sourceImages, presentation.placement);
         if (images.length > 0) primaryImagesRef.current = images;
         const hasImages = images.length > 0;
-        const patch = hasImages
-          ? revealCenteredOverlayPatch({
-              index: 0,
-              imageCount: images.length,
-              placement: "center",
-              opacity: prev.opacity,
-            })
-          : null;
         const next: StoryData = {
           ...prev,
-          ...(patch ?? {}),
           storyId,
           storyName,
           renderGeneration:
             prev.storyId === storyId ? prev.renderGeneration : 0,
           storyFinished: prev.storyId === storyId ? prev.storyFinished : false,
           images,
-          effectiveAlign: align ?? prev.effectiveAlign,
-          placement: hasImages ? "center" : prev.placement,
-          index: patch
-            ? patch.index
-            : prev.storyId === storyId
-              ? prev.index
-              : -1,
-          overlayOn: patch
-            ? patch.overlayOn
-            : prev.storyId === storyId
-              ? prev.overlayOn
-              : false,
+          modes:
+            args.modes ?? (prev.storyId === storyId ? prev.modes : {}),
+          modeNames:
+            args.modeNames ??
+            (prev.storyId === storyId ? prev.modeNames : []),
+          selectedMode: prev.storyId === storyId ? prev.selectedMode : null,
+          effectiveAlign: images[0]?.align ?? prev.effectiveAlign,
+          deviceScaleFactor:
+            images[0]?.deviceScaleFactor ?? prev.deviceScaleFactor,
+          placement: presentation.placement,
+          liveVisible: prefs.liveVisible,
+          opacity: prefs.liveVisible ? prefs.opacity : 1,
+          colorInversion: prefs.liveVisible ? prefs.colorInversion : false,
+          index: presentation.index,
+          overlayOn: presentation.overlayOn,
+          splitZoomPreference: prefs.splitZoom,
+          splitZoom: presentation.splitZoom,
+          previewSplitZoomDefault:
+            args.previewSplitZoomDefault ?? prev.previewSplitZoomDefault,
         };
-        persist(next);
-        if (hasImages) {
+        if (hasImages && presentation.previewIndex >= 0) {
           emitStyle(next);
-          void selectImage(next.index, images);
-        } else if (prev.storyId !== storyId) {
-          // New story with no baselines — clear any previous story's overlay.
+          void selectImage(presentation.previewIndex, images);
+        } else {
+          // Hidden or absent baseline — hydrate the gallery but leave preview
+          // clear. Recovery must not expose a saved-hidden overlay.
           void selectImage(-1, []);
         }
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, selectImage],
   );
 
   /**
@@ -1411,36 +1429,40 @@ export function useStoryData(currentStoryId?: string) {
           placement,
           opacity,
         };
-        persist(next);
         emitStyle(next);
         void selectImage(0, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, selectImage],
   );
 
   /** Restore end-of-play gallery images (Default tab). */
   const restorePrimaryBaselines = useCallback(
-    (availablePrimaryImages: VisualDeltaImage[] = primaryImagesRef.current) => {
+    (
+      availablePrimaryImages: VisualDeltaImage[] = primaryImagesRef.current,
+      revealForReview = false,
+    ) => {
       pinInteractionSrc(activeInteractionSrcRef, null);
       setStoryData((prev) => {
         const images = withPlacement(availablePrimaryImages, prev.placement);
         const hasImages = images.length > 0;
+        const overlayOn =
+          hasImages &&
+          (revealForReview || prefsRef.current.overlayOn || !prev.liveVisible);
         const next: StoryData = {
           ...prev,
           images,
           index: hasImages ? 0 : -1,
-          overlayOn: hasImages,
+          overlayOn,
           selectedMode: null,
         };
-        persist(next);
         emitStyle(next);
-        void selectImage(next.index, images);
+        void selectImage(overlayOn ? next.index : -1, images);
         return next;
       });
     },
-    [emitStyle, persist, selectImage],
+    [emitStyle, selectImage],
   );
 
   const hydrateInteractions = useCallback((next: VisualDeltaInteraction[]) => {

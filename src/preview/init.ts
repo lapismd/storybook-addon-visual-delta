@@ -14,9 +14,9 @@ import type {
   VisualDeltaResolvedConfig,
 } from "../shared/config-types.js";
 import { resolveIgnoreSelectors } from "../shared/ignore.js";
-import { modeNames, stackModes } from "../shared/modes.js";
+import { modeNames } from "../shared/modes.js";
 import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
-import { normalizeImagesWithModes } from "./normalize.js";
+import { resolveVisualDeltaImages } from "./normalize.js";
 import type { StorybookLayoutMode } from "../shared/preview-layout.js";
 import { beginPreviewRender, readPreviewRender } from "./render-lifecycle.js";
 
@@ -50,17 +50,11 @@ export function buildInitPayload(
   projectDefaults: VisualDeltaProjectDefaults = BUILTIN_VISUAL_DELTA_DEFAULTS,
   configUpdated = false,
 ) {
-  const modes = stackModes(visualDeltaParams?.modes);
-  const deviceScaleFactor =
-    visualDeltaParams?.deviceScaleFactor ?? projectDefaults.deviceScaleFactor;
-  const normalizedImages = normalizeImagesWithModes({
-    placement: projectDefaults.placement,
-    ...visualDeltaParams,
+  const {
+    images: normalizedImages,
     modes,
-  }).map((image) => ({
-    ...image,
-    deviceScaleFactor: image.deviceScaleFactor ?? deviceScaleFactor,
-  }));
+    deviceScaleFactor,
+  } = resolveVisualDeltaImages(visualDeltaParams, projectDefaults);
   const placement = normalizePlacement(
     normalizedImages[0]?.placement ??
       visualDeltaParams?.placement ??

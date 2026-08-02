@@ -1,4 +1,9 @@
 import { isSplitPlacement, type PlacementMode } from "../constants.js";
+import {
+  compareZoomFromDefault,
+  type CompareZoomState,
+} from "./compare-zoom.js";
+import type { VisualDeltaZoomDefault } from "./config-types.js";
 
 export type OverlaySessionSnapshot = {
   overlayOn: boolean;
@@ -93,6 +98,31 @@ export function initImageSelection(args: {
     index,
     overlayOn,
     previewIndex: overlayOn ? index : -1,
+  };
+}
+
+/** Presentation state used by the manager-only recovery path. */
+export function managerSeedPresentation(args: {
+  imageCount: number;
+  overlayOnPref: boolean;
+  liveVisible: boolean;
+  interactionPinned: boolean;
+  placement: PlacementMode;
+  splitZoomPreference: CompareZoomState | null;
+  projectZoomDefault: VisualDeltaZoomDefault;
+}): {
+  index: number;
+  overlayOn: boolean;
+  previewIndex: number;
+  placement: PlacementMode;
+  splitZoom: CompareZoomState;
+} {
+  return {
+    ...initImageSelection(args),
+    placement: args.liveVisible ? args.placement : "center",
+    splitZoom:
+      args.splitZoomPreference ??
+      compareZoomFromDefault(args.projectZoomDefault),
   };
 }
 

@@ -291,6 +291,7 @@ describe("CompareView zoom and coordinates", () => {
       expect(horizontalRail).toHaveStyle({ visibility: "visible" }),
     );
     expect(verticalRail).toHaveStyle({ visibility: "visible" });
+    await waitForScrollSync();
 
     baselinePane.scrollLeft = 180;
     baselinePane.scrollTop = 90;
