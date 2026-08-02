@@ -5,6 +5,7 @@ import {
   bodyOuterInsets,
   measurePreviewLayout,
   previewLayoutCacheKey,
+  projectRootWidthToViewport,
   totalInsets,
   type PreviewLayoutSnapshot,
 } from "./preview-layout.js";
@@ -236,5 +237,34 @@ describe("PreviewLayoutSnapshot", () => {
       cropToViewport: false,
     });
     expect(totalInsets(insets)).toEqual({ x: 10, y: 4 });
+  });
+
+  it("projects the live root to the baseline capture width", () => {
+    const snapshot = installFixture();
+    const narrowSnapshot = {
+      ...snapshot,
+      viewport: { width: 1061, height: 700 },
+      root: {
+        ...snapshot.root,
+        rect: { ...snapshot.root.rect, width: 1061 },
+      },
+    };
+
+    expect(
+      projectRootWidthToViewport(narrowSnapshot, { width: 1280 }),
+    ).toBe(1280);
+  });
+
+  it("preserves measured width outside the root", () => {
+    const snapshot = installFixture();
+
+    expect(projectRootWidthToViewport(snapshot, { width: 1440 })).toBe(1390);
+    expect(projectRootWidthToViewport(snapshot, { width: 1280 })).toBe(1230);
+  });
+
+  it("clamps a projected root width above zero", () => {
+    const snapshot = installFixture();
+
+    expect(projectRootWidthToViewport(snapshot, { width: 1 })).toBe(1);
   });
 });

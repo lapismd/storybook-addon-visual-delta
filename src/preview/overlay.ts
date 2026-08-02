@@ -47,6 +47,7 @@ import {
 import {
   baselineOuterInsets,
   bodyOuterInsets,
+  projectRootWidthToViewport,
   totalInsets,
   type BackgroundSnapshot,
   type BoxSidesPx,
@@ -379,6 +380,7 @@ function reportBaselineGeometry(
   canvasElement: HTMLElement,
   imageItem: VisualDeltaImage,
   sizes: BaselineCompareSizes | null | undefined,
+  measuredViewport: { width: number; height: number },
 ) {
   if (!sizes) return;
   const subjectRect = resolveSubjectRect(canvasElement);
@@ -389,6 +391,7 @@ function reportBaselineGeometry(
       sizes.content,
       liveCss,
       captureViewport,
+      measuredViewport,
       currentCropToViewport,
     ),
   );
@@ -494,18 +497,24 @@ function syncMeasuredPaneLayout(
   const centeredComponent =
     snapshot.layout === "centered" && !viewportCapture && snapshot.subject;
   if (centeredComponent && snapshot.subject) {
+    const projectedRootWidth = projectRootWidthToViewport(
+      snapshot,
+      viewportForImage(imageItem),
+    );
+    const projectedSubjectLeft =
+      snapshot.subject.rect.left -
+      snapshot.root.rect.left +
+      (projectedRootWidth - snapshot.root.rect.width) / 2;
     applyPadding(baselineFrame, {
       top: 0,
       right: 0,
       bottom: 0,
       left: 0,
     });
-    baselineFrame.style.width = `${snapshot.root.rect.width}px`;
+    baselineFrame.style.width = `${projectedRootWidth}px`;
     baselineFrame.style.height = `${snapshot.root.rect.height}px`;
     overlay.style.position = "absolute";
-    overlay.style.left = `${
-      snapshot.subject.rect.left - snapshot.root.rect.left
-    }px`;
+    overlay.style.left = `${projectedSubjectLeft}px`;
     overlay.style.top = `${
       snapshot.subject.rect.top - snapshot.root.rect.top
     }px`;
@@ -1082,8 +1091,16 @@ function applyEqualPaneViewports(
     ? `${paneH}px`
     : `${paneH * 2 + SPLIT_DIVIDER_THICKNESS_PX}px`;
 
-  lockLiveViewportWidth(canvasElement, snapshot.root.rect.width);
-  reportBaselineGeometry(canvasElement, selectedImage, sizes);
+  lockLiveViewportWidth(
+    canvasElement,
+    projectRootWidthToViewport(snapshot, viewportForImage(selectedImage)),
+  );
+  reportBaselineGeometry(
+    canvasElement,
+    selectedImage,
+    sizes,
+    snapshot.viewport,
+  );
   const subject = canvasElement.querySelector(":scope > *");
   const baselineImage = baselinePane.querySelector(`#${OVERLAY_ID} > img`);
   if (subject instanceof HTMLElement) {
@@ -1607,8 +1624,16 @@ function applyOverlayPosition(
     lastCompareSizes = compareSizes;
     const snapshot = lastSelection?.layoutSnapshot;
     if (!snapshot) return;
-    lockLiveViewportWidth(canvasElement, snapshot.root.rect.width);
-    reportBaselineGeometry(canvasElement, imageItem, compareSizes);
+    lockLiveViewportWidth(
+      canvasElement,
+      projectRootWidthToViewport(snapshot, viewportForImage(imageItem)),
+    );
+    reportBaselineGeometry(
+      canvasElement,
+      imageItem,
+      compareSizes,
+      snapshot.viewport,
+    );
   }
   if (!centerHostRestoreRef) {
     const previousPosition = canvasParent.style.position;

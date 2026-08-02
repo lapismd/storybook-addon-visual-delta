@@ -482,6 +482,50 @@ export const Responsive1440ViewportCanary: Story = {
   },
 };
 
+export const ResponsiveCanvasFitFixture: Story = {
+  name: "Responsive canvas Fit fixture",
+  tags: ["!skip-visual"],
+  parameters: {
+    visualDelta: {
+      images: [
+        {
+          src: "/visual-baselines/shadcn/tabs/preview-chromium-darwin.png",
+          viewport: { width: 1280, height: 900 },
+          deviceScaleFactor: 3,
+          align: "canvas",
+          placement: "right",
+        },
+      ],
+    },
+  },
+  render: () => (
+    <div
+      data-testid="responsive-canvas-fit-fixture"
+      style={{
+        boxSizing: "border-box",
+        width: "calc(100% - 48px)",
+        height: 408,
+        margin: 24,
+        display: "grid",
+        placeItems: "center",
+        border: "4px solid #2563eb",
+        borderRadius: 12,
+        background: "#eff6ff",
+        color: "#1e3a8a",
+        font: "700 32px/1.2 system-ui, sans-serif",
+      }}
+    >
+      Responsive canvas
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByTestId("responsive-canvas-fit-fixture"),
+    ).toBeInTheDocument();
+  },
+};
+
 export const DelayedStoryCompletion: Story = {
   name: "Delayed story completion",
   tags: ["!skip-visual"],

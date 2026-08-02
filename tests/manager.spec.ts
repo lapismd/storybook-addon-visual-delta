@@ -7,6 +7,7 @@ import {
   MANAGER_FIXTURE,
   NATURAL_WIDTH_COMPONENT_FIXTURE,
   OVERVIEW,
+  RESPONSIVE_CANVAS_FIT_FIXTURE,
   clickThrough,
   mockVisualBackend,
   openManager,
@@ -1250,23 +1251,9 @@ test.describe("Visual Delta manager integration", () => {
         splitVisible: true,
         subjectInlineWidth: "",
         subjectComputedWidth: 264,
+        canvasInlineWidth: "1280px",
       });
-    await expect
-      .poll(() =>
-        frame.locator("body").evaluate((body) => {
-          const subject = body.querySelector(
-            "[data-ui-component='task-due-calendar']",
-          );
-          const canvas = subject?.closest(
-            "#storybook-root",
-          ) as HTMLElement | null;
-          return canvas?.style.width ?? "";
-        }),
-      )
-      .toMatch(/^\d+px$/);
-    await expect(page.getByTestId("baseline-geometry-warning")).toContainText(
-      "Baseline 3696×561 CSS px; live component 264×187 CSS px",
-    );
+    await expect(page.getByTestId("baseline-geometry-warning")).toHaveCount(0);
     await expect(frame.locator("#visual-delta-overlay > img")).toBeVisible({
       timeout: 15_000,
     });
@@ -1324,6 +1311,140 @@ test.describe("Visual Delta manager integration", () => {
       .toBe(true);
     await page.getByRole("button", { name: "Close modal" }).click();
     expect(writes).toEqual([]);
+  });
+
+  test("fits a responsive canvas from canonical dimensions in a narrow manager iframe", async ({
+    page,
+  }) => {
+    const compareBodies: Array<Record<string, unknown>> = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.endsWith("/compare-story")) {
+        compareBodies.push(request.postDataJSON() as Record<string, unknown>);
+      }
+    });
+    const requests = await mockVisualBackend(page);
+    await openManager(page, RESPONSIVE_CANVAS_FIT_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    const frame = previewFrame(page);
+    const readFitGeometry = () =>
+      frame.locator("body").evaluate((body) => {
+        const root = body.querySelector("#storybook-root");
+        const subject = body.querySelector(
+          "[data-testid='responsive-canvas-fit-fixture']",
+        );
+        const image = body.querySelector(
+          "#visual-delta-baseline-pane #visual-delta-overlay img, #visual-delta-overlay > img",
+        );
+        if (
+          !(root instanceof HTMLElement) ||
+          !(subject instanceof HTMLElement) ||
+          !(image instanceof HTMLImageElement)
+        ) {
+          return null;
+        }
+        const subjectRect = subject.getBoundingClientRect();
+        const imageRect = image.getBoundingClientRect();
+        return {
+          measuredViewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+          },
+          rootInlineWidth: root.style.width,
+          subjectLayout: {
+            width: Number.parseFloat(getComputedStyle(subject).width),
+            height: Number.parseFloat(getComputedStyle(subject).height),
+          },
+          baselineCss: {
+            width: image.naturalWidth / 3,
+            height: image.naturalHeight / 3,
+          },
+          rendered: {
+            subjectWidth: subjectRect.width,
+            subjectHeight: subjectRect.height,
+            imageWidth: imageRect.width,
+            imageHeight: imageRect.height,
+          },
+        };
+      });
+
+    await expect(frame.locator("#visual-delta-overlay > img")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect.poll(readFitGeometry).toMatchObject({
+      rootInlineWidth: "1280px",
+      subjectLayout: { width: 1232, height: 408 },
+      baselineCss: { width: 1232, height: 408 },
+    });
+    const initial = await readFitGeometry();
+    expect(initial?.measuredViewport).not.toEqual({ width: 1280, height: 900 });
+    expect(initial?.rendered.subjectWidth).toBeCloseTo(
+      initial?.rendered.imageWidth ?? 0,
+      0,
+    );
+    expect(initial?.rendered.subjectHeight).toBeCloseTo(
+      initial?.rendered.imageHeight ?? 0,
+      0,
+    );
+    await expect(page.getByTestId("baseline-geometry-warning")).toHaveCount(0);
+
+    await clickThrough(
+      panel.getByRole("switch", { name: "Baseline centered over live" }),
+    );
+    await expect.poll(readFitGeometry).toMatchObject({
+      rootInlineWidth: "1280px",
+      subjectLayout: { width: 1232, height: 408 },
+      baselineCss: { width: 1232, height: 408 },
+    });
+
+    await clickThrough(
+      panel.getByRole("switch", { name: "Baseline below live" }),
+    );
+    await expect.poll(readFitGeometry).toMatchObject({
+      rootInlineWidth: "1280px",
+      subjectLayout: { width: 1232, height: 408 },
+    });
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect.poll(readFitGeometry).toMatchObject({
+      rootInlineWidth: "1280px",
+      subjectLayout: { width: 1232, height: 408 },
+      baselineCss: { width: 1232, height: 408 },
+    });
+    const resized = await readFitGeometry();
+    expect(resized?.measuredViewport).not.toEqual({ width: 1280, height: 900 });
+    expect(resized?.rendered.subjectWidth).toBeCloseTo(
+      resized?.rendered.imageWidth ?? 0,
+      0,
+    );
+    expect(resized?.rendered.subjectHeight).toBeCloseTo(
+      resized?.rendered.imageHeight ?? 0,
+      0,
+    );
+    await expect(page.getByTestId("baseline-geometry-warning")).toHaveCount(0);
+
+    await page
+      .getByRole("button", { name: "Choose Diff HTML or Diff Browser" })
+      .click();
+    await page
+      .getByRole("button", { name: "Diff Browser", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: /Compare via the selected Playwright browser/,
+      })
+      .click();
+    await expect.poll(() => compareBodies.length).toBe(1);
+    await expect(
+      page.getByRole("button", { name: /Log: Visual: 1 passed \(story\)/i }),
+    ).toBeVisible();
+    expect(compareBodies[0]).toMatchObject({
+      storyId: RESPONSIVE_CANVAS_FIT_FIXTURE,
+      browser: "chromium",
+    });
+    expect(
+      requests.filter((pathname) => !pathname.endsWith("/compare-story")),
+    ).toEqual([]);
   });
 });
 

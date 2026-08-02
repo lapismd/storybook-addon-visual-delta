@@ -242,6 +242,24 @@ export function totalInsets(insets: BoxSidesPx): {
   };
 }
 
+/**
+ * Project Storybook's measured root width to another iframe viewport while
+ * preserving the measured width outside the root. The manager iframe remains
+ * the visible container; this width gives responsive component layout the
+ * same horizontal canvas it had for the baseline capture.
+ */
+export function projectRootWidthToViewport(
+  snapshot: Pick<PreviewLayoutSnapshot, "viewport" | "root">,
+  targetViewport: { width: number },
+): number {
+  return Math.max(
+    1,
+    snapshot.root.rect.width +
+      targetViewport.width -
+      snapshot.viewport.width,
+  );
+}
+
 export function previewLayoutCacheKey(options: {
   storyId: string;
   renderGeneration: number;

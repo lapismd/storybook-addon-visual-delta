@@ -8,6 +8,7 @@ describe("baselineGeometryMismatch", () => {
         { width: 1232, height: 187 },
         { width: 263.968, height: 187 },
         { width: 1280, height: 900 },
+        { width: 1280, height: 900 },
         false,
       ),
     ).toEqual({
@@ -23,6 +24,7 @@ describe("baselineGeometryMismatch", () => {
         { width: 264, height: 187 },
         { width: 263.968, height: 187.4 },
         { width: 1280, height: 900 },
+        { width: 1280, height: 900 },
         false,
       ),
     ).toBeNull();
@@ -31,6 +33,19 @@ describe("baselineGeometryMismatch", () => {
         { width: 1280, height: 900 },
         { width: 264, height: 187 },
         { width: 1280, height: 900 },
+        { width: 1061, height: 700 },
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  it("suppresses responsive component geometry from another viewport", () => {
+    expect(
+      baselineGeometryMismatch(
+        { width: 1248, height: 544 },
+        { width: 1029, height: 544 },
+        { width: 1280, height: 900 },
+        { width: 1061, height: 700 },
         false,
       ),
     ).toBeNull();

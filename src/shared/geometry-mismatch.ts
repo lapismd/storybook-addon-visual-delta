@@ -35,9 +35,16 @@ export function baselineGeometryMismatch(
   baselineCss: Size,
   liveCss: Size,
   captureViewport: Size,
+  measuredViewport: Size,
   cropToViewport: boolean,
 ): BaselineGeometryMismatch | null {
   if (cropToViewport || isViewportSizedBaseline(baselineCss, captureViewport)) {
+    return null;
+  }
+  if (
+    measuredViewport.width !== captureViewport.width ||
+    measuredViewport.height !== captureViewport.height
+  ) {
     return null;
   }
   if (
