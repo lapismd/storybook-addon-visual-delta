@@ -633,6 +633,7 @@ export async function compareExactStory(
     mode?: string;
     browser?: VisualDeltaBrowser;
     onProgress?: (progress: { label: string }) => void;
+    onLog?: (line: string) => void;
     signal?: AbortSignal;
   },
 ): Promise<VisualRunResultItem> {
@@ -733,6 +734,7 @@ export async function compareExactStory(
     {
       signal: options?.signal,
       onProgress: (progress) => options?.onProgress?.(progress),
+      onLog: (line) => options?.onLog?.(line),
     },
   );
   return {

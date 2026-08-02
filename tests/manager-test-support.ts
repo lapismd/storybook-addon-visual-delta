@@ -203,6 +203,10 @@ export async function mockVisualBackend(
             label: "Capturing…",
           }),
           JSON.stringify({
+            type: "log",
+            line: "Installing clean Linux/ARM64 workspace…\n",
+          }),
+          JSON.stringify({
             type: "done",
             ok: true,
             storyId: body.storyId,

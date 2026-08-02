@@ -104,6 +104,7 @@ export async function compareStoryInCaptureRunner(options: {
   hostOptions?: VisualDeltaHostOptions;
   request: CompareStoryRequest;
   onProgress?: (progress: CaptureSubjectProgress) => void;
+  onLog?: (line: string) => void;
 }): Promise<CompareStoryResult> {
   const storyId = options.request.storyId.trim();
   const browser = options.request.browser ?? "chromium";
@@ -189,6 +190,7 @@ export async function compareStoryInCaptureRunner(options: {
         if (event.type === "start") {
           options.onProgress?.({ phase: "navigating", label: "Preparing canonical Storybook…" });
         } else if (event.type === "log") {
+          options.onLog?.(event.message);
           options.onProgress?.({ phase: "capturing", label: "Running visual comparison…" });
         }
       },

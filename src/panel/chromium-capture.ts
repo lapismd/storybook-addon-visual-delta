@@ -149,6 +149,7 @@ export async function postBrowserStoryCompare(
   body: Omit<CompareStoryRequest, "origin"> & { origin?: string },
   options?: {
     onProgress?: (progress: CaptureSubjectProgress) => void;
+    onLog?: (line: string) => void;
     signal?: AbortSignal;
   },
 ): Promise<CompareStoryResult> {
@@ -180,6 +181,8 @@ export async function postBrowserStoryCompare(
     }
     if (event.type === "progress") {
       options?.onProgress?.({ phase: event.phase, label: event.label });
+    } else if (event.type === "log") {
+      options?.onLog?.(event.line);
     } else if (event.type === "done") {
       result = event;
     } else if (event.type === "error") {

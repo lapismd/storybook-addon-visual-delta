@@ -85,6 +85,8 @@ export type VisualDeltaResolvedConfig = {
   projectDefaults: VisualDeltaProjectDefaults;
   /** Enabled local Playwright browser projects; Chromium alone by default. */
   browsers: import("./environments.js").VisualDeltaBrowser[];
+  /** Root-relative derived-cache directories omitted by the built-in runner. */
+  captureWorkspaceIgnore?: string[];
   /** Node platform hosting the development middleware. */
   runtimePlatform: string;
   /** @deprecated Legacy environment inventory; canonical responses return []. */

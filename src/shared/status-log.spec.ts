@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendStatusLogChunk,
   appendVisualRunLogLine,
   formatProgressFraction,
   lastMeaningfulLogLine,
@@ -7,6 +8,14 @@ import {
 } from "./status-log.js";
 
 describe("status-log helpers", () => {
+  it("appends streamed process chunks without inventing line breaks", () => {
+    const first = appendStatusLogChunk(null, "installing ");
+    expect(appendStatusLogChunk(first, "workspace\r\nready\n")).toBe(
+      "installing workspace\nready\n",
+    );
+    expect(appendStatusLogChunk("1234", "56", 4)).toBe("3456");
+  });
+
   it("lastMeaningfulLogLine returns the last non-empty line", () => {
     expect(lastMeaningfulLogLine("a\nb\n\n")).toBe("b");
     expect(lastMeaningfulLogLine("only")).toBe("only");

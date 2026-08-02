@@ -33,6 +33,7 @@ import {
   type VisualDeltaCaptureRunner,
 } from "../runner/index.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 export const VISUAL_DELTA_RUNNER_MODULE_REL = ".visual-delta/runner.mjs";
 export const VISUAL_DELTA_CAPTURE_WORKER_ENV =
@@ -46,8 +47,25 @@ const currentPackageRoot = path.resolve(
   path.dirname(currentPackageModulePath),
   "../..",
 );
-const runningPackageFromSource =
-  path.basename(path.dirname(path.dirname(currentPackageModulePath))) === "src";
+
+export function shouldBuildVisualDeltaPackageWorker(options: {
+  modulePath: string;
+  packageRoot: string;
+}): boolean {
+  const packageRoot = path.resolve(options.packageRoot);
+  const relativeModulePath = path
+    .relative(packageRoot, path.resolve(options.modulePath))
+    .replaceAll(path.sep, "/");
+  return (
+    relativeModulePath.startsWith("src/node/") &&
+    existsSync(path.join(packageRoot, "tsconfig.node-build.json"))
+  );
+}
+
+const runningPackageFromSource = shouldBuildVisualDeltaPackageWorker({
+  modulePath: currentPackageModulePath,
+  packageRoot: currentPackageRoot,
+});
 
 function commandAvailable(command: string): boolean {
   try {
@@ -80,6 +98,7 @@ const STAGE_COPY_IGNORES = new Set([
   ".git",
   ".jj",
   ".cache",
+  ".turbo",
   "blob-report",
   "dist",
   "node_modules",
@@ -104,6 +123,7 @@ function isPathAncestorOf(relative: string, directory: string): boolean {
 export function shouldStageVisualDeltaWorkspacePath(
   relativePath: string,
   affectedCacheDir = DEFAULT_AFFECTED_CACHE_DIR_REL,
+  captureWorkspaceIgnore: readonly string[] = [],
 ): boolean {
   const relative = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
   if (!relative) return true;
@@ -116,6 +136,13 @@ export function shouldStageVisualDeltaWorkspacePath(
     );
   }
   if (relative.startsWith(".cache/")) {
+    return false;
+  }
+  if (
+    captureWorkspaceIgnore.some((directory) =>
+      isPathAtOrBelow(relative, directory),
+    )
+  ) {
     return false;
   }
   return !relative.split("/").some((segment) => STAGE_COPY_IGNORES.has(segment));
@@ -140,7 +167,11 @@ function affectedCacheArtifactPaths(
   return AFFECTED_CACHE_FILE_NAMES.map((name) => `${directory}/${name}`);
 }
 
-function createStagedWorkspace(root: string, affectedCacheDir: string): {
+function createStagedWorkspace(
+  root: string,
+  affectedCacheDir: string,
+  captureWorkspaceIgnore: readonly string[],
+): {
   parent: string;
   workspace: string;
 } {
@@ -150,7 +181,11 @@ function createStagedWorkspace(root: string, affectedCacheDir: string): {
     recursive: true,
     filter(source) {
       const relative = path.relative(root, source).replaceAll(path.sep, "/");
-      return shouldStageVisualDeltaWorkspacePath(relative, affectedCacheDir);
+      return shouldStageVisualDeltaWorkspacePath(
+        relative,
+        affectedCacheDir,
+        captureWorkspaceIgnore,
+      );
     },
   });
   return { parent, workspace };
@@ -224,7 +259,10 @@ export function dockerWorkspaceArgv(
   });
 }
 
-function regularFiles(root: string): string[] {
+function regularFiles(
+  root: string,
+  captureWorkspaceIgnore: readonly string[],
+): string[] {
   const files: string[] = [];
   const pending = [root];
   while (pending.length) {
@@ -232,6 +270,14 @@ function regularFiles(root: string): string[] {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (STAGE_COPY_IGNORES.has(entry.name)) continue;
       const absolute = path.join(directory, entry.name);
+      const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
+      if (
+        captureWorkspaceIgnore.some((ignored) =>
+          isPathAtOrBelow(relative, ignored),
+        )
+      ) {
+        continue;
+      }
       if (entry.isDirectory()) pending.push(absolute);
       else if (entry.isFile()) files.push(absolute);
     }
@@ -239,11 +285,12 @@ function regularFiles(root: string): string[] {
   return files;
 }
 
-function changedStagedArtifacts(
+export function changedStagedArtifacts(
   originalRoot: string,
   stagedRoot: string,
+  captureWorkspaceIgnore: readonly string[] = [],
 ): NonNullable<VisualCaptureRunnerResult["stagedArtifacts"]> {
-  return regularFiles(stagedRoot).flatMap((stagedPath) => {
+  return regularFiles(stagedRoot, captureWorkspaceIgnore).flatMap((stagedPath) => {
     const relativePath = path.relative(stagedRoot, stagedPath).replaceAll(path.sep, "/");
     const originalPath = path.join(originalRoot, ...relativePath.split("/"));
     const stagedBytes = readFileSync(stagedPath);
@@ -487,7 +534,14 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         manifest.root,
         manifest.argv,
       );
-      const staged = createStagedWorkspace(manifest.root, cacheDir);
+      const captureWorkspaceIgnore = readVisualDeltaProjectConfig(
+        manifest.root,
+      ).captureWorkspaceIgnore;
+      const staged = createStagedWorkspace(
+        manifest.root,
+        cacheDir,
+        captureWorkspaceIgnore,
+      );
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
       const storeVolume = `visual-delta-pnpm-store-${key}`;
       try {
@@ -541,7 +595,11 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         context.onEvent?.({ type: "done", exitCode, profile });
         if (manifest.operation === "test") {
           const stagedArtifacts = [
-            ...changedStagedArtifacts(manifest.root, staged.workspace),
+            ...changedStagedArtifacts(
+              manifest.root,
+              staged.workspace,
+              captureWorkspaceIgnore,
+            ),
             ...changedExactArtifacts(
               manifest.root,
               staged.workspace,
@@ -571,6 +629,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           stagedArtifacts: changedStagedArtifacts(
             manifest.root,
             staged.workspace,
+            captureWorkspaceIgnore,
           ),
         };
       } catch (error) {

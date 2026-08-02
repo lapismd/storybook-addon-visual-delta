@@ -10,7 +10,7 @@ These requirements keep configuration precedence explicit and preserve safe defa
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | VD-CONF-001 | Effective capture settings MUST resolve in this order: explicit story value, project default, built-in default. An absent value falls through; a valid falsy value does not.                    |
 | VD-CONF-002 | Host options MUST configure integration capabilities and paths. They MUST NOT override an explicit story capture value.                                                                         |
-| VD-CONF-003 | `.visual-delta/config.json` MUST be the durable project configuration. The legacy `.visual-delta/playwright.json` MAY supply only the Playwright pass threshold when the project file does not. |
+| VD-CONF-003 | `.visual-delta/config.json` MUST be the durable project configuration. It MAY declare validated root-relative `captureWorkspaceIgnore` directories that the built-in runner excludes from staging and post-run inventory while retaining package-owned affected-cache files. The legacy `.visual-delta/playwright.json` MAY supply only the Playwright pass threshold when the project file does not. |
 | VD-CONF-004 | `parameters.visualDelta` MUST contain story-owned baseline wiring and story-specific overrides. Interaction entries MUST use `{ id, label, src }`.                                              |
 | VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.              |
 | VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                   |
@@ -32,9 +32,18 @@ Local panel preferences can change how one browser displays a comparison. They d
 
 ## Project configuration
 
-`.visual-delta/config.json` contains the editable default keys, MAY contain a `browsers` array, and MAY contain a `workflow` object. Readers MAY accept the older `projectDefaults` wrapper. Unknown or invalid editable keys MUST produce diagnostics and MUST NOT be applied.
+`.visual-delta/config.json` contains the editable default keys, MAY contain a `browsers` array, a `workflow` object, and a `captureWorkspaceIgnore` array. Readers MAY accept the older `projectDefaults` wrapper. Unknown or invalid editable keys MUST produce diagnostics and MUST NOT be applied.
 
 `browsers` defaults to `["chromium"]`. The supported values are `chromium`, `firefox`, and `webkit`; duplicates, unknown names, and an empty array are invalid. WebKit is presented as WebKit, not Safari. Each configured browser creates one independent baseline target in the canonical capture profile.
+
+`captureWorkspaceIgnore` defaults to `[]`. Each entry is a unique,
+root-relative directory path without `.` or `..` segments; a trailing slash is
+normalized away. The built-in runner excludes that directory and its descendants
+from both the clean staged copy and the post-run artifact candidate inventory.
+This is intended for derived tool caches such as `.nx/cache`; it MUST NOT be
+used to omit source, baselines, or configuration required by the clean build.
+Package-owned affected cache files retain their explicit transport allow-list
+even if an ancestor cache directory would otherwise be ignored.
 
 The built-in project defaults are:
 

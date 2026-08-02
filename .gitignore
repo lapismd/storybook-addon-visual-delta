@@ -3,6 +3,7 @@ dist
 storybook-static
 spec/book
 .cache
+.turbo
 coverage
 test-results
 playwright-report

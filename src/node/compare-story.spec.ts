@@ -157,9 +157,10 @@ describe("compareStoryInCaptureRunner", () => {
     const sidecarHash = createHash("sha256").update(sidecar).digest("hex");
     writeFileSync(
       path.join(configDir, "runner.mjs"),
-      `import { writeFileSync } from "node:fs"; const profile = ${JSON.stringify(runnerProfile)}; const stage = ${JSON.stringify(stage)}; export default { id: "compare-fixture", kind: "custom", profile, async run(manifest, context) { context.onEvent?.({ type: "start", profile }); writeFileSync(stage + "/argv.json", JSON.stringify(manifest.argv)); return { exitCode: 0, profile, stagedArtifactRoot: stage, stagedArtifacts: [{ relativePath: ${JSON.stringify(sidecarRelative)}, sha256: ${JSON.stringify(sidecarHash)} }] }; } };\n`,
+      `import { writeFileSync } from "node:fs"; const profile = ${JSON.stringify(runnerProfile)}; const stage = ${JSON.stringify(stage)}; export default { id: "compare-fixture", kind: "custom", profile, async run(manifest, context) { context.onEvent?.({ type: "start", profile }); context.onEvent?.({ type: "log", message: "clean Linux/ARM64 worker ready\\n" }); writeFileSync(stage + "/argv.json", JSON.stringify(manifest.argv)); return { exitCode: 0, profile, stagedArtifactRoot: stage, stagedArtifacts: [{ relativePath: ${JSON.stringify(sidecarRelative)}, sha256: ${JSON.stringify(sidecarHash)} }] }; } };\n`,
     );
     try {
+      const logs: string[] = [];
       const result = await compareStoryInCaptureRunner({
         root,
         hostOptions: {
@@ -179,6 +180,7 @@ describe("compareStoryInCaptureRunner", () => {
             "/visual-baselines/examples-card--default-chromium.png",
           browser: "chromium",
         },
+        onLog: (line) => logs.push(line),
       });
       expect(result.captureProfile).toEqual(runnerProfile);
       expect(result.sidecar.outcome).toBe("passed");
@@ -193,6 +195,7 @@ describe("compareStoryInCaptureRunner", () => {
         ]),
       );
       expect(argv).not.toContain("--all");
+      expect(logs).toEqual(["clean Linux/ARM64 worker ready\n"]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

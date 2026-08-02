@@ -76,7 +76,10 @@ import {
   type DiffCaptureEngine,
 } from "../manager/DiffCaptureSplitButton.js";
 import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
-import { appendVisualRunLogLine } from "../shared/status-log.js";
+import {
+  appendStatusLogChunk,
+  appendVisualRunLogLine,
+} from "../shared/status-log.js";
 import type { DiffResultData } from "../types.js";
 import {
   capturePreviewSubject,
@@ -1377,6 +1380,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       );
       setCaptureError(null);
       setDiffResult(null);
+      if (engine === "chromium") setUpdateLog(null);
       try {
         const selectedImage = images[diffIndex];
         // Soft-hide clears the preview overlay attach — load from gallery src.
@@ -1396,6 +1400,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         let observedCaptureViewport = captureViewport;
 
         if (engine === "chromium") {
+          let streamedLog = "";
           const result = await compareExactStory(api, storyId!, {
             baselineUrl: baselineUrlForComparison(baselineSrcForDiff),
             visualCaptureUntil: selectedInteractionId ?? undefined,
@@ -1404,6 +1409,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             browser: selectedBrowser,
             signal: abort.signal,
             onProgress: (progress) => setDiffProgressLabel(progress.label),
+            onLog: (line) => {
+              streamedLog = appendStatusLogChunk(streamedLog, line);
+              setUpdateLog(streamedLog);
+            },
           });
           if (abort.signal.aborted) return;
           applyVisualStatuses([result]);
@@ -1438,7 +1447,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             error: outcomePassed || warning ? undefined : "1 failed",
             scope: "story",
             results: [result],
-            logTail: `Live ${selectedBrowser} story comparison`,
+            logTail:
+              streamedLog || `Live ${selectedBrowser} story comparison`,
           });
           const stem =
             baselineSrcForDiff.split("?")[0] ??
@@ -1951,6 +1961,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         await testProviderStore.runWithState(async () => {
           if (scope === "story") {
             applyPendingVisualStatuses([storyId!]);
+            let streamedLog = "";
+            setUpdateLog(null);
             const result = await compareExactStory(api, storyId!, {
               baselineUrl: baselineUrlForComparison(baselineSrc),
               visualCaptureUntil: selectedInteractionId ?? undefined,
@@ -1958,6 +1970,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               mode: selectedMode ?? undefined,
               browser: selectedBrowser,
               onProgress: (progress) => setDiffProgressLabel(progress.label),
+              onLog: (line) => {
+                streamedLog = appendStatusLogChunk(streamedLog, line);
+                setUpdateLog(streamedLog);
+              },
             });
             applyVisualRunResults([storyId!], [result]);
             if (result.review?.autoAccepted) {
@@ -1991,7 +2007,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               error: outcomePassed || warning ? undefined : "1 failed",
               scope: "story",
               results: [result],
-              logTail: `Live ${selectedBrowser} story comparison`,
+              logTail:
+                streamedLog || `Live ${selectedBrowser} story comparison`,
             });
             setDiffEpoch(Date.now());
             if (!outcomePassed && !warning) {

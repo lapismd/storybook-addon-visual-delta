@@ -24,7 +24,7 @@ These requirements preserve ownership and trustworthy state across process bound
 
 | ID          | Requirement                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. |
+| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. Executing an exported source entry from a packed dependency MUST use that package's shipped worker and MUST NOT be mistaken for a buildable source checkout. |
 | VD-ARCH-002 | Authoritative visual data MUST flow from a settled preview through a configured browser in the canonical Linux/ARM64 capture profile to staged PNG and sidecar artifacts. Presentation state MUST NOT substitute for capture evidence. |
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Sidecars, static output, run state, and affected caches are derived evidence and MUST be safe to regenerate.                                                       |
@@ -60,8 +60,10 @@ package worker into the capture container. Workspace installation remains
 responsible for the consumer's Storybook and project dependencies, but worker
 selection does not resolve through the staged workspace's scripts,
 `node_modules/.bin`, or local-link topology. Source-checkout development builds
-the worker before staging it; published consumers use the package's shipped
-worker. Root-contained absolute snapshot and affected-cache arguments are
+the worker before staging it only when the executing module and package-local
+build configuration both identify a buildable checkout. Published consumers
+use the package's shipped worker even when Storybook executes an exported file
+under the tarball's included `src/` tree. Root-contained absolute snapshot and affected-cache arguments are
 remapped to their equivalent `/workspace` paths before the Docker worker is
 invoked; paths outside the frozen workspace are rejected.
 
@@ -74,6 +76,9 @@ planning JSON files. The host copies them back only after traversal checks,
 regular-file checks, checksums, capture-profile validation for sidecars, and
 exact cache-path allow-listing. Baseline PNGs, sources, configuration, static
 output, and unrelated caches are never valid compare-only return artifacts.
+Known and project-configured workspace build-cache roots are excluded from both
+staging and the post-run candidate inventory; an explicit runner result that
+names one remains forbidden.
 
 ## Lifecycle ownership
 

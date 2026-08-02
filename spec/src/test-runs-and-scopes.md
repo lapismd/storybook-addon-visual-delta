@@ -90,13 +90,17 @@ A full passing run seeds current fingerprints. Only successfully exercised stori
 
 ## Compare-only execution
 
-`visual-delta test --all`, `visual-delta test --affected`, `visual-delta test --story-id`, panel **Run**, Diff Browser, and Testing Module comparisons MUST set `PLAYWRIGHT_UPDATE_SNAPSHOTS=0`. They MUST NOT invoke update scripts or create missing snapshots. The capture runner MAY return only generated comparison sidecars, `.actual.png` / `.diff.png` diagnostics, and the exact package-owned `affected-state-v1.json` / `preview-stats.json` planning files for compare-only jobs; the host MUST checksum, validate, and copy only those allow-listed derived artifacts. A compare-only job MUST reject baseline PNGs, source files, configuration, static output, unrelated caches, or any other staged mutation. Compare actions MUST NOT change review tags unless Update status is enabled, or Testing Module **Run Diff** is enabled with project auto-accept for last-run passes.
+`visual-delta test --all`, `visual-delta test --affected`, `visual-delta test --story-id`, panel **Run**, Diff Browser, and Testing Module comparisons MUST set `PLAYWRIGHT_UPDATE_SNAPSHOTS=0`. They MUST NOT invoke update scripts or create missing snapshots. The capture runner MAY return only generated comparison sidecars, `.actual.png` / `.diff.png` diagnostics, and the exact package-owned `affected-state-v1.json` / `preview-stats.json` planning files for compare-only jobs; the host MUST checksum, validate, and copy only those allow-listed derived artifacts. Known derived build-cache roots, including Turbo's `.turbo`, plus validated project `captureWorkspaceIgnore` directories MUST be excluded from the staged workspace and post-run candidate inventory rather than classified as Visual Delta JSON. A compare-only job MUST still reject an explicitly returned unrelated cache, baseline PNG, source file, configuration, static output, or any other staged mutation. Compare actions MUST NOT change review tags unless Update status is enabled, or Testing Module **Run Diff** is enabled with project auto-accept for last-run passes.
 
 Story and Diff Browser actions compare one exact target through the same suite and runner as the corresponding command-line exact-story request. Scoped static runs compare every target registered by the host suite for each frozen story and enabled browser.
 
 ## Progress, reconnection, and cancellation
 
 Middleware owns the running child process and publishes newline-delimited JSON progress. The manager stores only the job identity and presentation state.
+
+Exact-story comparisons publish the capture runner's log chunks in the same
+NDJSON response. Diff Browser presents the accumulating log in the panel status
+surface while preserving structured phase labels and the terminal result.
 
 Story-targeted baseline writes publish their exact story IDs with every progress and terminal update. The panel presents a write only while the active story belongs to that scope. Navigating elsewhere does not cancel the writer, but it detaches the new story from the old progress and completion effects.
 

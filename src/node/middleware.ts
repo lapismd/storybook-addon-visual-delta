@@ -1831,6 +1831,7 @@ function resolvedConfigPayload(
     playwrightPassThresholdPercent: projectConfig.defaults.passThresholdPercent,
     projectDefaults: projectConfig.defaults,
     browsers: projectConfig.browsers,
+    captureWorkspaceIgnore: projectConfig.captureWorkspaceIgnore,
     runtimePlatform: process.platform,
     availableEnvironments: [],
     availableBrowsers: discoverSnapshotBrowsers(snapshotDir),
@@ -2228,6 +2229,7 @@ async function handleCompareStory(
       hostOptions: options,
       request: body,
       onProgress: (progress) => write({ type: "progress", ...progress }),
+      onLog: (line) => write({ type: "log", line }),
     });
     const workflow = workflowFor(root);
     const outcome = classifyVisualRunResult({

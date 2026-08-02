@@ -121,6 +121,7 @@ Add `.visual-delta/config.json` when the built-in defaults are not suitable:
 ```json
 {
   "browsers": ["chromium", "firefox", "webkit"],
+  "captureWorkspaceIgnore": [".nx/cache"],
   "workflow": {
     "visualTestFailureMode": "strict"
   }
@@ -133,7 +134,14 @@ Install local browser binaries only when developing the host-local diagnostic ca
 pnpm exec playwright install chromium firefox webkit
 ```
 
-The built-in comparison allows up to `0.063%` differing pixels and uses a `0.2` per-pixel color threshold. Project and story settings can override these values.
+`captureWorkspaceIgnore` accepts root-relative derived-cache directories that
+the clean runner should omit. The runner already excludes common caches such as
+`.turbo`; use this setting for tool-specific caches without waiting for another
+package release.
+
+The built-in comparison allows up to `0.063%` differing pixels and uses a
+`0.063` per-pixel color threshold. Project and story settings can override these
+values.
 
 The default runner executes authoritative comparisons in the pinned Linux ARM64 capture profile. Diff Browser, the Testing Module, and command-line tests all invoke the same packaged Playwright worker through that runner. Projects that cannot use Docker can provide `.visual-delta/runner.mjs` to transport the same capture job through another environment.
 

@@ -36,6 +36,16 @@ export function appendVisualRunLogLine(
   return `${prev}\n${line}`;
 }
 
+/** Append an arbitrary streamed process chunk while keeping panel state bounded. */
+export function appendStatusLogChunk(
+  prev: string | null | undefined,
+  chunk: string,
+  limit = 16_000,
+): string {
+  const merged = `${prev ?? ""}${chunk.replace(/\r\n/g, "\n")}`;
+  return merged.length > limit ? merged.slice(-limit) : merged;
+}
+
 /** Compact `completed/total` for Testing Module row chips / descriptions. */
 export function formatProgressFraction(
   completed: number | undefined,

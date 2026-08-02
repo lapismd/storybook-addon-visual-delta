@@ -39,17 +39,24 @@ describe("postChromiumStoryCompare", () => {
     const onChanges = vi.fn();
     window.addEventListener(VISUAL_DELTA_CHANGES_EVENT, onChanges);
     const fetchMock = vi.fn(async () => {
-      return new Response(`${JSON.stringify(done)}\n`, {
-        status: 200,
-        headers: { "Content-Type": "application/x-ndjson" },
-      });
+      return new Response(
+        `${JSON.stringify({ type: "log", line: "Installing clean workspace…\n" })}\n${JSON.stringify(done)}\n`,
+        {
+          status: 200,
+          headers: { "Content-Type": "application/x-ndjson" },
+        },
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await postChromiumStoryCompare({
-      storyId: "dialog--opens",
-      baselineUrl: "/visual-baselines/dialog--opens.png",
-    });
+    const onLog = vi.fn();
+    const result = await postChromiumStoryCompare(
+      {
+        storyId: "dialog--opens",
+        baselineUrl: "/visual-baselines/dialog--opens.png",
+      },
+      { onLog },
+    );
 
     expect(result.sidecar.outcome).toBe("passed");
     expect(result.review).toMatchObject({
@@ -65,6 +72,7 @@ describe("postChromiumStoryCompare", () => {
       }),
     );
     expect(onChanges).toHaveBeenCalledOnce();
+    expect(onLog).toHaveBeenCalledWith("Installing clean workspace…\n");
     expect((onChanges.mock.calls[0]?.[0] as CustomEvent).detail).toEqual(
       changes,
     );

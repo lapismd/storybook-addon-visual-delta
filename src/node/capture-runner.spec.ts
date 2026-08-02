@@ -10,12 +10,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   DOCKER_VISUAL_DELTA_WORKER_ROOT,
+  changedStagedArtifacts,
   createCaptureJobManifest,
   dockerVisualDeltaWorkerCommand,
   dockerWorkspaceArgv,
   resolveVisualDeltaCaptureRunner,
   runVisualDeltaCaptureJob,
   runVisualDeltaInCaptureRunner,
+  shouldBuildVisualDeltaPackageWorker,
   shouldStageVisualDeltaWorkspacePath,
   stageVisualDeltaPackageWorker,
 } from "./capture-runner.js";
@@ -82,14 +84,87 @@ describe("capture runner", () => {
     expect(
       shouldStageVisualDeltaWorkspacePath(".cache/visual-delta/unrelated.json"),
     ).toBe(false);
-    expect(shouldStageVisualDeltaWorkspacePath(".cache/vite/deps.json")).toBe(false);
-    expect(shouldStageVisualDeltaWorkspacePath("storybook-static/index.json")).toBe(false);
+    expect(shouldStageVisualDeltaWorkspacePath(".cache/vite/deps.json")).toBe(
+      false,
+    );
+    expect(
+      shouldStageVisualDeltaWorkspacePath(".turbo/cache/manifest.json"),
+    ).toBe(false);
+    expect(
+      shouldStageVisualDeltaWorkspacePath("storybook-static/index.json"),
+    ).toBe(false);
+    expect(
+      shouldStageVisualDeltaWorkspacePath(
+        ".nx/cache/manifest.json",
+        ".cache/visual-delta",
+        [".nx/cache"],
+      ),
+    ).toBe(false);
     expect(
       shouldStageVisualDeltaWorkspacePath(
         "artifacts/affected/affected-state-v1.json",
         "artifacts/affected",
       ),
     ).toBe(true);
+  });
+
+  it("builds a worker only for a buildable package source checkout", () => {
+    const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-package-"));
+    const sourceModule = path.join(root, "src", "node", "capture-runner.ts");
+    const builtModule = path.join(root, "dist", "node", "capture-runner.js");
+    mkdirSync(path.dirname(sourceModule), { recursive: true });
+    mkdirSync(path.dirname(builtModule), { recursive: true });
+    writeFileSync(sourceModule, "export {};\n");
+    writeFileSync(builtModule, "export {};\n");
+    try {
+      expect(
+        shouldBuildVisualDeltaPackageWorker({
+          modulePath: sourceModule,
+          packageRoot: root,
+        }),
+      ).toBe(false);
+
+      writeFileSync(path.join(root, "tsconfig.node-build.json"), "{}\n");
+      expect(
+        shouldBuildVisualDeltaPackageWorker({
+          modulePath: sourceModule,
+          packageRoot: root,
+        }),
+      ).toBe(true);
+      expect(
+        shouldBuildVisualDeltaPackageWorker({
+          modulePath: builtModule,
+          packageRoot: root,
+        }),
+      ).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("excludes generated Turbo manifests from the post-run artifact inventory", () => {
+    const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-audit-"));
+    const original = path.join(root, "original");
+    const staged = path.join(root, "staged");
+    mkdirSync(path.join(original, "snapshots"), { recursive: true });
+    mkdirSync(path.join(staged, "snapshots"), { recursive: true });
+    mkdirSync(path.join(staged, ".turbo", "cache"), { recursive: true });
+    writeFileSync(path.join(staged, "snapshots", "card-chromium.json"), "{}\n");
+    writeFileSync(
+      path.join(staged, ".turbo", "cache", "manifest.json"),
+      "{}\n",
+    );
+    mkdirSync(path.join(staged, ".nx", "cache"), { recursive: true });
+    writeFileSync(path.join(staged, ".nx", "cache", "manifest.json"), "{}\n");
+    try {
+      expect(changedStagedArtifacts(original, staged, [".nx/cache"])).toEqual([
+        expect.objectContaining({
+          relativePath: "snapshots/card-chromium.json",
+        }),
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("freezes and de-duplicates the requested scope", () => {
@@ -305,6 +380,35 @@ describe("capture runner", () => {
           operation: "test",
         }),
       ).rejects.toThrow("forbidden artifact");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a configured cache when a custom runner explicitly returns it", async () => {
+    const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-runner-"));
+    const stage = path.join(root, "stage");
+    const relativePath = ".nx/cache/manifest.json";
+    const manifest = "{}\n";
+    mkdirSync(path.join(stage, ".nx", "cache"), { recursive: true });
+    writeFileSync(path.join(stage, relativePath), manifest);
+    writeFixtureRunner({
+      root,
+      stage,
+      artifacts: [{ relativePath, sha256: hash(manifest) }],
+    });
+    writeFileSync(
+      path.join(root, ".visual-delta", "config.json"),
+      `${JSON.stringify({ captureWorkspaceIgnore: [".nx/cache"] })}\n`,
+    );
+    try {
+      await expect(
+        runVisualDeltaCaptureJob({
+          root,
+          argv: ["test", "--all"],
+          operation: "test",
+        }),
+      ).rejects.toThrow("not a visual sidecar");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

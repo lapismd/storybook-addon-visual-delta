@@ -70,7 +70,8 @@ export type CompareStoryStreamEvent =
       target?: VisualBaselineTarget;
       captureProfile?: VisualCaptureProfile;
       environment?: VisualBaselineEnvironment;
-    }
+  }
   | ({ type: "progress" } & CaptureSubjectProgress)
+  | { type: "log"; line: string }
   | ({ type: "done" } & CompareStoryResult)
   | { type: "error"; error: string };

@@ -33,6 +33,7 @@ const LEGACY_PLAYWRIGHT_CONFIG_REL = ".visual-delta/playwright.json";
 export type VisualDeltaProjectConfigResult = {
   defaults: VisualDeltaProjectDefaults;
   browsers: VisualDeltaBrowser[];
+  captureWorkspaceIgnore: string[];
   workflow: VisualDeltaWorkflowConfig;
   sources: Record<
     keyof VisualDeltaProjectDefaults,
@@ -57,6 +58,8 @@ function splitProjectConfig(input: unknown): {
   defaults: unknown;
   browsers: unknown;
   browsersPresent: boolean;
+  captureWorkspaceIgnore: unknown;
+  captureWorkspaceIgnorePresent: boolean;
   workflow: unknown;
   workflowPresent: boolean;
 } {
@@ -65,6 +68,8 @@ function splitProjectConfig(input: unknown): {
       defaults: input,
       browsers: undefined,
       browsersPresent: false,
+      captureWorkspaceIgnore: undefined,
+      captureWorkspaceIgnorePresent: false,
       workflow: undefined,
       workflowPresent: false,
     };
@@ -75,18 +80,67 @@ function splitProjectConfig(input: unknown): {
       defaults: record.projectDefaults,
       browsers: record.browsers,
       browsersPresent: "browsers" in record,
+      captureWorkspaceIgnore: record.captureWorkspaceIgnore,
+      captureWorkspaceIgnorePresent: "captureWorkspaceIgnore" in record,
       workflow: record.workflow,
       workflowPresent: "workflow" in record,
     };
   }
-  const { workflow, browsers, ...defaults } = record;
+  const { workflow, browsers, captureWorkspaceIgnore, ...defaults } = record;
   return {
     defaults,
     browsers,
     browsersPresent: "browsers" in record,
+    captureWorkspaceIgnore,
+    captureWorkspaceIgnorePresent: "captureWorkspaceIgnore" in record,
     workflow,
     workflowPresent: "workflow" in record,
   };
+}
+
+export function validateCaptureWorkspaceIgnore(input: unknown): {
+  value: string[];
+  errors: string[];
+} {
+  if (input === undefined) return { value: [], errors: [] };
+  if (!Array.isArray(input)) {
+    return {
+      value: [],
+      errors: ["captureWorkspaceIgnore must be an array of relative directories."],
+    };
+  }
+  const value: string[] = [];
+  const errors: string[] = [];
+  for (const candidate of input) {
+    if (typeof candidate !== "string") {
+      errors.push("captureWorkspaceIgnore entries must be strings.");
+      continue;
+    }
+    const normalized = candidate
+      .trim()
+      .replaceAll("\\", "/")
+      .replace(/^\.\//, "")
+      .replace(/\/+$/, "");
+    const segments = normalized.split("/");
+    if (
+      !normalized ||
+      normalized === "." ||
+      normalized.startsWith("/") ||
+      /^[A-Za-z]:\//.test(normalized) ||
+      segments.some((segment) => !segment || segment === "." || segment === "..")
+    ) {
+      errors.push(
+        `captureWorkspaceIgnore entry ${JSON.stringify(candidate)} must be a root-relative directory without . or .. segments.`,
+      );
+      continue;
+    }
+    if (value.includes(normalized)) {
+      errors.push(`captureWorkspaceIgnore contains duplicate ${normalized}.`);
+      continue;
+    }
+    value.push(normalized);
+  }
+  return { value, errors };
 }
 
 export function visualDeltaProjectConfigPath(root: string): string {
@@ -132,7 +186,15 @@ export function readVisualDeltaProjectConfig(
         rejectUnknown: true,
       });
       const browsers = validateVisualDeltaBrowsers(split.browsers);
-      const errors = [...result.errors, ...workflow.errors, ...browsers.errors];
+      const captureWorkspaceIgnore = validateCaptureWorkspaceIgnore(
+        split.captureWorkspaceIgnore,
+      );
+      const errors = [
+        ...result.errors,
+        ...workflow.errors,
+        ...browsers.errors,
+        ...captureWorkspaceIgnore.errors,
+      ];
       if (errors.length) {
         diagnostics.push({
           code: "project-config-invalid",
@@ -146,6 +208,10 @@ export function readVisualDeltaProjectConfig(
       return {
         defaults: result.value,
         browsers: browsers.value,
+        captureWorkspaceIgnore:
+          captureWorkspaceIgnore.errors.length > 0
+            ? []
+            : captureWorkspaceIgnore.value,
         workflow: workflow.value,
         sources,
         path,
@@ -171,6 +237,7 @@ export function readVisualDeltaProjectConfig(
           },
         },
         browsers: [...DEFAULT_VISUAL_DELTA_BROWSERS],
+        captureWorkspaceIgnore: [],
         workflow: cloneBuiltInWorkflow(),
         sources,
         path,
@@ -194,6 +261,7 @@ export function readVisualDeltaProjectConfig(
   return {
     defaults,
     browsers: [...DEFAULT_VISUAL_DELTA_BROWSERS],
+    captureWorkspaceIgnore: [],
     workflow: cloneBuiltInWorkflow(),
     sources,
     path,
@@ -219,7 +287,17 @@ export function writeVisualDeltaProjectConfig(
   const browsers = validateVisualDeltaBrowsers(
     split.browsersPresent ? split.browsers : current.browsers,
   );
-  const errors = [...result.errors, ...workflow.errors, ...browsers.errors];
+  const captureWorkspaceIgnore = validateCaptureWorkspaceIgnore(
+    split.captureWorkspaceIgnorePresent
+      ? split.captureWorkspaceIgnore
+      : current.captureWorkspaceIgnore,
+  );
+  const errors = [
+    ...result.errors,
+    ...workflow.errors,
+    ...browsers.errors,
+    ...captureWorkspaceIgnore.errors,
+  ];
   if (errors.length) {
     throw new Error(errors.join(" "));
   }
@@ -232,6 +310,7 @@ export function writeVisualDeltaProjectConfig(
       {
         ...result.value,
         browsers: browsers.value,
+        captureWorkspaceIgnore: captureWorkspaceIgnore.value,
         workflow: workflow.value,
       },
       null,

@@ -646,6 +646,17 @@ test.describe("Visual Delta manager integration", () => {
       })
       .click();
     await expect.poll(() => compareBodies.length).toBe(1);
+    const comparisonLog = page.getByRole("button", {
+      name: /Log: Visual: 1 passed \(story\)/,
+    });
+    await expect(comparisonLog).toBeVisible();
+    await comparisonLog.click();
+    await expect(
+      page.getByRole("dialog", {
+        name: /Log: Visual: 1 passed \(story\)/,
+      }),
+    ).toContainText("Installing clean Linux/ARM64 workspace…");
+    await page.keyboard.press("Escape");
 
     await page
       .getByRole("button", { name: "Run visual test for this story" })

@@ -7,11 +7,46 @@ import { BUILTIN_VISUAL_DELTA_DEFAULTS } from "../shared/project-defaults.js";
 import { BUILTIN_VISUAL_DELTA_WORKFLOW } from "../shared/workflow-config.js";
 import {
   readVisualDeltaProjectConfig,
+  validateCaptureWorkspaceIgnore,
   visualDeltaProjectConfigPath,
   writeVisualDeltaProjectConfig,
 } from "./project-config.js";
 
 describe("project configuration", () => {
+  it("validates and persists configurable capture workspace ignores", () => {
+    expect(
+      validateCaptureWorkspaceIgnore([".nx/cache", "tools/cache/"]).value,
+    ).toEqual([".nx/cache", "tools/cache"]);
+    expect(
+      validateCaptureWorkspaceIgnore(["../outside", "/absolute", "same", "same"])
+        .errors,
+    ).toHaveLength(3);
+
+    const root = mkdtempSync(join(tmpdir(), "visual-delta-config-"));
+    expect(() =>
+      writeVisualDeltaProjectConfig(root, {
+        ...BUILTIN_VISUAL_DELTA_DEFAULTS,
+        captureWorkspaceIgnore: ["../outside"],
+      }),
+    ).toThrow(/root-relative directory/);
+    writeVisualDeltaProjectConfig(root, {
+      ...BUILTIN_VISUAL_DELTA_DEFAULTS,
+      captureWorkspaceIgnore: [".nx/cache", "tools/cache/"],
+    });
+    expect(readVisualDeltaProjectConfig(root).captureWorkspaceIgnore).toEqual([
+      ".nx/cache",
+      "tools/cache",
+    ]);
+
+    writeVisualDeltaProjectConfig(root, {
+      projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
+    });
+    expect(readVisualDeltaProjectConfig(root).captureWorkspaceIgnore).toEqual([
+      ".nx/cache",
+      "tools/cache",
+    ]);
+  });
+
   it("uses the legacy threshold only when project config is absent", () => {
     const root = mkdtempSync(join(tmpdir(), "visual-delta-config-"));
     mkdirSync(join(root, ".visual-delta"), { recursive: true });
