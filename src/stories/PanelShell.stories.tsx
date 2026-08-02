@@ -251,7 +251,7 @@ export const ConfigurationDefaults: Story = {
     ).toBeInTheDocument();
     await expect(canvas.getAllByRole("slider")).toHaveLength(6);
     await userEvent.clear(threshold);
-    await userEvent.type(threshold, "1.5");
+    await userEvent.type(threshold, "0.063");
     await userEvent.tab();
     await userEvent.click(canvas.getByRole("button", { name: "Save" }));
     await expect(

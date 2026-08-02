@@ -17,7 +17,11 @@ import {
   type BaselineHistoryEntry,
   type BaselineHistoryResponse,
 } from "../shared/baseline-history.js";
-import { VISUAL_DEVICE_SCALE_FACTOR } from "../constants.js";
+import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+  VISUAL_DEVICE_SCALE_FACTOR,
+} from "../constants.js";
 import type { DiffResultData } from "../types.js";
 import { DiffResult } from "./DiffResult.js";
 import {
@@ -604,9 +608,9 @@ export function BaselineHistoryView({
     setComparisonError(null);
     setComparison(null);
     void compareImages(before.imageUrl, after.imageUrl, {
-      pixelThreshold: 0.2,
+      pixelThreshold: DEFAULT_DIFF_THRESHOLD,
       includeAntiAliasing: false,
-      passThresholdPercent: 1.5,
+      passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
       deviceScaleFactor: VISUAL_DEVICE_SCALE_FACTOR,
     })
       .then((result) => {

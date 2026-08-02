@@ -3,7 +3,11 @@ import {
   type VisualDiffSidecar,
 } from "../visual-diff-sidecar.js";
 import type { DiffResultData } from "../types.js";
-import { VISUAL_DEVICE_SCALE_FACTOR, VISUAL_VIEWPORT } from "../constants.js";
+import {
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+  VISUAL_DEVICE_SCALE_FACTOR,
+  VISUAL_VIEWPORT,
+} from "../constants.js";
 import { loadImage } from "./capture.js";
 import { buildFocusAssets } from "./diff-assets.js";
 
@@ -119,7 +123,8 @@ export async function loadPlaywrightDiffResult(
   const diffPercent =
     sidecar.diffPercent ??
     (totalPixels > 0 ? (diffPixels / totalPixels) * 100 : 0);
-  const passThresholdPercent = sidecar.passThresholdPercent ?? 1.5;
+  const passThresholdPercent =
+    sidecar.passThresholdPercent ?? DEFAULT_PASS_THRESHOLD_PERCENT;
   const passed =
     sidecar.outcome === "passed" ||
     sidecar.outcome === "changed-within-tolerance" ||

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
+import { DEFAULT_DIFF_THRESHOLD } from "../constants.js";
 import {
   PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
   VISUAL_DIFF_HISTOGRAM_BINS,
@@ -138,7 +139,8 @@ function fitRgba(src: PNG, width: number, height: number): Uint8Array {
 
 /**
  * Compare a baseline PNG on disk to an actual PNG buffer (from Playwright screenshot).
- * Threshold matches Playwright `maxDiffPixelRatio: 0.015` (1.5% of pixels) by default.
+ * The per-pixel color threshold and allowed changed-pixel percentage are
+ * independent defaults.
  */
 export function compareBaselineToActualPng(
   baselinePath: string,
@@ -156,7 +158,9 @@ export function compareBaselineToActualPng(
       ? options
       : (options.passThresholdPercent ?? PLAYWRIGHT_PASS_THRESHOLD_PERCENT);
   const diffThreshold =
-    typeof options === "number" ? 0.2 : (options.diffThreshold ?? 0.2);
+    typeof options === "number"
+      ? DEFAULT_DIFF_THRESHOLD
+      : (options.diffThreshold ?? DEFAULT_DIFF_THRESHOLD);
   const includeAntiAliasing =
     typeof options === "number"
       ? false

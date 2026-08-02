@@ -15,8 +15,8 @@ describe("visual delta settings", () => {
   it("returns defaults when storage is empty", () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
     expect(loadSettings().passThresholdByEngine).toEqual({
-      html: 1.5,
-      chromium: 1.5,
+      html: 0.063,
+      chromium: 0.063,
     });
   });
 
@@ -27,14 +27,14 @@ describe("visual delta settings", () => {
       opacity: 0.4,
       liveVisible: false,
       splitZoom: { mode: "custom", scale: 1.25 },
-      passThresholdByEngine: { html: 1.5, chromium: 0.25 },
+      passThresholdByEngine: { html: 0.75, chromium: 0.25 },
     });
     expect(loadSettings()).toMatchObject({
       placement: "right",
       opacity: 0.4,
       liveVisible: false,
       splitZoom: { mode: "custom", scale: 1.25 },
-      passThresholdByEngine: { html: 1.5, chromium: 0.25 },
+      passThresholdByEngine: { html: 0.75, chromium: 0.25 },
     });
   });
 

@@ -1112,7 +1112,7 @@ export function ConfigurationPanel({
                     label="Story pass threshold percentage"
                     min={0}
                     max={100}
-                    step={0.01}
+                    step={0.001}
                     value={storyDraft.passThresholdPercent}
                     suffix="%"
                     onChange={(value) =>
@@ -1129,7 +1129,7 @@ export function ConfigurationPanel({
                     label="Story pixel diff threshold"
                     min={0}
                     max={1}
-                    step={0.01}
+                    step={0.001}
                     value={storyDraft.diffThreshold}
                     onChange={(value) => setStoryValue("diffThreshold", value)}
                   />
@@ -1313,7 +1313,7 @@ export function ConfigurationPanel({
                   label="Pass threshold percentage"
                   min={0}
                   max={100}
-                  step={0.01}
+                  step={0.001}
                   value={draft.passThresholdPercent}
                   suffix="%"
                   onChange={(value) => setNumber("passThresholdPercent", value)}
@@ -1331,7 +1331,7 @@ export function ConfigurationPanel({
                   label="Pixel diff threshold"
                   min={0}
                   max={1}
-                  step={0.01}
+                  step={0.001}
                   value={draft.diffThreshold}
                   onChange={(value) => setNumber("diffThreshold", value)}
                 />

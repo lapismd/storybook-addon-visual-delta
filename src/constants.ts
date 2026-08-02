@@ -163,7 +163,7 @@ export type VisualDeltaParams = {
   passThresholdPercent?: number;
   /**
    * pixelmatch color threshold in `[0, 1]` (Chromatic `diffThreshold`).
-   * Default `0.2` for Live Diff.
+   * Default `0.063` for Live Diff.
    */
   diffThreshold?: number;
   /** Include anti-aliased pixels in the Live Diff pixelmatch. */
@@ -187,11 +187,11 @@ export type VisualDeltaParams = {
   cropToViewport?: boolean;
 };
 
-/** Default pixelmatch threshold for Live Diff (Chromatic default is ~0.063). */
-export const DEFAULT_DIFF_THRESHOLD = 0.2;
+/** Default pixelmatch color threshold, aligned with Chromatic. */
+export const DEFAULT_DIFF_THRESHOLD = 0.063;
 
-/** Allowed changed-pixel percentage; independent from the 0.2 color threshold. */
-export const DEFAULT_PASS_THRESHOLD_PERCENT = 1.5;
+/** Allowed changed-pixel percentage; independent from the color threshold. */
+export const DEFAULT_PASS_THRESHOLD_PERCENT = 0.063;
 export const DEFAULT_PLACEMENT: PlacementMode = "right";
 /** @deprecated Kept for any external imports; split layout no longer uses a gap. */
 export const BESIDE_GAP_PX = 24;

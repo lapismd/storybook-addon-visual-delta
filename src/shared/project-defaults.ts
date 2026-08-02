@@ -2,10 +2,14 @@ import type {
   VisualDeltaProjectDefaults,
   VisualDeltaZoomDefault,
 } from "./config-types.js";
+import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+} from "../constants.js";
 
 export const BUILTIN_VISUAL_DELTA_DEFAULTS: VisualDeltaProjectDefaults = {
-  passThresholdPercent: 1.5,
-  diffThreshold: 0.2,
+  passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
+  diffThreshold: DEFAULT_DIFF_THRESHOLD,
   diffIncludeAntiAliasing: false,
   delay: 0,
   deviceScaleFactor: 1,

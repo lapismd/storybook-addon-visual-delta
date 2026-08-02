@@ -31,11 +31,11 @@ describe("image comparison", () => {
     const result = compareLoadedImages(
       image(120, 120, 120),
       image(120, 120, 120),
-      { passThresholdPercent: 1 },
     );
 
     expect(result.diffPixels).toBe(0);
     expect(result.passed).toBe(true);
+    expect(result.passThresholdPercent).toBe(0.063);
     expect(result.changeBounds).toBeNull();
   });
 });

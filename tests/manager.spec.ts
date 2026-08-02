@@ -1332,7 +1332,7 @@ test.describe("Visual Delta manager integration", () => {
                 opacity: 1,
                 colorInversion: false,
                 liveVisible: true,
-                passThresholdByEngine: { html: 1.5, chromium: 1.5 },
+                passThresholdByEngine: { html: 0.063, chromium: 0.063 },
               }),
             );
           }

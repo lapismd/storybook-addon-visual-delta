@@ -24,6 +24,7 @@ describe("playwright threshold host file", () => {
     expect(readPlaywrightPassThresholdPercent(root)).toBe(
       PLAYWRIGHT_PASS_THRESHOLD_PERCENT,
     );
+    expect(PLAYWRIGHT_PASS_THRESHOLD_PERCENT).toBe(0.063);
   });
 
   it("round-trips a written percent", () => {

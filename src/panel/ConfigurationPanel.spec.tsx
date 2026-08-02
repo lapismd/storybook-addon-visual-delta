@@ -28,7 +28,7 @@ const config: VisualDeltaResolvedConfig = {
     visualTestArgs: ["playwright", "test"],
     addonSrcDir: null,
   },
-  playwrightPassThresholdPercent: 1.5,
+  playwrightPassThresholdPercent: 0.063,
   availableEnvironments: [{ browser: "chromium", platform: "darwin" }],
   projectDefaults: BUILTIN_VISUAL_DELTA_DEFAULTS,
   workflow: BUILTIN_VISUAL_DELTA_WORKFLOW,
@@ -78,7 +78,7 @@ describe("configurationSections", () => {
     ]);
     expect(sections[1]?.rows).toContainEqual({
       label: "Pass threshold",
-      value: "1.5%",
+      value: "0.063%",
     });
     expect(sections[2]?.rows).toContainEqual({
       label: "Device scale factor",

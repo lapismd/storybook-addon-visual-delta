@@ -1,5 +1,9 @@
 import React, { useMemo, useState } from "react";
-import type { PlacementMode, VisualDeltaImage } from "../constants.js";
+import {
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+  type PlacementMode,
+  type VisualDeltaImage,
+} from "../constants.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
 import { BaselineHistoryView } from "../panel/BaselineHistoryView.js";
 import { ImageGallery } from "../panel/ImageGallery.js";
@@ -156,7 +160,7 @@ export function BaselineAccordionFixture() {
         hint: "End of play · primary baseline",
         thumbSrc: SAMPLE_IMAGES[0]?.src,
         status: "pass" as const,
-        stats: "0.0000% · 0/100 px · <1.5%",
+        stats: `0.0000% · 0/100 px · <${DEFAULT_PASS_THRESHOLD_PERCENT}%`,
         history: {
           path: "forms/entry-actions/single-entry-chromium-darwin.png",
           label: "Default",

@@ -10,6 +10,10 @@ import {
 } from "./BaselineHistoryView.js";
 import type { BaselineHistoryEntry } from "../shared/baseline-history.js";
 import type { DiffResultData } from "../types.js";
+import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+} from "../constants.js";
 
 beforeAll(() => {
   class ResizeObserverStub {
@@ -71,7 +75,7 @@ const comparison: DiffResultData = {
   diffPixels: 2,
   totalPixels: 45_000,
   diffPercent: 0.0044,
-  passThresholdPercent: 1.5,
+  passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
   passed: true,
   diffHistogram: new Array(32).fill(0),
 };
@@ -147,6 +151,14 @@ describe("BaselineHistoryView", () => {
     expect(loadComponentDiff).toHaveBeenCalledWith(
       expect.objectContaining({
         componentPath: "src/forms/Example.stories.svelte",
+      }),
+    );
+    expect(compareImages).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        pixelThreshold: DEFAULT_DIFF_THRESHOLD,
+        passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
       }),
     );
   });

@@ -1,3 +1,5 @@
+import { DEFAULT_PASS_THRESHOLD_PERCENT } from "./constants.js";
+
 /** Shared schema for per-screenshot visual diff sidecars (Playwright + Storybook). */
 
 export type VisualDiffSidecarStatus =
@@ -74,7 +76,7 @@ export type VisualDiffSidecar = {
   diffPercent?: number;
   /**
    * Pass threshold as percent of pixels (Playwright `maxDiffPixelRatio` × 100).
-   * Suite default is 1.5 (1.5%).
+   * Suite default is 0.063 (0.063%).
    */
   passThresholdPercent?: number;
   passed?: boolean;
@@ -105,5 +107,6 @@ export function isVisualDiffSidecar(
 
 export const VISUAL_DIFF_HISTOGRAM_BINS = 32;
 
-/** Playwright `maxDiffPixelRatio: 0.015` → 1.5% of pixels. */
-export const PLAYWRIGHT_PASS_THRESHOLD_PERCENT = 1.5;
+/** Built-in allowed changed-pixel percentage for Playwright comparisons. */
+export const PLAYWRIGHT_PASS_THRESHOLD_PERCENT =
+  DEFAULT_PASS_THRESHOLD_PERCENT;

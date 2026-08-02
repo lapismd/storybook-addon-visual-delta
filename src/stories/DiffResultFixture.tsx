@@ -1,4 +1,5 @@
 import React from "react";
+import { DEFAULT_PASS_THRESHOLD_PERCENT } from "../constants.js";
 import type { DiffResultData } from "../types.js";
 import { DiffResult } from "../panel/DiffResult.js";
 
@@ -53,7 +54,7 @@ export function diffResultFixture(
     diffPixels: 128,
     totalPixels: imageWidth * imageHeight,
     diffPercent: (128 / (imageWidth * imageHeight)) * 100,
-    passThresholdPercent: 1.5,
+    passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
     passed: true,
     sizeNote:
       `html-to-image · viewport requested ${cssWidth}×${cssHeight}, ` +

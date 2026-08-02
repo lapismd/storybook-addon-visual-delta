@@ -78,7 +78,7 @@ export type VisualDeltaResolvedConfig = {
   };
   /**
    * Package-wide Playwright pass threshold (% of pixels), from
-   * `.visual-delta/playwright.json` or the built-in default (1.5).
+   * `.visual-delta/playwright.json` or the built-in default (0.063).
    */
   playwrightPassThresholdPercent: number;
   /** Editable values resolved from project file → legacy fallback → built-ins. */

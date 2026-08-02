@@ -1,5 +1,9 @@
 import { expect, type Page } from "@playwright/test";
 import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../src/shared/capture-profile.js";
+import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+} from "../src/constants.js";
 import type { VisualDeltaBrowser } from "../src/shared/environments.js";
 import type { VisualStoryFact } from "../src/shared/story-facts.js";
 
@@ -35,7 +39,7 @@ const CONFIG = {
     visualTestArgs: ["playwright", "test"],
     addonSrcDir: null,
   },
-  playwrightPassThresholdPercent: 1.5,
+  playwrightPassThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
   browsers: ["chromium", "firefox"],
   runtimePlatform: "darwin",
   availableEnvironments: [],
@@ -46,8 +50,8 @@ const CONFIG = {
     available: true,
   },
   projectDefaults: {
-    passThresholdPercent: 1.5,
-    diffThreshold: 0.2,
+    passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
+    diffThreshold: DEFAULT_DIFF_THRESHOLD,
     diffIncludeAntiAliasing: false,
     delay: 0,
     cropToViewport: false,
@@ -185,7 +189,7 @@ export async function mockVisualBackend(
         diffPixels: 0,
         totalPixels: 1,
         diffPercent: 0,
-        passThresholdPercent: 1.5,
+        passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
         passed: true,
       };
       await route.fulfill({
