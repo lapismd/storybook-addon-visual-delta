@@ -391,6 +391,17 @@ workflow retains `npm-signatures.json` for successful or failed
 verification; a successful release confirms the package, tag, repository,
 workflow, and Sigstore bundle.
 
+Release run
+[`30745135562`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30745135562)
+passed its x64 package gate, ARM64 visual gate, and trusted npm publication for
+`0.0.2`. Its final parser rejected the otherwise verified provenance because
+npm encoded the scoped-package PURL as
+`pkg:npm/%40lapismd/storybook-addon-visual-delta@0.0.2`, while the parser
+expected an unescaped `@`. The retained clean-runner `npm audit signatures`
+evidence contains the tarball SHA-512 and exact release tag, repository, and
+workflow. Focused verification now derives npm's canonical PURL, accepts that
+release evidence, and rejects the former non-canonical subject fixture.
+
 Also fix EditRemoveAndClear to use its own baseline path for primary image (optional consistency).
 
 Kill any leftover storybook on panel ports, then run focused failing tests first.

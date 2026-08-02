@@ -13,6 +13,21 @@ export const PROVENANCE_PREDICATE = "https://slsa.dev/provenance/v1";
 export const PUBLISH_REPOSITORY = REPOSITORY_URL.replace(/\.git$/, "");
 export const PUBLISH_WORKFLOW = ".github/workflows/npm-publish.yml";
 
+export function npmPackagePurl(packageName, version) {
+  const scopeSeparator = packageName.indexOf("/");
+  const encodedScope = encodeURIComponent(
+    packageName.slice(0, scopeSeparator),
+  );
+  const encodedName = encodeURIComponent(
+    packageName.slice(scopeSeparator + 1),
+  );
+  const packagePath =
+    packageName.startsWith("@") && scopeSeparator > 1
+      ? `${encodedScope}/${encodedName}`
+      : encodeURIComponent(packageName);
+  return `pkg:npm/${packagePath}@${encodeURIComponent(version)}`;
+}
+
 function decodeStatement(bundle) {
   const payload = bundle?.dsseEnvelope?.payload;
   if (typeof payload !== "string") return null;
@@ -58,7 +73,7 @@ export function verifyNpmProvenance(
     return { ok: false, errors };
   }
 
-  const expectedSubject = `pkg:npm/${packageName}@${version}`;
+  const expectedSubject = npmPackagePurl(packageName, version);
   const subject = statement.subject?.find(
     (candidate) => candidate?.name === expectedSubject,
   );

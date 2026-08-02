@@ -10,13 +10,15 @@ import {
 } from "./verify-npm-provenance.mjs";
 
 const VERSION = "0.0.1";
+const CANONICAL_SUBJECT =
+  `pkg:npm/%40lapismd/storybook-addon-visual-delta@${VERSION}`;
 
 function encodedStatement(overrides = {}) {
   const statement = {
     _type: "https://in-toto.io/Statement/v1",
     subject: [
       {
-        name: `pkg:npm/${PACKAGE_NAME}@${VERSION}`,
+        name: CANONICAL_SUBJECT,
         digest: { sha512: "tarball-digest" },
       },
     ],
@@ -64,6 +66,39 @@ test("accepts a verified Sigstore provenance bundle for the exact release", () =
   const result = verifyNpmProvenance(audit(), { version: VERSION });
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
+});
+
+test("requires npm's canonical scoped-package PURL subject", () => {
+  const result = verifyNpmProvenance(
+    audit({
+      verified: [
+        {
+          ...audit().verified[0],
+          attestationBundles: [
+            {
+              predicateType: PROVENANCE_PREDICATE,
+              bundle: {
+                dsseEnvelope: {
+                  payload: encodedStatement({
+                    subject: [
+                      {
+                        name: `pkg:npm/${PACKAGE_NAME}@${VERSION}`,
+                        digest: { sha512: "tarball-digest" },
+                      },
+                    ],
+                  }),
+                },
+              },
+            },
+          ],
+        },
+      ],
+    }),
+    { version: VERSION },
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /pkg:npm\/%40lapismd/);
 });
 
 test("rejects a missing verified package or provenance bundle", () => {
