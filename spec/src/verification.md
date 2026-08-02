@@ -336,6 +336,27 @@ manager acceptance reproduced the missing action. Environment-selection unit
 coverage and the five affected manager scenarios therefore distinguish the
 temporary legacy host fixtures from compare-only teaching assets.
 
+Release run
+[`30738781004`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30738781004)
+passed the x64 release and package gate, then failed compare-only ARM64 panel
+acceptance for exactly the `narrow-right` passed, mixed-mode-failure, and
+capture-error references. The 400 CSS pixel expanded-body minimum and `50cqh`
+scroll runway required by `VD-UI-012` intentionally changed those three layouts;
+all wide references and the other narrow states passed. The approved repair is
+limited to replacing those three platform-qualified Linux/ARM64 references and
+their three macOS counterparts, followed by focused and full compare-only
+acceptance. It does not authorize the browser-only baseline cutover, a threshold
+change, or any other baseline mutation.
+
+Visual review of the six refreshed references confirmed only the specified
+accordion body and scroll-runway geometry; typography, colors, controls, and
+states remained unchanged. With `PLAYWRIGHT_UPDATE_SNAPSHOTS=0`, the focused
+three-test and full thirteen-test panel suites passed compare-only on macOS and
+in the immutable ARM64 image. ARM64 manager acceptance passed 48 tests with
+only the documented VCS-history skip. The specification gate, build, typecheck,
+426 unit tests, dependency audit, exact `v0.0.2` metadata check, and npm package
+dry-run also passed without producing any additional baseline change.
+
 The combined primary, mode, and interaction VCS-history manager test remains
 temporarily skipped because its mode-popover sequence is unstable only within
 the full ARM64 manager suite. Focused execution against the immutable ARM64
