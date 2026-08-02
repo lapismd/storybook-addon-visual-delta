@@ -96,7 +96,7 @@ height so even the last interaction can move away from the fixed footer.
 
 Diff HTML captures the live preview in the manager browser. It restores iframe size, scroll positions, focus, temporary capture styles, and preview state even when capture fails.
 
-Diff Browser requests an exact-story middleware comparison for the selected configured browser through the canonical capture runner. Diff Result reads the matching sidecar, actual PNG, and diff PNG from `/visual-baselines`.
+Diff Browser requests an exact-story `visual-delta test --story-id` comparison for the selected configured browser through the resolved canonical capture runner. It uses the same packaged suite, static Storybook inputs, thresholds, modes or interaction target, and browser configuration as the equivalent command-line request. Diff Result reads the matching runner-produced sidecar, actual PNG, and diff PNG from `/visual-baselines` only after their capture profile matches the runner result.
 
 The panel MUST show:
 

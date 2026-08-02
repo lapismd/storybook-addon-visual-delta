@@ -26,7 +26,8 @@ export type CaptureSubjectResult = {
   width: number;
   height: number;
   target: VisualBaselineTarget;
-  captureProfile: VisualCaptureProfile;
+  /** Present only when capture ran through a declared profile. Host-local diagnostics omit it. */
+  captureProfile?: VisualCaptureProfile;
   /** @deprecated Informational compatibility alias. */
   environment: VisualBaselineEnvironment;
 };

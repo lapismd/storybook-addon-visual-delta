@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { visualTestCommandArgs } from "./middleware.js";
+import { attachSidecars, visualTestCommandArgs } from "./middleware.js";
 import {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_VISUAL_UPDATE_ARGS,
@@ -10,6 +13,7 @@ import {
   screenshotRelativePath,
   type StoryIndexEntry,
 } from "./snapshot-paths.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 
 const entry: StoryIndexEntry = {
   id: "workspace-shell-tabs--top-light",
@@ -87,5 +91,56 @@ describe("portable Visual Delta host options", () => {
       "--project",
       "webkit",
     ]);
+  });
+
+  it("preserves the runner profile carried by a fresh sidecar", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "visual-delta-sidecar-"));
+    const snapshotDir = path.join(root, "snapshots");
+    const staticDir = path.join(root, "storybook-static");
+    const profile = {
+      ...CANONICAL_VISUAL_CAPTURE_PROFILE,
+      id: "custom-canonical-runner",
+    };
+    mkdirSync(snapshotDir, { recursive: true });
+    mkdirSync(staticDir, { recursive: true });
+    writeFileSync(
+      path.join(staticDir, "index.json"),
+      JSON.stringify({ entries: { [entry.id]: entry } }),
+    );
+    writeFileSync(
+      path.join(snapshotDir, "workspace-shell-tabs--top-light-chromium.png"),
+      "baseline",
+    );
+    writeFileSync(
+      path.join(snapshotDir, "workspace-shell-tabs--top-light-chromium.json"),
+      JSON.stringify({
+        version: 3,
+        storyId: entry.id,
+        snapshotRel: "workspace-shell-tabs--top-light.png",
+        status: "passed",
+        generatedAt: new Date(0).toISOString(),
+        tool: "playwright",
+        target: { browser: "chromium" },
+        captureProfile: profile,
+      }),
+    );
+    try {
+      const [result] = attachSidecars(
+        [
+          {
+            storyId: entry.id,
+            title: entry.id,
+            status: "passed",
+            target: { browser: "chromium" },
+          },
+        ],
+        root,
+        { snapshotDir: "snapshots", baselinePathMode: "story-id" },
+      );
+      expect(result?.captureProfile).toEqual(profile);
+      expect(result?.environment?.platform).toBe(profile.os);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

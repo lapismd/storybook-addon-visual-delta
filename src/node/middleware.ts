@@ -55,6 +55,7 @@ import {
   type VisualTestFailureMode,
 } from "../shared/failure-mode.js";
 import { classifyVisualRunResult } from "../shared/visual-result-classification.js";
+import { isVisualDiffSidecar } from "../visual-diff-sidecar.js";
 import {
   modeResultStatus,
   type VisualModeRunResult,
@@ -68,7 +69,7 @@ import type {
   CompareStoryRequest,
   CompareStoryStreamEvent,
 } from "../shared/compare-story-types.js";
-import { compareLiveStoryWithBrowser } from "./compare-story.js";
+import { compareStoryInCaptureRunner } from "./compare-story.js";
 import {
   DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
   DEFAULT_VISUAL_TEST_ARGS,
@@ -94,6 +95,7 @@ import {
 import {
   CANONICAL_VISUAL_CAPTURE_PROFILE,
   validateVisualCaptureProfile,
+  type VisualCaptureProfile,
 } from "../shared/capture-profile.js";
 import { createVisualDeltaRuntimeEndpoint } from "./runtime-instance.js";
 import {
@@ -166,6 +168,7 @@ import {
   runStaticBuildSingleFlight,
   type StaticBuildReason,
 } from "./static-build.js";
+import { runVisualDeltaCaptureJob } from "./capture-runner.js";
 
 type UpdateBody = {
   /** Exact story ids to write in one Playwright invocation. */
@@ -227,6 +230,7 @@ export type {
 } from "./run-hub.js";
 
 let activeRun: ChildProcess | null = null;
+let activeCaptureRun: AbortController | null = null;
 let staticStaleReason: Extract<
   StaticBuildReason,
   "stale-config" | "unskip"
@@ -387,73 +391,6 @@ export function grepFromStoryIds(storyIds?: string[]): string | undefined {
   return playwrightStoryIdGrep(storyIds);
 }
 
-type PlaywrightJsonSpec = {
-  title?: string;
-  ok?: boolean;
-  tests?: Array<{
-    projectName?: string;
-    status?: string;
-    results?: Array<{ status?: string; error?: { message?: string } }>;
-  }>;
-  suites?: PlaywrightJsonSuite[];
-};
-
-type PlaywrightJsonSuite = {
-  title?: string;
-  specs?: PlaywrightJsonSpec[];
-  suites?: PlaywrightJsonSuite[];
-};
-
-function walkSpecs(
-  suite: PlaywrightJsonSuite,
-  out: VisualRunResultItem[],
-): void {
-  for (const spec of suite.specs ?? []) {
-    const storyId = spec.title?.trim();
-    if (!storyId) continue;
-    const test = spec.tests?.[0];
-    const result = test?.results?.[0];
-    const raw =
-      result?.status ?? test?.status ?? (spec.ok ? "passed" : "failed");
-    let status: VisualRunResultItem["status"] = "failed";
-    if (raw === "passed" || raw === "expected" || spec.ok === true) {
-      status = "passed";
-    } else if (raw === "skipped" || raw === "pending") {
-      status = "skipped";
-    } else if (raw === "timedOut") {
-      status = "timedOut";
-    }
-    out.push({
-      storyId,
-      status,
-      title: storyId,
-      error: result?.error?.message,
-      ...(isVisualDeltaBrowser(test?.projectName)
-        ? {
-            target: { browser: test.projectName },
-            captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-            environment: {
-              browser: test.projectName,
-              platform: process.platform,
-            },
-          }
-        : {}),
-    });
-  }
-  for (const child of suite.suites ?? []) {
-    walkSpecs(child, out);
-  }
-}
-
-function parsePlaywrightJson(raw: string): VisualRunResultItem[] {
-  const report = JSON.parse(raw) as { suites?: PlaywrightJsonSuite[] };
-  const results: VisualRunResultItem[] = [];
-  for (const suite of report.suites ?? []) {
-    walkSpecs(suite, results);
-  }
-  return results;
-}
-
 /** Error when refusing `visual-failed` without a committed baseline PNG. */
 export const NO_BASELINE_FAILED_ERROR =
   "Cannot mark failed — no baseline screenshot";
@@ -467,7 +404,7 @@ export function attachSidecars(
   const snapshotDir = resolveSnapshotDir(options, packageRoot);
   const mode = resolveBaselinePathMode(options);
   return results.map((item) => {
-    const browser = item.environment?.browser ?? "chromium";
+    const browser = item.target?.browser ?? item.environment?.browser ?? "chromium";
     const sidecar = loadSidecarForStoryId(
       item.storyId,
       packageRoot,
@@ -537,10 +474,15 @@ export function attachSidecars(
           outcome: sidecar.outcome,
           policyStatus,
           target: { browser },
-          captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+          captureProfile: sidecar.captureProfile ?? item.captureProfile,
           environment: {
             browser,
-            platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os,
+            platform:
+              sidecar.captureProfile?.os ??
+              item.captureProfile?.os ??
+              item.environment?.platform ??
+              sidecar.platform ??
+              "unknown",
           },
         }
       : { ...item };
@@ -569,13 +511,6 @@ function canMarkVisualFailed(
     resolveSnapshotDir(options, root),
     resolveBaselinePathMode(options),
   );
-}
-
-function extractJsonDocument(log: string): string | null {
-  const start = log.indexOf("{");
-  const end = log.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  return log.slice(start, end + 1);
 }
 
 function summarize(results: VisualRunResultItem[]) {
@@ -1020,7 +955,7 @@ async function handleRun(
   // Reconnect after manager HMR while Playwright is still running.
   // A finished snapshot must not block starting a new run — use GET
   // `/__visual-delta/run-events` to hydrate recent results instead.
-  if (activeRun || isVisualRunActive()) {
+  if (activeRun || activeCaptureRun || isVisualRunActive()) {
     subscribeVisualRunHub(res);
     return;
   }
@@ -1165,12 +1100,11 @@ async function handleRun(
     return;
   }
 
-  const allowRebuild = options.allowRebuild !== false;
-  if (selection === "affected" && !allowRebuild) {
+  if (options.allowRebuild === false) {
     writeJson(res, 400, {
       ok: false,
       crashed: true,
-      error: "Affected visual tests require static Storybook rebuilds",
+      error: "Canonical capture-runner comparisons require a static Storybook build",
       exitCode: 1,
       rebuild: false,
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
@@ -1180,285 +1114,180 @@ async function handleRun(
     } satisfies VisualRunResponse);
     return;
   }
-  const forceReason =
-    selection === "affected"
-      ? ("affected-plan" as const)
-      : body.rebuild
-        ? ("explicit-rebuild" as const)
-        : (staticStaleReason ?? undefined);
-  const buildDecision = decideStorybookStaticBuild({
-    packageRoot: root,
-    skipBuild: !allowRebuild,
-    forceRebuild: Boolean(forceReason),
-    forceReason,
-    storyIdPrefix: "",
-    storyIds: selectedStoryIds,
-  });
-  if (buildDecision.shouldBuild && !allowRebuild) {
-    writeJson(res, 400, {
-      ok: false,
-      crashed: true,
-      error: buildDecision.message,
-      exitCode: 1,
-      rebuild: false,
-      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-      results: [],
-      logTail: "",
-      affected,
-    } satisfies VisualRunResponse);
-    return;
-  }
-  if (buildDecision.reason === "skip-build-missing") {
-    writeJson(res, 400, {
-      ok: false,
-      crashed: true,
-      error: buildDecision.message,
-      exitCode: 1,
-      rebuild: false,
-      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-      results: [],
-      logTail: "",
-      affected,
-    } satisfies VisualRunResponse);
-    return;
-  }
-  const rebuild = buildDecision.shouldBuild;
-  let grep =
-    selection === "all" ? undefined : grepFromStoryIds(selectedStoryIds);
+
+  const storyIds = [...new Set(selectedStoryIds ?? [])];
+  const grep = selection === "all" ? undefined : grepFromStoryIds(storyIds);
+  const total = storyIds.length * selectedBrowsers.length;
   let log = "";
+  let activeProfile: VisualCaptureProfile | undefined;
+  const controller = new AbortController();
+  activeCaptureRun = controller;
 
   beginVisualRunHub();
   subscribeVisualRunHub(res);
-  emitRun({
-    type: "start",
-    total:
-      (countVisualStories(root, selectedStoryIds) ??
-        selectedStoryIds?.length ??
-        0) * selectedBrowsers.length,
-    affected,
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-  });
+  emitRun({ type: "start", total, affected });
 
   try {
-    if (rebuild) {
-      const rebuildLine = buildDecision.message;
-      emitRun({ type: "log", line: rebuildLine });
-      log += `${rebuildLine}\n`;
-      const rebuildStartedAt = Date.now();
-      const heartbeat = setInterval(() => {
-        emitRun({
-          type: "log",
-          line: `${rebuildLine}… ${Math.floor(
-            (Date.now() - rebuildStartedAt) / 1_000,
-          )}s`,
-        });
-      }, 5_000);
-      let built: Awaited<ReturnType<typeof runCommand>>;
-      try {
-        built = await runStaticBuildSingleFlight(root, () =>
-          runCommand("pnpm", ["build-storybook"], root),
-        );
-      } finally {
-        clearInterval(heartbeat);
-      }
-      log += built.log;
-      if (built.code !== 0) {
-        emitRun({
-          type: "error",
-          error: "build-storybook failed",
-          crashed: true,
-        });
-        emitRun({
-          type: "done",
-          ok: false,
-          crashed: true,
-          error: "build-storybook failed",
-          exitCode: built.code,
-          rebuild,
-          grep,
-          summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-          results: [],
-          logTail: log.slice(-4000),
-          affected,
-        });
-        return;
-      }
-      staticStaleReason = null;
-      markStorybookStaticFresh(root);
-      invalidateWarmStaticStorybookServer();
-
-      if (selection === "affected") {
-        plan = affectedPlan(root, options);
-        selectedStoryIds = plan.selectedStoryIds;
-        affected = plan.summary;
-        grep = affected.fallbackReason
-          ? undefined
-          : grepFromStoryIds(selectedStoryIds);
-        if (affected.noChange) {
-          recordAffectedVisualResults({
-            root,
-            hostOptions: options,
-            passedStoryIds: [],
-          });
-          emitRun({ type: "start", total: 0, affected });
-          emitRun({
-            type: "done",
-            ok: true,
-            exitCode: 0,
-            rebuild,
-            summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-            results: [],
-            logTail: `${log}Affected visual tests are up to date`.slice(-6000),
-            affected,
-          });
-          return;
-        }
-      } else {
-        affected = selectedRunSummary(
-          root,
-          options,
-          selectedStoryIds,
-          selection,
-        );
-      }
-    } else if (isStorybookStaticComplete(root)) {
-      emitRun({
-        type: "log",
-        line: "Using existing storybook-static",
-      });
-      log += "Using existing storybook-static\n";
-    }
-
-    const total = countVisualStories(root, selectedStoryIds) * selectedBrowsers.length;
-    emitRun({ type: "start", total, affected });
-
-    const seenIndexes = new Set<number>();
-    const progressResults: VisualRunResultItem[] = [];
+    const seen = new Set<string>();
     let completed = 0;
     let passed = 0;
     let failed = 0;
-    let warnings = 0;
-    let lineBuf = "";
-
-    const warm = await ensureWarmStaticStorybookServer(root, visualPort);
-    if (warm.message) {
-      emitRun({ type: "log", line: warm.message });
-      log += `${warm.message}\n`;
-    }
-    if (!warm.ok) {
-      await ensurePlaywrightWebServerPort(visualPort);
-    }
-
-    const args = visualTestCommandArgs(options, grep, selectedBrowsers);
-    const { code, log: runLog } = await runCommand(
-      "pnpm",
-      args,
+    let lineBuffer = "";
+    const affectedConfig = options.affectedTests || undefined;
+    const argv = [
+      "test",
+      ...(selection === "all"
+        ? ["--all"]
+        : storyIds.flatMap((storyId) => ["--story-id", storyId])),
+      ...selectedBrowsers.flatMap((browser) => ["--browser", browser]),
+      "--failure-mode",
+      failureMode,
+      ...(options.snapshotDir
+        ? ["--snapshot-dir", options.snapshotDir]
+        : []),
+      ...(options.baselinePathMode
+        ? ["--baseline-path-mode", options.baselinePathMode]
+        : []),
+      ...(options.visualTestArgs ?? []).flatMap((argument) => [
+        "--visual-test-arg",
+        argument,
+      ]),
+      ...(affectedConfig?.cacheDir
+        ? ["--cache-dir", affectedConfig.cacheDir]
+        : []),
+      ...(affectedConfig?.externals ?? []).flatMap((glob) => [
+        "--external",
+        glob,
+      ]),
+      ...(affectedConfig?.untraced ?? []).flatMap((glob) => [
+        "--untraced",
+        glob,
+      ]),
+    ];
+    const runnerResult = await runVisualDeltaCaptureJob({
       root,
-      {
-        PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
-        // Keep Playwright webServer on the same port the middleware warmed.
-        VISUAL_SERVER_PORT: String(visualPort),
-        VISUAL_DELTA_FAILURE_MODE: failureMode,
-      },
-      (chunk) => {
-        lineBuf += chunk;
-        const lines = lineBuf.split("\n");
-        lineBuf = lines.pop() ?? "";
-        for (const line of lines) {
-          for (const item of parseListReporterProgress(`${line}\n`)) {
-            if (seenIndexes.has(item.index)) continue;
-            seenIndexes.add(item.index);
-            completed = seenIndexes.size;
-            const result = attachSidecars(
-              [{
-              storyId: item.storyId,
-              status: item.status,
-              title: item.storyId,
-              target: item.target,
-              captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-              environment: {
-                browser: item.browser,
-                platform: item.platform,
-              },
-              }],
-              root,
-              options,
-            )[0]!;
-            if (result.policyStatus === "warning") warnings += 1;
-            else if (item.status === "passed") passed += 1;
-            else failed += 1;
-            progressResults.push(result);
-            emitRun({
-              type: "progress",
-              completed,
-              total: total || completed,
-              passed,
-              failed,
-              warnings,
-              storyId: item.storyId,
-              status: item.status,
-              target: item.target,
-              captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-              environment: {
-                browser: item.browser,
-                platform: item.platform,
-              },
-            });
+      argv,
+      operation: "test",
+      storyIds: selection === "all" ? [] : storyIds,
+      browsers: selectedBrowsers,
+      failureMode,
+      context: {
+        signal: controller.signal,
+        onEvent(event) {
+          if (event.type === "start") {
+            activeProfile = event.profile;
+            emitRun({ type: "start", total, affected, captureProfile: event.profile });
+            return;
           }
-        }
+          if (event.type !== "log") return;
+          log = `${log}${event.message}`.slice(-200_000);
+          emitRun({ type: "log", line: event.message.trimEnd() });
+          lineBuffer += event.message;
+          const lines = lineBuffer.split("\n");
+          lineBuffer = lines.pop() ?? "";
+          for (const line of lines) {
+            for (const item of parseListReporterProgress(`${line}\n`)) {
+              const key = `${item.browser}:${item.index}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              completed += 1;
+              if (item.status === "passed") passed += 1;
+              else failed += 1;
+              emitRun({
+                type: "progress",
+                completed,
+                total: total || completed,
+                passed,
+                failed,
+                storyId: item.storyId,
+                status: item.status,
+                target: item.target,
+                ...(activeProfile
+                  ? {
+                      captureProfile: activeProfile,
+                      environment: {
+                        browser: item.browser,
+                        platform: activeProfile.os,
+                      },
+                    }
+                  : {}),
+              });
+            }
+          }
+        },
       },
+    });
+    if (controller.signal.aborted) return;
+    activeProfile = runnerResult.profile;
+    const snapshotDir = resolveSnapshotDir(options, root);
+    const baselineMode = resolveBaselinePathMode(options);
+    const returnedTargets = new Map<
+      string,
+      { storyId: string; browser: VisualDeltaBrowser }
+    >();
+    for (const artifact of runnerResult.stagedArtifacts ?? []) {
+      const relative = artifact.relativePath.replaceAll("\\", "/");
+      if (!relative.toLowerCase().endsWith(".json")) continue;
+      const parsed = JSON.parse(
+        readFileSync(path.resolve(root, ...relative.split("/")), "utf8"),
+      ) as unknown;
+      if (!isVisualDiffSidecar(parsed)) continue;
+      const browser = parsed.target?.browser ?? parsed.browser;
+      if (!browser) continue;
+      returnedTargets.set(`${parsed.storyId}:${browser}`, {
+        storyId: parsed.storyId,
+        browser,
+      });
+    }
+    const targetPairs = selection === "all"
+      ? [...returnedTargets.values()]
+      : storyIds.flatMap((storyId) =>
+          selectedBrowsers.map((browser) => ({ storyId, browser })),
+        );
+    const results = attachSidecars(
+      targetPairs.map(({ storyId, browser }) => {
+        const sidecar = loadSidecarForStoryId(
+          storyId,
+          root,
+          snapshotDir,
+          baselineMode,
+          browser,
+        );
+        return {
+          storyId,
+          title: storyId,
+          status: sidecar?.status ?? "failed",
+          ...(sidecar ? {} : { error: "Capture runner produced no sidecar" }),
+          target: { browser },
+          captureProfile: runnerResult.profile,
+          environment: { browser, platform: runnerResult.profile.os },
+        } satisfies VisualRunResultItem;
+      }),
+      root,
+      options,
     );
-    log += runLog;
-
-    // Prefer list-reporter results (live progress). Fall back to a JSON document
-    // in the log when a host still wires `--reporter=json` without a file sink.
-    let results: VisualRunResultItem[] = [];
-    if (progressResults.length > 0) {
-      results = attachSidecars(progressResults, root, options);
-    } else {
-      const json = extractJsonDocument(runLog);
-      if (json) {
-        try {
-          results = attachSidecars(parsePlaywrightJson(json), root, options);
-        } catch {
-          /* leave empty — UI still shows crash/fail via exit code */
-        }
-      }
-    }
-
     const summary = summarize(results);
-    // List-reporter progress is authoritative when result parsing yielded nothing,
-    // so the UI does not show "Ran 0 tests".
-    if (summary.total === 0 && completed > 0) {
-      summary.total = completed;
-      summary.passed = passed;
-      summary.failed = failed;
-      summary.warnings = warnings;
-    }
     const passedStoryIds = successfulStoryIdsFromPlaywrightResults({
       root,
       hostOptions: options,
       results,
     });
-    recordAffectedVisualResults({
-      root,
-      hostOptions: options,
-      passedStoryIds,
-    });
+    recordAffectedVisualResults({ root, hostOptions: options, passedStoryIds });
     emitRun({
       type: "done",
-      ok: code === 0 && summary.failed === 0,
-      exitCode: code,
-      rebuild,
+      ok: runnerResult.exitCode === 0 && summary.failed === 0,
+      exitCode: runnerResult.exitCode,
+      rebuild: true,
       grep,
       summary,
       results,
       logTail: log.slice(-6000),
       affected,
       browsers: selectedBrowsers,
-      captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+      captureProfile: runnerResult.profile,
     });
   } catch (error) {
+    if (controller.signal.aborted) return;
     const message = error instanceof Error ? error.message : String(error);
     emitRun({ type: "error", error: message, crashed: true });
     emitRun({
@@ -1467,23 +1296,29 @@ async function handleRun(
       crashed: true,
       error: message,
       exitCode: 1,
-      rebuild,
+      rebuild: true,
       grep,
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
       results: [],
       logTail: log.slice(-4000),
       affected,
       browsers: selectedBrowsers,
-      captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+      captureProfile: activeProfile,
     });
+  } finally {
+    if (activeCaptureRun === controller) activeCaptureRun = null;
   }
 }
 
 function handleCancel(res: ServerResponse) {
-  const hadChild = Boolean(activeRun);
+  const hadChild = Boolean(activeRun || activeCaptureRun);
   if (activeRun) {
     activeRun.kill("SIGTERM");
     activeRun = null;
+  }
+  if (activeCaptureRun) {
+    activeCaptureRun.abort();
+    activeCaptureRun = null;
   }
   cancelVisualRunHub({ hadChild });
   writeJson(res, 200, { ok: true, cancelled: hadChild });
@@ -1507,7 +1342,7 @@ async function handleActionScope(
   root: string,
   options: VisualDeltaHostOptions,
 ): Promise<void> {
-  if (activeRun || isVisualRunActive()) {
+  if (activeRun || activeCaptureRun || isVisualRunActive()) {
     writeJson(res, 409, {
       ok: false,
       error:
@@ -1699,7 +1534,7 @@ function handleRunStatus(res: ServerResponse) {
   writeJson(res, 200, {
     ...getVisualRunHubStatus(),
     /** True while any middleware-spawned child (compare or baseline write) is alive. */
-    childActive: Boolean(activeRun),
+    childActive: Boolean(activeRun || activeCaptureRun),
   });
 }
 
@@ -2336,7 +2171,6 @@ async function handleCaptureSubject(
     type: "start",
     storyId: body.storyId,
     target: { browser },
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
     environment: {
       browser,
       platform: process.platform,
@@ -2387,14 +2221,9 @@ async function handleCompareStory(
     type: "start",
     storyId: body.storyId,
     target: { browser: body.browser ?? "chromium" },
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-    environment: {
-      browser: body.browser ?? "chromium",
-      platform: process.platform,
-    },
   });
   try {
-    const result = await compareLiveStoryWithBrowser({
+    const result = await compareStoryInCaptureRunner({
       root,
       hostOptions: options,
       request: body,

@@ -29,7 +29,6 @@ import {
   visualDeltaBrowserLabel,
   type VisualDeltaBrowser,
 } from "../shared/environments.js";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 
 export type {
   CaptureSubjectPhase,
@@ -339,7 +338,6 @@ export async function captureSubjectWithBrowser(
       width,
       height,
       target: { browser: browserName },
-      captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
       environment: { browser: browserName, platform: process.platform },
     };
   } finally {

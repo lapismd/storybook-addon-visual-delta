@@ -62,6 +62,7 @@ export {
   createCaptureJobManifest,
   createDockerVisualDeltaCaptureRunner,
   resolveVisualDeltaCaptureRunner,
+  runVisualDeltaCaptureJob,
   runVisualDeltaInCaptureRunner,
 } from "./capture-runner.js";
 export {
@@ -157,6 +158,7 @@ export {
   type StaticBuildReason,
 } from "./static-build.js";
 export {
+  compareStoryInCaptureRunner,
   compareLiveStoryWithBrowser,
   compareLiveStoryWithChromium,
 } from "./compare-story.js";

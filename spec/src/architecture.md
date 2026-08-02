@@ -12,7 +12,7 @@ Each component owns a bounded part of the system:
 | Storybook preview       | Story decorators, render readiness, capture metadata, overlay and split layout, interaction parking  | Baseline mutation, static-build decisions, repository state               |
 | Dev middleware          | Request validation, exact scope, process coordination, change tracking, static-build policy, run hub | Product rendering, pixel algorithms, unapproved baseline writes           |
 | CLI and host writers    | Approved baseline capture, wiring changes, skip and include source edits, scaffolding                | Presentation state, implicit scope expansion                              |
-| Capture runner          | Transport a frozen capture manifest into the canonical Linux/ARM64 profile                            | Scope expansion, comparison policy, direct unapproved repository writes   |
+| Capture runner          | Transport a frozen capture manifest into the canonical Linux/ARM64 profile and return checksummed derived evidence | Scope expansion, comparison policy, direct unapproved repository writes   |
 | Playwright suite        | Deterministic configured-browser capture, pixel comparison, staged artifacts, sidecar evidence        | Review approval policy, repository commits                                |
 | Artifact store          | Baseline PNGs, local sidecars, affected cache, static Storybook                                      | Business logic or inferred review state                                   |
 | Version-control adapter | Read-only history and guarded local commits                                                          | Push, amend, squash, branch creation, discard, remote mutation            |
@@ -61,9 +61,19 @@ responsible for the consumer's Storybook and project dependencies, but worker
 selection does not resolve through the staged workspace's scripts,
 `node_modules/.bin`, or local-link topology. Source-checkout development builds
 the worker before staging it; published consumers use the package's shipped
-worker.
+worker. Root-contained absolute snapshot and affected-cache arguments are
+remapped to their equivalent `/workspace` paths before the Docker worker is
+invoked; paths outside the frozen workspace are rejected.
 
 Baseline mutation adds a write gate before Playwright starts and an invalidation step after the requested files are written. Repository automation occurs after the mutation succeeds and cannot affect capture semantics.
+
+Compare-only artifact return is a narrow exception to the otherwise read-only
+host workspace boundary. The runner may stage only result sidecars, their
+`.actual.png` / `.diff.png` diagnostics, and the two package-owned affected
+planning JSON files. The host copies them back only after traversal checks,
+regular-file checks, checksums, capture-profile validation for sidecars, and
+exact cache-path allow-listing. Baseline PNGs, sources, configuration, static
+output, and unrelated caches are never valid compare-only return artifacts.
 
 ## Lifecycle ownership
 

@@ -22,12 +22,23 @@ import { readVisualDeltaProjectConfig } from "./project-config.js";
 
 export type VisualTestCliOptions = {
   root?: string;
-  selection: "affected" | "all";
+  selection: "affected" | "all" | "stories";
+  storyIds?: string[];
+  interaction?: {
+    storyId: string;
+    stepId: string;
+    stepLabel?: string;
+    captureCallId?: string;
+  };
+  baselineRelativePath?: string;
+  testArgs?: string[];
   dryRun?: boolean;
   explain?: boolean;
   hostOptions?: VisualDeltaHostOptions;
   browsers?: VisualDeltaBrowser[];
   failureMode?: VisualTestFailureMode;
+  /** Test seam; production uses the package process runner. */
+  runCommand?: typeof runCommand;
 };
 
 type CommandResult = {
@@ -100,14 +111,16 @@ function printPlan(plan: AffectedVisualPlan, explain: boolean): void {
 
 /**
  * Packaged `visual-delta test` runner.
- * Affected mode rebuilds before capture; all mode preserves the existing
- * compare-only Playwright behavior and opportunistically seeds the cache.
+ * Every executable selection builds the static Storybook used by the
+ * canonical runner. Exact story selection remains exact through Playwright
+ * grep and never broadens an empty or invalid request.
  */
 export async function runVisualTestCli(
   options: VisualTestCliOptions,
 ): Promise<number> {
   const root = options.root?.trim() || process.cwd();
   const hostOptions = options.hostOptions;
+  const execute = options.runCommand ?? runCommand;
   const projectConfig = readVisualDeltaProjectConfig(root);
   const configErrors = projectConfig.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
@@ -133,21 +146,41 @@ export async function runVisualTestCli(
     );
     return 1;
   }
-  let plan =
-    options.selection === "affected"
-      ? planAffectedVisualTests(root, hostOptions)
-      : planAllVisualTests(root, hostOptions);
+  let plan = options.selection === "affected"
+    ? planAffectedVisualTests(root, hostOptions)
+    : planAllVisualTests(root, hostOptions);
   printPlan(plan, Boolean(options.explain));
 
-  if (options.dryRun) return 0;
+  const requestedStoryIds = [...new Set(options.storyIds ?? [])];
+  if (options.dryRun) {
+    if (options.selection === "stories") {
+      if (requestedStoryIds.length === 0) {
+        console.error("Exact visual tests require at least one --story-id");
+        return 1;
+      }
+      const runnable = new Set(plan.runnableStoryIds);
+      const missing = requestedStoryIds.filter((storyId) => !runnable.has(storyId));
+      if (missing.length > 0) {
+        console.error(`Stories are not runnable visual targets: ${missing.join(", ")}`);
+        return 1;
+      }
+    }
+    return 0;
+  }
   if (options.selection === "affected" && plan.summary.noChange) return 0;
 
-  if (options.selection === "affected") {
-    const build = await runCommand("pnpm", ["build-storybook"], root);
+  if (
+    options.selection === "affected" ||
+    options.selection === "stories" ||
+    options.selection === "all"
+  ) {
+    const build = await execute("pnpm", ["build-storybook"], root);
     if (build.code !== 0) return build.code;
-    plan = planAffectedVisualTests(root, hostOptions);
+    plan = options.selection === "affected"
+      ? planAffectedVisualTests(root, hostOptions)
+      : planAllVisualTests(root, hostOptions);
     printPlan(plan, Boolean(options.explain));
-    if (plan.summary.noChange) {
+    if (options.selection === "affected" && plan.summary.noChange) {
       recordAffectedVisualResults({
         root,
         hostOptions,
@@ -157,16 +190,31 @@ export async function runVisualTestCli(
     }
   }
 
-  const selectedStoryIds =
-    options.selection === "all" ? plan.runnableStoryIds : plan.selectedStoryIds;
-  const grep =
-    options.selection === "affected" && !plan.summary.fallbackReason
-      ? playwrightStoryIdGrep(selectedStoryIds)
-      : undefined;
-  const result = await runCommand(
+  if (options.selection === "stories" && requestedStoryIds.length === 0) {
+    console.error("Exact visual tests require at least one --story-id");
+    return 1;
+  }
+  const runnable = new Set(plan.runnableStoryIds);
+  const missingStoryIds = requestedStoryIds.filter((storyId) => !runnable.has(storyId));
+  if (options.selection === "stories" && missingStoryIds.length > 0) {
+    console.error(`Stories are not runnable visual targets: ${missingStoryIds.join(", ")}`);
+    return 1;
+  }
+  const selectedStoryIds = options.selection === "all"
+    ? plan.runnableStoryIds
+    : options.selection === "stories"
+      ? requestedStoryIds
+      : plan.selectedStoryIds;
+  const grep = options.selection === "all" ||
+    (options.selection === "affected" && plan.summary.fallbackReason)
+    ? undefined
+    : playwrightStoryIdGrep(selectedStoryIds);
+  const result = await execute(
     "pnpm",
     [
-      ...DEFAULT_VISUAL_TEST_ARGS,
+      ...(options.testArgs?.length
+        ? options.testArgs
+        : DEFAULT_VISUAL_TEST_ARGS),
       "--reporter=list",
       ...browsers.flatMap((browser) => ["--project", browser]),
       ...(grep ? ["-g", grep] : []),
@@ -176,6 +224,12 @@ export async function runVisualTestCli(
       PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
       ...(options.failureMode
         ? { VISUAL_DELTA_FAILURE_MODE: options.failureMode }
+        : {}),
+      ...(options.interaction
+        ? { PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(options.interaction) }
+        : {}),
+      ...(options.baselineRelativePath
+        ? { VISUAL_DELTA_BASELINE_OVERRIDE: options.baselineRelativePath }
         : {}),
     },
   );

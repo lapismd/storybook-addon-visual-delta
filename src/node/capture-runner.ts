@@ -32,6 +32,7 @@ import {
   type VisualCaptureRunnerContext,
   type VisualDeltaCaptureRunner,
 } from "../runner/index.js";
+import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 
 export const VISUAL_DELTA_RUNNER_MODULE_REL = ".visual-delta/runner.mjs";
 export const VISUAL_DELTA_CAPTURE_WORKER_ENV =
@@ -86,8 +87,60 @@ const STAGE_COPY_IGNORES = new Set([
   "storybook-static",
   "test-results",
 ]);
+const DEFAULT_AFFECTED_CACHE_DIR_REL = ".cache/visual-delta";
+const AFFECTED_CACHE_FILE_NAMES = [
+  "affected-state-v1.json",
+  "preview-stats.json",
+] as const;
 
-function createStagedWorkspace(root: string): {
+function isPathAtOrBelow(relative: string, directory: string): boolean {
+  return relative === directory || relative.startsWith(`${directory}/`);
+}
+
+function isPathAncestorOf(relative: string, directory: string): boolean {
+  return !relative || directory.startsWith(`${relative}/`);
+}
+
+export function shouldStageVisualDeltaWorkspacePath(
+  relativePath: string,
+  affectedCacheDir = DEFAULT_AFFECTED_CACHE_DIR_REL,
+): boolean {
+  const relative = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
+  if (!relative) return true;
+  if (relative === affectedCacheDir || isPathAncestorOf(relative, affectedCacheDir)) {
+    return true;
+  }
+  if (isPathAtOrBelow(relative, affectedCacheDir)) {
+    return AFFECTED_CACHE_FILE_NAMES.some(
+      (name) => relative === `${affectedCacheDir}/${name}`,
+    );
+  }
+  if (relative.startsWith(".cache/")) {
+    return false;
+  }
+  return !relative.split("/").some((segment) => STAGE_COPY_IGNORES.has(segment));
+}
+
+function affectedCacheDirRelative(root: string, argv: readonly string[]): string {
+  const flagIndex = argv.lastIndexOf("--cache-dir");
+  const configured = flagIndex >= 0 ? argv[flagIndex + 1]?.trim() : undefined;
+  const absolute = path.resolve(root, configured || DEFAULT_AFFECTED_CACHE_DIR_REL);
+  const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
+  if (!relative || path.posix.isAbsolute(relative) || relative.split("/").includes("..")) {
+    throw new Error("Affected cache directory must be inside the capture workspace.");
+  }
+  return relative;
+}
+
+function affectedCacheArtifactPaths(
+  root: string,
+  argv: readonly string[],
+): string[] {
+  const directory = affectedCacheDirRelative(root, argv);
+  return AFFECTED_CACHE_FILE_NAMES.map((name) => `${directory}/${name}`);
+}
+
+function createStagedWorkspace(root: string, affectedCacheDir: string): {
   parent: string;
   workspace: string;
 } {
@@ -96,10 +149,32 @@ function createStagedWorkspace(root: string): {
   cpSync(root, workspace, {
     recursive: true,
     filter(source) {
-      return !STAGE_COPY_IGNORES.has(path.basename(source));
+      const relative = path.relative(root, source).replaceAll(path.sep, "/");
+      return shouldStageVisualDeltaWorkspacePath(relative, affectedCacheDir);
     },
   });
   return { parent, workspace };
+}
+
+function changedExactArtifacts(
+  originalRoot: string,
+  stagedRoot: string,
+  relativePaths: readonly string[],
+): NonNullable<VisualCaptureRunnerResult["stagedArtifacts"]> {
+  return relativePaths.flatMap((relativePath) => {
+    const stagedPath = path.resolve(stagedRoot, ...relativePath.split("/"));
+    if (!existsSync(stagedPath) || !lstatSync(stagedPath).isFile()) return [];
+    const originalPath = path.resolve(originalRoot, ...relativePath.split("/"));
+    const stagedBytes = readFileSync(stagedPath);
+    const stagedHash = createHash("sha256").update(stagedBytes).digest("hex");
+    if (
+      existsSync(originalPath) &&
+      createHash("sha256").update(readFileSync(originalPath)).digest("hex") === stagedHash
+    ) {
+      return [];
+    }
+    return [{ relativePath, sha256: stagedHash }];
+  });
 }
 
 export function stageVisualDeltaPackageWorker(options: {
@@ -130,6 +205,23 @@ export function dockerVisualDeltaWorkerCommand(
     `${DOCKER_VISUAL_DELTA_WORKER_ROOT}/dist/node/cli.js`,
     ...argv,
   ];
+}
+
+export function dockerWorkspaceArgv(
+  root: string,
+  argv: readonly string[],
+): string[] {
+  const pathFlags = new Set(["--snapshot-dir", "--cache-dir"]);
+  return argv.map((value, index) => {
+    if (!pathFlags.has(argv[index - 1] ?? "") || !path.isAbsolute(value)) {
+      return value;
+    }
+    const relative = path.relative(root, value).replaceAll(path.sep, "/");
+    if (!relative || path.posix.isAbsolute(relative) || relative.split("/").includes("..")) {
+      throw new Error(`${argv[index - 1]} must resolve inside the capture workspace.`);
+    }
+    return `/workspace/${relative}`;
+  });
 }
 
 function regularFiles(root: string): string[] {
@@ -165,6 +257,98 @@ function changedStagedArtifacts(
       sha256: createHash("sha256").update(stagedBytes).digest("hex"),
     }];
   });
+}
+
+function testArtifactKind(
+  relativePath: string,
+  affectedCacheArtifacts: ReadonlySet<string>,
+): "sidecar" | "actual" | "diff" | "affected-cache" | null {
+  if (affectedCacheArtifacts.has(relativePath)) return "affected-cache";
+  if (/\.actual\.png$/i.test(relativePath)) return "actual";
+  if (/\.diff\.png$/i.test(relativePath)) return "diff";
+  if (/\.json$/i.test(relativePath)) return "sidecar";
+  return null;
+}
+
+function validateTestArtifacts(options: {
+  stagedArtifactRoot: string;
+  artifacts: NonNullable<VisualCaptureRunnerResult["stagedArtifacts"]>;
+  profile: VisualCaptureRunnerResult["profile"];
+  storyIds: readonly string[];
+  browsers: readonly VisualDeltaBrowser[];
+  affectedCacheArtifacts: ReadonlySet<string>;
+}): void {
+  const sidecarBases = new Set<string>();
+  for (const artifact of options.artifacts) {
+    const relative = artifact.relativePath.replaceAll("\\", "/");
+    if (
+      !relative ||
+      path.posix.isAbsolute(relative) ||
+      relative.split("/").includes("..")
+    ) {
+      throw new Error(`Unsafe compare-only artifact path: ${artifact.relativePath}`);
+    }
+    const kind = testArtifactKind(relative, options.affectedCacheArtifacts);
+    if (kind === "affected-cache") {
+      try {
+        const parsed = JSON.parse(
+          readFileSync(
+            path.resolve(options.stagedArtifactRoot, ...relative.split("/")),
+            "utf8",
+          ),
+        ) as unknown;
+        if (!parsed || typeof parsed !== "object") throw new Error("invalid");
+      } catch {
+        throw new Error(`Compare-only affected cache is not valid JSON: ${relative}`);
+      }
+      continue;
+    }
+    if (kind !== "sidecar") continue;
+    const sidecarPath = path.resolve(
+      options.stagedArtifactRoot,
+      ...relative.split("/"),
+    );
+    let sidecar: VisualDiffSidecar;
+    try {
+      sidecar = JSON.parse(readFileSync(sidecarPath, "utf8")) as VisualDiffSidecar;
+    } catch {
+      throw new Error(`Compare-only staged JSON is not a visual sidecar: ${relative}`);
+    }
+    if (
+      sidecar.version !== 3 ||
+      typeof sidecar.storyId !== "string" ||
+      sidecar.tool !== "playwright"
+    ) {
+      throw new Error(`Compare-only staged JSON is not a visual sidecar: ${relative}`);
+    }
+    if (options.storyIds.length > 0 && !options.storyIds.includes(sidecar.storyId)) {
+      throw new Error(`Comparison sidecar escaped the frozen story scope: ${relative}`);
+    }
+    const sidecarBrowser = sidecar.target?.browser ?? sidecar.browser;
+    if (
+      options.browsers.length > 0 &&
+      (!sidecarBrowser || !options.browsers.includes(sidecarBrowser))
+    ) {
+      throw new Error(`Comparison sidecar escaped the frozen browser scope: ${relative}`);
+    }
+    if (!sidecar.captureProfile || !isDeepStrictEqual(sidecar.captureProfile, options.profile)) {
+      throw new Error(`Comparison sidecar profile does not match the capture runner: ${relative}`);
+    }
+    sidecarBases.add(relative.replace(/\.json$/i, ""));
+  }
+  for (const artifact of options.artifacts) {
+    const relative = artifact.relativePath.replaceAll("\\", "/");
+    const kind = testArtifactKind(relative, options.affectedCacheArtifacts);
+    if (!kind) {
+      throw new Error(`Compare-only runner returned a forbidden artifact: ${relative}`);
+    }
+    if (kind === "actual" || kind === "diff") {
+      const base = relative.replace(/\.(?:actual|diff)\.png$/i, "");
+      if (!sidecarBases.has(base)) {
+        throw new Error(`Compare-only diagnostic has no matching sidecar: ${relative}`);
+      }
+    }
+  }
 }
 
 function runProcess(
@@ -298,7 +482,12 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
       }
       const image = visualCaptureProfileImageReference(profile)!;
       const key = cacheKey(manifest.root);
-      const staged = createStagedWorkspace(manifest.root);
+      const cacheDir = affectedCacheDirRelative(manifest.root, manifest.argv);
+      const cacheArtifacts = affectedCacheArtifactPaths(
+        manifest.root,
+        manifest.argv,
+      );
+      const staged = createStagedWorkspace(manifest.root, cacheDir);
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
       const storeVolume = `visual-delta-pnpm-store-${key}`;
       try {
@@ -340,12 +529,38 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         }
         const exitCode = await runProcess(
           "docker",
-          [...commonArgs, ...dockerVisualDeltaWorkerCommand(manifest.argv)],
+          [
+            ...commonArgs,
+            ...dockerVisualDeltaWorkerCommand(
+              dockerWorkspaceArgv(manifest.root, manifest.argv),
+            ),
+          ],
           { cwd: manifest.root },
           context,
         );
         context.onEvent?.({ type: "done", exitCode, profile });
-        if (manifest.operation === "test" || exitCode !== 0) {
+        if (manifest.operation === "test") {
+          const stagedArtifacts = [
+            ...changedStagedArtifacts(manifest.root, staged.workspace),
+            ...changedExactArtifacts(
+              manifest.root,
+              staged.workspace,
+              cacheArtifacts,
+            ),
+          ].filter(
+            (artifact, index, all) =>
+              all.findIndex(
+                (candidate) => candidate.relativePath === artifact.relativePath,
+              ) === index,
+          );
+          return {
+            exitCode,
+            profile,
+            stagedArtifactRoot: staged.workspace,
+            stagedArtifacts,
+          };
+        }
+        if (exitCode !== 0) {
           rmSync(staged.parent, { recursive: true, force: true });
           return { exitCode, profile };
         }
@@ -442,7 +657,7 @@ function applyStagedArtifacts(options: {
   }
 }
 
-export async function runVisualDeltaInCaptureRunner(options: {
+export async function runVisualDeltaCaptureJob(options: {
   root: string;
   argv: string[];
   operation: VisualCaptureOperation;
@@ -451,7 +666,7 @@ export async function runVisualDeltaInCaptureRunner(options: {
   failureMode?: VisualTestFailureMode;
   mutationApproved?: boolean;
   context?: VisualCaptureRunnerContext;
-}): Promise<number> {
+}): Promise<VisualCaptureRunnerResult> {
   const runner = await resolveVisualDeltaCaptureRunner(options.root);
   const manifest = createCaptureJobManifest(options);
   if (options.operation !== "test" && !options.mutationApproved) {
@@ -473,39 +688,69 @@ export async function runVisualDeltaInCaptureRunner(options: {
     );
   }
   const artifacts = result.stagedArtifacts ?? [];
-  if (options.operation === "test" && artifacts.length > 0) {
-    throw new Error("Read-only comparison runners must not return staged artifacts.");
-  }
-  if (options.operation !== "test" && result.exitCode === 0) {
-    const cleanupDockerStage =
-      runner.kind === "docker" &&
-      result.stagedArtifactRoot?.startsWith(
-        `${path.join(tmpdir(), "visual-delta-capture-")}`,
+  const affectedCacheArtifacts = new Set(
+    affectedCacheArtifactPaths(options.root, manifest.argv),
+  );
+  const cleanupDockerStage =
+    runner.kind === "docker" &&
+    result.stagedArtifactRoot?.startsWith(
+      `${path.join(tmpdir(), "visual-delta-capture-")}`,
+    );
+  try {
+    if (options.operation === "test" && artifacts.length > 0) {
+      if (!result.stagedArtifactRoot) {
+        throw new Error("Compare-only staged artifacts require stagedArtifactRoot.");
+      }
+      validateTestArtifacts({
+        stagedArtifactRoot: result.stagedArtifactRoot,
+        artifacts,
+        profile: result.profile,
+        storyIds: manifest.storyIds,
+        browsers: manifest.browsers,
+        affectedCacheArtifacts,
+      });
+    }
+    if (
+      options.operation !== "test" &&
+      result.exitCode === 0 &&
+      runner.kind === "custom" &&
+      (!result.stagedArtifactRoot || artifacts.length === 0)
+    ) {
+      throw new Error(
+        "Custom mutation runners must return stagedArtifactRoot and stagedArtifacts.",
       );
-    try {
-      if (
-        runner.kind === "custom" &&
-        (!result.stagedArtifactRoot || artifacts.length === 0)
-      ) {
-        throw new Error(
-          "Custom mutation runners must return stagedArtifactRoot and stagedArtifacts.",
-        );
-      }
-      if (result.stagedArtifactRoot && artifacts.length > 0) {
-        applyStagedArtifacts({
-          root: options.root,
-          stagedArtifactRoot: result.stagedArtifactRoot,
-          artifacts,
-        });
-      }
-    } finally {
-      if (cleanupDockerStage && result.stagedArtifactRoot) {
-        rmSync(path.dirname(result.stagedArtifactRoot), {
-          recursive: true,
-          force: true,
-        });
-      }
+    }
+    if (
+      result.stagedArtifactRoot &&
+      artifacts.length > 0 &&
+      (options.operation === "test" || result.exitCode === 0)
+    ) {
+      applyStagedArtifacts({
+        root: options.root,
+        stagedArtifactRoot: result.stagedArtifactRoot,
+        artifacts,
+      });
+    }
+  } finally {
+    if (cleanupDockerStage && result.stagedArtifactRoot) {
+      rmSync(path.dirname(result.stagedArtifactRoot), {
+        recursive: true,
+        force: true,
+      });
     }
   }
-  return result.exitCode;
+  return result;
+}
+
+export async function runVisualDeltaInCaptureRunner(options: {
+  root: string;
+  argv: string[];
+  operation: VisualCaptureOperation;
+  storyIds?: string[];
+  browsers?: VisualDeltaBrowser[];
+  failureMode?: VisualTestFailureMode;
+  mutationApproved?: boolean;
+  context?: VisualCaptureRunnerContext;
+}): Promise<number> {
+  return (await runVisualDeltaCaptureJob(options)).exitCode;
 }

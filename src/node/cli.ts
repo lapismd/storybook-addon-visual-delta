@@ -72,7 +72,7 @@ function printHelp(): void {
 
 Usage:
   visual-delta init [--force] [--port <n>]
-  visual-delta test --affected|--all [--browser <id> …] [--failure-mode warn|strict] [--dry-run] [--explain]
+  visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--failure-mode warn|strict] [--dry-run] [--explain]
   visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta harness doctor
@@ -82,7 +82,7 @@ Usage:
 
 Commands:
   init                      Scaffold suite, Playwright config, snapshot dir, scripts
-  test                      Compare affected or all visual stories
+  test                      Compare affected, all, or exact visual stories
   update                    Create/overwrite primary baselines + CSF wiring
   interaction-update        Mid-play interaction baseline
   skip                      Add skip-visual (exclude from Playwright visual runs)
@@ -101,7 +101,7 @@ Flags:
   --cache-dir <path>        Override affected cache directory
   --external <glob>         Full-run bailout input (repeatable)
   --untraced <glob>         Ignore a known non-rendering input (repeatable; reduces coverage)
-  --story-id <id>           Exact Storybook story id (repeatable for update)
+  --story-id <id>           Exact Storybook story id (repeatable for test/update)
   --component <name>        Grep / title substring (update / skip / include)
   --step-label <label>      Play step label (interaction-update)
   --step-id <id>            Override slugified step id
@@ -200,7 +200,7 @@ async function main(argv: string[]): Promise<void> {
 
   if (
     process.env[VISUAL_DELTA_CAPTURE_WORKER_ENV] !== "1" &&
-    (command === "test" ||
+    ((command === "test" && !hasFlag(rest, "--dry-run")) ||
       command === "update" ||
       command === "visual-update" ||
       command === "interaction-update" ||
@@ -234,8 +234,16 @@ async function main(argv: string[]): Promise<void> {
   if (command === "test") {
     const affected = hasFlag(rest, "--affected");
     const all = hasFlag(rest, "--all");
-    if (affected && all) {
-      throw new Error("Choose either --affected or --all, not both");
+    const storyIds = readFlags(rest, "--story-id");
+    const selections = Number(affected) + Number(all) + Number(storyIds.length > 0);
+    if (selections !== 1) {
+      throw new Error("Choose exactly one of --affected, --all, or --story-id");
+    }
+    if (
+      (readFlag(rest, "--step-id") || readFlag(rest, "--baseline-rel")) &&
+      storyIds.length !== 1
+    ) {
+      throw new Error("Interaction and baseline-target tests require one exact --story-id");
     }
     const browserValues = readFlags(rest, "--browser");
     const invalidBrowser = browserValues.find(
@@ -252,7 +260,24 @@ async function main(argv: string[]): Promise<void> {
       throw new Error('failure mode must be "warn" or "strict"');
     }
     const exitCode = await runVisualTestCli({
-      selection: affected ? "affected" : "all",
+      selection: affected ? "affected" : all ? "all" : "stories",
+      storyIds,
+      ...(readFlag(rest, "--step-id")
+        ? {
+            interaction: {
+              storyId: storyIds[0]!,
+              stepId: readFlag(rest, "--step-id")!,
+              ...(readFlag(rest, "--step-label")
+                ? { stepLabel: readFlag(rest, "--step-label") }
+                : {}),
+              ...(readFlag(rest, "--capture-call-id")
+                ? { captureCallId: readFlag(rest, "--capture-call-id") }
+                : {}),
+            },
+          }
+        : {}),
+      baselineRelativePath: readFlag(rest, "--baseline-rel"),
+      testArgs: readFlags(rest, "--visual-test-arg"),
       dryRun: hasFlag(rest, "--dry-run"),
       explain: hasFlag(rest, "--explain"),
       browsers: browserValues as VisualDeltaBrowser[],

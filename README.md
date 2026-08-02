@@ -106,6 +106,12 @@ Missing baselines and visual mismatches are warnings by default. Use strict mode
 pnpm exec visual-delta test --all --failure-mode strict
 ```
 
+Compare one exact story with the same runner-backed suite used by Diff Browser:
+
+```bash
+pnpm exec visual-delta test --story-id examples-card--default --browser chromium
+```
+
 Compare-only commands never create or update baselines.
 
 ## Configure browsers and comparison defaults
@@ -121,15 +127,15 @@ Add `.visual-delta/config.json` when the built-in defaults are not suitable:
 }
 ```
 
-Install the corresponding local browser binaries when you use live browser comparison:
+Install local browser binaries only when developing the host-local diagnostic capture path or invoking Playwright directly:
 
 ```bash
 pnpm exec playwright install chromium firefox webkit
 ```
 
-The built-in comparison allows up to `1.5%` differing pixels and uses a `0.2` per-pixel color threshold. Project and story settings can override these values.
+The built-in comparison allows up to `0.063%` differing pixels and uses a `0.2` per-pixel color threshold. Project and story settings can override these values.
 
-The default runner executes authoritative comparisons and writes in the pinned Linux ARM64 capture profile. Projects that cannot use Docker can provide `.visual-delta/runner.mjs` to transport the same capture job through another environment.
+The default runner executes authoritative comparisons in the pinned Linux ARM64 capture profile. Diff Browser, the Testing Module, and command-line tests all invoke the same packaged Playwright worker through that runner. Projects that cannot use Docker can provide `.visual-delta/runner.mjs` to transport the same capture job through another environment.
 
 ## Further documentation
 

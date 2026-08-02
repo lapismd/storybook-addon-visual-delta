@@ -158,6 +158,30 @@ function resolveSnapshotDirRel(options: VisualSuiteOptions): string {
   return DEFAULT_SNAPSHOT_DIR;
 }
 
+function resolveBaselineOverride(options: VisualSuiteOptions): string | null {
+  const relative = process.env.VISUAL_DELTA_BASELINE_OVERRIDE?.trim();
+  if (!relative) return null;
+  const normalized = relative.replaceAll("\\", "/");
+  if (
+    path.posix.isAbsolute(normalized) ||
+    normalized.split("/").includes("..") ||
+    !normalized.toLowerCase().endsWith(".png") ||
+    /\.(?:actual|diff)\.png$/i.test(normalized)
+  ) {
+    throw new Error(`Invalid VISUAL_DELTA_BASELINE_OVERRIDE: ${relative}`);
+  }
+  const root = resolveRoot(options);
+  const snapshotRoot = path.resolve(root, resolveSnapshotDirRel(options));
+  const absolute = path.resolve(snapshotRoot, ...normalized.split("/"));
+  if (
+    absolute !== snapshotRoot &&
+    !absolute.startsWith(`${snapshotRoot}${path.sep}`)
+  ) {
+    throw new Error(`VISUAL_DELTA_BASELINE_OVERRIDE escapes snapshotDir: ${relative}`);
+  }
+  return absolute;
+}
+
 type ShotTarget = {
   subject: Locator | null;
   clip: { x: number; y: number; width: number; height: number } | null;
@@ -430,6 +454,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   });
   const mode = resolveMode(options);
   const snapshotDir = resolveSnapshotDirRel(options);
+  const baselineOverride = resolveBaselineOverride(options);
   const stories = loadVisualStories(packageRoot, options.includeStory);
 
   const interactionEnv = process.env.PLAYWRIGHT_INTERACTION_CAPTURE?.trim();
@@ -502,7 +527,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           () => null,
         );
         // `{slug}--{stepId}-{browser}.png` beside the primary baseline.
-        const baselinePngAbsPath = baselinePngAbs(
+        const baselinePngAbsPath = baselineOverride ?? baselinePngAbs(
           entry,
           packageRoot,
           snapshotDir,
@@ -608,14 +633,17 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
               packageRoot,
               snapshotDir,
               mode,
-              baselinePngAbsPath: baselinePngAbs(
-                story,
-                packageRoot,
-                snapshotDir,
-                mode,
-                browser,
-                capture.modeName,
-              ),
+              baselinePngAbsPath:
+                !capture.modeName && baselineOverride
+                  ? baselineOverride
+                  : baselinePngAbs(
+                      story,
+                      packageRoot,
+                      snapshotDir,
+                      mode,
+                      browser,
+                      capture.modeName,
+                    ),
               status,
               error,
               actualPng,

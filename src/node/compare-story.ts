@@ -1,9 +1,7 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import {
-  captureSubjectWithBrowser,
-  type CaptureSubjectProgress,
-} from "./capture-subject.js";
+import { isDeepStrictEqual } from "node:util";
+import type { CaptureSubjectProgress } from "./capture-subject.js";
 import type {
   CompareStoryRequest,
   CompareStoryResult,
@@ -19,14 +17,14 @@ import {
 } from "./delete-baseline.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
-import { writeDiffArtifactsForBaseline } from "../playwright/write-diff-artifacts.js";
 import { parseVisualBaselineTarget } from "../shared/environments.js";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 import type {
   VisualBaselineTarget,
   VisualDeltaBrowser,
 } from "../shared/environments.js";
+import { runVisualDeltaCaptureJob } from "./capture-runner.js";
+import { isVisualDiffSidecar, type VisualDiffSidecar } from "../visual-diff-sidecar.js";
 
 export function validateCompareStoryBaselineTarget(options: {
   baselineUrl: string;
@@ -97,11 +95,11 @@ export function resolveCompareStoryBaselinePath(options: {
 }
 
 /**
- * Capture and compare one live Storybook story without consulting or rebuilding
- * storybook-static. This is the authoritative backend for both Story and Diff
- * Browser manager actions.
+ * Compare one exact Storybook target through the same packaged CLI worker,
+ * static suite, configured browser, and canonical capture runner as command
+ * line visual tests.
  */
-export async function compareLiveStoryWithBrowser(options: {
+export async function compareStoryInCaptureRunner(options: {
   root: string;
   hostOptions?: VisualDeltaHostOptions;
   request: CompareStoryRequest;
@@ -127,7 +125,7 @@ export async function compareLiveStoryWithBrowser(options: {
   if (!entry) {
     throw new Error(`Story not found in index: ${storyId}`);
   }
-  const { absolutePath } = resolveCompareStoryBaselinePath({
+  const { absolutePath, relativePath } = resolveCompareStoryBaselinePath({
     root: options.root,
     hostOptions: options.hostOptions ?? {},
     storyId,
@@ -140,63 +138,100 @@ export async function compareLiveStoryWithBrowser(options: {
     throw new Error(`No baseline screenshot for ${storyId}`);
   }
 
-  const capture = await captureSubjectWithBrowser(
-    {
-      origin: options.request.origin,
-      storyId,
-      visualCaptureUntil: options.request.visualCaptureUntil,
-      visualCaptureCallId: options.request.visualCaptureCallId,
-      viewport: options.request.viewport,
-      deviceScaleFactor: options.request.deviceScaleFactor,
-      delay: options.request.delay,
-      ignoreSelectors: options.request.ignoreSelectors,
-      cropToViewport: options.request.cropToViewport,
-      globals: options.request.globals,
-      browser,
-    },
-    options.onProgress,
-  );
-  const captureConfig = {
-    viewport: options.request.viewport,
-    deviceScaleFactor: options.request.deviceScaleFactor,
-    delay: options.request.delay,
-    ignoreSelectors: options.request.ignoreSelectors ?? [],
-    cropToViewport: options.request.cropToViewport ?? false,
-    passThresholdPercent: options.request.passThresholdPercent,
-    diffThreshold: options.request.diffThreshold,
-    includeAntiAliasing: options.request.includeAntiAliasing ?? false,
-    mode: options.request.mode ?? null,
-    globals: options.request.globals ?? null,
-    align: options.request.align ?? "viewport",
-    interaction: options.request.visualCaptureUntil ?? null,
-  };
-  const sidecar = writeDiffArtifactsForBaseline({
-    entry,
-    packageRoot: options.root,
-    snapshotDir: resolveSnapshotDir(options.hostOptions, options.root),
-    mode: resolveBaselinePathMode(options.hostOptions),
-    baselinePngAbsPath: absolutePath,
-    status: "passed",
-    actualPng: Buffer.from(capture.pngBase64, "base64"),
-    visualModeName: options.request.mode,
-    viewport: options.request.viewport,
-    deviceScaleFactor: options.request.deviceScaleFactor,
-    passThresholdPercent: options.request.passThresholdPercent,
-    diffThreshold: options.request.diffThreshold,
-    includeAntiAliasing: options.request.includeAntiAliasing,
-    captureConfig,
+  const configuredSnapshotDir = options.hostOptions?.snapshotDir?.trim();
+  const affectedOptions = options.hostOptions?.affectedTests || undefined;
+  const argv = [
+    "test",
+    "--story-id",
+    storyId,
+    "--browser",
     browser,
+    "--failure-mode",
+    projectConfig.workflow.visualTestFailureMode,
+    "--baseline-path-mode",
+    resolveBaselinePathMode(options.hostOptions),
+    ...(!parseVisualBaselineTarget(options.request.baselineUrl)
+      ? ["--baseline-rel", relativePath]
+      : []),
+    ...(configuredSnapshotDir ? ["--snapshot-dir", configuredSnapshotDir] : []),
+    ...(options.hostOptions?.visualTestArgs ?? []).flatMap((argument) => [
+      "--visual-test-arg",
+      argument,
+    ]),
+    ...(affectedOptions && affectedOptions.cacheDir
+      ? ["--cache-dir", affectedOptions.cacheDir]
+      : []),
+    ...((affectedOptions && affectedOptions.externals) ?? []).flatMap((glob) => [
+      "--external",
+      glob,
+    ]),
+    ...((affectedOptions && affectedOptions.untraced) ?? []).flatMap((glob) => [
+      "--untraced",
+      glob,
+    ]),
+    ...(options.request.visualCaptureUntil
+      ? ["--step-id", options.request.visualCaptureUntil]
+      : []),
+    ...(options.request.visualCaptureCallId
+      ? ["--capture-call-id", options.request.visualCaptureCallId]
+      : []),
+  ];
+  options.onProgress?.({ phase: "launching", label: "Starting capture runner…" });
+  const result = await runVisualDeltaCaptureJob({
+    root: options.root,
+    argv,
+    operation: "test",
+    storyIds: [storyId],
+    browsers: [browser],
     failureMode: projectConfig.workflow.visualTestFailureMode,
+    context: {
+      onEvent(event) {
+        if (event.type === "start") {
+          options.onProgress?.({ phase: "navigating", label: "Preparing canonical Storybook…" });
+        } else if (event.type === "log") {
+          options.onProgress?.({ phase: "capturing", label: "Running visual comparison…" });
+        }
+      },
+    },
   });
+  const sidecarPath = absolutePath.replace(/\.png$/i, ".json");
+  const sidecarRelativeToRoot = path
+    .relative(options.root, sidecarPath)
+    .replaceAll(path.sep, "/");
+  const returnedSidecar = result.stagedArtifacts?.some(
+    (artifact) =>
+      artifact.relativePath.replaceAll("\\", "/") === sidecarRelativeToRoot,
+  );
+  if (!returnedSidecar || !existsSync(sidecarPath)) {
+    throw new Error(
+      `Capture runner exited ${result.exitCode} without an exact comparison sidecar for ${storyId}.`,
+    );
+  }
+  const parsed = JSON.parse(readFileSync(sidecarPath, "utf8")) as unknown;
+  if (!isVisualDiffSidecar(parsed)) {
+    throw new Error(`Capture runner returned an invalid sidecar for ${storyId}.`);
+  }
+  const sidecar: VisualDiffSidecar = parsed;
+  if (
+    sidecar.storyId !== storyId ||
+    sidecar.target?.browser !== browser ||
+    !sidecar.captureProfile ||
+    !isDeepStrictEqual(sidecar.captureProfile, result.profile) ||
+    (options.request.mode != null && sidecar.mode !== options.request.mode)
+  ) {
+    throw new Error(`Capture runner returned sidecar metadata for another target.`);
+  }
+  options.onProgress?.({ phase: "encoding", label: "Loading comparison result…" });
   return {
     ok: true,
     storyId,
     sidecar,
     target: { browser },
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-    environment: { browser, platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os },
+    captureProfile: result.profile,
+    environment: { browser, platform: result.profile.os },
   };
 }
 
-/** Compatibility alias for existing Chromium callers. */
-export const compareLiveStoryWithChromium = compareLiveStoryWithBrowser;
+/** Compatibility aliases for callers using the former host-live name. */
+export const compareLiveStoryWithBrowser = compareStoryInCaptureRunner;
+export const compareLiveStoryWithChromium = compareStoryInCaptureRunner;

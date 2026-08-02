@@ -614,11 +614,11 @@ test.describe("Visual Delta manager integration", () => {
     });
   });
 
-  test("Story and Diff Browser use the same live exact-story contract without static work", async ({
+  test("Story and Diff Browser submit the same runner-backed exact-story request", async ({
     page,
   }) => {
     const compareBodies: unknown[] = [];
-    const staticRequests: string[] = [];
+    const unrelatedRunRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
       if (pathname.endsWith("/compare-story")) {
@@ -628,7 +628,7 @@ test.describe("Visual Delta manager integration", () => {
         pathname.endsWith("/run-tests") ||
         pathname.endsWith("/rebuild-static")
       ) {
-        staticRequests.push(pathname);
+        unrelatedRunRequests.push(pathname);
       }
     });
     await mockVisualBackend(page);
@@ -653,7 +653,7 @@ test.describe("Visual Delta manager integration", () => {
     await expect.poll(() => compareBodies.length).toBe(2);
 
     expect(compareBodies[1]).toEqual(compareBodies[0]);
-    expect(staticRequests).toEqual([]);
+    expect(unrelatedRunRequests).toEqual([]);
   });
 
   test("Diff Browser sends the explicit browser target for an unqualified teaching baseline", async ({
