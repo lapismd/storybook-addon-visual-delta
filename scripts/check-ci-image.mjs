@@ -79,6 +79,8 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
 
 const EXPECTED_CONSUMER_WORKFLOWS = {
   ".github/workflows/visual-delta-ci.yml": {
+    triggerSnippet:
+      "on:\n  push:\n    branches:\n      - master\n  pull_request:",
     jobs: 4,
     mutableImageJobs: 1,
     immutableImageJobs: 3,
@@ -257,6 +259,9 @@ function permissionKeys(source) {
 
 function validateConsumerWorkflow(errors, pathLabel, source, expected) {
   const label = `consumer workflow ${pathLabel}`;
+  if (expected.triggerSnippet) {
+    requireSnippet(errors, label, source, expected.triggerSnippet);
+  }
   requireSnippet(
     errors,
     label,

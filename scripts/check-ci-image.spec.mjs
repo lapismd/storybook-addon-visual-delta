@@ -13,6 +13,22 @@ test("accepts the repository CI-image publication and reuse configuration", () =
   assert.equal(result.ok, true, result.errors.join("\n"));
 });
 
+test("requires Visual Delta CI on pull requests and master pushes", () => {
+  const workflowPath = ".github/workflows/visual-delta-ci.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "  push:\n    branches:\n      - master\n",
+        "",
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /push.*master/s);
+});
+
 test("requires a safe and complete Storybook Pages deployment", () => {
   const result = validateCiImageSources({
     ...sources,
