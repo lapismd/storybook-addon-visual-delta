@@ -84,4 +84,30 @@ describe("PlacementPad", () => {
       expect(control).toHaveAttribute("aria-checked", "false");
     }
   });
+
+  it("owns the icon-only overlay reset in its bottom-right cell", async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn();
+    renderWithTheme(
+      <PlacementPad
+        value="center"
+        active
+        onToggle={vi.fn()}
+        onReset={onReset}
+      />,
+    );
+
+    const pad = screen.getByRole("group", { name: "Baseline position" });
+    const reset = screen.getByRole("switch", {
+      name: "Reset overlay position after drag",
+    });
+    expect(pad).toContainElement(reset);
+    expect(pad.children).toHaveLength(9);
+    expect(pad.lastElementChild).toBe(reset);
+    expect(reset).toHaveTextContent("");
+    expect(reset.querySelector("svg")).not.toBeNull();
+
+    await user.click(reset);
+    expect(onReset).toHaveBeenCalledOnce();
+  });
 });

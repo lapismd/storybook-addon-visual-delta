@@ -24,6 +24,21 @@ function Harness() {
 }
 
 describe("CompareZoomControl", () => {
+  it("uses icon-only actions for Fit and native size", () => {
+    renderWithTheme(<Harness />);
+
+    const fit = screen.getByRole("switch", {
+      name: "Fit split comparison. Current 80%",
+    });
+    const native = screen.getByRole("switch", {
+      name: "Show split comparison at 100%",
+    });
+    expect(fit).toHaveTextContent("");
+    expect(native).toHaveTextContent("");
+    expect(fit.querySelector("svg")).not.toBeNull();
+    expect(native.querySelector("svg")).not.toBeNull();
+  });
+
   it("accepts a custom whole-number percentage", async () => {
     const user = userEvent.setup();
     renderWithTheme(<Harness />);

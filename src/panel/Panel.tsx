@@ -141,7 +141,6 @@ import {
   type BaselineHistoryTarget,
 } from "./BaselineHistoryView.js";
 import {
-  ButtonGroup,
   Checkbox,
   CheckboxContainer,
   ErrorText,
@@ -2380,25 +2379,17 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   value={placement}
                   active={overlayOn}
                   onToggle={togglePlacement}
+                  onReset={
+                    index >= 0 && (!isSplit || !liveVisible)
+                      ? resetOverlay
+                      : undefined
+                  }
                   comparisonTarget={liveVisible ? "live" : "actual"}
                   disabled={images.length === 0}
                 />
               ) : null}
               {liveVisible && index >= 0 && isSplit ? (
                 <CompareZoomControl value={splitZoom} onChange={setSplitZoom} />
-              ) : null}
-              {index >= 0 && (!isSplit || !liveVisible) ? (
-                <ButtonGroup role="group" aria-label="Overlay controls">
-                  <ToggleButton
-                    size="small"
-                    pressed={false}
-                    onClick={resetOverlay}
-                    ariaLabel={false}
-                    title="Reset overlay position after drag"
-                  >
-                    Reset
-                  </ToggleButton>
-                </ButtonGroup>
               ) : null}
               <ToolbarSpacer />
               {liveVisible && index >= 0 && !isSplit ? (

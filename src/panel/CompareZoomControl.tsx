@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { CollapseIcon, ZoomResetIcon } from "@storybook/icons";
 import { ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
 import {
@@ -79,9 +80,9 @@ export function CompareZoomControl({
         pressed={value.mode === "fit"}
         onClick={() => onChange({ mode: "fit", scale: value.scale })}
         ariaLabel={`Fit ${subject}. Current ${percent}%`}
-        title={`Fit ${subject}`}
+        tooltip={`Fit ${subject}`}
       >
-        Fit
+        <CollapseIcon />
       </ToggleButton>
       <ToggleButton
         size="small"
@@ -131,9 +132,9 @@ export function CompareZoomControl({
         pressed={value.mode === "custom" && value.scale === 1}
         onClick={() => onChange({ mode: "custom", scale: 1 })}
         ariaLabel={`Show ${subject} at 100%`}
-        title="Native CSS size (100%)"
+        tooltip={`Show ${subject} at native CSS size (100%)`}
       >
-        100%
+        <ZoomResetIcon />
       </ToggleButton>
     </ButtonGroup>
   );

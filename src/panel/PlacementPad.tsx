@@ -5,6 +5,7 @@ import {
   ArrowRightIcon,
   ArrowUpIcon,
   CircleIcon,
+  UndoIcon,
 } from "@storybook/icons";
 import { ToggleButton } from "storybook/internal/components";
 import { styled } from "storybook/theming";
@@ -46,6 +47,8 @@ type PlacementPadProps = {
   /** Whether a baseline overlay is currently shown. */
   active: boolean;
   onToggle: (placement: PlacementMode) => void;
+  /** Reset a manually dragged overlay to its configured origin. */
+  onReset?: () => void;
   /** The surface whose position is described by each Baseline control. */
   comparisonTarget?: "live" | "actual";
   disabled?: boolean;
@@ -99,6 +102,7 @@ export function PlacementPad({
   value,
   active,
   onToggle,
+  onReset,
   comparisonTarget = "live",
   disabled,
 }: PlacementPadProps) {
@@ -115,6 +119,24 @@ export function PlacementPad({
         const row = Math.floor(i / 3) + 1;
         const col = (i % 3) + 1;
         const btn = BUTTONS.find((b) => b.row === row && b.col === col);
+        if (!btn && row === 3 && col === 3 && onReset) {
+          const label = "Reset overlay position after drag";
+          return (
+            <PadButton
+              key="reset"
+              size="small"
+              variant="ghost"
+              padding="none"
+              pressed={false}
+              disabled={disabled}
+              ariaLabel={label}
+              tooltip={label}
+              onClick={onReset}
+            >
+              <UndoIcon />
+            </PadButton>
+          );
+        }
         if (!btn) return <Cell key={`empty-${i}`} />;
         const pressed = active && value === btn.placement;
         const placementLabel = `Baseline ${btn.relation} ${comparisonTarget}`;

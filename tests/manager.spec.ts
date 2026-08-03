@@ -1259,6 +1259,25 @@ test.describe("Visual Delta manager integration", () => {
         );
       })
       .toBeLessThanOrEqual(1);
+    await expect(
+      placementPad.getByRole("switch", {
+        name: "Reset overlay position after drag",
+      }),
+    ).toHaveCount(0);
+    const centerPlacement = placementPad.getByRole("switch", {
+      name: "Baseline centered over live",
+    });
+    if ((await centerPlacement.getAttribute("aria-checked")) !== "true") {
+      await centerPlacement.click();
+    }
+    const resetPlacement = placementPad.getByRole("switch", {
+      name: "Reset overlay position after drag",
+    });
+    await expect(resetPlacement).toBeVisible();
+    await expect(resetPlacement.locator("svg")).toHaveCount(1);
+    await expect(resetPlacement).toHaveText("");
+    await expect(panel.getByText("Reset", { exact: true })).toHaveCount(0);
+    await resetPlacement.click();
 
     await preview.click();
     await expect(
@@ -1804,9 +1823,16 @@ test.describe("Visual Delta manager integration", () => {
     await reloadedPanel
       .getByRole("switch", { name: "Baseline right of live" })
       .click();
-    await reloadedPanel
-      .getByRole("switch", { name: "Show split comparison at 100%" })
-      .click();
+    const savedNativeZoom = reloadedPanel.getByRole("switch", {
+      name: "Show split comparison at 100%",
+    });
+    await expect(savedNativeZoom.locator("svg")).toHaveCount(1);
+    await expect(savedNativeZoom).toHaveText("");
+    await savedNativeZoom.hover();
+    await expect(page.getByTestId("tooltip")).toHaveText(
+      "Show split comparison at native CSS size (100%)",
+    );
+    await savedNativeZoom.click();
     await expect
       .poll(async () => (await readSettings()).splitZoom)
       .toEqual({ mode: "custom", scale: 1 });
@@ -1852,9 +1878,16 @@ test.describe("Visual Delta manager integration", () => {
       nativeGeometry?.completeScroll.clientWidth ?? Number.POSITIVE_INFINITY,
     );
 
-    await page
-      .getByRole("switch", { name: /Fit split comparison/ })
-      .click();
+    const fitZoom = page.getByRole("switch", { name: /Fit split comparison/ });
+    await expect(fitZoom.locator("svg")).toHaveCount(1);
+    await expect(fitZoom).toHaveText("");
+    await page.mouse.move(0, 0);
+    await expect(page.getByTestId("tooltip")).toHaveCount(0);
+    await fitZoom.hover();
+    await expect(page.getByTestId("tooltip")).toHaveText(
+      "Fit split comparison",
+    );
+    await fitZoom.click();
     await expect
       .poll(async () => (await readSettings()).splitZoom)
       .toEqual({ mode: "fit", scale: 1 });
