@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -16,10 +17,12 @@ import {
   DOCKER_VISUAL_DELTA_WORKER_ROOT,
   changedStagedArtifacts,
   createCaptureJobManifest,
+  dockerLinkedVisualDeltaPackageMountArgs,
   dockerVisualDeltaWorkerCommand,
   dockerVisualDeltaWorkerTransactionCommand,
   dockerWorkspaceArgv,
   resolveDockerImageAvailability,
+  resolveLinkedVisualDeltaPackage,
   resolveTypescriptCli,
   resolveVisualDeltaCaptureRunner,
   runVisualDeltaCaptureJob,
@@ -27,6 +30,7 @@ import {
   shouldBuildVisualDeltaPackageWorker,
   shouldStageVisualDeltaWorkspacePath,
   stageExternalVisualDeltaSnapshotDir,
+  stageLinkedVisualDeltaPackage,
   stageVisualDeltaPackageWorker,
   visualDeltaDependencyInstallKey,
 } from "./capture-runner.js";
@@ -291,14 +295,17 @@ describe("capture runner", () => {
     }
   });
 
-  it("installs dependencies and launches the worker in one resumable transaction", () => {
+  it("relinks every fresh workspace while reusing a warm dependency volume", () => {
     const command = dockerVisualDeltaWorkerTransactionCommand([
       "test",
       "--story-id",
       "card--default",
     ]);
     expect(command.slice(0, 2)).toEqual(["bash", "-lc"]);
-    expect(command[2]).toContain('if [ ! -f "$marker" ]');
+    expect(command[2]).toContain('if [ -f "$marker" ]');
+    expect(command[2]).toContain(
+      "pnpm install --frozen-lockfile --offline",
+    );
     expect(command[2]).toContain("pnpm install --frozen-lockfile");
     expect(command[2]).toContain('exec "$@"');
     expect(command.slice(4)).toEqual([
@@ -308,6 +315,92 @@ describe("capture runner", () => {
       "--story-id",
       "card--default",
     ]);
+  });
+
+  it("stages a linked source checkout without host dependencies", () => {
+    const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-link-"));
+    const workspace = path.join(root, "consumer");
+    const packageRoot = path.join(root, "visual-delta-source");
+    const stagingParent = path.join(root, "stage");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(path.join(packageRoot, "src"), { recursive: true });
+    mkdirSync(path.join(packageRoot, "dist", "node"), { recursive: true });
+    mkdirSync(path.join(packageRoot, "node_modules", "host-only"), {
+      recursive: true,
+    });
+    mkdirSync(stagingParent, { recursive: true });
+    writeFileSync(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        devDependencies: {
+          "@lapismd/storybook-addon-visual-delta":
+            "link:../visual-delta-source",
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(packageRoot, "package.json"),
+      JSON.stringify({ name: "@lapismd/storybook-addon-visual-delta" }),
+    );
+    writeFileSync(
+      path.join(packageRoot, "pnpm-lock.yaml"),
+      "lockfileVersion: '9.0'\n",
+    );
+    writeFileSync(path.join(packageRoot, "src", "preview.ts"), "export {};\n");
+    writeFileSync(
+      path.join(packageRoot, "dist", "node", "cli.js"),
+      "export {};\n",
+    );
+    writeFileSync(
+      path.join(packageRoot, "node_modules", "host-only", "index.js"),
+      "throw new Error('wrong platform');\n",
+    );
+    try {
+      const linkedPackage = resolveLinkedVisualDeltaPackage({
+        workspaceRoot: workspace,
+        packageRoot,
+      });
+      expect(linkedPackage).toEqual({
+        sourceRoot: packageRoot,
+        containerRoot: "/visual-delta-source",
+        dependencyKey: visualDeltaDependencyInstallKey(packageRoot),
+      });
+      const stagedRoot = stageLinkedVisualDeltaPackage({
+        packageRoot,
+        stagingParent,
+      });
+      expect(readFileSync(path.join(stagedRoot, "src", "preview.ts"), "utf8"))
+        .toBe("export {};\n");
+      expect(
+        readFileSync(path.join(stagedRoot, "dist", "node", "cli.js"), "utf8"),
+      ).toBe("export {};\n");
+      expect(existsSync(path.join(stagedRoot, "node_modules", "host-only"))).toBe(
+        false,
+      );
+      expect(statSync(path.join(stagedRoot, "node_modules")).isDirectory()).toBe(
+        true,
+      );
+      expect(
+        dockerLinkedVisualDeltaPackageMountArgs({
+          stagedRoot,
+          linkedPackage: linkedPackage!,
+        }),
+      ).toEqual([
+        "--mount",
+        `type=bind,src=${stagedRoot},dst=/visual-delta-source,readonly`,
+        "--mount",
+        `type=volume,src=visual-delta-linked-node-modules-${linkedPackage!.dependencyKey},dst=/visual-delta-source/node_modules`,
+      ]);
+
+      const command = dockerVisualDeltaWorkerTransactionCommand(["test"], {
+        linkedPackageRoot: linkedPackage!.containerRoot,
+      });
+      expect(command[2]).toContain(
+        'pnpm --dir "$linked_root" install --frozen-lockfile --ignore-scripts',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("keys dependency installs by manifests rather than checkout location or source files", () => {

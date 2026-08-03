@@ -46,6 +46,9 @@ export const VISUAL_DELTA_CAPTURE_WORKER_ENV =
   "VISUAL_DELTA_CAPTURE_WORKER";
 export const DOCKER_VISUAL_DELTA_WORKER_ROOT =
   "/build/visual-delta-worker";
+const DOCKER_VISUAL_DELTA_WORKSPACE_ROOT = "/workspace";
+const VISUAL_DELTA_PACKAGE_NAME =
+  "@lapismd/storybook-addon-visual-delta";
 
 const currentPackageModulePath = fileURLToPath(import.meta.url);
 const currentPackageRequire = createRequire(import.meta.url);
@@ -186,6 +189,14 @@ const STAGE_COPY_IGNORES = new Set([
   "storybook-static",
   "test-results",
 ]);
+const LINKED_PACKAGE_STAGE_ENTRIES = [
+  ".npmrc",
+  ".pnpmfile.cjs",
+  "dist",
+  "package.json",
+  "pnpm-lock.yaml",
+  "src",
+] as const;
 const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
 const ARTIFACT_DIR_REL = ".visual-delta/artifacts";
 const CAPTURE_INPUTS_DIR_REL = ".visual-delta/capture-inputs";
@@ -392,6 +403,119 @@ export function stageVisualDeltaPackageWorker(options: {
   return workerRoot;
 }
 
+export interface LinkedVisualDeltaPackage {
+  sourceRoot: string;
+  containerRoot: string;
+  dependencyKey: string;
+}
+
+export function resolveLinkedVisualDeltaPackage(options: {
+  workspaceRoot: string;
+  packageRoot: string;
+}): LinkedVisualDeltaPackage | undefined {
+  const workspaceRoot = path.resolve(options.workspaceRoot);
+  const packageRoot = realpathSync(path.resolve(options.packageRoot));
+  const manifest = JSON.parse(
+    readFileSync(path.join(workspaceRoot, "package.json"), "utf8"),
+  ) as Record<string, Record<string, string> | undefined>;
+  const specifier = [
+    manifest.dependencies,
+    manifest.devDependencies,
+    manifest.optionalDependencies,
+  ]
+    .map((dependencies) => dependencies?.[VISUAL_DELTA_PACKAGE_NAME])
+    .find((candidate) => candidate?.startsWith("link:"));
+  if (!specifier) return undefined;
+
+  const linkTarget = specifier.slice("link:".length);
+  if (!linkTarget) {
+    throw new Error("The Visual Delta link dependency has an empty target.");
+  }
+  const sourceRoot = realpathSync(path.resolve(workspaceRoot, linkTarget));
+  if (sourceRoot !== packageRoot) {
+    throw new Error(
+      `The Visual Delta link target resolves to ${sourceRoot}, but the active package source is ${packageRoot}.`,
+    );
+  }
+
+  const workspaceRelative = path
+    .relative(workspaceRoot, sourceRoot)
+    .replaceAll(path.sep, "/");
+  const containerRoot = path.posix.resolve(
+    DOCKER_VISUAL_DELTA_WORKSPACE_ROOT,
+    workspaceRelative,
+  );
+  if (
+    containerRoot === DOCKER_VISUAL_DELTA_WORKSPACE_ROOT ||
+    containerRoot.startsWith(`${DOCKER_VISUAL_DELTA_WORKSPACE_ROOT}/`)
+  ) {
+    return undefined;
+  }
+  if (
+    containerRoot === "/" ||
+    containerRoot === DOCKER_VISUAL_DELTA_WORKER_ROOT ||
+    containerRoot.startsWith(`${DOCKER_VISUAL_DELTA_WORKER_ROOT}/`) ||
+    containerRoot === "/pnpm" ||
+    containerRoot.startsWith("/pnpm/")
+  ) {
+    throw new Error(
+      `The Visual Delta link target cannot be mounted safely at ${containerRoot}.`,
+    );
+  }
+
+  return {
+    sourceRoot,
+    containerRoot,
+    dependencyKey: visualDeltaDependencyInstallKey(sourceRoot),
+  };
+}
+
+export function stageLinkedVisualDeltaPackage(options: {
+  packageRoot: string;
+  stagingParent: string;
+}): string {
+  const packageRoot = path.resolve(options.packageRoot);
+  const linkedRoot = path.join(
+    options.stagingParent,
+    "linked-visual-delta-package",
+  );
+  mkdirSync(linkedRoot, { recursive: true });
+  for (const entry of LINKED_PACKAGE_STAGE_ENTRIES) {
+    const source = path.join(packageRoot, entry);
+    if (!existsSync(source)) continue;
+    const destination = path.join(linkedRoot, entry);
+    if (statSync(source).isDirectory()) {
+      cpSync(source, destination, { recursive: true });
+    } else {
+      copyFileSync(source, destination);
+    }
+  }
+  if (
+    !existsSync(path.join(linkedRoot, "package.json")) ||
+    !existsSync(path.join(linkedRoot, "pnpm-lock.yaml")) ||
+    !existsSync(path.join(linkedRoot, "src")) ||
+    !existsSync(path.join(linkedRoot, "dist", "node", "cli.js"))
+  ) {
+    throw new Error(
+      "The linked Visual Delta source is incomplete. Build it and install its frozen lockfile before capture.",
+    );
+  }
+  mkdirSync(path.join(linkedRoot, "node_modules"), { recursive: true });
+  return linkedRoot;
+}
+
+export function dockerLinkedVisualDeltaPackageMountArgs(options: {
+  stagedRoot: string;
+  linkedPackage: LinkedVisualDeltaPackage;
+}): string[] {
+  return [
+    "--mount",
+    `type=bind,src=${options.stagedRoot},dst=${options.linkedPackage.containerRoot},readonly`,
+    "--mount",
+    `type=volume,src=visual-delta-linked-node-modules-${options.linkedPackage.dependencyKey},dst=${options.linkedPackage.containerRoot}/node_modules`,
+  ];
+}
+
 export function dockerVisualDeltaWorkerCommand(
   argv: readonly string[],
 ): string[] {
@@ -404,11 +528,25 @@ export function dockerVisualDeltaWorkerCommand(
 
 export function dockerVisualDeltaWorkerTransactionCommand(
   argv: readonly string[],
+  options: { linkedPackageRoot?: string } = {},
 ): string[] {
+  const linkedInstall = options.linkedPackageRoot
+    ? [
+        `linked_root=${JSON.stringify(options.linkedPackageRoot)}`,
+        'linked_marker="$linked_root/node_modules/.visual-delta-install-ready"',
+        'if [ ! -f "$linked_marker" ]; then',
+        '  pnpm --dir "$linked_root" install --frozen-lockfile --ignore-scripts',
+        '  touch "$linked_marker"',
+        "fi",
+      ]
+    : [];
   const script = [
     "set -e",
+    ...linkedInstall,
     'marker="/workspace/node_modules/.visual-delta-install-ready"',
-    'if [ ! -f "$marker" ]; then',
+    'if [ -f "$marker" ]; then',
+    "  pnpm install --frozen-lockfile --offline",
+    "else",
     "  pnpm install --frozen-lockfile",
     '  touch "$marker"',
     "fi",
@@ -752,6 +890,22 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           staged.parent,
           context,
         );
+        const linkedPackage = resolveLinkedVisualDeltaPackage({
+          workspaceRoot: manifest.root,
+          packageRoot: currentPackageRoot,
+        });
+        const linkedPackageRoot = linkedPackage
+          ? stageLinkedVisualDeltaPackage({
+              packageRoot: linkedPackage.sourceRoot,
+              stagingParent: staged.parent,
+            })
+          : undefined;
+        if (linkedPackage) {
+          context.onEvent?.({
+            type: "log",
+            message: `Staging linked Visual Delta source at ${linkedPackage.containerRoot}…\n`,
+          });
+        }
         const commonArgs = [
           "run",
           "--rm",
@@ -765,6 +919,12 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           `type=bind,src=${staged.workspace},dst=/workspace`,
           "--mount",
           `type=bind,src=${packageWorkerRoot},dst=${DOCKER_VISUAL_DELTA_WORKER_ROOT},readonly`,
+          ...(linkedPackage && linkedPackageRoot
+            ? dockerLinkedVisualDeltaPackageMountArgs({
+                stagedRoot: linkedPackageRoot,
+                linkedPackage,
+              })
+            : []),
           "--mount",
           `type=volume,src=${nodeModulesVolume},dst=/workspace/node_modules`,
           "--mount",
@@ -787,6 +947,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
               dockerWorkspaceArgv(manifest.root, manifest.argv, {
                 externalSnapshotDir: staged.externalSnapshotDir,
               }),
+              { linkedPackageRoot: linkedPackage?.containerRoot },
             ),
           ],
           { cwd: manifest.root },
