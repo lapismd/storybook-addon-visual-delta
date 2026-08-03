@@ -1911,14 +1911,31 @@ test.describe("Visual Delta manager integration", () => {
     );
 
     const fitZoom = page.getByRole("switch", { name: /Fit split comparison/ });
-    await expect(fitZoom.locator("svg")).toHaveCount(1);
+    const fitIcon = fitZoom.getByTestId("fit-zoom-icon");
+    await expect(fitIcon).toHaveCount(1);
     await expect(fitZoom).toHaveText("");
     await page.mouse.move(0, 0);
+    await page.waitForTimeout(220);
+    const restingTransform = await fitIcon.evaluate(
+      (icon) => getComputedStyle(icon).transform,
+    );
+    expect(restingTransform).not.toBe("none");
     await expect(page.getByTestId("tooltip")).toHaveCount(0);
     await fitZoom.hover();
+    await page.waitForTimeout(220);
+    expect(
+      await fitIcon.evaluate((icon) => getComputedStyle(icon).transform),
+    ).not.toBe(restingTransform);
     await expect(page.getByTestId("tooltip")).toHaveText(
       "Fit split comparison",
     );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect
+      .poll(() =>
+        fitIcon.evaluate((icon) => getComputedStyle(icon).transitionDuration),
+      )
+      .toBe("0s");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await fitZoom.click();
     await expect
       .poll(async () => (await readSettings()).splitZoom)

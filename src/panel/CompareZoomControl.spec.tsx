@@ -35,7 +35,11 @@ describe("CompareZoomControl", () => {
     });
     expect(fit).toHaveTextContent("");
     expect(native).toHaveTextContent("");
-    expect(fit.querySelector("svg")).not.toBeNull();
+    const fitIcon = screen.getByTestId("fit-zoom-icon");
+    expect(fitIcon).toHaveStyle({
+      transform: "rotate(45deg) scale(1)",
+      transformOrigin: "center",
+    });
     expect(native.querySelector("svg")).not.toBeNull();
   });
 

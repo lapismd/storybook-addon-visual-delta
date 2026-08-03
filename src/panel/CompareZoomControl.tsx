@@ -33,6 +33,22 @@ const PercentInput = styled.input(({ theme }) => ({
   },
 }));
 
+const FitToggleButton = styled(ToggleButton)({
+  "& svg": {
+    transform: "rotate(45deg) scale(1)",
+    transformOrigin: "center",
+    transition: "transform 180ms cubic-bezier(0.2, 0, 0, 1)",
+  },
+  "&:hover:not(:disabled) svg, &:focus-visible svg": {
+    transform: "rotate(45deg) scale(0.72)",
+  },
+  "@media (prefers-reduced-motion: reduce)": {
+    "& svg": {
+      transition: "none",
+    },
+  },
+});
+
 export function CompareZoomControl({
   value,
   onChange,
@@ -75,15 +91,15 @@ export function CompareZoomControl({
 
   return (
     <ButtonGroup role="group" aria-label={label}>
-      <ToggleButton
+      <FitToggleButton
         size="small"
         pressed={value.mode === "fit"}
         onClick={() => onChange({ mode: "fit", scale: value.scale })}
         ariaLabel={`Fit ${subject}. Current ${percent}%`}
         tooltip={`Fit ${subject}`}
       >
-        <CollapseIcon />
-      </ToggleButton>
+        <CollapseIcon data-testid="fit-zoom-icon" />
+      </FitToggleButton>
       <ToggleButton
         size="small"
         pressed={false}
