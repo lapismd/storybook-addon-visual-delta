@@ -221,6 +221,8 @@ type RunBody = {
   rebuild?: boolean;
   browsers?: VisualDeltaBrowser[];
   failureMode?: VisualTestFailureMode;
+  /** Force canonical capture rather than reusable actual comparison. */
+  fresh?: boolean;
 };
 
 export type {
@@ -375,6 +377,7 @@ async function handleStoryFacts(
       resolveBaselinePathMode(options),
       projectConfig.browsers,
       availableBrowsers,
+      root,
     ),
   };
   writeJson(res, 200, response);
@@ -1163,6 +1166,7 @@ async function handleRun(
         "--untraced",
         glob,
       ]),
+      ...(body.fresh ? ["--fresh"] : []),
     ];
     const runnerResult = await runVisualDeltaCaptureJob({
       root,

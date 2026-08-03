@@ -106,7 +106,8 @@ const STAGE_COPY_IGNORES = new Set([
   "storybook-static",
   "test-results",
 ]);
-const DEFAULT_AFFECTED_CACHE_DIR_REL = ".cache/visual-delta";
+const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
+const ARTIFACT_DIR_REL = ".visual-delta/artifacts";
 const AFFECTED_CACHE_FILE_NAMES = [
   "affected-state-v1.json",
   "preview-stats.json",
@@ -311,9 +312,10 @@ function testArtifactKind(
   affectedCacheArtifacts: ReadonlySet<string>,
 ): "sidecar" | "actual" | "diff" | "affected-cache" | null {
   if (affectedCacheArtifacts.has(relativePath)) return "affected-cache";
+  if (!isPathAtOrBelow(relativePath, ARTIFACT_DIR_REL)) return null;
   if (/\.actual\.png$/i.test(relativePath)) return "actual";
   if (/\.diff\.png$/i.test(relativePath)) return "diff";
-  if (/\.json$/i.test(relativePath)) return "sidecar";
+  if (/\.result\.json$/i.test(relativePath)) return "sidecar";
   return null;
 }
 
@@ -362,7 +364,7 @@ function validateTestArtifacts(options: {
       throw new Error(`Compare-only staged JSON is not a visual sidecar: ${relative}`);
     }
     if (
-      sidecar.version !== 3 ||
+      sidecar.version !== 4 ||
       typeof sidecar.storyId !== "string" ||
       sidecar.tool !== "playwright"
     ) {
@@ -381,7 +383,15 @@ function validateTestArtifacts(options: {
     if (!sidecar.captureProfile || !isDeepStrictEqual(sidecar.captureProfile, options.profile)) {
       throw new Error(`Comparison sidecar profile does not match the capture runner: ${relative}`);
     }
-    sidecarBases.add(relative.replace(/\.json$/i, ""));
+    const base = relative.replace(/\.result\.json$/i, "");
+    const publicBase = base.slice(`${ARTIFACT_DIR_REL}/`.length);
+    if (
+      (sidecar.actualRel && sidecar.actualRel !== `${publicBase}.actual.png`) ||
+      (sidecar.diffRel && sidecar.diffRel !== `${publicBase}.diff.png`)
+    ) {
+      throw new Error(`Comparison sidecar diagnostic paths do not match its result: ${relative}`);
+    }
+    sidecarBases.add(base);
   }
   for (const artifact of options.artifacts) {
     const relative = artifact.relativePath.replaceAll("\\", "/");

@@ -14,6 +14,7 @@ import {
   type StoryIndexEntry,
 } from "./snapshot-paths.js";
 import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 const entry: StoryIndexEntry = {
   id: "workspace-shell-tabs--top-light",
@@ -111,10 +112,20 @@ describe("portable Visual Delta host options", () => {
       path.join(snapshotDir, "workspace-shell-tabs--top-light-chromium.png"),
       "baseline",
     );
+    const baselinePath = path.join(
+      snapshotDir,
+      "workspace-shell-tabs--top-light-chromium.png",
+    );
+    const resultPath = visualArtifactPaths({
+      root,
+      snapshotDir,
+      baselinePath,
+    }).result;
+    mkdirSync(path.dirname(resultPath), { recursive: true });
     writeFileSync(
-      path.join(snapshotDir, "workspace-shell-tabs--top-light-chromium.json"),
+      resultPath,
       JSON.stringify({
-        version: 3,
+        version: 4,
         storyId: entry.id,
         snapshotRel: "workspace-shell-tabs--top-light.png",
         status: "passed",

@@ -7,7 +7,7 @@
 export type AffectedVisualTestsOptions = {
   /**
    * Local disposable state and Storybook `preview-stats.json`.
-   * Default: `.cache/visual-delta`.
+   * Default: `.visual-delta/cache`.
    */
   cacheDir?: string;
   /**

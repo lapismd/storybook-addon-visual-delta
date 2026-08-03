@@ -17,8 +17,8 @@ import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 
-const CACHE_VERSION = 1;
-const DEFAULT_CACHE_DIR = ".cache/visual-delta";
+const CACHE_VERSION = 2;
+const DEFAULT_CACHE_DIR = ".visual-delta/cache";
 const CACHE_FILE_NAME = "affected-state-v1.json";
 const STATS_FILE_NAME = "preview-stats.json";
 
@@ -52,11 +52,12 @@ type PreviewStats = { modules?: PreviewStatsModule[] };
 type CachedStory = {
   importPath: string;
   dependencies: string[];
+  renderFingerprint: string;
   fingerprint: string;
 };
 
 type AffectedCache = {
-  version: 1;
+  version: 2;
   configFingerprint: string;
   inputHashes: Record<string, string>;
   stories: Record<string, CachedStory>;
@@ -198,6 +199,14 @@ function walkFiles(directory: string, root = directory): string[] {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       if (entry.isDirectory() && WALK_IGNORES.has(entry.name)) continue;
       const absolute = path.join(current, entry.name);
+      const projectRelative = normalizeSlashes(path.relative(root, absolute));
+      if (
+        entry.isDirectory() &&
+        (projectRelative === ".visual-delta/artifacts" ||
+          projectRelative === ".visual-delta/cache")
+      ) {
+        continue;
+      }
       if (entry.isDirectory()) visit(absolute);
       else if (entry.isFile()) out.push(relativeKey(root, absolute));
     }
@@ -310,6 +319,8 @@ function isInsideSnapshotDir(
 function isBuiltInGlobalInput(file: string): boolean {
   return (
     file.startsWith(".storybook/") ||
+    file === ".visual-delta/config.json" ||
+    file === ".visual-delta/runner.mjs" ||
     file === "package.json" ||
     file.endsWith("/package.json") ||
     /^(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?)$/i.test(
@@ -482,18 +493,27 @@ function buildGraphSnapshot(
       unresolvedStory ??= entry.id;
       continue;
     }
-    const dependencies = [
+    const renderDependencies = [
       ...transitiveDependencies(importPath, dependenciesByImporter),
-      ...(baselines.get(entry.id) ?? []),
     ]
       .filter((file) => !matchesAffectedGlob(file, untraced))
       .sort();
+    const dependencies = [
+      ...renderDependencies,
+      ...(baselines.get(entry.id) ?? []),
+    ].sort();
     const hashes = dependencies.map(
       (file) => [file, hashFile(root, file)] as [string, string],
     );
     stories[entry.id] = {
       importPath,
       dependencies,
+      renderFingerprint: fingerprintEntries([
+        ["@story-id", sha256(entry.id)],
+        ...renderDependencies.map(
+          (file) => [file, hashFile(root, file)] as [string, string],
+        ),
+      ]),
       fingerprint: fingerprintEntries([
         ["@story-id", sha256(entry.id)],
         ...hashes,
@@ -537,9 +557,19 @@ function buildGraphSnapshot(
     ),
   );
   for (const [storyId, story] of Object.entries(stories)) {
-    story.fingerprint = fingerprintEntries([
+    const baselineDependencies = new Set(baselines.get(storyId) ?? []);
+    story.renderFingerprint = fingerprintEntries([
       ["@story-id", sha256(storyId)],
       ["@global", globalFingerprint],
+      ...story.dependencies
+        .filter((file) => !baselineDependencies.has(file))
+        .map(
+          (file) =>
+            [file, inputHashes[file] ?? hashFile(root, file)] as [string, string],
+        ),
+    ]);
+    story.fingerprint = fingerprintEntries([
+      ["@render", story.renderFingerprint],
       ...story.dependencies.map(
         (file) =>
           [file, inputHashes[file] ?? hashFile(root, file)] as [string, string],
@@ -795,3 +825,18 @@ export function recordAffectedVisualResults({
 
 export const AFFECTED_VISUAL_CACHE_FILE = CACHE_FILE_NAME;
 export const AFFECTED_VISUAL_STATS_FILE = STATS_FILE_NAME;
+
+/** Current source/dependency fingerprint, excluding baselines and artifacts. */
+export function visualRenderFingerprints(
+  root: string,
+  hostOptions?: VisualDeltaHostOptions,
+): Record<string, string> {
+  const snapshot = buildGraphSnapshot(path.resolve(root), hostOptions);
+  if (snapshot.unsupportedReason) return {};
+  return Object.fromEntries(
+    Object.entries(snapshot.stories).map(([storyId, story]) => [
+      storyId,
+      story.renderFingerprint,
+    ]),
+  );
+}

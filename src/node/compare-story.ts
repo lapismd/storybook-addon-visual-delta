@@ -25,6 +25,7 @@ import type {
 } from "../shared/environments.js";
 import { runVisualDeltaCaptureJob } from "./capture-runner.js";
 import { isVisualDiffSidecar, type VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 export function validateCompareStoryBaselineTarget(options: {
   baselineUrl: string;
@@ -176,6 +177,7 @@ export async function compareStoryInCaptureRunner(options: {
     ...(options.request.visualCaptureCallId
       ? ["--capture-call-id", options.request.visualCaptureCallId]
       : []),
+    ...(options.request.fresh ? ["--fresh"] : []),
   ];
   options.onProgress?.({ phase: "launching", label: "Starting capture runner…" });
   const result = await runVisualDeltaCaptureJob({
@@ -196,7 +198,11 @@ export async function compareStoryInCaptureRunner(options: {
       },
     },
   });
-  const sidecarPath = absolutePath.replace(/\.png$/i, ".json");
+  const sidecarPath = visualArtifactPaths({
+    root: options.root,
+    snapshotDir: resolveSnapshotDir(options.hostOptions, options.root),
+    baselinePath: absolutePath,
+  }).result;
   const sidecarRelativeToRoot = path
     .relative(options.root, sidecarPath)
     .replaceAll(path.sep, "/");

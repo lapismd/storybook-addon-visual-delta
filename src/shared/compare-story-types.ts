@@ -44,6 +44,8 @@ export type CompareStoryRequest = {
    * canonical browser suffix. Canonical filename identity remains authoritative.
    */
   target?: VisualBaselineTarget;
+  /** Force a new canonical browser capture instead of reusing a fresh actual. */
+  fresh?: boolean;
 };
 
 export type CompareStoryResult = {

@@ -11,6 +11,7 @@ import { PNG } from "pngjs";
 import { afterEach, describe, expect, it } from "vitest";
 import type { StoryIndexEntry } from "../node/snapshot-paths.js";
 import { writeDiffArtifactsForBaseline } from "./write-diff-artifacts.js";
+import { visualArtifactPaths } from "../node/visual-artifacts.js";
 
 const roots: string[] = [];
 
@@ -61,7 +62,7 @@ describe("writeDiffArtifactsForBaseline", () => {
     });
 
     expect(sidecar).toMatchObject({
-      version: 3,
+      version: 4,
       runnerStatus: "failed",
       status: "failed",
       outcome: "mismatch",
@@ -69,6 +70,19 @@ describe("writeDiffArtifactsForBaseline", () => {
       dimensionMismatch: true,
       capturedWidth: 3,
       capturedHeight: 2,
+    });
+    const storedActual = PNG.sync.read(
+      readFileSync(
+        visualArtifactPaths({
+          root: input.packageRoot,
+          snapshotDir: path.join(input.packageRoot, input.snapshotDir),
+          baselinePath: input.baselinePngAbsPath,
+        }).actual,
+      ),
+    );
+    expect({ width: storedActual.width, height: storedActual.height }).toEqual({
+      width: 3,
+      height: 2,
     });
   });
 
@@ -82,7 +96,7 @@ describe("writeDiffArtifactsForBaseline", () => {
       passThresholdPercent: 100,
     });
 
-    expect(sidecar.version).toBe(3);
+    expect(sidecar.version).toBe(4);
     expect(sidecar.runnerStatus).toBe("passed");
     expect(sidecar.status).toBe("passed");
     expect(["passed", "changed-within-tolerance"]).toContain(sidecar.outcome);
@@ -90,7 +104,14 @@ describe("writeDiffArtifactsForBaseline", () => {
     expect(sidecar.baselineHash).toHaveLength(64);
 
     const written = JSON.parse(
-      readFileSync(input.baselinePngAbsPath.replace(/\.png$/, ".json"), "utf8"),
+      readFileSync(
+        visualArtifactPaths({
+          root: input.packageRoot,
+          snapshotDir: path.join(input.packageRoot, input.snapshotDir),
+          baselinePath: input.baselinePngAbsPath,
+        }).result,
+        "utf8",
+      ),
     );
     expect(written.operationId).toBeTruthy();
   });
@@ -118,7 +139,13 @@ describe("writeDiffArtifactsForBaseline", () => {
     });
     expect(sidecar.actualRel).toMatch(/\.actual\.png$/);
     expect(
-      readFileSync(input.baselinePngAbsPath.replace(/\.png$/, ".actual.png")),
+      readFileSync(
+        visualArtifactPaths({
+          root: input.packageRoot,
+          snapshotDir: path.join(input.packageRoot, input.snapshotDir),
+          baselinePath: input.baselinePngAbsPath,
+        }).actual,
+      ),
     ).toBeTruthy();
   });
 

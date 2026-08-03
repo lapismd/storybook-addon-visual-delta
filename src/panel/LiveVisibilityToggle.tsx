@@ -19,36 +19,36 @@ const Toggle = styled(ToggleButton)({
 });
 
 type LiveVisibilityToggleProps = {
-  /** True when the live story is shown (default). False = image-only. */
+  /** True when the live story is shown. False = captured actual when present. */
   liveVisible: boolean;
   onToggle: (liveVisible: boolean) => void;
   disabled?: boolean;
 };
 
 /**
- * Eye toggle for image-only mode. Unselected by default (live + gallery shown).
- * Selected = hide live story and baseline gallery; show only the PNG (center, draggable).
+ * Toggle between the live story and the latest fresh captured actual. When no
+ * actual exists, Captured mode retains the baseline-only fallback.
  */
 export function LiveVisibilityToggle({
   liveVisible,
   onToggle,
   disabled = false,
 }: LiveVisibilityToggleProps) {
-  const imageOnly = !liveVisible;
-  const label = imageOnly
-    ? "Exit image only (show live story)"
-    : "Image only (hide live story)";
+  const captured = !liveVisible;
+  const label = captured
+    ? "Show live component"
+    : "Show captured actual";
   return (
-    <ButtonGroup role="group" aria-label="Image only">
+    <ButtonGroup role="group" aria-label="Live or Captured">
       <Toggle
         size="small"
-        pressed={imageOnly}
+        pressed={captured}
         disabled={disabled}
         ariaLabel={label}
         title={label}
         onClick={() => onToggle(!liveVisible)}
       >
-        {imageOnly ? <EyeCloseIcon /> : <EyeIcon />}
+        {captured ? <EyeCloseIcon /> : <EyeIcon />}
       </Toggle>
     </ButtonGroup>
   );

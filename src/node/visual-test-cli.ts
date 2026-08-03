@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
 import {
   planAffectedVisualTests,
@@ -19,6 +20,14 @@ import { playwrightStoryIdGrep } from "./story-id-grep.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
 import type { VisualTestFailureMode } from "../shared/failure-mode.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import {
+  resolveBaselinePathMode,
+  resolveSnapshotDir,
+} from "./options.js";
+import { baselinePngAbs } from "../playwright/write-diff-artifacts.js";
+import { loadStoryIndex } from "./visual-sidecars.js";
+import { visualRenderFingerprints } from "./affected-visual-tests.js";
+import { recompareCachedActualSet } from "./cached-actual.js";
 
 export type VisualTestCliOptions = {
   root?: string;
@@ -37,6 +46,8 @@ export type VisualTestCliOptions = {
   hostOptions?: VisualDeltaHostOptions;
   browsers?: VisualDeltaBrowser[];
   failureMode?: VisualTestFailureMode;
+  /** Force browser capture even when a reusable canonical actual exists. */
+  fresh?: boolean;
   /** Test seam; production uses the package process runner. */
   runCommand?: typeof runCommand;
 };
@@ -205,6 +216,69 @@ export async function runVisualTestCli(
     : options.selection === "stories"
       ? requestedStoryIds
       : plan.selectedStoryIds;
+  if (
+    projectConfig.workflow.reuseActualComparisons &&
+    !options.fresh &&
+    selectedStoryIds.length > 0
+  ) {
+    const snapshotDir = resolveSnapshotDir(hostOptions, root);
+    const baselinePathMode = resolveBaselinePathMode(hostOptions);
+    const entries = loadStoryIndex(root);
+    const fingerprints = visualRenderFingerprints(root, hostOptions);
+    const failureMode =
+      options.failureMode ?? projectConfig.workflow.visualTestFailureMode;
+    const cachedResults = selectedStoryIds.flatMap((storyId) =>
+      browsers.map((browser) => {
+        const entry = entries[storyId];
+        const renderFingerprint = fingerprints[storyId];
+        if (!entry || !renderFingerprint) return null;
+        let baselinePath = options.baselineRelativePath
+          ? path.resolve(
+              snapshotDir,
+              ...options.baselineRelativePath.split("/"),
+            )
+          : baselinePngAbs(
+              entry,
+              root,
+              snapshotDir,
+              baselinePathMode,
+              browser,
+            );
+        if (options.interaction) {
+          baselinePath = baselinePath.replace(
+            `-${browser}.png`,
+            `--${options.interaction.stepId}-${browser}.png`,
+          );
+        }
+        return recompareCachedActualSet({
+          root,
+          snapshotDir,
+          baselinePath,
+          storyId,
+          browser,
+          baselinePathMode,
+          renderFingerprint,
+          failureMode,
+        });
+      }),
+    );
+    if (
+      cachedResults.length === selectedStoryIds.length * browsers.length &&
+      cachedResults.every(Boolean)
+    ) {
+      console.log(
+        `[visual-delta] Reused canonical actuals for ${selectedStoryIds.length} stor${selectedStoryIds.length === 1 ? "y" : "ies"} across ${browsers.length} browser target${browsers.length === 1 ? "" : "s"}.`,
+      );
+      const passed = cachedResults.every((result) => result?.passed);
+      recordAffectedVisualResults({
+        root,
+        hostOptions,
+        passedStoryIds: passed ? selectedStoryIds : [],
+      });
+      return passed ? 0 : 1;
+    }
+    console.log("[visual-delta] Cached actual set is stale or incomplete; launching canonical browser capture.");
+  }
   const grep = options.selection === "all" ||
     (options.selection === "affected" && plan.summary.fallbackReason)
     ? undefined

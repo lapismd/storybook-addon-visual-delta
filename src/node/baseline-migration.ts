@@ -32,7 +32,7 @@ export type VisualBaselineMigrationPlan = {
   canApply: boolean;
 };
 
-const DEFAULT_AFFECTED_CACHE_DIR = ".cache/visual-delta";
+const DEFAULT_AFFECTED_CACHE_DIR = ".visual-delta/cache";
 
 const LEGACY_SUFFIX_RE =
   /-(chromium|firefox|webkit)-([a-z0-9]+)(?=\.png$)/i;

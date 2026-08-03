@@ -64,6 +64,7 @@ const CONFIG = {
   workflow: {
     autoAcceptLiveStoryComparisons: false,
     visualTestFailureMode: "warn",
+    reuseActualComparisons: true,
     vcs: {
       mode: "off",
       commitMessageTemplate: "Visual Delta: {action} {scope}",

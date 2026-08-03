@@ -171,6 +171,7 @@ export type VisualTestModuleUIProps = {
   onAffectedOnlyChange: (enabled: boolean) => void;
   onBaselineModeChange: (mode: BaselineWriteMode) => void;
   onRun: () => void;
+  onRunFresh?: () => void;
   onStop: () => void;
   onOpenCompareResults: () => void;
   onOpenBaselineStatus: () => void;
@@ -223,6 +224,7 @@ export function VisualTestModuleUI({
   onAffectedOnlyChange,
   onBaselineModeChange,
   onRun,
+  onRunFresh,
   onStop,
   onOpenCompareResults,
   onOpenBaselineStatus,
@@ -277,6 +279,7 @@ export function VisualTestModuleUI({
             writeOnMainClick={false}
             disabled={!anyActionSelected || runnerBusy}
             onRun={onRun}
+            onRunFresh={onRunFresh}
             onStop={onStop}
           />
         </Actions>

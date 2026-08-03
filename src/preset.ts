@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 import type { UserConfig } from "vite";
 import { visualBaselineVisualDeltaPlugin } from "./node/baseline-vite-plugin.js";
 import { visualDeltaMiddlewarePlugin } from "./node/middleware.js";
@@ -13,6 +14,7 @@ import {
   resolveToolbarStatusEnabled,
 } from "./shared/manager-options.js";
 import { watchVisualDeltaSourcePlugin } from "./node/watch-src.js";
+import { resolveVisualArtifactRoot } from "./node/visual-artifacts.js";
 
 export type { VisualDeltaHostOptions } from "./node/options.js";
 
@@ -83,18 +85,33 @@ export function staticDirs(
   existing: StaticDirEntry[] = [],
   options: PresetOptions = {},
 ): StaticDirEntry[] {
-  const to = "/visual-baselines";
-  const already = existing.some(
-    (entry) => typeof entry === "object" && entry?.to === to,
-  );
-  if (already) return existing;
-  return [
-    ...existing,
-    {
+  const host = resolveHostOptions(options);
+  const root = host.root?.trim() || process.cwd();
+  const additions: StaticDirEntry[] = [];
+  if (
+    !existing.some(
+      (entry) => typeof entry === "object" && entry?.to === "/visual-baselines",
+    )
+  ) {
+    additions.push({
       from: resolveSnapshotDirFromOptions(options),
-      to,
-    },
-  ];
+      to: "/visual-baselines",
+    });
+  }
+  if (
+    !existing.some(
+      (entry) =>
+        typeof entry === "object" && entry?.to === "/visual-delta-artifacts",
+    )
+  ) {
+    const artifactRoot = resolveVisualArtifactRoot(root);
+    mkdirSync(artifactRoot, { recursive: true });
+    additions.push({
+      from: artifactRoot,
+      to: "/visual-delta-artifacts",
+    });
+  }
+  return [...existing, ...additions];
 }
 
 /**

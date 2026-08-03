@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { SETTINGS_STORAGE_KEY } from "../src/panel/settings.js";
 import {
   AI_SEND_BUTTON_STATES,
@@ -29,6 +31,15 @@ const FIXTURE_BASELINE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
 );
+const LARGE_CAPTURED_ACTUAL_PNG = readFileSync(
+  new URL(
+    "./fixtures/visual-baselines/forms/task-due-calendar/shows-a-selected-date-chromium-darwin.png",
+    import.meta.url,
+  ),
+);
+const LARGE_CAPTURED_ACTUAL_HASH = createHash("sha256")
+  .update(LARGE_CAPTURED_ACTUAL_PNG)
+  .digest("hex");
 
 test.describe("Visual Delta manager integration", () => {
   test("surfaces the canonical profile and configured browser", async ({
@@ -728,6 +739,150 @@ test.describe("Visual Delta manager integration", () => {
         name: "Choose Diff HTML or Diff Browser",
       }),
     ).toBeVisible();
+  });
+
+  test("shows a hydrated actual beside its baseline without mutating the project", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await openManager(
+      page,
+      "examples-interactions--with-interaction-baseline",
+      DEV_STORYBOOK,
+    );
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await panel
+      .getByRole("switch", { name: "Show captured actual" })
+      .click();
+
+    const preview = previewFrame(page);
+    const actual = preview.locator("#visual-delta-captured-actual");
+    const baseline = preview.locator("#visual-delta-overlay > img");
+    const storyRoot = preview.locator("#storybook-root");
+    await expect(actual).toBeVisible({ timeout: 15_000 });
+    await expect(baseline).toBeVisible();
+    await expect(storyRoot).toHaveCSS("visibility", "hidden");
+
+    const rendered = await Promise.all([
+      actual.evaluate((element) => {
+        const image = element as HTMLImageElement;
+        const rect = image.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, zoom: image.style.zoom };
+      }),
+      baseline.evaluate((element) => {
+        const image = element as HTMLImageElement;
+        const rect = image.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, zoom: image.style.zoom };
+      }),
+    ]);
+    expect(rendered[0]).toEqual(rendered[1]);
+
+    await panel.getByRole("switch", { name: "Show live component" }).click();
+    await expect(actual).toHaveCount(0);
+    await expect(storyRoot).toHaveCSS("visibility", "visible");
+    expect(writes).toEqual([]);
+  });
+
+  test("fits captured comparison panes from the larger actual dimensions", async ({
+    page,
+  }) => {
+    await page.route(
+      "**/visual-delta-artifacts/examples/interactions/opened.result.json*",
+      async (route) => {
+        const response = await route.fetch();
+        const sidecar = (await response.json()) as Record<string, unknown>;
+        await route.fulfill({
+          response,
+          json: {
+            ...sidecar,
+            capturedWidth: 3696,
+            capturedHeight: 561,
+            actualHash: LARGE_CAPTURED_ACTUAL_HASH,
+          },
+        });
+      },
+    );
+    for (const name of ["opened.actual.png", "opened.diff.png"]) {
+      await page.route(
+        `**/visual-delta-artifacts/examples/interactions/${name}*`,
+        async (route) => {
+          await route.fulfill({
+            contentType: "image/png",
+            body: LARGE_CAPTURED_ACTUAL_PNG,
+          });
+        },
+      );
+    }
+    const writes = await mockVisualBackend(page);
+    await openManager(
+      page,
+      "examples-interactions--with-interaction-baseline",
+      DEV_STORYBOOK,
+    );
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await panel
+      .getByRole("switch", { name: "Show captured actual" })
+      .click();
+
+    const preview = previewFrame(page);
+    const actual = preview.locator("#visual-delta-captured-actual");
+    const baseline = preview.locator("#visual-delta-overlay > img");
+    const livePane = preview.locator("#visual-delta-live-pane");
+    await expect(actual).toBeVisible({ timeout: 15_000 });
+    await expect(baseline).toBeVisible();
+
+    const dimensions = await Promise.all([
+      actual.evaluate((element) => {
+        const image = element as HTMLImageElement;
+        const rect = image.getBoundingClientRect();
+        return {
+          naturalWidth: image.naturalWidth,
+          width: rect.width,
+          zoom: Number(image.style.zoom),
+        };
+      }),
+      baseline.evaluate((element) => {
+        const image = element as HTMLImageElement;
+        const rect = image.getBoundingClientRect();
+        return {
+          naturalWidth: image.naturalWidth,
+          width: rect.width,
+          zoom: Number(image.style.zoom),
+        };
+      }),
+      livePane.evaluate((element) => element.clientWidth),
+    ]);
+    expect(dimensions[0].naturalWidth).toBe(3696);
+    expect(dimensions[1].naturalWidth).toBe(300);
+    expect(dimensions[0].zoom).toBeLessThan(1);
+    expect(dimensions[0].zoom).toBeCloseTo(dimensions[1].zoom, 6);
+    expect(dimensions[0].width).toBeLessThanOrEqual(dimensions[2] + 1);
+    expect(dimensions[0].width).toBeGreaterThan(dimensions[1].width);
+
+    await panel.getByRole("switch", { name: "Show live component" }).click();
+    await clickThrough(
+      panel.getByRole("switch", { name: "Baseline centered over live" }),
+    );
+    await panel
+      .getByRole("switch", { name: "Show captured actual" })
+      .click();
+    await expect(actual).toBeVisible();
+    await expect(preview.locator("#visual-delta-split")).toHaveCount(0);
+    const centered = await Promise.all([
+      actual.evaluate((element) => {
+        const image = element as HTMLImageElement;
+        const rect = image.getBoundingClientRect();
+        return { width: rect.width, zoom: Number(image.style.zoom) };
+      }),
+      baseline.evaluate((element) => Number((element as HTMLElement).style.zoom)),
+      preview.locator("html").evaluate(() => window.innerWidth),
+    ]);
+    expect(centered[0].zoom).toBeLessThan(1);
+    expect(centered[0].zoom).toBeCloseTo(centered[1], 6);
+    expect(centered[0].width).toBeLessThanOrEqual(centered[2] + 1);
+    expect(writes).toEqual([]);
   });
 
   test("creates a baseline for the exact Storybook interaction selected by the user", async ({

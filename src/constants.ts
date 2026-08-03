@@ -93,6 +93,11 @@ export function isSplitPlacement(placement: PlacementMode): boolean {
 
 export type VisualDeltaImage = {
   src: string;
+  /** Fresh canonical actual paired with this baseline for Captured mode. */
+  actualSrc?: string;
+  /** Decoded canonical actual size in CSS pixels. */
+  actualCssWidth?: number;
+  actualCssHeight?: number;
   /** Exact environment for explicitly wired non-canonical demo assets. */
   environment?: VisualBaselineEnvironment;
   anchor?: string;

@@ -425,6 +425,12 @@ export function configurationSections(
             ? "Enabled"
             : "Disabled",
         },
+        {
+          label: "Reuse canonical actuals",
+          value: config.workflow.reuseActualComparisons
+            ? "Enabled"
+            : "Disabled",
+        },
         { label: "VCS mode", value: config.workflow.vcs.mode },
         {
           label: "Detected VCS",
@@ -1640,6 +1646,31 @@ export function ConfigurationPanel({
                   Fresh passed or within-tolerance browser comparisons mark
                   stories visual-approved only after the configured matrix is
                   clean. Failures and warnings never change review state.
+                </FieldHint>
+              </Field>
+
+              <Field>
+                <FieldLabel>Comparison capture</FieldLabel>
+                <CheckboxRow>
+                  <Input
+                    aria-label="Reuse fresh canonical actual images"
+                    type="checkbox"
+                    checked={workflowDraft.reuseActualComparisons}
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
+                      setSaved(null);
+                      setWorkflowDraft((current) => ({
+                        ...current,
+                        reuseActualComparisons: checked,
+                      }));
+                    }}
+                    style={{ width: 16 }}
+                  />
+                  Reuse fresh canonical actual images
+                </CheckboxRow>
+                <FieldHint>
+                  Disable to always launch the canonical browser. Any run can
+                  also request a one-time fresh capture.
                 </FieldHint>
               </Field>
 

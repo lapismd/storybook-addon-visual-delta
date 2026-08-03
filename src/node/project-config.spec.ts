@@ -21,6 +21,13 @@ describe("project configuration", () => {
       validateCaptureWorkspaceIgnore(["../outside", "/absolute", "same", "same"])
         .errors,
     ).toHaveLength(3);
+    expect(
+      validateCaptureWorkspaceIgnore([
+        ".visual-delta",
+        ".visual-delta/artifacts",
+        ".visual-delta/cache",
+      ]).errors,
+    ).toHaveLength(3);
 
     const root = mkdtempSync(join(tmpdir(), "visual-delta-config-"));
     expect(() =>
@@ -104,6 +111,7 @@ describe("project configuration", () => {
     expect(result.defaults).toEqual(BUILTIN_VISUAL_DELTA_DEFAULTS);
     expect(result.workflow).toEqual({
       autoAcceptLiveStoryComparisons: true,
+      reuseActualComparisons: true,
       visualTestFailureMode: "warn",
       vcs: {
         mode: "review",

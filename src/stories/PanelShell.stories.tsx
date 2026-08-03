@@ -583,7 +583,7 @@ export const PlacementAndGallery: Story = {
     );
 
     await userEvent.click(
-      scope.getByRole("switch", { name: "Image only (hide live story)" }),
+      scope.getByRole("switch", { name: "Show captured actual" }),
     );
     await expect(scope.getByTestId("fixture-live-visible")).toHaveTextContent(
       "false",

@@ -37,7 +37,7 @@ describe("affectsAffectedPlan", () => {
     expect(
       affectsAffectedPlan(
         root,
-        path.join(root, ".cache/visual-delta/preview-stats.json"),
+        path.join(root, ".visual-delta/cache/preview-stats.json"),
       ),
     ).toBe(true);
   });

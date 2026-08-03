@@ -545,6 +545,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       scope: VisualRunScope,
       ids: string[],
       resolvedSummary?: AffectedVisualSummary,
+      fresh = false,
     ) => {
       const runnable = visualRunnableStoryIds(api, ids);
       if (!runnable.length) {
@@ -555,6 +556,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       applyPendingVisualStatuses(runnable);
       if (scope === "story" && runnable.length === 1) {
         const result = await compareExactStory(api, runnable[0]!, {
+          fresh,
           onProgress: (next) => {
             setStatusLog(next.label);
           },
@@ -585,6 +587,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       const data = await postVisualRun({
         storyIds: runnable,
         selection: "selected",
+        fresh,
       });
       if (data.crashed) {
         const summary: VisualLastRunSummary = {
@@ -632,7 +635,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
   sidebarStoryIdsRef.current = sidebarStoryIds;
 
   const runSelectedActions = useCallback(
-    async (scopedIds?: string[]) => {
+    async (scopedIds?: string[], fresh = false) => {
       const runVisual = loadRunVisualEnabled();
       const runDiff = loadRunDiffEnabled();
       const writeBaselines = loadCreateBaselinesEnabled();
@@ -722,6 +725,7 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
                       compareScope,
                       frozenIds,
                       resolvedSummary,
+                      fresh,
                     );
                   } finally {
                     setIsComparing(false);
@@ -1329,6 +1333,14 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
           return;
         }
         void runSelectedRef.current();
+      }}
+      onRunFresh={() => {
+        if (entry) {
+          if (!entryStoryIds?.length) return;
+          void runSelectedRef.current(entryStoryIds, true);
+          return;
+        }
+        void runSelectedRef.current(undefined, true);
       }}
       onStop={() => {
         void abortVisualWork().finally(() => {

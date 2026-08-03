@@ -111,7 +111,7 @@ type StoryData = {
   baselineLabelOffset: { x: number; y: number };
   colorInversion: boolean;
   placement: PlacementMode;
-  /** False = image-only (live hidden, center overlay). Default true. */
+  /** False = Captured mode (actual replaces live when available). */
   liveVisible: boolean;
   /** Pass threshold (%) scoped by Diff HTML vs Diff Browser. */
   passThresholdByEngine: PassThresholdByEngine;
@@ -208,11 +208,44 @@ function withPlacement(
   return images.map((img) => ({ ...img, placement }));
 }
 
+function withCapturedActualSources(
+  images: VisualDeltaImage[],
+  sources: ReadonlyMap<
+    string,
+    { storyId: string; src: string; cssWidth: number; cssHeight: number }
+  >,
+  storyId: string,
+): VisualDeltaImage[] {
+  return images.map((image) => {
+    const actual = sources.get(image.src.split("?")[0]);
+    return actual?.storyId === storyId
+      ? {
+          ...image,
+          actualSrc: actual.src,
+          actualCssWidth: actual.cssWidth,
+          actualCssHeight: actual.cssHeight,
+        }
+      : image;
+  });
+}
+
+function preferredSplitZoom(
+  state: Pick<
+    StoryData,
+    "splitZoomPreference" | "previewSplitZoomDefault"
+  >,
+): CompareZoomState {
+  return (
+    state.splitZoomPreference ??
+    compareZoomFromDefault(state.previewSplitZoomDefault)
+  );
+}
+
 export function useStoryData(currentStoryId?: string) {
   const currentStoryIdRef = useRef(currentStoryId);
   currentStoryIdRef.current = currentStoryId;
   const prefsRef = useRef<VisualDeltaSettings>(loadSettings());
-  /** Compare prefs to restore when leaving image-only. */
+  /** Compare prefs to restore when leaving baseline-only fallback. */
   const placementBeforeImageOnlyRef = useRef<PlacementMode | null>(null);
   const styleBeforeImageOnlyRef = useRef<{
     opacity: number;
@@ -265,6 +298,17 @@ export function useStoryData(currentStoryId?: string) {
   });
   /** End-of-play gallery — preserved while Interactions tab swaps overlay src. */
   const primaryImagesRef = useRef<VisualDeltaImage[]>([]);
+  /**
+   * Validated result artifacts can hydrate before preview INIT on reload/HMR.
+   * Retain them by canonical baseline URL so the later INIT cannot drop the
+   * captured source while rebuilding the gallery image objects.
+   */
+  const capturedActualSourcesRef = useRef(
+    new Map<
+      string,
+      { storyId: string; src: string; cssWidth: number; cssHeight: number }
+    >(),
+  );
   /**
    * Mid-play interaction baseline currently pinned in the overlay. Survives
    * story remount / INIT_IMAGE (GOTO) so selecting an interaction does not
@@ -478,9 +522,14 @@ export function useStoryData(currentStoryId?: string) {
         layout: data.layout ?? null,
         renderGeneration: data.renderGeneration ?? 0,
       };
-      const imagesArray = Array.isArray(data.images)
+      const incomingImages = Array.isArray(data.images)
         ? data.images
         : [data.images];
+      const imagesArray = withCapturedActualSources(
+        incomingImages,
+        capturedActualSourcesRef.current,
+        data.storyId,
+      );
       const interactions = data.interactions ?? [];
       const prefs = prefsRef.current;
       const interactionSrcEarly =
@@ -567,16 +616,20 @@ export function useStoryData(currentStoryId?: string) {
         const images =
           interactionSrc != null
             ? withPlacement(
-                [
-                  {
-                    src: `${wiredInteraction?.src.split("?")[0] ?? interactionSrc}?t=${Date.now()}`,
-                    offsetX: 0,
-                    offsetY: 0,
-                    align: data.align ?? prev.effectiveAlign,
-                    placement: resolvedPlacement,
-                    deviceScaleFactor: effectiveDeviceScale,
-                  },
-                ],
+                withCapturedActualSources(
+                  [
+                    {
+                      src: `${wiredInteraction?.src.split("?")[0] ?? interactionSrc}?t=${Date.now()}`,
+                      offsetX: 0,
+                      offsetY: 0,
+                      align: data.align ?? prev.effectiveAlign,
+                      placement: resolvedPlacement,
+                      deviceScaleFactor: effectiveDeviceScale,
+                    },
+                  ],
+                  capturedActualSourcesRef.current,
+                  data.storyId,
+                ),
                 resolvedPlacement,
               )
             : primaryImages;
@@ -743,7 +796,7 @@ export function useStoryData(currentStoryId?: string) {
           placement: prev.placement,
           liveVisible: prev.liveVisible,
           baselineLabelOffset: prev.baselineLabelOffset,
-          splitZoom: prev.splitZoom,
+          splitZoom: preferredSplitZoom(prev),
           cropToViewport: prev.cropToViewport,
         });
         void selectImage(prev.index, prev.images);
@@ -825,6 +878,15 @@ export function useStoryData(currentStoryId?: string) {
             viewport,
           }),
         );
+        emitRef.current?.(EVENTS.UPDATE_OVERLAY_STYLE, {
+          opacity: current.opacity,
+          colorInversion: current.colorInversion,
+          placement: current.placement,
+          liveVisible: current.liveVisible,
+          baselineLabelOffset: current.baselineLabelOffset,
+          splitZoom: preferredSplitZoom(current),
+          cropToViewport: current.cropToViewport,
+        });
         void selectImage(current.index, current.images);
       }, 120);
     });
@@ -877,6 +939,8 @@ export function useStoryData(currentStoryId?: string) {
         | "liveVisible"
         | "baselineLabelOffset"
         | "splitZoom"
+        | "splitZoomPreference"
+        | "previewSplitZoomDefault"
         | "cropToViewport"
       >,
     ) => {
@@ -886,7 +950,7 @@ export function useStoryData(currentStoryId?: string) {
         placement: next.placement,
         liveVisible: next.liveVisible,
         baselineLabelOffset: next.baselineLabelOffset,
-        splitZoom: next.splitZoom,
+        splitZoom: preferredSplitZoom(next),
         cropToViewport: next.cropToViewport,
       });
     },
@@ -1015,8 +1079,8 @@ export function useStoryData(currentStoryId?: string) {
   );
 
   /**
-   * Eye toggle: live story visible (default) vs image-only.
-   * Image-only forces center overlay on and hides the live canvas.
+   * Eye toggle: live story vs canonical Captured actual. Without an actual,
+   * keep the historical centered baseline-only fallback.
    */
   const setLiveVisible = useCallback(
     (liveVisible: boolean) => {
@@ -1029,18 +1093,20 @@ export function useStoryData(currentStoryId?: string) {
             opacity: prev.opacity,
             colorInversion: prev.colorInversion,
           };
-          const images = withPlacement(prev.images, "center");
           const index =
             prev.images.length > 0 ? (prev.index >= 0 ? prev.index : 0) : -1;
+          const hasActual = Boolean(prev.images[index]?.actualSrc);
+          const placement = hasActual ? prev.placement : "center";
+          const images = withPlacement(prev.images, placement);
           const next: StoryData = {
             ...prev,
             liveVisible: false,
-            placement: "center",
+            placement,
             images,
             index,
             overlayOn: index >= 0,
-            opacity: 1,
-            colorInversion: false,
+            opacity: hasActual ? prev.opacity : 1,
+            colorInversion: hasActual ? prev.colorInversion : false,
           };
           persistPreferencePatch({ liveVisible: false });
           emitStyle(next);
@@ -1091,6 +1157,71 @@ export function useStoryData(currentStoryId?: string) {
       });
     },
     [persistPreferencePatch],
+  );
+
+  const setCapturedActual = useCallback(
+    (
+      baselineSrc: string,
+      actual: { src: string; cssWidth: number; cssHeight: number } | null,
+    ) => {
+      const stem = baselineSrc.split("?")[0];
+      if (actual) {
+        capturedActualSourcesRef.current.set(stem, {
+          storyId:
+            currentStoryIdRef.current ?? storyDataRef.current.storyId,
+          ...actual,
+        });
+      }
+      else capturedActualSourcesRef.current.delete(stem);
+      const patchImages = (images: VisualDeltaImage[]) =>
+        images.map((image) =>
+          image.src.split("?")[0] === stem
+            ? {
+                ...image,
+                ...(actual
+                  ? {
+                      actualSrc: actual.src,
+                      actualCssWidth: actual.cssWidth,
+                      actualCssHeight: actual.cssHeight,
+                    }
+                  : {
+                      actualSrc: undefined,
+                      actualCssWidth: undefined,
+                      actualCssHeight: undefined,
+                    }),
+              }
+            : image,
+        );
+      primaryImagesRef.current = patchImages(primaryImagesRef.current);
+      setStoryData((prev) => {
+        let images = patchImages(prev.images);
+        let next = { ...prev, images };
+        if (!prev.liveVisible) {
+          const preferred =
+            placementBeforeImageOnlyRef.current ?? prefsRef.current.placement;
+          const placement = actual ? preferred : "center";
+          const priorStyle = styleBeforeImageOnlyRef.current;
+          images = withPlacement(images, placement);
+          next = {
+            ...next,
+            images,
+            placement,
+            opacity: actual
+              ? isSplitPlacement(placement)
+                ? 1
+                : (priorStyle?.opacity ?? prefsRef.current.opacity)
+              : 1,
+            colorInversion: actual
+              ? (priorStyle?.colorInversion ?? prefsRef.current.colorInversion)
+              : false,
+          };
+          emitStyle(next);
+        }
+        if (prev.overlayOn) void selectImage(prev.index, images);
+        return next;
+      });
+    },
+    [emitStyle, selectImage],
   );
 
   const resetOverlay = useCallback(() => {
@@ -1525,6 +1656,7 @@ export function useStoryData(currentStoryId?: string) {
     togglePlacement,
     setLiveVisible,
     setPassThresholdPercent,
+    setCapturedActual,
     setSelectedMode,
     hideOverlay,
     showOverlay,

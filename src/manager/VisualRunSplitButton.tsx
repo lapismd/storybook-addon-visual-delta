@@ -142,6 +142,7 @@ export function VisualRunSplitButton({
   disabled,
   storyMissing,
   onRun,
+  onFreshRun,
   onStop,
   allowStory = true,
   /** Visual Delta panel: show label, include All. */
@@ -155,6 +156,7 @@ export function VisualRunSplitButton({
   /** Story/Component need a selected story; All does not. */
   storyMissing?: boolean;
   onRun: (mode: VisualRunMode) => void;
+  onFreshRun?: (mode: VisualRunMode) => void;
   onStop: () => void;
   allowStory?: boolean;
   panel?: boolean;
@@ -231,8 +233,24 @@ export function VisualRunSplitButton({
       </ActionList.Action>
     </ActionList.Item>
   ));
+  if (onFreshRun) {
+    menuItems.push(
+      <ActionList.Item key="fresh">
+        <ActionList.Action
+          ariaLabel={`Run ${modeActionLabel(mode)} fresh`}
+          onClick={() => {
+            setMenuOpen(false);
+            onFreshRun(mode);
+          }}
+        >
+          <ActionList.Icon><PlayHollowIcon /></ActionList.Icon>
+          <ActionList.Text>Run fresh</ActionList.Text>
+        </ActionList.Action>
+      </ActionList.Item>,
+    );
+  }
 
-  if (allowed.length === 1) {
+  if (allowed.length === 1 && !onFreshRun) {
     return (
       <Split $compact={compact}>
         <MainButton

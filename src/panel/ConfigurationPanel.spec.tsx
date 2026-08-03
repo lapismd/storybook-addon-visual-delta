@@ -298,6 +298,7 @@ describe("ConfigurationPanel", () => {
     expect(saveWorkflow).toHaveBeenCalledWith(
       {
         autoAcceptLiveStoryComparisons: true,
+        reuseActualComparisons: true,
         visualTestFailureMode: "strict",
         vcs: {
           mode: "review",

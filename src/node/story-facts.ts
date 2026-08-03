@@ -10,6 +10,7 @@ import type { BaselinePathMode } from "./options.js";
 import { snapshotFileName } from "./snapshot-paths.js";
 import { isVisualDiffSidecar } from "../visual-diff-sidecar.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 function sha256(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
@@ -41,6 +42,7 @@ export function resolveVisualStoryFacts(
   baselinePathMode: BaselinePathMode,
   browsers: readonly VisualDeltaBrowser[] = ["chromium"],
   availableBrowsers: readonly VisualDeltaBrowser[] = [],
+  root: string = path.dirname(snapshotDir),
 ): VisualStoryFact[] {
   const resolvedSnapshotDir = path.resolve(snapshotDir);
   const requiredBrowsers = requiredVisualBaselineBrowsers(browsers);
@@ -92,7 +94,11 @@ export function resolveVisualStoryFacts(
         : undefined;
       const matchingSidecars = baselinePresent
         ? baselinePaths.map((baselinePath, index) => {
-            const sidecarPath = baselinePath.replace(/\.png$/i, ".json");
+            const sidecarPath = visualArtifactPaths({
+              root,
+              snapshotDir: resolvedSnapshotDir,
+              baselinePath,
+            }).result;
             if (!existsSync(sidecarPath)) return null;
             try {
               const sidecar = JSON.parse(readFileSync(sidecarPath, "utf8"));

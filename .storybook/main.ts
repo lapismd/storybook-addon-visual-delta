@@ -28,9 +28,9 @@ const hostSnapshots =
   !forcePackageBaselines && existsSync(siblingUiSnapshots)
     ? siblingUiSnapshots
     : packageSnapshotMount;
-const repoRoot = existsSync(path.join(siblingUiRoot, "package.json"))
-  ? siblingUiRoot
-  : packageRoot;
+// The package Storybook owns its runner/config/artifacts even when it reads
+// baseline fixtures from the sibling UI catalog.
+const repoRoot = packageRoot;
 const exampleSnapshots = path.join(
   packageRoot,
   "tests/examples-snapshots/examples",

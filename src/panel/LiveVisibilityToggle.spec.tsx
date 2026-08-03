@@ -6,25 +6,25 @@ import { LiveVisibilityToggle } from "./LiveVisibilityToggle.js";
 import { renderWithTheme } from "../test/render.js";
 
 describe("LiveVisibilityToggle", () => {
-  it("toggles into image-only mode", async () => {
+  it("toggles into Captured mode", async () => {
     const user = userEvent.setup();
     const onToggle = vi.fn();
     renderWithTheme(<LiveVisibilityToggle liveVisible onToggle={onToggle} />);
 
     await user.click(
-      screen.getByRole("switch", { name: "Image only (hide live story)" }),
+      screen.getByRole("switch", { name: "Show captured actual" }),
     );
     expect(onToggle).toHaveBeenCalledWith(false);
   });
 
-  it("keeps image-only state accessible without a duplicate visible hint", () => {
+  it("keeps Captured state accessible without a duplicate visible hint", () => {
     renderWithTheme(
       <LiveVisibilityToggle liveVisible={false} onToggle={vi.fn()} />,
     );
     expect(screen.queryByText("Image only")).not.toBeInTheDocument();
     expect(
       screen.getByRole("switch", {
-        name: "Exit image only (show live story)",
+        name: "Show live component",
       }),
     ).toBeInTheDocument();
   });

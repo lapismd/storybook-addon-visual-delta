@@ -69,7 +69,7 @@ diagnostic change-set evidence.
 
 ## Evidence invalidation
 
-Baseline and capture configuration changes invalidate matching `.json`, `.actual.png`, and `.diff.png` evidence. The implementation MAY delete derived evidence or mark it stale, but the panel MUST stop treating it as current.
+Baseline and capture configuration changes invalidate matching `.result.json`, `.actual.png`, and `.diff.png` evidence beneath `.visual-delta/artifacts`. The implementation MAY delete derived evidence or mark it stale, but the panel MUST stop treating it as current.
 
 Baseline creation and overwrite set only written stories to pending. Stories requested but not written retain their existing review status. Updating story configuration does not rewrite a baseline and does not automatically change review status.
 

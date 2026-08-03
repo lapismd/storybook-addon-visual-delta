@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "storyId": "examples-interactions--with-interaction-baseline",
   "title": "Examples/Interactions",
   "snapshotRel": "src/stories/examples/with-interaction-baseline.png",
@@ -51,6 +51,22 @@
   "generatedAt": "2026-08-01T23:12:58.255Z",
   "tool": "playwright",
   "operationId": "08ae58b7-de90-4ee6-b086-668e58c65869",
+  "variant": {
+    "kind": "primary"
+  },
+  "captureSet": [
+    {
+      "variant": {
+        "kind": "primary"
+      },
+      "baselineRelative": "examples/interactions/opened.png"
+    }
+  ],
+  "renderFingerprint": "packaged-example-interaction-opened-v1",
+  "actualHash": "7521b89a27eedc58f45dc2790d6c37a532577514dea9e4cbfa7abad50775b49f",
+  "captureOperationId": "08ae58b7-de90-4ee6-b086-668e58c65869",
+  "actualCapturedAt": "2026-08-01T23:12:58.255Z",
+  "comparisonSource": "browser",
   "viewport": {
     "width": 1280,
     "height": 900

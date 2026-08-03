@@ -132,13 +132,13 @@ describe("compareStoryInCaptureRunner", () => {
     const stage = path.join(root, "stage");
     const configDir = path.join(root, ".visual-delta");
     const baselineRelative = "snapshots/examples-card--default-chromium.png";
-    const sidecarRelative = baselineRelative.replace(/\.png$/, ".json");
-    mkdirSync(path.join(stage, "snapshots"), { recursive: true });
+    const sidecarRelative = ".visual-delta/artifacts/examples-card--default-chromium.result.json";
+    mkdirSync(path.dirname(path.join(stage, sidecarRelative)), { recursive: true });
     mkdirSync(path.join(root, "snapshots"), { recursive: true });
     mkdirSync(configDir, { recursive: true });
     writeFileSync(path.join(root, baselineRelative), Buffer.from("baseline"));
     const sidecar = `${JSON.stringify({
-      version: 3,
+      version: 4,
       storyId: "examples-card--default",
       title: "Examples/Card",
       snapshotRel: "examples-card--default.png",

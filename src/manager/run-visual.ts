@@ -632,6 +632,7 @@ export async function compareExactStory(
     visualCaptureCallId?: string;
     mode?: string;
     browser?: VisualDeltaBrowser;
+    fresh?: boolean;
     onProgress?: (progress: { label: string }) => void;
     onLog?: (line: string) => void;
     signal?: AbortSignal;
@@ -729,6 +730,7 @@ export async function compareExactStory(
       includeAntiAliasing:
         params?.diffIncludeAntiAliasing ?? defaults.diffIncludeAntiAliasing,
       browser,
+      fresh: options?.fresh,
       target: declaredTarget,
     },
     {
@@ -1041,6 +1043,7 @@ export async function postVisualRun(
     selection?: VisualRunSelectionMode;
     browsers?: VisualDeltaBrowser[];
     failureMode?: "warn" | "strict";
+    fresh?: boolean;
   },
   options?: {
     onProgress?: (progress: VisualRunProgress) => void;

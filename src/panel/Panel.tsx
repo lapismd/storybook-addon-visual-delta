@@ -22,6 +22,7 @@ import {
   PANEL_ID,
   SKIP_VISUAL_TAG,
   TEST_PROVIDER_ID,
+  VISUAL_DEVICE_SCALE_FACTOR,
   deviceScaleFactorForImage,
   isSplitPlacement,
   viewportForImage,
@@ -287,6 +288,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     togglePlacement,
     setLiveVisible,
     setPassThresholdPercent,
+    setCapturedActual,
     setSelectedMode,
     hideOverlay,
     showOverlay,
@@ -1237,6 +1239,22 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     };
   }, [storyId, index, baselineStem, diffEpoch]);
 
+  useEffect(() => {
+    if (!baselineStem) return;
+    if (diffResult?.source !== "playwright") {
+      setCapturedActual(baselineStem, null);
+      return;
+    }
+    const density = diffResult.deviceScaleFactor ?? VISUAL_DEVICE_SCALE_FACTOR;
+    setCapturedActual(baselineStem, {
+      src: diffResult.actualImage,
+      cssWidth:
+        (diffResult.capturedBitmap?.width ?? diffResult.imageWidth) / density,
+      cssHeight:
+        (diffResult.capturedBitmap?.height ?? diffResult.imageHeight) / density,
+    });
+  }, [baselineStem, diffResult, setCapturedActual]);
+
   // Fresh visual-run artifacts invalidate the per-baseline cache.
   useEffect(() => {
     if (!diffEpoch) return;
@@ -1353,7 +1371,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   ]);
 
   const handleDiff = useCallback(
-    async (engine: DiffCaptureEngine = "html") => {
+    async (engine: DiffCaptureEngine = "html", fresh = false) => {
       const diffIndex = index >= 0 ? index : images.length > 0 ? 0 : -1;
       if (diffIndex === -1 || !images[diffIndex]) {
         setCaptureError("Please select a baseline image first");
@@ -1407,6 +1425,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             visualCaptureCallId: selectedVisualCaptureCallId,
             mode: selectedMode ?? undefined,
             browser: selectedBrowser,
+            fresh,
             signal: abort.signal,
             onProgress: (progress) => setDiffProgressLabel(progress.label),
             onLog: (line) => {
@@ -1932,7 +1951,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   }, [clearBaselineDiagnostics, skipVisual, storyId]);
 
   const handleRunVisual = useCallback(
-    async (scope: VisualRunMode) => {
+    async (scope: VisualRunMode, fresh = false) => {
       if (scope !== "all" && scope !== "affected" && !storyId) {
         setCaptureError("No story selected");
         return;
@@ -1969,6 +1988,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               visualCaptureCallId: selectedVisualCaptureCallId,
               mode: selectedMode ?? undefined,
               browser: selectedBrowser,
+              fresh,
               onProgress: (progress) => setDiffProgressLabel(progress.label),
               onLog: (line) => {
                 streamedLog = appendStatusLogChunk(streamedLog, line);
@@ -2023,6 +2043,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           }
           const data = await postVisualRun({
             storyIds,
+            fresh,
             selection:
               scope === "affected"
                 ? "affected"
@@ -2544,7 +2565,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           reviewStatus: previewBusy ? null : reviewStatus,
           skipVisual: previewBusy ? false : skipVisual,
           onDiff: (engine) => void handleDiff(engine),
+          onFreshDiff: () => void handleDiff("chromium", true),
           onRun: handleRun,
+          onFreshRun: (mode) => void handleRunVisual(mode, true),
           diffEngine,
           onDiffEngineChange: setDiffEngine,
           onCreate: () => void handleCreateBaselines(),

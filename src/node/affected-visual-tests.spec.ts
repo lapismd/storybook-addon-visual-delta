@@ -98,7 +98,7 @@ function createFixture() {
   write(root, "storybook-static/index.json", JSON.stringify({ entries }));
   write(
     root,
-    ".cache/visual-delta/preview-stats.json",
+    ".visual-delta/cache/preview-stats.json",
     JSON.stringify({ modules }),
   );
 
@@ -117,7 +117,7 @@ function rewriteGraph(fixture: Fixture): void {
   );
   write(
     fixture.root,
-    ".cache/visual-delta/preview-stats.json",
+    ".visual-delta/cache/preview-stats.json",
     JSON.stringify({ modules: fixture.modules }),
   );
 }
@@ -337,7 +337,7 @@ describe("affected visual planner", () => {
     seed(fixture);
     write(
       fixture.root,
-      `.cache/visual-delta/${AFFECTED_VISUAL_CACHE_FILE}`,
+      `.visual-delta/cache/${AFFECTED_VISUAL_CACHE_FILE}`,
       "{",
     );
     expect(
@@ -345,7 +345,7 @@ describe("affected visual planner", () => {
         .fallbackReason,
     ).toContain("cache is invalid");
 
-    write(fixture.root, ".cache/visual-delta/preview-stats.json", "{}");
+    write(fixture.root, ".visual-delta/cache/preview-stats.json", "{}");
     expect(
       planAffectedVisualTests(fixture.root, fixture.hostOptions).summary
         .fallbackReason,

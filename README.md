@@ -113,6 +113,10 @@ pnpm exec visual-delta test --story-id examples-card--default --browser chromium
 ```
 
 Compare-only commands never create or update baselines.
+They write mirrored `.actual.png`, `.diff.png`, and `.result.json` evidence to
+`.visual-delta/artifacts/`; affected planning state lives in
+`.visual-delta/cache/`. Both roots are ignored by default, but projects may
+cache or commit them. Add `--fresh` to bypass a reusable actual once.
 
 ## Configure browsers and comparison defaults
 
@@ -123,7 +127,8 @@ Add `.visual-delta/config.json` when the built-in defaults are not suitable:
   "browsers": ["chromium", "firefox", "webkit"],
   "captureWorkspaceIgnore": [".nx/cache"],
   "workflow": {
-    "visualTestFailureMode": "strict"
+    "visualTestFailureMode": "strict",
+    "reuseActualComparisons": true
   }
 }
 ```

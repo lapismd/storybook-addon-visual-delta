@@ -69,20 +69,20 @@ function writeFixtureRunner(options: {
 }
 
 describe("capture runner", () => {
-  it("stages only the affected-planning cache under .cache", () => {
-    expect(shouldStageVisualDeltaWorkspacePath(".cache")).toBe(true);
+  it("stages only Visual Delta artifacts and affected-planning cache", () => {
+    expect(shouldStageVisualDeltaWorkspacePath(".visual-delta")).toBe(true);
     expect(
       shouldStageVisualDeltaWorkspacePath(
-        ".cache/visual-delta/affected-state-v1.json",
+        ".visual-delta/cache/affected-state-v1.json",
       ),
     ).toBe(true);
     expect(
       shouldStageVisualDeltaWorkspacePath(
-        ".cache/visual-delta/preview-stats.json",
+        ".visual-delta/cache/preview-stats.json",
       ),
     ).toBe(true);
     expect(
-      shouldStageVisualDeltaWorkspacePath(".cache/visual-delta/unrelated.json"),
+      shouldStageVisualDeltaWorkspacePath(".visual-delta/cache/unrelated.json"),
     ).toBe(false);
     expect(shouldStageVisualDeltaWorkspacePath(".cache/vite/deps.json")).toBe(
       false,
@@ -96,7 +96,7 @@ describe("capture runner", () => {
     expect(
       shouldStageVisualDeltaWorkspacePath(
         ".nx/cache/manifest.json",
-        ".cache/visual-delta",
+        ".visual-delta/cache",
         [".nx/cache"],
       ),
     ).toBe(false);
@@ -223,14 +223,14 @@ describe("capture runner", () => {
         "--snapshot-dir",
         path.join(root, "snapshots"),
         "--cache-dir",
-        path.join(root, ".cache", "visual-delta"),
+        path.join(root, ".visual-delta", "cache"),
       ]),
     ).toEqual([
       "test",
       "--snapshot-dir",
       "/workspace/snapshots",
       "--cache-dir",
-      "/workspace/.cache/visual-delta",
+      "/workspace/.visual-delta/cache",
     ]);
     expect(() =>
       dockerWorkspaceArgv(root, [
@@ -314,11 +314,11 @@ describe("capture runner", () => {
   it("copies checksum-verified compare sidecars and diagnostics", async () => {
     const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-runner-"));
     const stage = path.join(root, "stage");
-    const sidecarRelative = "snapshots/card-chromium.json";
-    const actualRelative = "snapshots/card-chromium.actual.png";
-    const cacheRelative = ".cache/visual-delta/affected-state-v1.json";
+    const sidecarRelative = ".visual-delta/artifacts/snapshots/card-chromium.result.json";
+    const actualRelative = ".visual-delta/artifacts/snapshots/card-chromium.actual.png";
+    const cacheRelative = ".visual-delta/cache/affected-state-v1.json";
     const sidecar = `${JSON.stringify({
-      version: 3,
+      version: 4,
       storyId: "examples-card--default",
       snapshotRel: "card.png",
       status: "passed",
@@ -328,8 +328,8 @@ describe("capture runner", () => {
       captureProfile: fixtureProfile,
     })}\n`;
     const actual = Buffer.from("actual png fixture");
-    mkdirSync(path.join(stage, "snapshots"), { recursive: true });
-    mkdirSync(path.join(stage, ".cache", "visual-delta"), { recursive: true });
+    mkdirSync(path.dirname(path.join(stage, sidecarRelative)), { recursive: true });
+    mkdirSync(path.join(stage, ".visual-delta", "cache"), { recursive: true });
     writeFileSync(path.join(stage, sidecarRelative), sidecar);
     writeFileSync(path.join(stage, actualRelative), actual);
     writeFileSync(path.join(stage, cacheRelative), "{}\n");
@@ -408,7 +408,7 @@ describe("capture runner", () => {
           argv: ["test", "--all"],
           operation: "test",
         }),
-      ).rejects.toThrow("not a visual sidecar");
+      ).rejects.toThrow("forbidden artifact");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -417,9 +417,9 @@ describe("capture runner", () => {
   it("rejects comparison sidecars with false runner provenance", async () => {
     const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-runner-"));
     const stage = path.join(root, "stage");
-    const relativePath = "snapshots/card-chromium.json";
+    const relativePath = ".visual-delta/artifacts/snapshots/card-chromium.result.json";
     const sidecar = JSON.stringify({
-      version: 3,
+      version: 4,
       storyId: "examples-card--default",
       snapshotRel: "card.png",
       status: "passed",
@@ -427,7 +427,7 @@ describe("capture runner", () => {
       tool: "playwright",
       captureProfile: { ...fixtureProfile, id: "not-the-runner" },
     });
-    mkdirSync(path.join(stage, "snapshots"), { recursive: true });
+    mkdirSync(path.dirname(path.join(stage, relativePath)), { recursive: true });
     writeFileSync(path.join(stage, relativePath), sidecar);
     writeFixtureRunner({
       root,

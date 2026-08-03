@@ -108,6 +108,7 @@ describe("initImageSelection", () => {
     ).toMatchObject({ index: 0, overlayOn: true, previewIndex: 0 });
   });
 
+
   it("uses index -1 when there are no images", () => {
     expect(
       initImageSelection({

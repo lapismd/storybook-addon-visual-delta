@@ -85,7 +85,9 @@ export type VisualDeltaHeaderProps = {
   /** Story CSF currently has `skip-visual`. */
   skipVisual: boolean;
   onDiff: (engine: DiffCaptureEngine) => void;
+  onFreshDiff?: () => void;
   onRun: (mode: VisualRunMode) => void;
+  onFreshRun?: (mode: VisualRunMode) => void;
   /** Selected Diff capture engine (HTML vs Playwright browser). */
   diffEngine: DiffCaptureEngine;
   onDiffEngineChange: (engine: DiffCaptureEngine) => void;
@@ -130,7 +132,9 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
   reviewStatus,
   skipVisual,
   onDiff,
+  onFreshDiff,
   onRun,
+  onFreshRun,
   diffEngine,
   onDiffEngineChange,
   onCreate,
@@ -216,6 +220,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
             engine={effectiveDiffEngine}
             onEngineChange={allowChromium ? onDiffEngineChange : undefined}
             onDiff={onDiff}
+            onFreshDiff={allowChromium ? onFreshDiff : undefined}
             onStop={onStopDiff}
             engines={allowChromium ? undefined : ["html"]}
           />
@@ -229,6 +234,7 @@ export const VisualDeltaHeaderView = memo(function VisualDeltaHeaderView({
               storyMissing={storyMissing}
               allowStory
               onRun={onRun}
+              onFreshRun={onFreshRun}
               onStop={onStopRun}
             />
           ) : null}

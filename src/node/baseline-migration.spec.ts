@@ -39,7 +39,7 @@ describe("baseline migration", () => {
       path.join(root, "Story.stories.ts"),
       'const src = "/visual-baselines/story-chromium-linux.png";\n',
     );
-    const cacheDir = path.join(root, ".cache", "visual-delta");
+    const cacheDir = path.join(root, ".visual-delta", "cache");
     mkdirSync(cacheDir, { recursive: true });
     writeFileSync(path.join(cacheDir, "affected-state-v1.json"), "{}");
     const plan = planVisualBaselineMigration({
@@ -53,7 +53,7 @@ describe("baseline migration", () => {
     expect(result.removed).toContain("snapshots/story-chromium-linux.png");
     expect(result.removed).toContain("snapshots/story-chromium.json");
     expect(result.updatedSources).toContain("Story.stories.ts");
-    expect(result.invalidatedCaches).toEqual([".cache/visual-delta"]);
+    expect(result.invalidatedCaches).toEqual([".visual-delta/cache"]);
     expect(existsSync(cacheDir)).toBe(false);
   });
 });

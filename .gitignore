@@ -4,6 +4,8 @@ storybook-static
 spec/book
 .cache
 .turbo
+.visual-delta/artifacts/
+.visual-delta/cache/
 coverage
 test-results
 playwright-report

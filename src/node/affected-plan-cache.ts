@@ -58,9 +58,15 @@ export function affectsAffectedPlan(root: string, filePath: string): boolean {
   const normalized = relative.replaceAll("\\", "/");
   if (
     normalized === "storybook-static/index.json" ||
-    normalized === ".cache/visual-delta/preview-stats.json"
+    normalized === ".visual-delta/cache/preview-stats.json"
   ) {
     return true;
+  }
+  if (
+    normalized.startsWith(".visual-delta/artifacts/") ||
+    normalized.startsWith(".visual-delta/cache/")
+  ) {
+    return false;
   }
   const [directory] = normalized.split("/");
   return !directory || !GENERATED_DIRECTORIES.has(directory);

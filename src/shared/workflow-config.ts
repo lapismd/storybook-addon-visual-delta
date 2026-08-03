@@ -14,6 +14,7 @@ export const DEFAULT_VISUAL_DELTA_COMMIT_MESSAGE_TEMPLATE =
 export const BUILTIN_VISUAL_DELTA_WORKFLOW: VisualDeltaWorkflowConfig = {
   autoAcceptLiveStoryComparisons: false,
   visualTestFailureMode: DEFAULT_VISUAL_TEST_FAILURE_MODE,
+  reuseActualComparisons: true,
   vcs: {
     mode: "off",
     commitMessageTemplate: DEFAULT_VISUAL_DELTA_COMMIT_MESSAGE_TEMPLATE,
@@ -46,6 +47,8 @@ function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
       BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
     visualTestFailureMode:
       BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
+    reuseActualComparisons:
+      BUILTIN_VISUAL_DELTA_WORKFLOW.reuseActualComparisons,
     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
   };
 }
@@ -75,6 +78,7 @@ export function validateVisualDeltaWorkflowConfig(
   const workflowKeys = new Set([
     "autoAcceptLiveStoryComparisons",
     "visualTestFailureMode",
+    "reuseActualComparisons",
     "vcs",
   ]);
   if (options.rejectUnknown) {
@@ -99,6 +103,14 @@ export function validateVisualDeltaWorkflowConfig(
       value.visualTestFailureMode = input.visualTestFailureMode;
     } else {
       errors.push('workflow.visualTestFailureMode must be "warn" or "strict".');
+    }
+  }
+
+  if ("reuseActualComparisons" in input) {
+    if (typeof input.reuseActualComparisons === "boolean") {
+      value.reuseActualComparisons = input.reuseActualComparisons;
+    } else {
+      errors.push("workflow.reuseActualComparisons must be a boolean.");
     }
   }
 

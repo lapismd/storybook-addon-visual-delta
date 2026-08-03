@@ -56,6 +56,7 @@ import {
 import { baselineImageReady } from "../shared/baseline-image-readiness.js";
 
 const OVERLAY_ID = "visual-delta-overlay";
+const CAPTURED_ACTUAL_ID = "visual-delta-captured-actual";
 const SPLIT_ID = "visual-delta-split";
 const PANES_WRAP_ID = "visual-delta-panes";
 const LIVE_PANE_ID = "visual-delta-live-pane";
@@ -129,7 +130,7 @@ let lastSelection: {
  */
 let selectionGeneration = 0;
 let currentPlacement: PlacementMode = DEFAULT_PLACEMENT;
-/** False = image-only: hide live story, show baseline PNG (center + drag). */
+/** False = Captured mode: replace live with actual, or baseline-only fallback. */
 let currentLiveVisible = true;
 let currentOpacity = 0.5;
 let currentColorInversion = false;
@@ -228,9 +229,112 @@ function getOverlayChannelApi(): OverlayChannelApi {
 const overlayChannelApi = getOverlayChannelApi();
 
 function applyLiveVisibility(canvasElement: HTMLElement) {
-  const imageOnly = !currentLiveVisible;
-  canvasElement.style.visibility = imageOnly ? "hidden" : "";
-  syncModeBadge(imageOnly);
+  const selected = lastSelection?.images[lastSelection.index];
+  const capturedMode = !currentLiveVisible;
+  const actualSource = capturedMode ? selected?.actualSrc : undefined;
+  const generation = selectionGeneration;
+  let actual = document.getElementById(CAPTURED_ACTUAL_ID);
+  if (!actualSource || !selected) {
+    actual?.remove();
+    canvasElement.style.visibility = capturedMode ? "hidden" : "";
+    syncModeBadge(capturedMode);
+    return;
+  }
+  const host = canvasElement.parentElement;
+  if (!host) return;
+  if (!(actual instanceof HTMLImageElement)) {
+    actual?.remove();
+    actual = document.createElement("img");
+    actual.id = CAPTURED_ACTUAL_ID;
+    actual.style.cssText = `
+      position: absolute;
+      display: block;
+      max-width: none;
+      max-height: none;
+      pointer-events: none;
+      user-select: none;
+      visibility: hidden;
+      z-index: 0;
+      transform-origin: top left;
+    `;
+  }
+  if (host.style.position === "") host.style.position = "relative";
+  if (actual.parentElement !== host) host.appendChild(actual);
+  canvasElement.style.visibility = "hidden";
+  const capturedImage = actual as HTMLImageElement;
+  const overlay = document.getElementById(OVERLAY_ID);
+  const baselinePane = document.getElementById(BASELINE_PANE_ID);
+  const hideComparison = () => {
+    capturedImage.style.visibility = "hidden";
+    if (overlay instanceof HTMLElement) overlay.style.visibility = "hidden";
+    if (baselinePane instanceof HTMLElement) {
+      baselinePane.style.visibility = "hidden";
+    }
+  };
+  const position = () => {
+    const activeActual =
+      lastSelection?.images[lastSelection.index]?.actualSrc;
+    if (
+      !baselineImageReady({
+        generation,
+        activeGeneration: selectionGeneration,
+        source: actualSource,
+        activeSource: activeActual,
+        complete: capturedImage.complete,
+        naturalWidth: capturedImage.naturalWidth,
+        naturalHeight: capturedImage.naturalHeight,
+      }) ||
+      capturedImage.getAttribute("src") !== actualSource
+    ) {
+      return;
+    }
+    const density = deviceScaleFactorForImage(selected);
+    capturedImage.style.width = `${capturedImage.naturalWidth / density}px`;
+    capturedImage.style.height = `${capturedImage.naturalHeight / density}px`;
+    capturedImage.style.zoom = String(currentSplitZoom.scale);
+    if (!isSplitPlacement(currentPlacement) && overlay instanceof HTMLElement) {
+      capturedImage.style.left = overlay.style.left || "0px";
+      capturedImage.style.top = overlay.style.top || "0px";
+      capturedImage.style.transform = overlay.style.transform || "none";
+    } else {
+      const target = usesViewportCapture(selected, lastCompareSizes)
+        ? canvasElement
+        : (canvasElement.querySelector(":scope > *") ?? canvasElement);
+      const targetRect = target.getBoundingClientRect();
+      const hostRect = host.getBoundingClientRect();
+      capturedImage.style.left = `${targetRect.left - hostRect.left}px`;
+      capturedImage.style.top = `${targetRect.top - hostRect.top}px`;
+      capturedImage.style.transform = "none";
+    }
+    // The baseline load transaction owns final positioning. Reveal the pair
+    // only after that transaction has also completed for this generation.
+    if (
+      overlay instanceof HTMLElement &&
+      overlay.dataset.visualDeltaReady === "true"
+    ) {
+      capturedImage.style.visibility = "";
+      overlay.style.visibility = "";
+      if (baselinePane instanceof HTMLElement) {
+        baselinePane.style.visibility = "";
+      }
+      syncOverlayChip(overlay).style.visibility = "";
+    }
+  };
+  if (capturedImage.getAttribute("src") !== actualSource) {
+    hideComparison();
+    capturedImage.addEventListener("load", position, { once: true });
+    capturedImage.addEventListener(
+      "error",
+      () => {
+        if (generation === selectionGeneration) capturedImage.remove();
+      },
+      { once: true },
+    );
+    capturedImage.src = actualSource;
+  } else if (capturedImage.complete) {
+    position();
+  }
+  syncModeBadge(true);
 }
 
 function getCanvasScale(element: Element): number {
@@ -1065,11 +1169,29 @@ function applyEqualPaneViewports(
   const hostPaneH = horizontal
     ? Math.max(1, availH)
     : Math.max(1, Math.floor((availH - 1) / 2));
+  const actualImage = livePane.querySelector(`#${CAPTURED_ACTUAL_ID}`);
+  const density = deviceScaleFactorForImage(selectedImage);
+  const actualContent = {
+    width:
+      selectedImage.actualCssWidth ??
+      (actualImage instanceof HTMLImageElement && actualImage.naturalWidth > 0
+        ? actualImage.naturalWidth / density
+        : 0),
+    height:
+      selectedImage.actualCssHeight ??
+      (actualImage instanceof HTMLImageElement && actualImage.naturalHeight > 0
+        ? actualImage.naturalHeight / density
+        : 0),
+  };
+  const requiredContent =
+    !currentLiveVisible && selectedImage.actualSrc
+      ? sharedScrollExtentSize(sizes.content, actualContent)
+      : sizes.content;
   const resolvedZoom = resolveFitZoomState(currentSplitZoom, {
     availableWidth: Math.max(1, hostPaneW - insets.x),
     availableHeight: Math.max(1, hostPaneH - insets.y),
-    contentWidth: sizes.content.width,
-    contentHeight: sizes.content.height,
+    contentWidth: requiredContent.width,
+    contentHeight: requiredContent.height,
   });
   const zoomScale = resolvedZoom.scale;
 
@@ -1480,7 +1602,11 @@ function updateOverlayStyle(overlay: HTMLElement | null) {
     img.style.mixBlendMode = "normal";
     img.style.opacity = "1";
   } else {
-    img.style.zoom = "";
+    const selected = lastSelection?.images[lastSelection.index];
+    img.style.zoom =
+      !currentLiveVisible && selected?.actualSrc
+        ? String(currentSplitZoom.scale)
+        : "";
     img.style.mixBlendMode = currentColorInversion ? "difference" : "normal";
     img.style.opacity = String(currentOpacity);
   }
@@ -1635,6 +1761,30 @@ function applyOverlayPosition(
       compareSizes,
       snapshot.viewport,
     );
+    if (!currentLiveVisible && imageItem.actualSrc) {
+      const insets = totalInsets(
+        baselineOuterInsets(snapshot, {
+          align: imageItem.align,
+          cropToViewport: usesViewportCapture(imageItem, compareSizes),
+        }),
+      );
+      const actualContent = {
+        width: imageItem.actualCssWidth ?? compareSizes.content.width,
+        height: imageItem.actualCssHeight ?? compareSizes.content.height,
+      };
+      const requiredContent = sharedScrollExtentSize(
+        compareSizes.content,
+        actualContent,
+      );
+      currentSplitZoom = resolveFitZoomState(currentSplitZoom, {
+        availableWidth: Math.max(1, window.innerWidth - insets.x),
+        availableHeight: Math.max(1, window.innerHeight - insets.y),
+        contentWidth: requiredContent.width,
+        contentHeight: requiredContent.height,
+      });
+      updateOverlayStyle(overlay);
+      addons.getChannel().emit(EVENTS.SPLIT_ZOOM_STATUS, currentSplitZoom);
+    }
   }
   if (!centerHostRestoreRef) {
     const previousPosition = canvasParent.style.position;
@@ -1729,6 +1879,7 @@ function removeOverlayDom(retainSelection: boolean) {
     centerHostRestoreRef?.();
     centerHostRestoreRef = null;
     canvasElement.style.visibility = "";
+    document.getElementById(CAPTURED_ACTUAL_ID)?.remove();
   } else {
     // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
     // still tear down split chrome by id so the baseline PNG cannot orphan.
@@ -1741,6 +1892,7 @@ function removeOverlayDom(retainSelection: boolean) {
     centerHostRestoreRef = null;
     lastCompareSizes = null;
     document.getElementById(SPLIT_ID)?.remove();
+    document.getElementById(CAPTURED_ACTUAL_ID)?.remove();
   }
   syncModeBadge(false);
   emitBaselineGeometryStatus(null, true);
@@ -1834,17 +1986,24 @@ function applySelection(attempt: number, generation = selectionGeneration) {
       scheduleOverlayPosition(overlay, selectedImageItem, sizes, generation);
       if (!selectionStillCurrent(generation, selectedImageItem)) return;
       img.style.visibility = "";
-      overlay.style.visibility = "";
       overlay.style.pointerEvents = isSplitPlacement(currentPlacement)
         ? "none"
         : "auto";
-      const readyBaselinePane = document.getElementById(BASELINE_PANE_ID);
-      if (readyBaselinePane instanceof HTMLElement) {
-        readyBaselinePane.style.visibility = "";
-      }
       const chip = syncOverlayChip(overlay);
-      chip.style.visibility = "";
       overlay.dataset.visualDeltaReady = "true";
+      const waitingForActual = Boolean(
+        !currentLiveVisible && selectedImageItem.actualSrc,
+      );
+      if (waitingForActual) {
+        applyLiveVisibility(canvasElement);
+      } else {
+        overlay.style.visibility = "";
+        const readyBaselinePane = document.getElementById(BASELINE_PANE_ID);
+        if (readyBaselinePane instanceof HTMLElement) {
+          readyBaselinePane.style.visibility = "";
+        }
+        chip.style.visibility = "";
+      }
       watchLayout(overlay);
     };
     img.addEventListener("error", onFailed, { once: true });

@@ -11,6 +11,7 @@ import { patchStoryRemoveBaseline } from "./story-source.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import { parseVisualBaselineTarget } from "../shared/environments.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 export type DeleteVisualBaselineRequest = {
   storyId: string;
@@ -116,14 +117,17 @@ export function resolveVisualBaselinePath(
   return { absolutePath, relativePath, snapshotRoot };
 }
 
-function derivedBaselineFiles(absolutePng: string): string[] {
-  const stem = absolutePng.replace(/\.png$/i, "");
-  return [
-    absolutePng,
-    `${stem}.actual.png`,
-    `${stem}.diff.png`,
-    `${stem}.json`,
-  ];
+function derivedBaselineFiles(
+  root: string,
+  snapshotDir: string,
+  absolutePng: string,
+): string[] {
+  const artifacts = visualArtifactPaths({
+    root,
+    snapshotDir,
+    baselinePath: absolutePng,
+  });
+  return [absolutePng, artifacts.actual, artifacts.diff, artifacts.result];
 }
 
 /**
@@ -171,7 +175,11 @@ export function deleteVisualBaseline(
   }
 
   const deletedFiles: string[] = [];
-  for (const filePath of derivedBaselineFiles(absolutePng)) {
+  for (const filePath of derivedBaselineFiles(
+    root,
+    resolveSnapshotDir(hostOptions, root),
+    absolutePng,
+  )) {
     if (!existsSync(filePath)) continue;
     unlinkSync(filePath);
     deletedFiles.push(path.relative(root, filePath).replaceAll(path.sep, "/"));

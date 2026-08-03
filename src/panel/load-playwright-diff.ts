@@ -10,8 +10,10 @@ import {
 } from "../constants.js";
 import { loadImage } from "./capture.js";
 import { buildFocusAssets } from "./diff-assets.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 
 const VISUAL_BASELINES_PREFIX = "/visual-baselines/";
+const VISUAL_ARTIFACTS_PREFIX = "/visual-delta-artifacts/";
 
 function baselineStem(baselineSrc: string): string | null {
   const pathOnly = baselineSrc.split("?")[0] ?? baselineSrc;
@@ -21,7 +23,17 @@ function baselineStem(baselineSrc: string): string | null {
 
 function publicUrl(rel: string, cacheBust: number): string {
   const cleaned = rel.replace(/^\/+/, "");
-  return `${VISUAL_BASELINES_PREFIX}${cleaned}?t=${cacheBust}`;
+  return `${VISUAL_ARTIFACTS_PREFIX}${cleaned}?t=${cacheBust}`;
+}
+
+function artifactStem(baselineSrc: string): string | null {
+  const pathOnly = baselineSrc.split("?")[0] ?? baselineSrc;
+  if (!pathOnly.startsWith(VISUAL_BASELINES_PREFIX) || !/\.png$/i.test(pathOnly)) {
+    return null;
+  }
+  return `${VISUAL_ARTIFACTS_PREFIX}${pathOnly
+    .slice(VISUAL_BASELINES_PREFIX.length)
+    .replace(/\.png$/i, "")}`;
 }
 
 async function fetchSidecar(url: string): Promise<VisualDiffSidecar | null> {
@@ -72,29 +84,56 @@ async function sha256Url(url: string): Promise<string | null> {
 
 /**
  * Load a Playwright visual-run compare into panel `DiffResultData` when
- * ephemeral `.json` / `.actual.png` / `.diff.png` artifacts exist beside the
- * selected baseline under `/visual-baselines`.
+ * `.result.json` / `.actual.png` / `.diff.png` artifacts exist under the
+ * mirrored `/visual-delta-artifacts` path for the selected baseline.
  */
 export async function loadPlaywrightDiffResult(
   baselineSrc: string,
   cacheBust = Date.now(),
 ): Promise<DiffResultData | null> {
   const stem = baselineStem(baselineSrc);
-  if (!stem) return null;
+  const derivedStem = artifactStem(baselineSrc);
+  if (!stem || !derivedStem) return null;
 
-  const sidecar = await fetchSidecar(`${stem}.json?t=${cacheBust}`);
-  if (!sidecar) return null;
-  if (sidecar.baselineHash) {
-    const currentHash = await sha256Url(`${stem}.png?t=${cacheBust}`);
-    if (currentHash && currentHash !== sidecar.baselineHash) return null;
+  const sidecar = await fetchSidecar(`${derivedStem}.result.json?t=${cacheBust}`);
+  if (
+    !sidecar ||
+    sidecar.version !== 4 ||
+    !sidecar.baselineHash ||
+    !sidecar.actualHash ||
+    !sidecar.captureConfigHash ||
+    !sidecar.captureOperationId ||
+    !sidecar.actualCapturedAt ||
+    !sidecar.renderFingerprint ||
+    !sidecar.variant ||
+    !sidecar.captureSet?.length ||
+    JSON.stringify(sidecar.captureProfile) !==
+      JSON.stringify(CANONICAL_VISUAL_CAPTURE_PROFILE)
+  ) {
+    return null;
   }
+  const currentHash = await sha256Url(`${stem}.png?t=${cacheBust}`);
+  if (currentHash !== sidecar.baselineHash) return null;
 
-  const actualSrc = sidecar.actualRel
-    ? publicUrl(sidecar.actualRel, cacheBust)
-    : `${stem}.actual.png?t=${cacheBust}`;
-  const diffSrc = sidecar.diffRel
-    ? publicUrl(sidecar.diffRel, cacheBust)
-    : `${stem}.diff.png?t=${cacheBust}`;
+  const derivedRelativeStem = derivedStem.slice(VISUAL_ARTIFACTS_PREFIX.length);
+  const expectedActualRel = `${derivedRelativeStem}.actual.png`;
+  const expectedDiffRel = `${derivedRelativeStem}.diff.png`;
+  if (
+    sidecar.actualRel !== expectedActualRel ||
+    sidecar.diffRel !== expectedDiffRel ||
+    !sidecar.captureSet.some(
+      (member) =>
+        member.baselineRelative === `${derivedRelativeStem}.png` &&
+        member.variant.kind === sidecar.variant?.kind &&
+        (member.variant.kind === "primary" ||
+          (sidecar.variant?.kind !== "primary" &&
+            member.variant.id === sidecar.variant?.id)),
+    )
+  ) {
+    return null;
+  }
+  const actualSrc = publicUrl(expectedActualRel, cacheBust);
+  const diffSrc = publicUrl(expectedDiffRel, cacheBust);
 
   const [hasActual, hasDiff] = await Promise.all([
     urlExists(actualSrc),
@@ -103,11 +142,19 @@ export async function loadPlaywrightDiffResult(
   if (!hasActual || !hasDiff) return null;
 
   const baselineUrl = `${stem}.png?t=${cacheBust}`;
-  const [baseline, actual, diff] = await Promise.all([
+  const [actualHash, baseline, actual, diff] = await Promise.all([
+    sha256Url(actualSrc),
     loadImage(baselineUrl),
     loadImage(actualSrc),
     loadImage(diffSrc),
   ]);
+  if (
+    actualHash !== sidecar.actualHash ||
+    sidecar.capturedWidth !== actual.width ||
+    sidecar.capturedHeight !== actual.height
+  ) {
+    return null;
+  }
 
   const width = sidecar.imageWidth ?? baseline.width;
   const height = sidecar.imageHeight ?? baseline.height;

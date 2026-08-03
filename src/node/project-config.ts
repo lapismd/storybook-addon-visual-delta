@@ -50,6 +50,8 @@ function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
       BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
     visualTestFailureMode:
       BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
+    reuseActualComparisons:
+      BUILTIN_VISUAL_DELTA_WORKFLOW.reuseActualComparisons,
     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
   };
 }
@@ -136,6 +138,18 @@ export function validateCaptureWorkspaceIgnore(input: unknown): {
     }
     if (value.includes(normalized)) {
       errors.push(`captureWorkspaceIgnore contains duplicate ${normalized}.`);
+      continue;
+    }
+    if (
+      normalized === ".visual-delta" ||
+      normalized === ".visual-delta/artifacts" ||
+      normalized.startsWith(".visual-delta/artifacts/") ||
+      normalized === ".visual-delta/cache" ||
+      normalized.startsWith(".visual-delta/cache/")
+    ) {
+      errors.push(
+        `captureWorkspaceIgnore cannot suppress package-owned directory ${normalized}.`,
+      );
       continue;
     }
     value.push(normalized);

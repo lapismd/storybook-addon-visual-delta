@@ -25,13 +25,22 @@ export type VisualDiffChangeBounds = {
   height: number;
 };
 
+export type VisualDiffVariant =
+  | { kind: "primary" }
+  | { kind: "mode" | "interaction"; id: string };
+
+export type VisualCaptureSetItem = {
+  variant: VisualDiffVariant;
+  baselineRelative: string;
+};
+
 export type VisualDiffSidecar = {
   /**
    * v1 readers used `status` and `passed` as overlapping sources of truth.
    * v2 keeps those compatibility fields but records runner and comparison
    * outcomes independently. v3 separates browser target from capture profile.
    */
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   storyId: string;
   title?: string;
   /** Named Storybook globals mode; omitted for the Default capture. */
@@ -55,6 +64,19 @@ export type VisualDiffSidecar = {
   tool: "playwright";
   /** Stable identity for one capture/compare operation (v2). */
   operationId?: string;
+  /** Exact primary, mode, or interaction identity (v4). */
+  variant?: VisualDiffVariant;
+  /** Every target captured by the originating story/browser operation (v4). */
+  captureSet?: VisualCaptureSetItem[];
+  /** Hash of story source, transitive render dependencies, and global inputs. */
+  renderFingerprint?: string;
+  /** SHA-256 of the raw canonical actual PNG. */
+  actualHash?: string;
+  /** Original browser capture operation retained across cached recomparison. */
+  captureOperationId?: string;
+  actualCapturedAt?: string;
+  /** Whether this result launched a browser or reused the canonical actual. */
+  comparisonSource?: "browser" | "cached-actual";
   /** SHA-256 of the baseline PNG used by this comparison (v2). */
   baselineHash?: string;
   /** SHA-256 of effective capture settings used by this comparison (v2). */
@@ -84,8 +106,8 @@ export type VisualDiffSidecar = {
   /** Changed-pixel max-channel delta histogram (32 bins). */
   diffHistogram?: number[];
   /**
-   * Paths relative to `tests/visual/storybook.spec.ts-snapshots/`, served at
-   * `/visual-baselines/<rel>`. Written next to the baseline during a run.
+   * Paths relative to `.visual-delta/artifacts/`, served at
+   * `/visual-delta-artifacts/<rel>`.
    */
   actualRel?: string;
   diffRel?: string;
@@ -99,7 +121,8 @@ export function isVisualDiffSidecar(
   return (
     (candidate.version === 1 ||
       candidate.version === 2 ||
-      candidate.version === 3) &&
+      candidate.version === 3 ||
+      candidate.version === 4) &&
     typeof candidate.storyId === "string" &&
     candidate.storyId.length > 0
   );

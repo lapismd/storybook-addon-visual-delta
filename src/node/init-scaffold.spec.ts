@@ -48,7 +48,8 @@ describe("visual-delta init scaffold", () => {
     );
     expect(pkg.scripts["build-storybook"]).toContain("--stats-json");
     expect(readFileSync(path.join(root, ".gitignore"), "utf8")).toContain(
-      ".cache/visual-delta/",
+      ".visual-delta/artifacts/",
+      ".visual-delta/cache/",
     );
 
     const suite = readFileSync(

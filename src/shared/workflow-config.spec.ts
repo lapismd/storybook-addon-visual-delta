@@ -18,6 +18,7 @@ describe("Visual Delta workflow configuration", () => {
     const valid = validateVisualDeltaWorkflowConfig(
       {
         autoAcceptLiveStoryComparisons: true,
+        reuseActualComparisons: false,
         vcs: {
           mode: "review",
           commitMessageTemplate: "Visual: {action} {scope}",
@@ -27,6 +28,7 @@ describe("Visual Delta workflow configuration", () => {
     );
     expect(valid.errors).toEqual([]);
     expect(valid.value.vcs.mode).toBe("review");
+    expect(valid.value.reuseActualComparisons).toBe(false);
 
     const invalid = validateVisualDeltaWorkflowConfig(
       {
@@ -39,6 +41,10 @@ describe("Visual Delta workflow configuration", () => {
     );
     expect(invalid.errors.join(" ")).toMatch(/mode must be/);
     expect(invalid.errors.join(" ")).toMatch(/command is not an editable/);
+    expect(
+      validateVisualDeltaWorkflowConfig({ reuseActualComparisons: "yes" })
+        .errors,
+    ).toContain("workflow.reuseActualComparisons must be a boolean.");
   });
 
   it("renders only supported commit-message tokens", () => {

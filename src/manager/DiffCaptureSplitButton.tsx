@@ -124,6 +124,7 @@ export function DiffCaptureSplitButton({
   progressLabel,
   engine: engineProp,
   onEngineChange,
+  onFreshDiff,
   engines = ENGINES,
 }: {
   isRunning: boolean;
@@ -136,6 +137,8 @@ export function DiffCaptureSplitButton({
   /** Controlled engine; omit to manage selection internally. */
   engine?: DiffCaptureEngine;
   onEngineChange?: (engine: DiffCaptureEngine) => void;
+  /** One-shot canonical browser capture which bypasses reusable actuals. */
+  onFreshDiff?: () => void;
   /** Available engines; single-engine mode hides the picker (read-only static). */
   engines?: readonly DiffCaptureEngine[];
 }) {
@@ -149,7 +152,7 @@ export function DiffCaptureSplitButton({
   });
   const engine = engineProp ?? internalEngine;
   const [menuOpen, setMenuOpen] = useState(false);
-  const showEngineMenu = allowedEngines.length > 1;
+  const showEngineMenu = allowedEngines.length > 1 || Boolean(onFreshDiff);
 
   useEffect(() => {
     if (engineProp !== undefined) return;
@@ -232,6 +235,21 @@ export function DiffCaptureSplitButton({
                     </ActionList.Action>
                   </ActionList.Item>
                 ))}
+                {onFreshDiff ? (
+                  <ActionList.Item>
+                    <ActionList.Action
+                      ariaLabel="Capture a fresh browser comparison"
+                      title="Bypass reusable actuals and launch the canonical browser"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onFreshDiff();
+                      }}
+                    >
+                      <ActionList.Icon><PlayHollowIcon /></ActionList.Icon>
+                      <ActionList.Text>Fresh browser capture</ActionList.Text>
+                    </ActionList.Action>
+                  </ActionList.Item>
+                ) : null}
               </ActionList>
             </div>
           )}

@@ -21,6 +21,11 @@ import {
   isWarningComparisonOutcome,
   type VisualTestFailureMode,
 } from "../shared/failure-mode.js";
+import { visualArtifactPaths } from "../node/visual-artifacts.js";
+import type {
+  VisualCaptureSetItem,
+  VisualDiffVariant,
+} from "../visual-diff-sidecar.js";
 
 export function baselinePngAbs(
   entry: StoryIndexEntry,
@@ -37,30 +42,6 @@ export function baselinePngAbs(
     snapshotRoot,
     snapshotFileName(entry, mode, project, visualModeName),
   );
-}
-
-function sidecarJsonPath(baselinePngAbsPath: string): string {
-  return baselinePngAbsPath.replace(/\.png$/i, ".json");
-}
-
-function actualPngPath(baselinePngAbsPath: string): string {
-  return baselinePngAbsPath.replace(/\.png$/i, ".actual.png");
-}
-
-function diffPngPath(baselinePngAbsPath: string): string {
-  return baselinePngAbsPath.replace(/\.png$/i, ".diff.png");
-}
-
-/** Path relative to the snapshot root, for `/visual-baselines/<rel>` URLs. */
-function snapshotPublicRel(
-  absPath: string,
-  packageRoot: string,
-  snapshotDir: string,
-): string {
-  const snapshotRoot = path.isAbsolute(snapshotDir)
-    ? snapshotDir
-    : path.join(packageRoot, snapshotDir);
-  return path.relative(snapshotRoot, absPath).replace(/\\/g, "/");
 }
 
 export function writeVisualDiffSidecar(
@@ -95,7 +76,7 @@ function buildSidecarBase(
   | "diffRel"
 > {
   return {
-    version: 3,
+    version: 4,
     storyId: entry.id,
     title: entry.title,
     snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
@@ -155,8 +136,8 @@ function comparisonOutcome(options: {
 }
 
 /**
- * Write ephemeral `.json` / `.actual.png` / `.diff.png` beside the baseline so
- * the Storybook panel can load a DiffResult after a Playwright compare run.
+ * Write derived comparison evidence beneath `.visual-delta/artifacts`, mirroring
+ * the baseline's path relative to the configured snapshot directory.
  */
 export function writeDiffArtifactsForBaseline(input: {
   entry: StoryIndexEntry;
@@ -174,9 +155,16 @@ export function writeDiffArtifactsForBaseline(input: {
   diffThreshold?: number;
   includeAntiAliasing?: boolean;
   captureConfig?: unknown;
+  captureConfigHash?: string;
   operationId?: string;
   browser?: VisualDeltaBrowser;
   failureMode?: VisualTestFailureMode;
+  variant?: VisualDiffVariant;
+  captureSet?: VisualCaptureSetItem[];
+  renderFingerprint?: string;
+  comparisonSource?: "browser" | "cached-actual";
+  captureOperationId?: string;
+  actualCapturedAt?: string;
 }): VisualDiffSidecar {
   const {
     entry,
@@ -194,21 +182,50 @@ export function writeDiffArtifactsForBaseline(input: {
     diffThreshold,
     includeAntiAliasing,
     captureConfig,
+    captureConfigHash,
     operationId,
     browser = "chromium",
     failureMode = "warn",
+    variant = visualModeName
+      ? { kind: "mode", id: visualModeName }
+      : { kind: "primary" },
+    captureSet,
+    renderFingerprint,
+    comparisonSource = "browser",
+    captureOperationId,
+    actualCapturedAt,
   } = input;
-  const outPath = sidecarJsonPath(baselinePngAbsPath);
+  const snapshotRoot = path.isAbsolute(snapshotDir)
+    ? snapshotDir
+    : path.join(packageRoot, snapshotDir);
+  const artifacts = visualArtifactPaths({
+    root: packageRoot,
+    snapshotDir: snapshotRoot,
+    baselinePath: baselinePngAbsPath,
+  });
+  const outPath = artifacts.result;
+  const captureId = captureOperationId ?? operationId ?? randomUUID();
+  const capturedAt = actualCapturedAt ?? new Date().toISOString();
   const base = {
     ...buildSidecarBase(entry, mode, status, error, visualModeName, {
       browser,
     }),
     viewport,
     deviceScaleFactor,
-    ...(operationId ? { operationId } : {}),
-    ...(captureConfig
-      ? { captureConfigHash: visualCaptureConfigHash(captureConfig) }
-      : {}),
+    operationId: operationId ?? captureId,
+    variant,
+    captureSet: captureSet ?? [
+      { variant, baselineRelative: artifacts.baselineRelative },
+    ],
+    comparisonSource,
+    captureOperationId: captureId,
+    actualCapturedAt: capturedAt,
+    ...(renderFingerprint ? { renderFingerprint } : {}),
+    ...(captureConfigHash
+      ? { captureConfigHash }
+      : captureConfig
+        ? { captureConfigHash: visualCaptureConfigHash(captureConfig) }
+        : {}),
   };
   const baselineExists = existsSync(baselinePngAbsPath);
   if (!actualPng || !baselineExists) {
@@ -217,10 +234,12 @@ export function writeDiffArtifactsForBaseline(input: {
       baselineExists,
       actualExists: Boolean(actualPng),
     });
-    const actualPath = actualPngPath(baselinePngAbsPath);
+    const actualPath = artifacts.actual;
     if (actualPng) {
       mkdirSync(path.dirname(actualPath), { recursive: true });
-      writeFileSync(actualPath, actualPng);
+      if (comparisonSource === "browser" || !existsSync(actualPath)) {
+        writeFileSync(actualPath, actualPng);
+      }
     }
     const sidecar: VisualDiffSidecar = {
       ...base,
@@ -231,8 +250,9 @@ export function writeDiffArtifactsForBaseline(input: {
           ? "warning"
           : "failed",
       passed: false,
+      ...(actualPng ? { actualHash: sha256(actualPng) } : {}),
       ...(actualPng
-        ? { actualRel: snapshotPublicRel(actualPath, packageRoot, snapshotDir) }
+        ? { actualRel: artifacts.actualRelative }
         : {}),
     };
     writeVisualDiffSidecar(outPath, sidecar);
@@ -241,18 +261,22 @@ export function writeDiffArtifactsForBaseline(input: {
   try {
     const threshold =
       passThresholdPercent ?? readPlaywrightPassThresholdPercent(packageRoot);
-    const {
-      actualPng: fittedActual,
-      diffPng,
-      ...metrics
-    } = compareBaselineToActualPng(baselinePngAbsPath, actualPng, {
-      passThresholdPercent: threshold,
-      diffThreshold,
-      includeAntiAliasing,
-    });
-    const actualPath = actualPngPath(baselinePngAbsPath);
-    const heatmapPath = diffPngPath(baselinePngAbsPath);
-    writeFileSync(actualPath, fittedActual);
+    const { diffPng, ...comparison } = compareBaselineToActualPng(
+      baselinePngAbsPath,
+      actualPng,
+      {
+        passThresholdPercent: threshold,
+        diffThreshold,
+        includeAntiAliasing,
+      },
+    );
+    const { actualPng: _fittedActual, ...metrics } = comparison;
+    const actualPath = artifacts.actual;
+    const heatmapPath = artifacts.diff;
+    mkdirSync(path.dirname(actualPath), { recursive: true });
+    if (comparisonSource === "browser" || !existsSync(actualPath)) {
+      writeFileSync(actualPath, actualPng);
+    }
     writeFileSync(heatmapPath, diffPng);
     const outcome = comparisonOutcome({
       runnerStatus: status,
@@ -277,8 +301,9 @@ export function writeDiffArtifactsForBaseline(input: {
           : "failed",
       passed,
       baselineHash: sha256(readFileSync(baselinePngAbsPath)),
-      actualRel: snapshotPublicRel(actualPath, packageRoot, snapshotDir),
-      diffRel: snapshotPublicRel(heatmapPath, packageRoot, snapshotDir),
+      actualHash: sha256(actualPng),
+      actualRel: artifacts.actualRelative,
+      diffRel: artifacts.diffRelative,
     };
     writeVisualDiffSidecar(outPath, sidecar);
     return sidecar;

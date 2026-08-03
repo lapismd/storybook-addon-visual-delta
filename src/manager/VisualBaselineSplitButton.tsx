@@ -163,6 +163,7 @@ export function VisualBaselineSplitButton({
   mainIcon = "sync",
   writeOnMainClick = true,
   onRun,
+  onRunFresh,
   onCreateMissing,
   onRewriteExisting,
   onStop,
@@ -184,6 +185,8 @@ export function VisualBaselineSplitButton({
   writeOnMainClick?: boolean;
   /** Testing Module: run the checked actions (compare / baselines / status). */
   onRun?: () => void;
+  /** Testing Module: run checked comparison actions with a fresh capture. */
+  onRunFresh?: () => void;
   onCreateMissing?: () => void;
   onRewriteExisting?: () => void;
   onStop: () => void;
@@ -296,6 +299,20 @@ export function VisualBaselineSplitButton({
                   </ActionList.Action>
                 </ActionList.Item>
               ))}
+              {isPlay && onRunFresh ? (
+                <ActionList.Item>
+                  <ActionList.Action
+                    ariaLabel="Run selected actions fresh"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRunFresh();
+                    }}
+                  >
+                    <ActionList.Icon><PlayHollowIcon /></ActionList.Icon>
+                    <ActionList.Text>Run fresh</ActionList.Text>
+                  </ActionList.Action>
+                </ActionList.Item>
+              ) : null}
             </ActionList>
           </div>
         )}

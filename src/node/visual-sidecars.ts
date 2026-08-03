@@ -18,6 +18,10 @@ import {
 } from "../visual-diff-sidecar.js";
 import type { BaselinePathMode } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
+import {
+  resolveVisualArtifactRoot,
+  visualArtifactPaths,
+} from "./visual-artifacts.js";
 
 function readSidecar(filePath: string): VisualDiffSidecar | null {
   try {
@@ -204,7 +208,13 @@ export function loadSidecarForStoryId(
     project,
   );
   if (!png) return null;
-  const sidecar = readSidecar(png.replace(/\.png$/i, ".json"));
+  const sidecar = readSidecar(
+    visualArtifactPaths({
+      root: packageRoot,
+      snapshotDir,
+      baselinePath: png,
+    }).result,
+  );
   return sidecarMatchesBaseline(sidecar, png) ? sidecar : null;
 }
 
@@ -229,17 +239,22 @@ export function invalidateVisualResultArtifacts(options: {
       options.mode,
     );
     if (!primary) continue;
-    const directory = path.dirname(primary);
+    const primaryArtifacts = visualArtifactPaths({
+      root: options.packageRoot,
+      snapshotDir: options.snapshotDir,
+      baselinePath: primary,
+    });
+    const directory = path.dirname(primaryArtifacts.result);
     if (!existsSync(directory)) continue;
-    const primaryName = path.basename(primary);
-    const browserSuffix = `-chromium.png`;
+    const primaryName = path.basename(primaryArtifacts.result);
+    const browserSuffix = `-chromium.result.json`;
     const stem = primaryName.endsWith(browserSuffix)
       ? primaryName.slice(0, -browserSuffix.length)
-      : primaryName.replace(/\.png$/i, "");
+      : primaryName.replace(/\.result\.json$/i, "");
     for (const name of readdirSync(directory)) {
       if (
         !name.startsWith(stem) ||
-        !/\.(?:json|actual\.png|diff\.png)$/i.test(name)
+        !/\.(?:result\.json|actual\.png|diff\.png)$/i.test(name)
       ) {
         continue;
       }
@@ -267,9 +282,14 @@ export function loadModeSidecarsForStoryId(
     project,
   );
   if (!primary) return [];
-  const directory = path.dirname(primary);
-  const primaryName = path.basename(primary);
-  const suffix = `-${project}.png`;
+  const primaryArtifacts = visualArtifactPaths({
+    root: packageRoot,
+    snapshotDir,
+    baselinePath: primary,
+  });
+  const directory = path.dirname(primaryArtifacts.result);
+  const primaryName = path.basename(primaryArtifacts.result);
+  const suffix = `-${project}.result.json`;
   if (!primaryName.endsWith(suffix) || !existsSync(directory)) return [];
   const stem = primaryName.slice(0, -suffix.length);
   const prefix = `${stem}--`;
@@ -277,12 +297,19 @@ export function loadModeSidecarsForStoryId(
     .filter(
       (name) =>
         name.startsWith(prefix) &&
-        name.endsWith(`-${project}.json`),
+        name.endsWith(`-${project}.result.json`),
     )
     .map((name) => {
       const sidecar = readSidecar(path.join(directory, name));
       if (!sidecar) return null;
-      const png = path.join(directory, name.replace(/\.json$/i, ".png"));
+      const artifactRelative = path
+        .relative(
+          resolveVisualArtifactRoot(packageRoot),
+          path.join(directory, name),
+        )
+        .replaceAll(path.sep, "/")
+        .replace(/\.result\.json$/i, ".png");
+      const png = path.resolve(snapshotDir, ...artifactRelative.split("/"));
       return sidecarMatchesBaseline(sidecar, png) ? sidecar : null;
     })
     .filter((sidecar): sidecar is VisualDiffSidecar =>

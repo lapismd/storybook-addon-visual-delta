@@ -6,6 +6,7 @@ import {
   requiredVisualBaselineBrowsers,
   resolveVisualStoryFacts,
 } from "./story-facts.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 describe("resolveVisualStoryFacts", () => {
   it("reports present and missing primary baselines", () => {
@@ -95,10 +96,16 @@ describe("resolveVisualStoryFacts", () => {
       "forms-entry--default-chromium.png",
     );
     writeFileSync(png, "current");
+    const resultPath = visualArtifactPaths({
+      root: snapshotDir,
+      snapshotDir,
+      baselinePath: png,
+    }).result;
+    mkdirSync(path.dirname(resultPath), { recursive: true });
     writeFileSync(
-      png.replace(/\.png$/, ".json"),
+      resultPath,
       JSON.stringify({
-        version: 2,
+        version: 4,
         storyId: "forms-entry--default",
         snapshotRel: "forms-entry--default.png",
         status: "passed",
@@ -115,6 +122,9 @@ describe("resolveVisualStoryFacts", () => {
         [{ id: "forms-entry--default" }],
         snapshotDir,
         "story-id",
+        ["chromium"],
+        [],
+        snapshotDir,
       )[0],
     ).toMatchObject({
       resultBaselineHash:

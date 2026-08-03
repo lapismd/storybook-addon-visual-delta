@@ -31,6 +31,8 @@ export type VisualDeltaWorkflowConfig = {
   /** Approve the exact story after a fresh authoritative live pass. */
   autoAcceptLiveStoryComparisons: boolean;
   visualTestFailureMode: import("./failure-mode.js").VisualTestFailureMode;
+  /** Reuse a proven-fresh canonical actual unless a run explicitly requests fresh. */
+  reuseActualComparisons: boolean;
   vcs: {
     mode: VisualDeltaVcsMode;
     commitMessageTemplate: string;

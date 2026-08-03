@@ -72,7 +72,7 @@ function printHelp(): void {
 
 Usage:
   visual-delta init [--force] [--port <n>]
-  visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--failure-mode warn|strict] [--dry-run] [--explain]
+  visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--fresh] [--failure-mode warn|strict] [--dry-run] [--explain]
   visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta harness doctor
@@ -96,6 +96,7 @@ Flags:
   --all                     Run every visual story and seed affected state
   --browser <id>            chromium | firefox | webkit (repeatable for test)
   --failure-mode <mode>     warn | strict (test only; default warn)
+  --fresh                   Force canonical browser capture; bypass reusable actuals
   --dry-run                 Plan selection without building or capturing
   --explain                 Print changed inputs, selected stories, and fallback
   --cache-dir <path>        Override affected cache directory
@@ -282,6 +283,7 @@ async function main(argv: string[]): Promise<void> {
       explain: hasFlag(rest, "--explain"),
       browsers: browserValues as VisualDeltaBrowser[],
       failureMode: failureModeValue as VisualTestFailureMode | undefined,
+      fresh: hasFlag(rest, "--fresh"),
       hostOptions: {
         snapshotDir: options.snapshotDir,
         baselinePathMode: options.baselinePathMode,

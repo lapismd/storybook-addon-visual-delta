@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
 import type * as PlaywrightTest from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
@@ -53,6 +54,8 @@ import {
   isWarningComparisonOutcome,
   resolveVisualTestFailureMode,
 } from "../shared/failure-mode.js";
+import { visualRenderFingerprints } from "../node/affected-visual-tests.js";
+import type { VisualCaptureSetItem } from "../visual-diff-sidecar.js";
 
 const requireFromHost = createRequire(path.join(process.cwd(), "package.json"));
 
@@ -456,6 +459,10 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   const snapshotDir = resolveSnapshotDirRel(options);
   const baselineOverride = resolveBaselineOverride(options);
   const stories = loadVisualStories(packageRoot, options.includeStory);
+  const renderFingerprints = visualRenderFingerprints(packageRoot, {
+    snapshotDir,
+    baselinePathMode: mode,
+  });
 
   const interactionEnv = process.env.PLAYWRIGHT_INTERACTION_CAPTURE?.trim();
   const interactionRequest: InteractionCaptureRequest | null = interactionEnv
@@ -468,6 +475,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
       page,
     }, testInfo) => {
       const browser = browserForTest(testInfo);
+      const captureOperationId = randomUUID();
       if (!entry) {
         throw new Error(
           `Story not found or skip-visual: ${interactionRequest.storyId}`,
@@ -554,6 +562,10 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           captureConfig: target.captureConfig,
           browser,
           failureMode,
+          variant: { kind: "interaction", id: interactionRequest.stepId },
+          renderFingerprint: renderFingerprints[entry.id],
+          operationId: captureOperationId,
+          captureOperationId,
         });
         applyFailurePolicy({
           label: "Interaction",
@@ -571,6 +583,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   for (const story of stories) {
     test(story.id, async ({ page }, testInfo) => {
       const browser = browserForTest(testInfo);
+      const captureOperationId = randomUUID();
       await prepareStoryPage(page, story.id, {
         projectDefaultDelay: projectDefaults.delay,
       });
@@ -588,6 +601,28 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         })),
       ];
       const failures: string[] = [];
+      const snapshotRoot = path.resolve(packageRoot, snapshotDir);
+      const captureSet: VisualCaptureSetItem[] = captures.map((capture) => {
+        const baselinePath =
+          !capture.modeName && baselineOverride
+            ? baselineOverride
+            : baselinePngAbs(
+                story,
+                packageRoot,
+                snapshotDir,
+                mode,
+                browser,
+                capture.modeName,
+              );
+        return {
+          variant: capture.modeName
+            ? { kind: "mode", id: capture.modeName }
+            : { kind: "primary" },
+          baselineRelative: path
+            .relative(snapshotRoot, baselinePath)
+            .replaceAll(path.sep, "/"),
+        };
+      });
 
       for (const capture of captures) {
         await test.step(`Visual mode: ${capture.name}`, async () => {
@@ -662,6 +697,13 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
               },
               browser,
               failureMode,
+              variant: capture.modeName
+                ? { kind: "mode", id: capture.modeName }
+                : { kind: "primary" },
+              captureSet,
+              renderFingerprint: renderFingerprints[story.id],
+              operationId: captureOperationId,
+              captureOperationId,
             });
             applyFailurePolicy({
               label: capture.name,

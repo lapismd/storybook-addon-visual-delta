@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { deleteVisualBaseline } from "./delete-baseline.js";
+import { visualArtifactPaths } from "./visual-artifacts.js";
 
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "visual-delete-"));
@@ -51,20 +52,21 @@ function fixture() {
       },
     }),
   );
-  for (const filePath of [
+  const artifacts = visualArtifactPaths({
+    root,
+    snapshotDir,
     baselinePath,
-    baselinePath.replace(/\.png$/, ".actual.png"),
-    baselinePath.replace(/\.png$/, ".diff.png"),
-    baselinePath.replace(/\.png$/, ".json"),
-  ]) {
+  });
+  for (const filePath of [baselinePath, artifacts.actual, artifacts.diff, artifacts.result]) {
+    mkdirSync(path.dirname(filePath), { recursive: true });
     writeFileSync(filePath, "fixture");
   }
-  return { root, storyPath, baselinePath, baselineUrl };
+  return { root, storyPath, baselinePath, baselineUrl, artifacts };
 }
 
 describe("deleteVisualBaseline", () => {
   it("removes the exact source reference, PNG, and sidecars without changing review metadata", () => {
-    const { root, storyPath, baselinePath, baselineUrl } = fixture();
+    const { root, storyPath, baselinePath, baselineUrl, artifacts } = fixture();
     const result = deleteVisualBaseline(
       root,
       { baselinePathMode: "nested-import" },
@@ -76,9 +78,7 @@ describe("deleteVisualBaseline", () => {
 
     expect(result.deletedFiles).toHaveLength(4);
     expect(existsSync(baselinePath)).toBe(false);
-    expect(existsSync(baselinePath.replace(/\.png$/, ".actual.png"))).toBe(
-      false,
-    );
+    expect(existsSync(artifacts.actual)).toBe(false);
     const source = readFileSync(storyPath, "utf8");
     expect(source).not.toContain(baselineUrl);
     expect(source).toContain("visual-approved");
