@@ -14,6 +14,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -201,6 +202,7 @@ const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
 const ARTIFACT_DIR_REL = ".visual-delta/artifacts";
 const CAPTURE_INPUTS_DIR_REL = ".visual-delta/capture-inputs";
 const EXTERNAL_SNAPSHOT_INPUT_REL = `${CAPTURE_INPUTS_DIR_REL}/snapshot-dir`;
+const LINKED_PACKAGE_INPUT_REL = `${CAPTURE_INPUTS_DIR_REL}/linked-visual-delta.json`;
 const AFFECTED_CACHE_FILE_NAMES = [
   "affected-state-v1.json",
   "preview-stats.json",
@@ -504,13 +506,59 @@ export function stageLinkedVisualDeltaPackage(options: {
   return linkedRoot;
 }
 
+export function stageLinkedVisualDeltaBuildInput(options: {
+  packageRoot: string;
+  workspace: string;
+}): string {
+  const packageRoot = path.resolve(options.packageRoot);
+  const inputs: Array<[string, string]> = [];
+  const visit = (absolute: string, relative: string): void => {
+    const stats = statSync(absolute);
+    if (stats.isDirectory()) {
+      for (const entry of readdirSync(absolute, { withFileTypes: true })) {
+        visit(
+          path.join(absolute, entry.name),
+          relative ? `${relative}/${entry.name}` : entry.name,
+        );
+      }
+    } else if (stats.isFile()) {
+      inputs.push([
+        relative,
+        createHash("sha256").update(readFileSync(absolute)).digest("hex"),
+      ]);
+    }
+  };
+  for (const entry of ["package.json", "pnpm-lock.yaml", "src"] as const) {
+    const absolute = path.join(packageRoot, entry);
+    if (existsSync(absolute)) visit(absolute, entry);
+  }
+  const fingerprint = createHash("sha256")
+    .update(
+      inputs
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([relative, hash]) => `${relative}\0${hash}`)
+        .join("\n"),
+    )
+    .digest("hex");
+  const destination = path.join(
+    options.workspace,
+    ...LINKED_PACKAGE_INPUT_REL.split("/"),
+  );
+  mkdirSync(path.dirname(destination), { recursive: true });
+  writeFileSync(
+    destination,
+    `${JSON.stringify({ version: 1, package: VISUAL_DELTA_PACKAGE_NAME, fingerprint })}\n`,
+  );
+  return destination;
+}
+
 export function dockerLinkedVisualDeltaPackageMountArgs(options: {
   stagedRoot: string;
   linkedPackage: LinkedVisualDeltaPackage;
 }): string[] {
   return [
     "--mount",
-    `type=bind,src=${options.stagedRoot},dst=${options.linkedPackage.containerRoot},readonly`,
+    `type=bind,src=${options.stagedRoot},dst=${options.linkedPackage.containerRoot}`,
     "--mount",
     `type=volume,src=visual-delta-linked-node-modules-${options.linkedPackage.dependencyKey},dst=${options.linkedPackage.containerRoot}/node_modules`,
   ];
@@ -901,6 +949,10 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
             })
           : undefined;
         if (linkedPackage) {
+          stageLinkedVisualDeltaBuildInput({
+            packageRoot: linkedPackage.sourceRoot,
+            workspace: staged.workspace,
+          });
           context.onEvent?.({
             type: "log",
             message: `Staging linked Visual Delta source at ${linkedPackage.containerRoot}…\n`,

@@ -30,6 +30,7 @@ import {
   shouldBuildVisualDeltaPackageWorker,
   shouldStageVisualDeltaWorkspacePath,
   stageExternalVisualDeltaSnapshotDir,
+  stageLinkedVisualDeltaBuildInput,
   stageLinkedVisualDeltaPackage,
   stageVisualDeltaPackageWorker,
   visualDeltaDependencyInstallKey,
@@ -380,6 +381,18 @@ describe("capture runner", () => {
       expect(statSync(path.join(stagedRoot, "node_modules")).isDirectory()).toBe(
         true,
       );
+      const buildInput = stageLinkedVisualDeltaBuildInput({
+        packageRoot,
+        workspace,
+      });
+      const initialBuildInput = readFileSync(buildInput, "utf8");
+      expect(initialBuildInput).not.toContain(packageRoot);
+      writeFileSync(
+        path.join(packageRoot, "src", "preview.ts"),
+        "export const changed = true;\n",
+      );
+      stageLinkedVisualDeltaBuildInput({ packageRoot, workspace });
+      expect(readFileSync(buildInput, "utf8")).not.toBe(initialBuildInput);
       expect(
         dockerLinkedVisualDeltaPackageMountArgs({
           stagedRoot,
@@ -387,7 +400,7 @@ describe("capture runner", () => {
         }),
       ).toEqual([
         "--mount",
-        `type=bind,src=${stagedRoot},dst=/visual-delta-source,readonly`,
+        `type=bind,src=${stagedRoot},dst=/visual-delta-source`,
         "--mount",
         `type=volume,src=visual-delta-linked-node-modules-${linkedPackage!.dependencyKey},dst=/visual-delta-source/node_modules`,
       ]);
