@@ -1145,8 +1145,8 @@ async function handleRun(
       ...selectedBrowsers.flatMap((browser) => ["--browser", browser]),
       "--failure-mode",
       failureMode,
-      ...(options.snapshotDir
-        ? ["--snapshot-dir", options.snapshotDir]
+      ...(options.snapshotDir?.trim()
+        ? ["--snapshot-dir", resolveSnapshotDir(options, root)]
         : []),
       ...(options.baselinePathMode
         ? ["--baseline-path-mode", options.baselinePathMode]

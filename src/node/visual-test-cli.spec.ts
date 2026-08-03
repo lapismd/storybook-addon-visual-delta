@@ -57,6 +57,10 @@ describe("runVisualTestCli exact stories", () => {
           storyIds: ["examples-card--responsive"],
           browsers: ["chromium"],
           baselineRelativePath: "teaching/responsive.png",
+          hostOptions: {
+            snapshotDir: "snapshots",
+            baselinePathMode: "nested-import",
+          },
           interaction: {
             storyId: "examples-card--responsive",
             stepId: "open-menu",
@@ -76,6 +80,8 @@ describe("runVisualTestCli exact stories", () => {
       const env = execute.mock.calls[1]?.[3];
       expect(env).toMatchObject({
         PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
+        VISUAL_DELTA_SNAPSHOT_DIR: path.join(root, "snapshots"),
+        VISUAL_DELTA_BASELINE_PATH_MODE: "nested-import",
         VISUAL_DELTA_BASELINE_OVERRIDE: "teaching/responsive.png",
         PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify({
           storyId: "examples-card--responsive",

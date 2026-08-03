@@ -141,6 +141,9 @@ export async function compareStoryInCaptureRunner(options: {
   }
 
   const configuredSnapshotDir = options.hostOptions?.snapshotDir?.trim();
+  const snapshotDir = configuredSnapshotDir
+    ? resolveSnapshotDir(options.hostOptions, options.root)
+    : undefined;
   const affectedOptions = options.hostOptions?.affectedTests || undefined;
   const argv = [
     "test",
@@ -155,7 +158,7 @@ export async function compareStoryInCaptureRunner(options: {
     ...(!parseVisualBaselineTarget(options.request.baselineUrl)
       ? ["--baseline-rel", relativePath]
       : []),
-    ...(configuredSnapshotDir ? ["--snapshot-dir", configuredSnapshotDir] : []),
+    ...(snapshotDir ? ["--snapshot-dir", snapshotDir] : []),
     ...(options.hostOptions?.visualTestArgs ?? []).flatMap((argument) => [
       "--visual-test-arg",
       argument,

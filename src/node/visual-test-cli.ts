@@ -216,13 +216,13 @@ export async function runVisualTestCli(
     : options.selection === "stories"
       ? requestedStoryIds
       : plan.selectedStoryIds;
+  const snapshotDir = resolveSnapshotDir(hostOptions, root);
+  const baselinePathMode = resolveBaselinePathMode(hostOptions);
   if (
     projectConfig.workflow.reuseActualComparisons &&
     !options.fresh &&
     selectedStoryIds.length > 0
   ) {
-    const snapshotDir = resolveSnapshotDir(hostOptions, root);
-    const baselinePathMode = resolveBaselinePathMode(hostOptions);
     const entries = loadStoryIndex(root);
     const fingerprints = visualRenderFingerprints(root, hostOptions);
     const failureMode =
@@ -296,6 +296,8 @@ export async function runVisualTestCli(
     root,
     {
       PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
+      VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+      VISUAL_DELTA_BASELINE_PATH_MODE: baselinePathMode,
       ...(options.failureMode
         ? { VISUAL_DELTA_FAILURE_MODE: options.failureMode }
         : {}),

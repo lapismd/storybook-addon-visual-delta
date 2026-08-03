@@ -10,8 +10,10 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -134,6 +136,8 @@ const STAGE_COPY_IGNORES = new Set([
 ]);
 const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
 const ARTIFACT_DIR_REL = ".visual-delta/artifacts";
+const CAPTURE_INPUTS_DIR_REL = ".visual-delta/capture-inputs";
+const EXTERNAL_SNAPSHOT_INPUT_REL = `${CAPTURE_INPUTS_DIR_REL}/snapshot-dir`;
 const AFFECTED_CACHE_FILE_NAMES = [
   "affected-state-v1.json",
   "preview-stats.json",
@@ -154,6 +158,7 @@ export function shouldStageVisualDeltaWorkspacePath(
 ): boolean {
   const relative = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
   if (!relative) return true;
+  if (isPathAtOrBelow(relative, CAPTURE_INPUTS_DIR_REL)) return false;
   if (relative === affectedCacheDir || isPathAncestorOf(relative, affectedCacheDir)) {
     return true;
   }
@@ -194,13 +199,76 @@ function affectedCacheArtifactPaths(
   return AFFECTED_CACHE_FILE_NAMES.map((name) => `${directory}/${name}`);
 }
 
+function copyDereferencedCaptureInput(
+  source: string,
+  destination: string,
+  ancestorDirectories: ReadonlySet<string> = new Set(),
+): void {
+  const realSource = realpathSync(source);
+  const sourceStat = statSync(realSource);
+  if (sourceStat.isDirectory()) {
+    if (ancestorDirectories.has(realSource)) {
+      throw new Error(`Cyclic link in external snapshot directory: ${source}`);
+    }
+    mkdirSync(destination, { recursive: true });
+    const descendants = new Set(ancestorDirectories);
+    descendants.add(realSource);
+    for (const entry of readdirSync(realSource)) {
+      copyDereferencedCaptureInput(
+        path.join(realSource, entry),
+        path.join(destination, entry),
+        descendants,
+      );
+    }
+    return;
+  }
+  if (!sourceStat.isFile()) {
+    throw new Error(
+      `External snapshot input must contain only files and directories: ${source}`,
+    );
+  }
+  mkdirSync(path.dirname(destination), { recursive: true });
+  copyFileSync(realSource, destination);
+}
+
+export function stageExternalVisualDeltaSnapshotDir(options: {
+  root: string;
+  workspace: string;
+  argv: readonly string[];
+}): string | undefined {
+  const flagIndex = options.argv.lastIndexOf("--snapshot-dir");
+  const configured = flagIndex >= 0 ? options.argv[flagIndex + 1]?.trim() : undefined;
+  if (!configured) return undefined;
+  const root = path.resolve(options.root);
+  const snapshotDir = path.resolve(root, configured);
+  const relative = path.relative(root, snapshotDir).replaceAll(path.sep, "/");
+  if (
+    !path.posix.isAbsolute(relative) &&
+    !relative.split("/").includes("..")
+  ) {
+    return undefined;
+  }
+  if (!existsSync(snapshotDir) || !statSync(snapshotDir).isDirectory()) {
+    throw new Error(`External snapshot directory does not exist: ${snapshotDir}`);
+  }
+  const stagedSnapshotDir = path.join(
+    options.workspace,
+    ...EXTERNAL_SNAPSHOT_INPUT_REL.split("/"),
+  );
+  mkdirSync(path.dirname(stagedSnapshotDir), { recursive: true });
+  copyDereferencedCaptureInput(snapshotDir, stagedSnapshotDir);
+  return `/workspace/${EXTERNAL_SNAPSHOT_INPUT_REL}`;
+}
+
 function createStagedWorkspace(
   root: string,
   affectedCacheDir: string,
   captureWorkspaceIgnore: readonly string[],
+  argv: readonly string[],
 ): {
   parent: string;
   workspace: string;
+  externalSnapshotDir?: string;
 } {
   const parent = mkdtempSync(path.join(tmpdir(), "visual-delta-capture-"));
   const workspace = path.join(parent, "workspace");
@@ -215,7 +283,12 @@ function createStagedWorkspace(
       );
     },
   });
-  return { parent, workspace };
+  const externalSnapshotDir = stageExternalVisualDeltaSnapshotDir({
+    root,
+    workspace,
+    argv,
+  });
+  return { parent, workspace, externalSnapshotDir };
 }
 
 function changedExactArtifacts(
@@ -272,6 +345,7 @@ export function dockerVisualDeltaWorkerCommand(
 export function dockerWorkspaceArgv(
   root: string,
   argv: readonly string[],
+  options: { externalSnapshotDir?: string } = {},
 ): string[] {
   const pathFlags = new Set(["--snapshot-dir", "--cache-dir"]);
   return argv.map((value, index) => {
@@ -279,10 +353,13 @@ export function dockerWorkspaceArgv(
       return value;
     }
     const relative = path.relative(root, value).replaceAll(path.sep, "/");
-    if (!relative || path.posix.isAbsolute(relative) || relative.split("/").includes("..")) {
+    if (path.posix.isAbsolute(relative) || relative.split("/").includes("..")) {
+      if (argv[index - 1] === "--snapshot-dir" && options.externalSnapshotDir) {
+        return options.externalSnapshotDir;
+      }
       throw new Error(`${argv[index - 1]} must resolve inside the capture workspace.`);
     }
-    return `/workspace/${relative}`;
+    return relative ? `/workspace/${relative}` : "/workspace";
   });
 }
 
@@ -298,6 +375,7 @@ function regularFiles(
       if (STAGE_COPY_IGNORES.has(entry.name)) continue;
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
+      if (isPathAtOrBelow(relative, CAPTURE_INPUTS_DIR_REL)) continue;
       if (
         captureWorkspaceIgnore.some((ignored) =>
           isPathAtOrBelow(relative, ignored),
@@ -577,6 +655,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         manifest.root,
         cacheDir,
         captureWorkspaceIgnore,
+        manifest.argv,
       );
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
       const storeVolume = `visual-delta-pnpm-store-${key}`;
@@ -622,7 +701,9 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           [
             ...commonArgs,
             ...dockerVisualDeltaWorkerCommand(
-              dockerWorkspaceArgv(manifest.root, manifest.argv),
+              dockerWorkspaceArgv(manifest.root, manifest.argv, {
+                externalSnapshotDir: staged.externalSnapshotDir,
+              }),
             ),
           ],
           { cwd: manifest.root },

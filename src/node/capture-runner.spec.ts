@@ -1,8 +1,11 @@
 import {
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
@@ -21,6 +24,7 @@ import {
   runVisualDeltaInCaptureRunner,
   shouldBuildVisualDeltaPackageWorker,
   shouldStageVisualDeltaWorkspacePath,
+  stageExternalVisualDeltaSnapshotDir,
   stageVisualDeltaPackageWorker,
 } from "./capture-runner.js";
 
@@ -85,6 +89,11 @@ describe("capture runner", () => {
     ).toBe(true);
     expect(
       shouldStageVisualDeltaWorkspacePath(".visual-delta/cache/unrelated.json"),
+    ).toBe(false);
+    expect(
+      shouldStageVisualDeltaWorkspacePath(
+        ".visual-delta/capture-inputs/snapshot-dir/card.png",
+      ),
     ).toBe(false);
     expect(shouldStageVisualDeltaWorkspacePath(".cache/vite/deps.json")).toBe(
       false,
@@ -274,6 +283,108 @@ describe("capture runner", () => {
         path.resolve(root, "..", "outside"),
       ]),
     ).toThrow("inside the capture workspace");
+    expect(
+      dockerWorkspaceArgv(
+        root,
+        [
+          "test",
+          "--snapshot-dir",
+          path.resolve(root, "..", "outside"),
+        ],
+        {
+          externalSnapshotDir:
+            "/workspace/.visual-delta/capture-inputs/snapshot-dir",
+        },
+      ),
+    ).toEqual([
+      "test",
+      "--snapshot-dir",
+      "/workspace/.visual-delta/capture-inputs/snapshot-dir",
+    ]);
+    expect(() =>
+      dockerWorkspaceArgv(
+        root,
+        ["test", "--cache-dir", path.resolve(root, "..", "outside-cache")],
+        {
+          externalSnapshotDir:
+            "/workspace/.visual-delta/capture-inputs/snapshot-dir",
+        },
+      ),
+    ).toThrow("--cache-dir must resolve inside the capture workspace");
+  });
+
+  it("stages an external snapshot directory without returning it as an artifact", () => {
+    const parent = mkdtempSync(
+      path.join(process.cwd(), ".visual-delta-external-snapshots-"),
+    );
+    const root = path.join(parent, "project");
+    const workspace = path.join(parent, "workspace");
+    const snapshotDir = path.join(parent, "external-snapshots");
+    const linkedBaselines = path.join(parent, "linked-baselines");
+    mkdirSync(root, { recursive: true });
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(snapshotDir, { recursive: true });
+    mkdirSync(path.join(linkedBaselines, "modes"), { recursive: true });
+    writeFileSync(path.join(linkedBaselines, "modes", "default.png"), "baseline\n");
+    symlinkSync(linkedBaselines, path.join(snapshotDir, "examples"), "dir");
+    try {
+      expect(
+        stageExternalVisualDeltaSnapshotDir({
+          root,
+          workspace,
+          argv: ["test", "--snapshot-dir", snapshotDir],
+        }),
+      ).toBe("/workspace/.visual-delta/capture-inputs/snapshot-dir");
+      const stagedBaseline = path.join(
+        workspace,
+        ".visual-delta",
+        "capture-inputs",
+        "snapshot-dir",
+        "examples",
+        "modes",
+        "default.png",
+      );
+      expect(readFileSync(stagedBaseline, "utf8")).toBe("baseline\n");
+      expect(statSync(stagedBaseline).isFile()).toBe(true);
+      expect(
+        lstatSync(
+          path.join(
+            workspace,
+            ".visual-delta",
+            "capture-inputs",
+            "snapshot-dir",
+            "examples",
+          ),
+        ).isSymbolicLink(),
+      ).toBe(false);
+      expect(changedStagedArtifacts(root, workspace)).toEqual([]);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects cyclic links in an external snapshot directory", () => {
+    const parent = mkdtempSync(
+      path.join(process.cwd(), ".visual-delta-external-cycle-"),
+    );
+    const root = path.join(parent, "project");
+    const workspace = path.join(parent, "workspace");
+    const snapshotDir = path.join(parent, "external-snapshots");
+    mkdirSync(root, { recursive: true });
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(snapshotDir, { recursive: true });
+    symlinkSync(snapshotDir, path.join(snapshotDir, "cycle"), "dir");
+    try {
+      expect(() =>
+        stageExternalVisualDeltaSnapshotDir({
+          root,
+          workspace,
+          argv: ["test", "--snapshot-dir", snapshotDir],
+        }),
+      ).toThrow("Cyclic link in external snapshot directory");
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 
   it("loads a project-owned custom module", async () => {

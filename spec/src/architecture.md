@@ -24,7 +24,7 @@ These requirements preserve ownership and trustworthy state across process bound
 
 | ID          | Requirement                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. Executing an exported source entry from a packed dependency MUST use that package's shipped worker and MUST NOT be mistaken for a buildable source checkout. A buildable source checkout MUST locate its installed TypeScript compiler through the package manifest rather than requiring an unexported package subpath. |
+| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. Executing an exported source entry from a packed dependency MUST use that package's shipped worker and MUST NOT be mistaken for a buildable source checkout. A buildable source checkout MUST locate its installed TypeScript compiler through the package manifest rather than requiring an unexported package subpath. An explicitly configured baseline directory outside the repository root MUST be copied into an isolated staged input and remapped into the capture workspace; nested symbolic links MUST be materialized as regular files and directories so no host-only link target enters the container. The input MUST NOT broaden the staged source root or become a returned artifact. |
 | VD-ARCH-002 | Authoritative visual data MUST originate from a settled preview captured through a configured browser in the canonical Linux/ARM64 capture profile. A later comparison MAY reuse that raw actual PNG without relaunching a browser only when its exact target, render-input fingerprint, capture configuration, capture profile, dimensions, and checksum remain current; the result MUST identify cached-actual reuse and preserve the original capture provenance. Presentation state MUST NOT substitute for capture evidence. |
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Derived actual, diff, result, static-output, run, and affected-cache evidence MUST live outside `snapshotDir`, be safe to regenerate, and never be mistaken for a committed baseline. |
@@ -66,9 +66,14 @@ installed compiler from TypeScript's exported package manifest, so package
 export restrictions on the `bin/tsc` subpath do not masquerade as a missing
 compiler. Published consumers use the package's shipped worker even when
 Storybook executes an exported file under the tarball's included `src/` tree.
-Root-contained absolute snapshot and affected-cache arguments are
-remapped to their equivalent `/workspace` paths before the Docker worker is
-invoked; paths outside the frozen workspace are rejected.
+Root-contained absolute snapshot and affected-cache arguments are remapped to
+their equivalent `/workspace` paths before the Docker worker is invoked. An
+explicit external `snapshotDir` is recursively dereferenced into the isolated
+`.visual-delta/capture-inputs/snapshot-dir` staging path so linked baseline
+trees become self-contained regular files and directories without transporting
+their parent repository. Cyclic links are rejected. That input is excluded from
+post-run artifact inventory. An affected-cache path
+outside the frozen workspace remains invalid.
 
 Baseline mutation adds a write gate before Playwright starts and an invalidation step after the requested files are written. Repository automation occurs after the mutation succeeds and cannot affect capture semantics.
 

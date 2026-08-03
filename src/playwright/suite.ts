@@ -282,11 +282,32 @@ async function readVisualModes(page: Page): Promise<VisualDeltaModes> {
   }
 }
 
+export function visualCaptureSelections(
+  modes: VisualDeltaModes,
+  exactBaselineOverride = false,
+): Array<{
+  name: string;
+  modeName?: string;
+  globals?: Record<string, unknown>;
+}> {
+  const primary = [{ name: "Default" }];
+  if (exactBaselineOverride) return primary;
+  return [
+    ...primary,
+    ...Object.entries(modes).map(([modeName, definition]) => ({
+      name: modeName,
+      modeName,
+      globals: definition.globals,
+    })),
+  ];
+}
+
 async function screenshotStorySubject(
   page: Page,
   name: string | string[],
   defaults: VisualDeltaProjectDefaults,
   target: ShotTarget,
+  compareWithPlaywrightSnapshot = true,
 ): Promise<ShotTarget> {
   const { expect } = loadHostPlaywrightTest();
   const crop = await page.locator("html").getAttribute(VISUAL_DELTA_CROP_ATTR);
@@ -353,10 +374,12 @@ async function screenshotStorySubject(
       fullViewport: true,
       captureConfig,
     });
-    await expect(page).toHaveScreenshot(name, {
-      ...expectOpts,
-      fullPage: false,
-    });
+    if (compareWithPlaywrightSnapshot) {
+      await expect(page).toHaveScreenshot(name, {
+        ...expectOpts,
+        fullPage: false,
+      });
+    }
     return target;
   }
 
@@ -371,7 +394,9 @@ async function screenshotStorySubject(
       fullViewport: false,
       captureConfig,
     });
-    await expect(page).toHaveScreenshot(name, { ...expectOpts, clip });
+    if (compareWithPlaywrightSnapshot) {
+      await expect(page).toHaveScreenshot(name, { ...expectOpts, clip });
+    }
     return target;
   }
 
@@ -383,7 +408,9 @@ async function screenshotStorySubject(
       fullViewport: false,
       captureConfig,
     });
-    await expect(subject).toHaveScreenshot(name, expectOpts);
+    if (compareWithPlaywrightSnapshot) {
+      await expect(subject).toHaveScreenshot(name, expectOpts);
+    }
     return target;
   }
   Object.assign(target, {
@@ -392,10 +419,12 @@ async function screenshotStorySubject(
     fullViewport: true,
     captureConfig,
   });
-  await expect(page).toHaveScreenshot(name, {
-    ...expectOpts,
-    fullPage: false,
-  });
+  if (compareWithPlaywrightSnapshot) {
+    await expect(page).toHaveScreenshot(name, {
+      ...expectOpts,
+      fullPage: false,
+    });
+  }
   return target;
 }
 
@@ -588,18 +617,10 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
         projectDefaultDelay: projectDefaults.delay,
       });
       const visualModes = await readVisualModes(page);
-      const captures: Array<{
-        name: string;
-        modeName?: string;
-        globals?: Record<string, unknown>;
-      }> = [
-        { name: "Default" },
-        ...Object.entries(visualModes).map(([modeName, definition]) => ({
-          name: modeName,
-          modeName,
-          globals: definition.globals,
-        })),
-      ];
+      const captures = visualCaptureSelections(
+        visualModes,
+        baselineOverride != null,
+      );
       const failures: string[] = [];
       const snapshotRoot = path.resolve(packageRoot, snapshotDir);
       const captureSet: VisualCaptureSetItem[] = captures.map((capture) => {
@@ -655,6 +676,7 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
               rel.split("/"),
               projectDefaults,
               target,
+              baselineOverride == null,
             );
           } catch (err) {
             status = "failed";
