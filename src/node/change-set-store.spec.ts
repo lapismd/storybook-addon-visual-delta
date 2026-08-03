@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -48,6 +48,22 @@ function fakeVcs(options: {
 }
 
 describe("VisualDeltaChangeSetStore", () => {
+  it("migrates legacy review state into the canonical Visual Delta cache", () => {
+    const root = mkdtempSync(join(tmpdir(), "visual-delta-changes-"));
+    const legacy = join(root, ".cache/visual-delta/change-sets/index.json");
+    mkdirSync(join(root, ".cache/visual-delta/change-sets"), {
+      recursive: true,
+    });
+    writeFileSync(legacy, '{"version":1,"changeSets":[]}\n');
+
+    new VisualDeltaChangeSetStore(root, false);
+
+    expect(existsSync(legacy)).toBe(false);
+    expect(
+      existsSync(join(root, ".visual-delta/cache/change-sets/index.json")),
+    ).toBe(true);
+  });
+
   it("records and commits only the exact clean path changed by the operation", async () => {
     const root = mkdtempSync(join(tmpdir(), "visual-delta-changes-"));
     writeFileSync(join(root, "story.ts"), "before\n");

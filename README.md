@@ -38,6 +38,36 @@ tests/visual/storybook.spec.ts-snapshots/
 
 It also adds `build-storybook`, `test:visual`, `test:visual:affected`, and `visual-delta` scripts when they do not already exist.
 
+## Check an installation
+
+Run the fast, read-only doctor after setup or an upgrade:
+
+```bash
+pnpm exec visual-delta doctor
+```
+
+It validates Storybook registration, the portable Playwright suite, package
+dependencies and scripts, resolved capture settings, snapshot ownership, and
+Visual Delta artifact/cache placement. The default check does not build
+Storybook, start Docker, launch a browser, or write files.
+
+Use the opt-in checks and repairs when needed:
+
+```bash
+pnpm exec visual-delta doctor --runner
+pnpm exec visual-delta doctor --build
+pnpm exec visual-delta doctor --strict --json
+pnpm exec visual-delta doctor --fix
+```
+
+`--runner` performs the existing Docker or custom-runner probe. `--build`
+refreshes static Storybook before authoritative orphan analysis. `--fix` only
+moves verified v4 actual/diff/result evidence into `.visual-delta/artifacts/`,
+quarantines obsolete derived files under `.visual-delta/cache/doctor-quarantine/`,
+and migrates the legacy change-set cache. It never modifies committed baseline
+PNGs, story sources, or project configuration, and it never overwrites a
+destination.
+
 ## Register the addon manually
 
 If the Storybook CLI did not update your configuration, add the package to the existing `addons` array in `.storybook/main.ts`:
@@ -82,10 +112,11 @@ The default snapshot directory is `tests/visual/storybook.spec.ts-snapshots`. Ba
 
 ## Run visual tests
 
-Check the capture environment before the first authoritative run:
+Check the full capture environment before the first authoritative run (the
+legacy runner-only spelling remains supported):
 
 ```bash
-pnpm exec visual-delta harness doctor
+pnpm exec visual-delta doctor --runner
 ```
 
 Run every eligible story:
@@ -115,8 +146,10 @@ pnpm exec visual-delta test --story-id examples-card--default --browser chromium
 Compare-only commands never create or update baselines.
 They write mirrored `.actual.png`, `.diff.png`, and `.result.json` evidence to
 `.visual-delta/artifacts/`; affected planning state lives in
-`.visual-delta/cache/`. Both roots are ignored by default, but projects may
-cache or commit them. Add `--fresh` to bypass a reusable actual once.
+`.visual-delta/cache/`, including UI change-set history at
+`.visual-delta/cache/change-sets/`. Both roots are ignored by default, but
+projects may cache or commit them. Add `--fresh` to bypass a reusable actual
+once.
 
 ## Configure browsers and comparison defaults
 

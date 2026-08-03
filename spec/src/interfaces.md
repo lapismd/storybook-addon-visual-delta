@@ -18,6 +18,7 @@ These requirements keep callers on validated, recoverable interfaces.
 | VD-API-008 | Browser-aware CLI, HTTP, progress, story-fact coverage, and result contracts MUST identify the selected `{ browser }` target separately from `VisualCaptureProfile` provenance and identify browser versus cached-actual comparison. `POST /compare-story` MUST accept an explicit target for non-canonical teaching assets whose URLs do not encode a browser, require it to match the selected browser, and keep a canonical filename suffix authoritative. Compare-only resolution MAY read that PNG beneath `snapshotDir`; mutation and cached-actual reuse MUST reject non-canonical targets. Existing Chromium and deprecated environment aliases MAY remain, but platform MUST NOT participate in baseline identity. A project-owned runner MUST receive a frozen manifest and return progress, matching profile metadata, one terminal result, and checksummed staged artifacts. Test results MAY stage only version 4 result JSON, matching actual/diff diagnostics, and exact affected-planning files; mutations MAY stage only artifacts permitted by their operation. |
 | VD-API-009 | `GET /config` MUST expose a de-duplicated project-wide browser inventory derived from canonical browser-qualified PNG filenames beneath the configured `snapshotDir`, plus the resolved canonical capture profile and runner availability. Discovery MUST ignore legacy platform-qualified PNGs, actual/diff diagnostics, non-PNG files, unsupported browser suffixes, and files outside that directory; a missing or unreadable directory MUST yield an empty inventory without weakening configuration diagnostics. |
 | VD-API-010 | `POST /story-facts` version 4 MUST preserve aggregate coverage and result-hash fields while adding project `availableBrowsers`, required configured browsers, and exact per-story primary `browserCoverage`. Managers MUST accept older responses without inventing browser coverage. The `visualFilter` query contract MUST accept `browser.<id>`, its existing `!` exclusion form, and the include-only `quick.browser-coverage-gaps` token; OS tokens and OS-parity filtering are obsolete. |
+| VD-API-011 | `visual-delta doctor` MUST provide a fast read-only installation and snapshot diagnostic by default. It MUST resolve Storybook registration and host paths, validate portable suite, Playwright, project, runner-profile, dependency, script, and ignore wiring, and classify canonical, legacy, misplaced, unowned, and unverifiable snapshot artifacts without building Storybook or launching the capture runner unless explicitly requested. Human output MUST group bounded findings with actionable suggestions; versioned JSON and verbose output MUST expose every finding. A missing or stale static index MUST suppress orphan claims rather than guess. Errors MUST fail the command; warnings MUST fail only in explicit strict mode. |
 
 ## Package exports
 
@@ -50,10 +51,21 @@ The supported commands are:
 | `visual-delta interaction-update` | Create or overwrite one interaction baseline          | Requires approval, story ID, and interaction label          |
 | `visual-delta skip`               | Add `skip-visual` to an exact story or component      | Mutates only matching story sources                         |
 | `visual-delta include`            | Remove `skip-visual` from an exact story or component | Mutates only matching story sources                         |
+| `visual-delta doctor`             | Validate installation, snapshot ownership, artifacts, and caches | Read-only unless `--build` or `--fix` is explicit           |
 | `visual-delta harness doctor`     | Validate the resolved runner and canonical profile   | Read-only diagnostics                                       |
 | `visual-delta migrate-baselines`  | Inventory or apply browser-only filename migration   | Apply requires `--approved`; dry-run is read-only           |
 
 `--dry-run` and `--explain` MUST avoid builds and captures for affected planning. `--create-only` MUST use missing-only snapshot mode. `--story-id` MAY repeat only where the command accepts an exact list. `test` accepts exactly one of `--all`, `--affected`, or one-or-more `--story-id` values, plus repeatable `--browser chromium|firefox|webkit`, `--failure-mode warn|strict`, and one-shot `--fresh`; update commands accept one exact `--browser`. Middleware MAY add a traversal-safe `--baseline-rel` beneath `snapshotDir` only for one exact compare-only teaching target, and MAY forward configured Playwright invocation arguments as repeatable `--visual-test-arg` values. An omitted browser selection resolves to the configured browser list for tests and to Chromium for backward-compatible mutation commands. `migrate-baselines` MUST refuse collisions and mutation without both `--apply` and `--approved`; an optional repeatable `--cache-dir` identifies affected caches to invalidate after an approved cutover.
+
+`doctor` accepts `--config-dir`, `--snapshot-dir`, and
+`--baseline-path-mode` resolution overrides plus `--runner`, `--build`,
+`--fix`, `--strict`, `--json`, and `--verbose`. The fast default MAY resolve
+and validate a runner module and capture profile but MUST call its potentially
+slow `doctor()` probe only with `--runner`. `--build` MAY refresh the ignored
+static Storybook and affected graph before ownership analysis. `--fix` MAY
+perform only the recoverable derived-file and legacy-cache repairs defined by
+`VD-MUT-007`; it MUST rescan and report the resulting state. `harness doctor`
+retains its existing runner-only behavior.
 
 ## Development HTTP routes
 

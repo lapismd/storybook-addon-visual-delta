@@ -115,7 +115,7 @@ Each comparison target MAY have:
 | `.actual.png`   | Captured image used for diagnosis         | Local, derived            |
 | `.diff.png`     | Changed-pixel visualization               | Local, derived            |
 
-Version 4 results MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`. New readers and writers MUST ignore legacy companions beside baselines rather than migrate or reuse them.
+Version 4 results MUST keep `runnerStatus` and `outcome` independent. Valid outcomes are `passed`, `changed-within-tolerance`, `mismatch`, `missing-baseline`, `error`, and `skipped`. New readers and writers MUST ignore legacy companions beside baselines rather than migrate or reuse them. Doctor MAY inventory and quarantine those companions, but MUST NOT promote incomplete or legacy evidence into a current version 4 result.
 
 When available, a sidecar records `operationId`, browser target, capture-profile identity and provenance, baseline SHA-256, capture-configuration SHA-256, dimensions, viewport, device scale factor, thresholds, changed-pixel counts, bounds, histogram, policy status, and diagnostic artifact paths. Deprecated platform fields MAY be emitted for compatibility but MUST NOT affect freshness or lookup.
 

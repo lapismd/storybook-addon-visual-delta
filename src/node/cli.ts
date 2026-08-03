@@ -24,6 +24,11 @@ import {
   applyVisualBaselineMigration,
   planVisualBaselineMigration,
 } from "./baseline-migration.js";
+import {
+  formatVisualDeltaDoctorReport,
+  runVisualDeltaDoctor,
+  visualDeltaDoctorExitCode,
+} from "./doctor.js";
 
 function readFlag(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(name);
@@ -72,6 +77,7 @@ function printHelp(): void {
 
 Usage:
   visual-delta init [--force] [--port <n>]
+  visual-delta doctor [--runner] [--build] [--fix] [--strict] [--json] [--verbose]
   visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--fresh] [--failure-mode warn|strict] [--dry-run] [--explain]
   visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
@@ -82,6 +88,7 @@ Usage:
 
 Commands:
   init                      Scaffold suite, Playwright config, snapshot dir, scripts
+  doctor                    Validate installation, snapshots, artifacts, and caches
   test                      Compare affected, all, or exact visual stories
   update                    Create/overwrite primary baselines + CSF wiring
   interaction-update        Mid-play interaction baseline
@@ -92,6 +99,7 @@ Commands:
 
 Flags:
   --force                   Overwrite existing scaffold files (init)
+  --config-dir <path>       Storybook configuration directory (doctor)
   --affected                Trace from the last passing local run
   --all                     Run every visual story and seed affected state
   --browser <id>            chromium | firefox | webkit (repeatable for test)
@@ -114,6 +122,12 @@ Flags:
   --rebuild                 Force build-storybook before capture (overrides --skip-build)
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
+  --runner                  Run the full capture-runner probe (doctor)
+  --build                   Rebuild Storybook before ownership checks (doctor)
+  --fix                     Move or quarantine safe derived state (doctor)
+  --strict                  Fail doctor when warnings remain
+  --json                    Print the complete versioned doctor report as JSON
+  --verbose                 Print every doctor finding path
   --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)
   --apply                   Apply a migration plan after canonical recapture
 `);
@@ -127,6 +141,68 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const rest = argv.slice(1);
+
+  if (command === "doctor") {
+    const valueFlags = new Set([
+      "--config-dir",
+      "--snapshot-dir",
+      "--baseline-path-mode",
+    ]);
+    const booleanFlags = new Set([
+      "--runner",
+      "--build",
+      "--fix",
+      "--strict",
+      "--json",
+      "--verbose",
+      "--help",
+      "-h",
+    ]);
+    for (let index = 0; index < rest.length; index += 1) {
+      const value = rest[index]!;
+      if (valueFlags.has(value)) {
+        if (!rest[index + 1] || rest[index + 1]!.startsWith("--")) {
+          throw new Error(`${value} requires a value.`);
+        }
+        index += 1;
+      } else if (!booleanFlags.has(value)) {
+        throw new Error(`Unknown doctor flag: ${value}`);
+      }
+    }
+    if (hasFlag(rest, "--help") || hasFlag(rest, "-h")) {
+      printHelp();
+      return;
+    }
+    const pathMode = readFlag(rest, "--baseline-path-mode");
+    if (pathMode && pathMode !== "story-id" && pathMode !== "nested-import") {
+      throw new Error("--baseline-path-mode must be story-id or nested-import.");
+    }
+    const json = hasFlag(rest, "--json");
+    const strict = hasFlag(rest, "--strict");
+    const report = await runVisualDeltaDoctor({
+      configDir: readFlag(rest, "--config-dir"),
+      snapshotDir: readFlag(rest, "--snapshot-dir"),
+      baselinePathMode: pathMode as
+        | "story-id"
+        | "nested-import"
+        | undefined,
+      runner: hasFlag(rest, "--runner"),
+      build: hasFlag(rest, "--build"),
+      fix: hasFlag(rest, "--fix"),
+      strict,
+      json,
+      verbose: hasFlag(rest, "--verbose"),
+    });
+    console.log(
+      json
+        ? JSON.stringify(report, null, 2)
+        : formatVisualDeltaDoctorReport(report, {
+            verbose: hasFlag(rest, "--verbose"),
+          }),
+    );
+    process.exitCode = visualDeltaDoctorExitCode(report, strict);
+    return;
+  }
 
   if (command === "harness") {
     if (rest[0] !== "doctor") {
@@ -192,7 +268,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(`  scripts: ${result.scriptsUpdated.join(", ")}`);
     }
     console.log(
-      'Next: addons: ["@lapismd/storybook-addon-visual-delta"] in .storybook/main.ts, then Create visual in the panel.',
+      'Next: register the addon in .storybook/main.ts, run "visual-delta doctor", then Create visual in the panel.',
     );
     return;
   }

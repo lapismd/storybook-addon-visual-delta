@@ -17,6 +17,10 @@ import type {
   VisualDeltaChangeSetsResponse,
 } from "../shared/change-sets.js";
 import { visualDeltaChangeSetFileUrl } from "../shared/change-sets.js";
+import {
+  migrateLegacyChangeSetCache,
+  VISUAL_DELTA_CHANGE_SETS_CACHE_REL,
+} from "./cache-paths.js";
 import type {
   VisualDeltaVcsMode,
   VisualDeltaWorkflowConfig,
@@ -157,7 +161,8 @@ export class VisualDeltaChangeSetStore {
       root: string,
     ) => Promise<VisualDeltaChangeVcs | null> = detectVisualDeltaChangeVcs,
   ) {
-    this.cacheRoot = path.join(root, ".cache", "visual-delta", "change-sets");
+    migrateLegacyChangeSetCache(root);
+    this.cacheRoot = path.join(root, ...VISUAL_DELTA_CHANGE_SETS_CACHE_REL.split("/"));
     this.statePath = path.join(this.cacheRoot, "index.json");
     this.load();
   }

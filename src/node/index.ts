@@ -73,6 +73,19 @@ export {
   type VisualBaselineMigrationStatus,
 } from "./baseline-migration.js";
 export {
+  formatVisualDeltaDoctorReport,
+  runVisualDeltaDoctor,
+  visualDeltaDoctorExitCode,
+  type VisualDeltaDoctorCheck,
+  type VisualDeltaDoctorDependencies,
+  type VisualDeltaDoctorFix,
+  type VisualDeltaDoctorInventoryItem,
+  type VisualDeltaDoctorInventoryKind,
+  type VisualDeltaDoctorOptions,
+  type VisualDeltaDoctorReport,
+  type VisualDeltaDoctorSeverity,
+} from "./doctor.js";
+export {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
   type VisualDeltaInitOptions,
