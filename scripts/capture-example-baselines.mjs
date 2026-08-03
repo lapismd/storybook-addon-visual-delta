@@ -7,9 +7,15 @@
  */
 import { chromium } from "@playwright/test";
 import { settleVisualStoryPage } from "../dist/playwright/index.js";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  DEFAULT_DIFF_THRESHOLD,
+  DEFAULT_PASS_THRESHOLD_PERCENT,
+} from "../dist/constants.js";
+import { writeDiffArtifactsForBaseline } from "../dist/playwright/write-diff-artifacts.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const outRoot = path.join(packageRoot, "tests/examples-snapshots/examples");
@@ -156,6 +162,72 @@ export async function captureOne(
   );
 }
 
+/** Keep the committed image-comparison fixture coherent with its baseline. */
+export function refreshExampleComparisonFixture({
+  root = packageRoot,
+  baselineRoot = outRoot,
+  actualPath = path.join(
+    packageRoot,
+    ".visual-delta/artifacts/examples/interactions/opened.actual.png",
+  ),
+  resultPath = path.join(
+    packageRoot,
+    ".visual-delta/artifacts/examples/interactions/opened.result.json",
+  ),
+} = {}) {
+  if (!fs.existsSync(actualPath) || !fs.existsSync(resultPath)) return null;
+  const previous = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+  const snapshotRoot = path.dirname(baselineRoot);
+  const captureConfig = {
+    cropToViewport: false,
+    ignoreSelectors: [],
+    passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
+    diffThreshold: DEFAULT_DIFF_THRESHOLD,
+    includeAntiAliasing: false,
+    delay: 0,
+    align: "canvas",
+    mode: null,
+    globals: null,
+  };
+  return writeDiffArtifactsForBaseline({
+    entry: {
+      id: "examples-interactions--with-interaction-baseline",
+      type: "story",
+      title: "Examples/Interactions",
+      name: "With interaction baseline",
+      importPath: "./src/stories/examples/Interactions.stories.tsx",
+      tags: [],
+    },
+    packageRoot: root,
+    snapshotDir: snapshotRoot,
+    mode: "nested-import",
+    baselinePngAbsPath: path.join(baselineRoot, "interactions/opened.png"),
+    status: "passed",
+    actualPng: fs.readFileSync(actualPath),
+    viewport: previous.viewport,
+    deviceScaleFactor: previous.deviceScaleFactor,
+    passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
+    diffThreshold: DEFAULT_DIFF_THRESHOLD,
+    includeAntiAliasing: false,
+    captureConfig,
+    operationId: randomUUID(),
+    browser: "chromium",
+    failureMode: "warn",
+    variant: { kind: "primary" },
+    captureSet: [
+      {
+        variant: { kind: "primary" },
+        baselineRelative: "examples/interactions/opened.png",
+      },
+    ],
+    renderFingerprint:
+      previous.renderFingerprint ?? "packaged-example-interaction-opened-v1",
+    comparisonSource: "cached-actual",
+    captureOperationId: previous.captureOperationId,
+    actualCapturedAt: previous.actualCapturedAt,
+  });
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage({
@@ -166,6 +238,7 @@ async function main() {
     for (const spec of CAPTURES) {
       await captureOne(page, spec);
     }
+    refreshExampleComparisonFixture();
   } finally {
     await browser.close();
   }

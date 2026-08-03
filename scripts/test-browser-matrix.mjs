@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
@@ -10,8 +10,10 @@ const snapshotRoot = path.join(
   "snapshots",
 );
 const fixtureRoot = path.dirname(snapshotRoot);
+const artifactRoot = path.join(fixtureRoot, ".visual-delta", "artifacts");
 
-function sidecars(directory = snapshotRoot) {
+function sidecars(directory = artifactRoot) {
+  if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) return sidecars(absolute);

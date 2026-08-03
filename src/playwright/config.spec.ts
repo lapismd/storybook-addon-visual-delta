@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defineVisualPlaywrightConfig,
+  visualScreenshotExpect,
   visualUpdateSnapshotsMode,
   VISUAL_DEVICE_SCALE_FACTOR,
   VISUAL_VIEWPORT,
@@ -36,6 +37,15 @@ describe("visual capture constants", () => {
   it("exports the v1 viewport matrix and built-in scale default", () => {
     expect(VISUAL_VIEWPORT).toEqual({ width: 1280, height: 900 });
     expect(VISUAL_DEVICE_SCALE_FACTOR).toBe(1);
+  });
+
+  it("converts the built-in 0.063% allowance to Playwright's ratio", () => {
+    const previous = process.env.VISUAL_DELTA_PASS_THRESHOLD_PERCENT;
+    delete process.env.VISUAL_DELTA_PASS_THRESHOLD_PERCENT;
+    expect(visualScreenshotExpect().maxDiffPixelRatio).toBe(0.00063);
+    if (previous !== undefined) {
+      process.env.VISUAL_DELTA_PASS_THRESHOLD_PERCENT = previous;
+    }
   });
 });
 
