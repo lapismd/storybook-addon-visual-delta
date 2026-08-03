@@ -111,6 +111,23 @@ function commandOutput(command: string, args: string[]): string {
   }).trim();
 }
 
+export function resolveDockerImageAvailability(
+  image: string,
+  output: (command: string, args: string[]) => string = commandOutput,
+): "registry" | "local" | null {
+  try {
+    output("docker", ["buildx", "imagetools", "inspect", image]);
+    return "registry";
+  } catch {
+    try {
+      output("docker", ["image", "inspect", image]);
+      return "local";
+    } catch {
+      return null;
+    }
+  }
+}
+
 function cacheKey(root: string): string {
   const lockPath = path.join(root, "pnpm-lock.yaml");
   const lock = existsSync(lockPath) ? readFileSync(lockPath) : Buffer.alloc(0);
@@ -600,10 +617,10 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
       }
       const image = visualCaptureProfileImageReference(profile);
       if (image) {
-        try {
-          commandOutput("docker", ["buildx", "imagetools", "inspect", image]);
-        } catch {
-          diagnostics.push(`Canonical image is unavailable at ${image}.`);
+        if (!resolveDockerImageAvailability(image)) {
+          diagnostics.push(
+            `Canonical image is unavailable from the registry and local Docker store at ${image}.`,
+          );
         }
         try {
           const probe = commandOutput("docker", [

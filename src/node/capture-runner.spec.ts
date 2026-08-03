@@ -18,6 +18,7 @@ import {
   createCaptureJobManifest,
   dockerVisualDeltaWorkerCommand,
   dockerWorkspaceArgv,
+  resolveDockerImageAvailability,
   resolveTypescriptCli,
   resolveVisualDeltaCaptureRunner,
   runVisualDeltaCaptureJob,
@@ -75,6 +76,31 @@ function writeFixtureRunner(options: {
 }
 
 describe("capture runner", () => {
+  it("accepts an exact locally cached image when registry inspection is unavailable", () => {
+    const calls: string[][] = [];
+    const output = (_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === "buildx") throw new Error("registry unavailable");
+      return "cached image";
+    };
+
+    expect(resolveDockerImageAvailability("fixture@sha256:digest", output)).toBe(
+      "local",
+    );
+    expect(calls).toEqual([
+      ["buildx", "imagetools", "inspect", "fixture@sha256:digest"],
+      ["image", "inspect", "fixture@sha256:digest"],
+    ]);
+  });
+
+  it("rejects a pinned image absent from both the registry and local store", () => {
+    expect(
+      resolveDockerImageAvailability("fixture@sha256:missing", () => {
+        throw new Error("unavailable");
+      }),
+    ).toBeNull();
+  });
+
   it("stages only Visual Delta artifacts and affected-planning cache", () => {
     expect(shouldStageVisualDeltaWorkspacePath(".visual-delta")).toBe(true);
     expect(
