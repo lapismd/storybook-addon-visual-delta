@@ -17,6 +17,7 @@ export const VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV =
   "VISUAL_DELTA_CANONICAL_BUILD_CACHE";
 export const CANONICAL_BUILD_CACHE_REL =
   ".visual-delta/cache/canonical-build";
+export const CANONICAL_BUILD_CACHE_MAX_ENTRIES = 2;
 
 type CanonicalBuildManifest = {
   version: 1;
@@ -100,6 +101,52 @@ function entryPath(cacheRoot: string, fingerprint: string): string {
   return path.join(cacheRoot, "entries", fingerprint);
 }
 
+function entryCreatedAt(entry: string): number {
+  const manifest = readManifest(entry);
+  const parsed = manifest ? Date.parse(manifest.createdAt) : Number.NaN;
+  if (Number.isFinite(parsed)) return parsed;
+  try {
+    return statSync(entry).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+export function pruneCanonicalBuildCache(options: {
+  cacheRoot: string;
+  activeFingerprint: string;
+  maxEntries?: number;
+}): string[] {
+  const entriesRoot = path.join(options.cacheRoot, "entries");
+  if (!existsSync(entriesRoot)) return [];
+  const maxEntries = Math.max(
+    1,
+    Math.trunc(options.maxEntries ?? CANONICAL_BUILD_CACHE_MAX_ENTRIES),
+  );
+  const candidates = readdirSync(entriesRoot, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && /^[a-f0-9]{64}$/i.test(entry.name),
+    )
+    .map((entry) => ({
+      fingerprint: entry.name,
+      path: path.join(entriesRoot, entry.name),
+      createdAt: entryCreatedAt(path.join(entriesRoot, entry.name)),
+    }))
+    .sort((left, right) => right.createdAt - left.createdAt);
+  const keep = new Set<string>([options.activeFingerprint]);
+  for (const candidate of candidates) {
+    if (keep.size >= maxEntries) break;
+    keep.add(candidate.fingerprint);
+  }
+  const removed: string[] = [];
+  for (const candidate of candidates) {
+    if (keep.has(candidate.fingerprint)) continue;
+    rmSync(candidate.path, { recursive: true, force: true });
+    removed.push(candidate.fingerprint);
+  }
+  return removed;
+}
+
 function readManifest(entry: string): CanonicalBuildManifest | null {
   try {
     const value = JSON.parse(
@@ -151,11 +198,13 @@ function validEntry(options: {
 }
 
 export function resolveCanonicalBuildCacheRoot(
-  _root: string,
+  root: string,
   environment = process.env,
 ): string | null {
   const configured = environment[VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV]?.trim();
-  return configured ? path.resolve(configured) : null;
+  return configured
+    ? path.resolve(configured)
+    : path.join(path.resolve(root), CANONICAL_BUILD_CACHE_REL);
 }
 
 export function restoreCanonicalBuildCache(options: {
@@ -227,6 +276,10 @@ export function persistCanonicalBuildCache(options: {
         options.profileId ?? CANONICAL_VISUAL_CAPTURE_PROFILE.id,
     })
   ) {
+    pruneCanonicalBuildCache({
+      cacheRoot: options.cacheRoot,
+      activeFingerprint: options.fingerprint,
+    });
     return true;
   }
 
@@ -258,6 +311,10 @@ export function persistCanonicalBuildCache(options: {
     );
     rmSync(destination, { recursive: true, force: true });
     renameSync(temporary, destination);
+    pruneCanonicalBuildCache({
+      cacheRoot: options.cacheRoot,
+      activeFingerprint: options.fingerprint,
+    });
     return true;
   } finally {
     rmSync(temporary, { recursive: true, force: true });

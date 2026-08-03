@@ -17,6 +17,7 @@ import {
   changedStagedArtifacts,
   createCaptureJobManifest,
   dockerVisualDeltaWorkerCommand,
+  dockerVisualDeltaWorkerTransactionCommand,
   dockerWorkspaceArgv,
   resolveDockerImageAvailability,
   resolveTypescriptCli,
@@ -27,6 +28,7 @@ import {
   shouldStageVisualDeltaWorkspacePath,
   stageExternalVisualDeltaSnapshotDir,
   stageVisualDeltaPackageWorker,
+  visualDeltaDependencyInstallKey,
 } from "./capture-runner.js";
 
 const fixtureProfile = {
@@ -286,6 +288,51 @@ describe("capture runner", () => {
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("installs dependencies and launches the worker in one resumable transaction", () => {
+    const command = dockerVisualDeltaWorkerTransactionCommand([
+      "test",
+      "--story-id",
+      "card--default",
+    ]);
+    expect(command.slice(0, 2)).toEqual(["bash", "-lc"]);
+    expect(command[2]).toContain('if [ ! -f "$marker" ]');
+    expect(command[2]).toContain("pnpm install --frozen-lockfile");
+    expect(command[2]).toContain('exec "$@"');
+    expect(command.slice(4)).toEqual([
+      "node",
+      `${DOCKER_VISUAL_DELTA_WORKER_ROOT}/dist/node/cli.js`,
+      "test",
+      "--story-id",
+      "card--default",
+    ]);
+  });
+
+  it("keys dependency installs by manifests rather than checkout location or source files", () => {
+    const first = mkdtempSync(path.join(process.cwd(), ".visual-delta-deps-a-"));
+    const second = mkdtempSync(path.join(process.cwd(), ".visual-delta-deps-b-"));
+    const seed = (root: string) => {
+      mkdirSync(path.join(root, "packages", "ui", "src"), { recursive: true });
+      writeFileSync(path.join(root, "package.json"), '{"name":"fixture"}\n');
+      writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+      writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+      writeFileSync(path.join(root, "packages/ui/package.json"), '{"name":"ui"}\n');
+      writeFileSync(path.join(root, "packages/ui/src/index.ts"), "export {};\n");
+    };
+    try {
+      seed(first);
+      seed(second);
+      const initial = visualDeltaDependencyInstallKey(first);
+      expect(visualDeltaDependencyInstallKey(second)).toBe(initial);
+      writeFileSync(path.join(second, "packages/ui/src/index.ts"), "export const value = 1;\n");
+      expect(visualDeltaDependencyInstallKey(second)).toBe(initial);
+      writeFileSync(path.join(second, "packages/ui/package.json"), '{"name":"ui","version":"2"}\n');
+      expect(visualDeltaDependencyInstallKey(second)).not.toBe(initial);
+    } finally {
+      rmSync(first, { recursive: true, force: true });
+      rmSync(second, { recursive: true, force: true });
     }
   });
 

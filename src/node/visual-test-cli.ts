@@ -29,6 +29,7 @@ import {
 import { baselinePngAbs } from "../playwright/write-diff-artifacts.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import { recompareCachedActualSet } from "./cached-actual.js";
+import type { CachedActualComparison } from "./cached-actual.js";
 import {
   loadModeSidecarsForStoryId,
   loadSidecarForStoryId,
@@ -164,6 +165,41 @@ function variantKey(sidecar: {
     return `interaction:${sidecar.variant.id ?? ""}`;
   }
   return sidecar.mode ? `mode:${sidecar.mode}` : "primary";
+}
+
+function captureTargetKey(
+  storyId: string,
+  browser: VisualDeltaBrowser,
+): string {
+  return `${storyId}\0${browser}`;
+}
+
+type CachedCaptureTarget = {
+  storyId: string;
+  browser: VisualDeltaBrowser;
+  result: CachedActualComparison;
+};
+
+function groupPendingCaptures(
+  storyIds: readonly string[],
+  browsers: readonly VisualDeltaBrowser[],
+  cached: ReadonlyMap<string, CachedCaptureTarget>,
+): Array<{ storyIds: string[]; browsers: VisualDeltaBrowser[] }> {
+  const groups = new Map<
+    string,
+    { storyIds: string[]; browsers: VisualDeltaBrowser[] }
+  >();
+  for (const browser of browsers) {
+    const pending = storyIds.filter(
+      (storyId) => !cached.has(captureTargetKey(storyId, browser)),
+    );
+    if (!pending.length) continue;
+    const key = pending.join("\0");
+    const group = groups.get(key) ?? { storyIds: pending, browsers: [] };
+    group.browsers.push(browser);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
 }
 
 function policyPassingStoryIds(options: {
@@ -302,18 +338,22 @@ export async function runVisualTestCli(
   const baselinePathMode = resolveBaselinePathMode(hostOptions);
   const failureMode =
     options.failureMode ?? projectConfig.workflow.visualTestFailureMode;
-  if (
-    projectConfig.workflow.reuseActualComparisons &&
-    !options.fresh &&
-    selectedStoryIds.length > 0
-  ) {
+  const reuseEnabled =
+    projectConfig.workflow.reuseActualComparisons && !options.fresh;
+  const forceRebuild = process.env.VISUAL_DELTA_FORCE_REBUILD === "1";
+  const resolveCachedTargets = (
+    currentPlan: AffectedVisualPlan,
+    currentStoryIds: readonly string[],
+  ): Map<string, CachedCaptureTarget> => {
+    const cached = new Map<string, CachedCaptureTarget>();
+    if (!reuseEnabled || currentStoryIds.length === 0) return cached;
     const entries = loadStoryIndex(root);
-    const fingerprints = visualRenderFingerprintsForPlan(plan);
-    const cachedResults = selectedStoryIds.flatMap((storyId) =>
-      browsers.map((browser) => {
+    const fingerprints = visualRenderFingerprintsForPlan(currentPlan);
+    for (const storyId of currentStoryIds) {
+      for (const browser of browsers) {
         const entry = entries[storyId];
         const renderFingerprint = fingerprints[storyId];
-        if (!entry || !renderFingerprint) return null;
+        if (!entry || !renderFingerprint) continue;
         let baselinePath = options.baselineRelativePath
           ? path.resolve(
               snapshotDir,
@@ -332,7 +372,7 @@ export async function runVisualTestCli(
             `--${options.interaction.stepId}-${browser}.png`,
           );
         }
-        return recompareCachedActualSet({
+        const result = recompareCachedActualSet({
           root,
           snapshotDir,
           baselinePath,
@@ -342,34 +382,49 @@ export async function runVisualTestCli(
           renderFingerprint,
           failureMode,
         });
-      }),
-    );
-    if (
-      cachedResults.length === selectedStoryIds.length * browsers.length &&
-      cachedResults.every(Boolean)
-    ) {
+        if (result) {
+          cached.set(captureTargetKey(storyId, browser), {
+            storyId,
+            browser,
+            result,
+          });
+        }
+      }
+    }
+    return cached;
+  };
+  const completeCachedRun = (
+    cached: ReadonlyMap<string, CachedCaptureTarget>,
+    currentStoryIds: readonly string[],
+  ): number | null => {
+    if (cached.size !== currentStoryIds.length * browsers.length) return null;
+    if (currentStoryIds.length > 0) {
       console.log(
-        `[visual-delta] Reused canonical actuals for ${selectedStoryIds.length} stor${selectedStoryIds.length === 1 ? "y" : "ies"} across ${browsers.length} browser target${browsers.length === 1 ? "" : "s"}.`,
+        `[visual-delta] Reused canonical actuals for ${currentStoryIds.length} stor${currentStoryIds.length === 1 ? "y" : "ies"} across ${browsers.length} browser target${browsers.length === 1 ? "" : "s"}.`,
       );
-      const passed = cachedResults.every((result) => result?.passed);
-      const passingStoryIds = selectedStoryIds.filter((storyId) =>
+    }
+    const passed = [...cached.values()].every(
+      (target) => target.result.passed,
+    );
+    const passingStoryIds = currentStoryIds.filter((storyId) =>
         browsers.every((browser) => {
-          const result = cachedResults.find((candidate) =>
-            candidate?.sidecars.some(
-              (sidecar) =>
-                sidecar.storyId === storyId &&
-                (sidecar.target?.browser ?? sidecar.browser) === browser,
-            ),
-          );
-          return result?.sidecars.every(
+          const target = cached.get(captureTargetKey(storyId, browser));
+          return target?.result.sidecars.every(
             (sidecar) =>
               sidecar.passed === true && sidecar.policyStatus === "passed",
           );
         }),
       );
-      recordAffectedVisualResultsForPlan(plan, passingStoryIds, hostOptions);
-      return passed ? 0 : 1;
-    }
+    recordAffectedVisualResultsForPlan(plan, passingStoryIds, hostOptions);
+    return passed ? 0 : 1;
+  };
+
+  let cachedTargets = resolveCachedTargets(plan, selectedStoryIds);
+  if (!forceRebuild) {
+    const cachedExit = completeCachedRun(cachedTargets, selectedStoryIds);
+    if (cachedExit != null) return cachedExit;
+  }
+  if (reuseEnabled && selectedStoryIds.length > 0) {
     console.log("[visual-delta] Cached actual set is stale or incomplete; launching canonical browser capture.");
   }
 
@@ -379,7 +434,7 @@ export async function runVisualTestCli(
     root,
     cacheRoot,
     fingerprint: buildFingerprint,
-    forceRebuild: process.env.VISUAL_DELTA_FORCE_REBUILD === "1",
+    forceRebuild,
   });
   let built = false;
   if (!restored.restored) {
@@ -427,38 +482,66 @@ export async function runVisualTestCli(
       : options.selection === "stories"
         ? requestedStoryIds
         : plan.selectedStoryIds;
-  const grep = options.selection === "all" ||
-    (options.selection === "affected" && plan.summary.fallbackReason)
-    ? undefined
-    : playwrightStoryIdGrep(selectedStoryIds);
-  const result = await execute(
-    "pnpm",
-    [
-      ...(options.testArgs?.length
-        ? options.testArgs
-        : DEFAULT_VISUAL_TEST_ARGS),
-      "--reporter=list",
-      ...browsers.flatMap((browser) => ["--project", browser]),
-      ...(grep ? ["-g", grep] : []),
-    ],
-    root,
-    {
-      PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
-      VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
-      VISUAL_DELTA_BASELINE_PATH_MODE: baselinePathMode,
-      VISUAL_DELTA_FAILURE_MODE: failureMode,
-      VISUAL_DELTA_DEFER_POLICY_FAILURES: "1",
-      ...(options.interaction
-        ? { PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(options.interaction) }
-        : {}),
-      ...(options.baselineRelativePath
-        ? { VISUAL_DELTA_BASELINE_OVERRIDE: options.baselineRelativePath }
-        : {}),
-    },
+  cachedTargets = resolveCachedTargets(plan, selectedStoryIds);
+  const cachedExit = completeCachedRun(cachedTargets, selectedStoryIds);
+  if (cachedExit != null) return cachedExit;
+  const captureGroups = groupPendingCaptures(
+    selectedStoryIds,
+    browsers,
+    cachedTargets,
   );
+  if (cachedTargets.size > 0) {
+    const totalTargets = selectedStoryIds.length * browsers.length;
+    console.log(
+      `[visual-delta] Reused ${cachedTargets.size}/${totalTargets} canonical actual targets; capturing ${totalTargets - cachedTargets.size}.`,
+    );
+  }
+  const capturedResults: PlaywrightListResult[] = [];
+  let infrastructureExitCode = 0;
+  for (const group of captureGroups) {
+    const capturesWholeSelection =
+      group.storyIds.length === selectedStoryIds.length &&
+      group.storyIds.every((storyId) => selectedStoryIds.includes(storyId));
+    const grep = capturesWholeSelection &&
+        (options.selection === "all" ||
+          (options.selection === "affected" && plan.summary.fallbackReason))
+      ? undefined
+      : playwrightStoryIdGrep(group.storyIds);
+    const result = await execute(
+      "pnpm",
+      [
+        ...(options.testArgs?.length
+          ? options.testArgs
+          : DEFAULT_VISUAL_TEST_ARGS),
+        "--reporter=list",
+        ...group.browsers.flatMap((browser) => ["--project", browser]),
+        ...(grep ? ["-g", grep] : []),
+      ],
+      root,
+      {
+        PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
+        VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+        VISUAL_DELTA_BASELINE_PATH_MODE: baselinePathMode,
+        VISUAL_DELTA_FAILURE_MODE: failureMode,
+        VISUAL_DELTA_DEFER_POLICY_FAILURES: "1",
+        ...(options.interaction
+          ? { PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(options.interaction) }
+          : {}),
+        ...(options.baselineRelativePath
+          ? { VISUAL_DELTA_BASELINE_OVERRIDE: options.baselineRelativePath }
+          : {}),
+      },
+    );
+    capturedResults.push(...result.results);
+    if (result.code !== 0) {
+      infrastructureExitCode = result.code;
+      break;
+    }
+  }
   const playwrightPassedStoryIds = selectedStoryIds.filter((storyId) =>
     browsers.every((browser) =>
-      result.results.some(
+      cachedTargets.has(captureTargetKey(storyId, browser)) ||
+      capturedResults.some(
         (candidate) =>
           candidate.storyId === storyId &&
           candidate.browser === browser &&
@@ -479,6 +562,6 @@ export async function runVisualTestCli(
     policy.passing.filter((storyId) => passedByPlaywright.has(storyId)),
     hostOptions,
   );
-  if (result.code !== 0) return result.code;
+  if (infrastructureExitCode !== 0) return infrastructureExitCode;
   return failureMode === "strict" && policy.strictFailure ? 1 : 0;
 }

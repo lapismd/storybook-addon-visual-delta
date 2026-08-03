@@ -125,7 +125,6 @@ import {
 } from "./init-scaffold.js";
 import {
   parseListReporterProgress,
-  successfulStoryIdsFromPlaywrightResults,
 } from "./playwright-results.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
 export { parseListReporterProgress, stripAnsi } from "./playwright-results.js";
@@ -158,9 +157,6 @@ import { detectVisualDeltaVcsKind } from "./change-set-vcs.js";
 import { deleteVisualBaseline } from "./delete-baseline.js";
 import {
   planAffectedVisualTests,
-  planAllVisualTests,
-  planExactVisualTests,
-  recordAffectedVisualResults,
 } from "./affected-visual-tests.js";
 import {
   decideStorybookStaticBuild,
@@ -298,6 +294,42 @@ function componentStoryIds(root: string, component: string): string[] {
   return Object.keys(loadStoryIndex(root)).filter((storyId) =>
     storyId.startsWith(prefix),
   );
+}
+
+export function runnableVisualStoryIds(root: string): string[] {
+  return Object.values(loadStoryIndex(root))
+    .filter(
+      (entry) =>
+        (entry.type === "story" || !entry.type) &&
+        !(entry.tags ?? []).includes("skip-visual"),
+    )
+    .map((entry) => entry.id);
+}
+
+export function managerIndexedVisualRunScope(
+  root: string,
+  selection: "selected" | "all",
+  requestedStoryIds: readonly string[] = [],
+): { storyIds: string[]; summary: AffectedVisualSummary } {
+  const runnable = runnableVisualStoryIds(root);
+  const storyIds =
+    selection === "selected"
+      ? [...new Set(requestedStoryIds)]
+      : runnable;
+  return {
+    storyIds,
+    summary: {
+      selection,
+      selected: storyIds.length,
+      unchanged:
+        selection === "selected"
+          ? Math.max(0, runnable.length - storyIds.length)
+          : 0,
+      total: runnable.length,
+      noChange: storyIds.length === 0,
+      storyIds,
+    },
+  };
 }
 
 function snapshotPrefix(
@@ -585,16 +617,28 @@ export function countVisualStories(root: string, storyIds?: string[]): number {
   }
 }
 
-function disabledAffectedPlan(root: string, options: VisualDeltaHostOptions) {
-  const plan = planAllVisualTests(root, options);
+function disabledAffectedPlan(
+  root: string,
+  _options: VisualDeltaHostOptions,
+): {
+  summary: AffectedVisualSummary;
+  selectedStoryIds: string[];
+  runnableStoryIds: string[];
+  needsRebuild: boolean;
+} {
+  const storyIds = runnableVisualStoryIds(root);
   return {
-    ...plan,
     summary: {
-      ...plan.summary,
       selection: "affected" as const,
+      selected: storyIds.length,
+      unchanged: 0,
+      total: storyIds.length,
       fallbackReason: "Affected visual tests are not enabled for this host",
       noChange: false,
+      storyIds,
     },
+    selectedStoryIds: storyIds,
+    runnableStoryIds: storyIds,
     needsRebuild: true,
   };
 }
@@ -603,29 +647,6 @@ function affectedPlan(root: string, options: VisualDeltaHostOptions) {
   return options.affectedTests === false
     ? disabledAffectedPlan(root, options)
     : planAffectedVisualTests(root, options);
-}
-
-function selectedRunSummary(
-  root: string,
-  options: VisualDeltaHostOptions,
-  storyIds: string[] | undefined,
-  selection: VisualRunSelectionMode,
-): AffectedVisualSummary {
-  const all = storyIds?.length
-    ? planExactVisualTests(root, storyIds, options).runnableStoryIds
-    : planAllVisualTests(root, options).runnableStoryIds;
-  const selected =
-    selection === "all" || !storyIds
-      ? all
-      : all.filter((storyId) => new Set(storyIds).has(storyId));
-  return {
-    selection,
-    selected: selected.length,
-    unchanged: Math.max(0, all.length - selected.length),
-    total: all.length,
-    noChange: selected.length === 0,
-    storyIds: selected,
-  };
 }
 
 function writeNdjson(res: ServerResponse, event: VisualRunStreamEvent) {
@@ -1082,20 +1103,16 @@ async function handleRun(
     return;
   }
 
-  let plan =
-    selection === "affected"
-      ? affectedPlan(root, options)
-      : planAllVisualTests(root, options);
-  let selectedStoryIds =
-    selection === "selected"
-      ? body.storyIds
-      : selection === "affected"
-        ? plan.selectedStoryIds
-        : plan.runnableStoryIds;
-  let affected =
-    selection === "affected"
-      ? plan.summary
-      : selectedRunSummary(root, options, selectedStoryIds, selection);
+  const plan = selection === "affected" ? affectedPlan(root, options) : null;
+  const indexedScope = plan
+    ? null
+    : managerIndexedVisualRunScope(
+        root,
+        selection === "all" ? "all" : "selected",
+        body.storyIds ?? [],
+      );
+  const selectedStoryIds = plan?.selectedStoryIds ?? indexedScope!.storyIds;
+  const affected = plan?.summary ?? indexedScope!.summary;
 
   if (selection === "affected" && affected.noChange) {
     beginVisualRunHub();
@@ -1256,6 +1273,9 @@ async function handleRun(
         browser,
       });
     }
+    if (runnerResult.exitCode === 0 || returnedTargets.size > 0) {
+      staticStaleReason = null;
+    }
     const targetPairs = selection === "all"
       ? [...returnedTargets.values()]
       : storyIds.flatMap((storyId) =>
@@ -1284,12 +1304,6 @@ async function handleRun(
       options,
     );
     const summary = summarize(results);
-    const passedStoryIds = successfulStoryIdsFromPlaywrightResults({
-      root,
-      hostOptions: options,
-      results,
-    });
-    recordAffectedVisualResults({ root, hostOptions: options, passedStoryIds });
     emitRun({
       type: "done",
       ok: runnerResult.exitCode === 0 && summary.failed === 0,
@@ -1413,11 +1427,9 @@ async function handleActionScope(
   // synchronous filesystem/hash work.
   await new Promise<void>((resolve) => setImmediate(resolve));
 
-  let plan = body.affectedOnly
-    ? affectedPlan(root, options)
-    : planAllVisualTests(root, options);
-  let rebuilt = false;
-  const preflightReason = plan.needsRebuild
+  const plan = body.affectedOnly ? affectedPlan(root, options) : null;
+  const runnableStoryIds = plan?.runnableStoryIds ?? runnableVisualStoryIds(root);
+  const preflightReason = plan?.needsRebuild
     ? ("affected-plan" as const)
     : (staticStaleReason ?? undefined);
   const buildDecision = decideStorybookStaticBuild({
@@ -1441,88 +1453,43 @@ async function handleActionScope(
     return;
   }
 
-  if (body.affectedOnly && buildDecision.shouldBuild) {
-    const rebuildStartedAt = Date.now();
-    write({
-      type: "progress",
-      phase: "rebuilding",
-      message: `${buildDecision.message}… 0s`,
-      elapsedMs: 0,
-    });
-    const heartbeat = setInterval(() => {
-      const elapsedMs = Date.now() - rebuildStartedAt;
-      write({
-        type: "progress",
-        phase: "rebuilding",
-        message: `${buildDecision.message}… ${Math.floor(elapsedMs / 1_000)}s`,
-        elapsedMs,
-      });
-    }, 1_000);
-    let built: Awaited<ReturnType<typeof runCommand>>;
-    try {
-      built = await runStaticBuildSingleFlight(root, () =>
-        runCommand("pnpm", ["build-storybook"], root),
-      );
-    } catch (error) {
-      write({
-        type: "error",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to start build-storybook",
-      });
-      res.end();
-      return;
-    } finally {
-      clearInterval(heartbeat);
-    }
-    if (built.code !== 0) {
-      write({
-        type: "error",
-        error: "build-storybook failed while refreshing the affected scope",
-        logTail: ansiRawTail(built.log, 4000),
-      });
-      res.end();
-      return;
-    }
-    rebuilt = true;
-    staticStaleReason = null;
-    markStorybookStaticFresh(root);
-    invalidateWarmStaticStorybookServer();
-    write({
-      type: "progress",
-      phase: "resolving",
-      message: "Refreshing affected plan…",
-    });
-    plan = affectedPlan(root, options);
-  }
+  const canonicalRefreshRequired =
+    body.affectedOnly &&
+    (buildDecision.shouldBuild || buildDecision.reason === "skip-build-missing");
 
   const eligibleVisible = resolveVisualActionStoryIds({
     context: "global",
     visibleStoryIds,
-    ...(body.affectedOnly ? { runnableStoryIds: plan.runnableStoryIds } : {}),
-  });
-  const storyIds = resolveVisualActionStoryIds({
-    context: "global",
-    visibleStoryIds,
-    ...(body.affectedOnly
-      ? {
-          runnableStoryIds: plan.runnableStoryIds,
-          affectedStoryIds: plan.selectedStoryIds,
-        }
+    ...(body.affectedOnly && !canonicalRefreshRequired
+      ? { runnableStoryIds }
       : {}),
-    affectedOnly: body.affectedOnly,
   });
+  const storyIds = canonicalRefreshRequired
+    ? eligibleVisible
+    : resolveVisualActionStoryIds({
+        context: "global",
+        visibleStoryIds,
+        ...(body.affectedOnly
+          ? {
+              runnableStoryIds: plan!.runnableStoryIds,
+              affectedStoryIds: plan!.selectedStoryIds,
+            }
+          : {}),
+        affectedOnly: body.affectedOnly,
+      });
   const summary: AffectedVisualSummary = {
     selection: body.affectedOnly ? "affected" : "selected",
     selected: storyIds.length,
     unchanged: Math.max(0, eligibleVisible.length - storyIds.length),
     total: eligibleVisible.length,
     noChange: storyIds.length === 0,
-    ...(plan.summary.fallbackReason
-      ? { fallbackReason: plan.summary.fallbackReason }
+    ...(canonicalRefreshRequired || plan?.summary.fallbackReason
+      ? {
+          fallbackReason:
+            plan?.summary.fallbackReason ?? buildDecision.message,
+        }
       : {}),
-    ...(plan.summary.changedInputs?.length
+    ...(plan?.summary.changedInputs?.length
       ? { changedInputs: plan.summary.changedInputs }
       : {}),
     storyIds,
@@ -1538,7 +1505,7 @@ async function handleActionScope(
     ok: true,
     storyIds,
     summary,
-    rebuilt,
+    rebuilt: false,
   } satisfies VisualActionScopeStreamEvent);
   res.end();
 }

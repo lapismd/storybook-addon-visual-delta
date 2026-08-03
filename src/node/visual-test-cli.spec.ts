@@ -426,4 +426,128 @@ describe("runVisualTestCli exact stories", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("captures only the stale story-browser target when another actual remains reusable", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "visual-delta-test-cli-"));
+    const snapshotDir = path.join(root, "snapshots");
+    const entries = Object.fromEntries(
+      ["examples-card--cached", "examples-card--stale"].map((id, index) => [
+        id,
+        {
+          id,
+          type: "story" as const,
+          title: "Examples/Card",
+          name: index === 0 ? "Cached" : "Stale",
+          importPath: `./src/card-${index}.stories.ts`,
+        },
+      ]),
+    );
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    mkdirSync(path.join(root, ".visual-delta/cache"), { recursive: true });
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    mkdirSync(snapshotDir, { recursive: true });
+    writeFileSync(path.join(root, "package.json"), '{"name":"fixture"}\n');
+    for (const entry of Object.values(entries)) {
+      writeFileSync(
+        path.join(root, entry.importPath.slice(2)),
+        "export const Story = {};\n",
+      );
+    }
+    writeFileSync(path.join(root, "storybook-static/iframe.html"), "iframe\n");
+    writeFileSync(
+      path.join(root, "storybook-static/index.json"),
+      JSON.stringify({ entries }),
+    );
+    writeFileSync(
+      path.join(root, ".visual-delta/cache/preview-stats.json"),
+      JSON.stringify({
+        modules: [
+          { id: "/virtual:/@storybook/builder-vite/vite-app.js" },
+          ...Object.values(entries).map((entry) => ({
+            id: entry.importPath,
+            reasons: [],
+          })),
+        ],
+      }),
+    );
+    const hostOptions = {
+      snapshotDir: "snapshots",
+      baselinePathMode: "story-id" as const,
+      affectedTests: {},
+    };
+    const fingerprints = visualRenderFingerprints(root, hostOptions);
+    for (const entry of Object.values(entries)) {
+      const baselinePath = path.join(snapshotDir, `${entry.id}-chromium.png`);
+      writeFileSync(baselinePath, png());
+      writeDiffArtifactsForBaseline({
+        entry,
+        packageRoot: root,
+        snapshotDir,
+        mode: "story-id",
+        baselinePngAbsPath: baselinePath,
+        status: "passed",
+        actualPng: png(),
+        captureConfig: { align: "viewport" },
+        renderFingerprint: fingerprints[entry.id],
+      });
+    }
+    const staleEntry = entries["examples-card--stale"]!;
+    const staleBaseline = path.join(
+      snapshotDir,
+      "examples-card--stale-chromium.png",
+    );
+    rmSync(
+      visualArtifactPaths({
+        root,
+        snapshotDir,
+        baselinePath: staleBaseline,
+      }).actual,
+    );
+    const execute = vi.fn(async (_command: string, args: string[]) => {
+      if (args.includes("build-storybook")) return { code: 0, results: [] };
+      writeDiffArtifactsForBaseline({
+        entry: staleEntry,
+        packageRoot: root,
+        snapshotDir,
+        mode: "story-id",
+        baselinePngAbsPath: staleBaseline,
+        status: "passed",
+        actualPng: png(),
+        captureConfig: { align: "viewport" },
+        renderFingerprint: fingerprints[staleEntry.id],
+      });
+      return {
+        code: 0,
+        results: [
+          {
+            index: 1,
+            storyId: staleEntry.id,
+            status: "passed" as const,
+            browser: "chromium" as const,
+            target: { browser: "chromium" as const },
+            platform: "linux",
+          },
+        ],
+      };
+    });
+    try {
+      await expect(
+        runVisualTestCli({
+          root,
+          selection: "stories",
+          storyIds: Object.keys(entries),
+          browsers: ["chromium"],
+          hostOptions,
+          runCommand: execute,
+        }),
+      ).resolves.toBe(0);
+      expect(execute).toHaveBeenCalledTimes(2);
+      const playwrightArgs = execute.mock.calls[1]?.[1] ?? [];
+      const grep = playwrightArgs[playwrightArgs.indexOf("-g") + 1];
+      expect(grep).toContain("examples-card--stale");
+      expect(grep).not.toContain("examples-card--cached");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

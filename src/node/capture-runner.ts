@@ -132,12 +132,43 @@ export function resolveDockerImageAvailability(
   }
 }
 
-function cacheKey(root: string): string {
-  const lockPath = path.join(root, "pnpm-lock.yaml");
-  const lock = existsSync(lockPath) ? readFileSync(lockPath) : Buffer.alloc(0);
+export function visualDeltaDependencyInstallKey(root: string): string {
+  const inputs: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (STAGE_COPY_IGNORES.has(entry.name) || entry.name === ".visual-delta") {
+        continue;
+      }
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
+      if (
+        entry.name === "package.json" ||
+        relative === "pnpm-lock.yaml" ||
+        relative === "pnpm-workspace.yaml" ||
+        relative === ".npmrc" ||
+        relative === ".pnpmfile.cjs"
+      ) {
+        inputs.push(relative);
+      }
+    }
+  };
+  visit(root);
   return createHash("sha256")
-    .update(root)
-    .update(lock)
+    .update(
+      inputs
+        .sort()
+        .map((relative) =>
+          `${relative}\0${createHash("sha256")
+            .update(readFileSync(path.join(root, ...relative.split("/"))))
+            .digest("hex")}`,
+        )
+        .join("\n"),
+    )
     .update(CANONICAL_VISUAL_CAPTURE_PROFILE.id)
     .digest("hex")
     .slice(0, 16);
@@ -368,6 +399,27 @@ export function dockerVisualDeltaWorkerCommand(
     "node",
     `${DOCKER_VISUAL_DELTA_WORKER_ROOT}/dist/node/cli.js`,
     ...argv,
+  ];
+}
+
+export function dockerVisualDeltaWorkerTransactionCommand(
+  argv: readonly string[],
+): string[] {
+  const script = [
+    "set -e",
+    'marker="/workspace/node_modules/.visual-delta-install-ready"',
+    'if [ ! -f "$marker" ]; then',
+    "  pnpm install --frozen-lockfile",
+    '  touch "$marker"',
+    "fi",
+    'exec "$@"',
+  ].join("\n");
+  return [
+    "bash",
+    "-lc",
+    script,
+    "visual-delta-worker",
+    ...dockerVisualDeltaWorkerCommand(argv),
   ];
 }
 
@@ -671,7 +723,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         );
       }
       const image = visualCaptureProfileImageReference(profile)!;
-      const key = cacheKey(manifest.root);
+      const key = visualDeltaDependencyInstallKey(manifest.root);
       const cacheDir = affectedCacheDirRelative(manifest.root, manifest.argv);
       const cacheArtifacts = affectedCacheArtifactPaths(
         manifest.root,
@@ -727,21 +779,11 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           `${VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV}=/visual-delta/canonical-build-cache`,
           image,
         ];
-        const installExit = await runProcess(
-          "docker",
-          [...commonArgs, "pnpm", "install", "--frozen-lockfile"],
-          { cwd: manifest.root },
-          context,
-        );
-        if (installExit !== 0) {
-          rmSync(staged.parent, { recursive: true, force: true });
-          return { exitCode: installExit, profile };
-        }
         const exitCode = await runProcess(
           "docker",
           [
             ...commonArgs,
-            ...dockerVisualDeltaWorkerCommand(
+            ...dockerVisualDeltaWorkerTransactionCommand(
               dockerWorkspaceArgv(manifest.root, manifest.argv, {
                 externalSnapshotDir: staged.externalSnapshotDir,
               }),

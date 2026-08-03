@@ -2,7 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { attachSidecars, visualTestCommandArgs } from "./middleware.js";
+import {
+  attachSidecars,
+  managerIndexedVisualRunScope,
+  visualTestCommandArgs,
+} from "./middleware.js";
 import {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_VISUAL_UPDATE_ARGS,
@@ -34,8 +38,40 @@ describe("portable Visual Delta host options", () => {
       "update",
       "--allow-dirty",
       "--approved",
-      "--skip-build",
     ]);
+  });
+
+  it("resolves selected and visible manager scopes from the static index only", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "visual-delta-manager-scope-"));
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    writeFileSync(
+      path.join(root, "storybook-static/index.json"),
+      JSON.stringify({
+        entries: {
+          "card--one": { id: "card--one", type: "story" },
+          "card--two": { id: "card--two", type: "story" },
+          "card--skipped": {
+            id: "card--skipped",
+            type: "story",
+            tags: ["skip-visual"],
+          },
+        },
+      }),
+    );
+    try {
+      expect(
+        managerIndexedVisualRunScope(root, "selected", ["card--two"]),
+      ).toMatchObject({
+        storyIds: ["card--two"],
+        summary: { selected: 1, total: 2 },
+      });
+      expect(managerIndexedVisualRunScope(root, "all").storyIds).toEqual([
+        "card--one",
+        "card--two",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("supports flat story-id snapshots", () => {

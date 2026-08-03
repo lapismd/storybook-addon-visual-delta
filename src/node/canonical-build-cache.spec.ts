@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -12,6 +13,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   persistCanonicalBuildCache,
+  resolveCanonicalBuildCacheRoot,
   restoreCanonicalBuildCache,
 } from "./canonical-build-cache.js";
 
@@ -40,6 +42,18 @@ afterEach(() => {
 });
 
 describe("canonical Storybook build cache", () => {
+  it("uses the project cache by default and honors the runner mount override", () => {
+    const current = fixture();
+    expect(resolveCanonicalBuildCacheRoot(current.root, {})).toBe(
+      path.join(current.root, ".visual-delta/cache/canonical-build"),
+    );
+    expect(
+      resolveCanonicalBuildCacheRoot(current.root, {
+        VISUAL_DELTA_CANONICAL_BUILD_CACHE: "/mounted/cache",
+      }),
+    ).toBe("/mounted/cache");
+  });
+
   it("round-trips a checksum-verified complete static build", () => {
     const current = fixture();
     expect(
@@ -158,5 +172,21 @@ describe("canonical Storybook build cache", () => {
         profileId: "profile-one",
       }).reason,
     ).toBe("invalid");
+  });
+
+  it("retains the active entry and at most one previous complete build", () => {
+    const current = fixture();
+    for (const fingerprint of ["1".repeat(64), "2".repeat(64), "3".repeat(64)]) {
+      expect(
+        persistCanonicalBuildCache({
+          ...current,
+          fingerprint,
+          profileId: "profile-one",
+        }),
+      ).toBe(true);
+    }
+    const entries = readdirSync(path.join(current.cacheRoot, "entries"));
+    expect(entries).toHaveLength(2);
+    expect(entries).toContain("3".repeat(64));
   });
 });

@@ -36,6 +36,12 @@ import { playwrightStoryIdGrep } from "./story-id-grep.js";
 import { decideStorybookStaticBuild } from "./static-build.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import { visualCanonicalBuildFingerprint } from "./affected-visual-tests.js";
+import {
+  persistCanonicalBuildCache,
+  resolveCanonicalBuildCacheRoot,
+  restoreCanonicalBuildCache,
+} from "./canonical-build-cache.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -111,8 +117,23 @@ function ensureStorybookStatic(
     forceReason?: "unskip" | "explicit-rebuild";
     storyIds?: string[];
     component?: string;
+    snapshotDir?: string;
+    baselinePathMode?: BaselinePathMode;
   } = {},
 ): void {
+  const hostOptions = {
+    snapshotDir: options.snapshotDir,
+    baselinePathMode: options.baselinePathMode,
+  };
+  const cacheRoot = resolveCanonicalBuildCacheRoot(root);
+  const fingerprint = visualCanonicalBuildFingerprint(root, hostOptions);
+  const restored = restoreCanonicalBuildCache({
+    root,
+    cacheRoot,
+    fingerprint,
+    forceRebuild: options.forceRebuild,
+  });
+  if (restored.restored) return;
   const decision = decideStorybookStaticBuild({
     packageRoot: root,
     skipBuild: Boolean(options.skipBuild),
@@ -137,6 +158,11 @@ function ensureStorybookStatic(
       "build-storybook did not produce a complete storybook-static (index.json + iframe.html)",
     );
   }
+  persistCanonicalBuildCache({
+    root,
+    cacheRoot,
+    fingerprint: visualCanonicalBuildFingerprint(root, hostOptions),
+  });
 }
 
 function matchingEntries(
@@ -236,26 +262,10 @@ export async function runBaselineUpdate(
     );
   }
 
-  ensureStorybookStatic(root, {
-    skipBuild: options.skipBuild,
-    forceRebuild: options.forceRebuild || unskipped,
-    forceReason: unskipped ? "unskip" : "explicit-rebuild",
-    storyIds: storyIds.length ? storyIds : undefined,
-    component,
-  });
-  const warm = await ensureWarmStaticStorybookServer(root, port);
-  if (!warm.ok) await ensurePlaywrightWebServerPort(port);
-
-  const targets = matchingEntries(root, storyIds, component).filter(
+  let targets = matchingEntries(root, storyIds, component).filter(
     (entry) => !(entry.tags ?? []).includes("skip-visual"),
   );
-  if (!targets.length) {
-    throw new Error(
-      `No runnable visual stories for ${storyIds.join(", ") || component} (all skip-visual or missing from index)`,
-    );
-  }
-
-  const needingCreate = options.createOnly
+  let needingCreate = options.createOnly
     ? targets.filter(
         (entry) =>
           !existsSync(
@@ -267,7 +277,49 @@ export async function runBaselineUpdate(
       )
     : [];
 
-  const grep = playwrightGrep(storyIds, component);
+  // Create-only is already satisfied. Existing baselines and review state are
+  // left untouched, and no canonical build or browser process is needed.
+  if (options.createOnly && targets.length > 0 && needingCreate.length === 0) {
+    return;
+  }
+
+  ensureStorybookStatic(root, {
+    skipBuild: options.skipBuild,
+    forceRebuild: options.forceRebuild || unskipped,
+    forceReason: unskipped ? "unskip" : "explicit-rebuild",
+    storyIds: storyIds.length ? storyIds : undefined,
+    component,
+    snapshotDir,
+    baselinePathMode: mode,
+  });
+  targets = matchingEntries(root, storyIds, component).filter(
+    (entry) => !(entry.tags ?? []).includes("skip-visual"),
+  );
+  if (!targets.length) {
+    throw new Error(
+      `No runnable visual stories for ${storyIds.join(", ") || component} (all skip-visual or missing from index)`,
+    );
+  }
+  needingCreate = options.createOnly
+    ? targets.filter(
+        (entry) =>
+          !existsSync(
+            path.join(
+              snapshotDir,
+              snapshotFileName(entry, mode, browser),
+            ),
+          ),
+      )
+    : [];
+  if (options.createOnly && needingCreate.length === 0) return;
+  const captureTargets = options.createOnly ? needingCreate : targets;
+  const warm = await ensureWarmStaticStorybookServer(root, port);
+  if (!warm.ok) await ensurePlaywrightWebServerPort(port);
+
+  const grep = playwrightGrep(
+    captureTargets.map((entry) => entry.id),
+    undefined,
+  );
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
@@ -298,7 +350,7 @@ export async function runBaselineUpdate(
       packageRoot: root,
       snapshotDir,
       mode,
-      storyIds: targets.map((entry) => entry.id),
+      storyIds: captureTargets.map((entry) => entry.id),
     });
     throw error;
   }
@@ -307,10 +359,10 @@ export async function runBaselineUpdate(
     packageRoot: root,
     snapshotDir,
     mode,
-    storyIds: targets.map((entry) => entry.id),
+    storyIds: captureTargets.map((entry) => entry.id),
   });
 
-  for (const entry of targets) {
+  for (const entry of captureTargets) {
     const png = path.join(
       snapshotDir,
       snapshotFileName(entry, mode, browser),
@@ -373,12 +425,19 @@ export async function runInteractionUpdate(
   const port = resolveVisualServerPort(options);
   const stepId = (options.stepId ?? slugifyStepLabel(stepLabel)).trim();
 
-  ensureStorybookStatic(root, {
-    skipBuild: options.skipBuild,
-    forceRebuild: options.forceRebuild,
-  });
-
-  const entry = loadStoryIndex(root)[storyId];
+  let staticPrepared = false;
+  let entry = loadStoryIndex(root)[storyId];
+  if (!entry) {
+    ensureStorybookStatic(root, {
+      skipBuild: options.skipBuild,
+      forceRebuild: options.forceRebuild,
+      storyIds: [storyId],
+      snapshotDir,
+      baselinePathMode: mode,
+    });
+    staticPrepared = true;
+    entry = loadStoryIndex(root)[storyId];
+  }
   if (!entry) {
     throw new Error(`Story not found in index: ${storyId}`);
   }
@@ -410,12 +469,17 @@ export async function runInteractionUpdate(
     existsSync(interactionPng) || existsSync(fallbackInteractionPng);
 
   if (options.createOnly && interactionPngExists()) {
-    patchStoryInteraction({
-      packageRoot: root,
-      storyId,
-      interaction: { id: stepId, label: stepLabel, src },
-    });
     return;
+  }
+
+  if (!staticPrepared) {
+    ensureStorybookStatic(root, {
+      skipBuild: options.skipBuild,
+      forceRebuild: options.forceRebuild,
+      storyIds: [storyId],
+      snapshotDir,
+      baselinePathMode: mode,
+    });
   }
 
   const warmInteraction = await ensureWarmStaticStorybookServer(root, port);
