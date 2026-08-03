@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
+import { VISUAL_DELTA_CACHE_DIR_REL } from "./visual-artifacts.js";
 
 export type StaticBuildReason =
   | "missing-index"
@@ -116,8 +117,7 @@ export function previewModulesNewerThanIndex(packageRoot: string): boolean {
   if (indexMtime == null) return false;
   const statsPath = path.join(
     packageRoot,
-    ".cache",
-    "visual-delta",
+    VISUAL_DELTA_CACHE_DIR_REL,
     "preview-stats.json",
   );
   if (!existsSync(statsPath)) return false;

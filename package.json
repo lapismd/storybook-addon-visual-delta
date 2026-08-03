@@ -70,7 +70,7 @@
     "prepack": "pnpm build:node",
     "storybook": "node ./scripts/run-storybook.mjs",
     "storybook:ci": "node ./scripts/run-storybook.mjs --ci",
-    "build-storybook": "storybook build -o storybook-static",
+    "build-storybook": "node -e \"require('node:fs').mkdirSync('.visual-delta/cache',{recursive:true})\" && storybook build --stats-json .visual-delta/cache -o storybook-static",
     "examples:baselines": "node ./scripts/generate-example-baselines.mjs",
     "examples:baselines:capture": "pnpm build:node && node ./scripts/capture-example-baselines.mjs",
     "test": "vitest run",
