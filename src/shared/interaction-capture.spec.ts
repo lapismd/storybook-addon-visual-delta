@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  captureBaselineSetWithCreateVerification,
   captureInteractionWithCreateVerification,
   interactionIdForInstrumenterCall,
   instrumenterCallIdForInteraction,
@@ -57,6 +58,45 @@ describe("instrumenter interaction capture", () => {
 });
 
 describe("create-only interaction capture verification", () => {
+  it("verifies a complete newly written primary baseline set", () => {
+    const modes: string[] = [];
+    const written = new Set<string>();
+
+    captureBaselineSetWithCreateVerification({
+      createOnly: true,
+      baselinesExist: () => written.size === 2,
+      capture: (mode) => {
+        modes.push(mode);
+        if (mode === "missing") {
+          written.add("one");
+          written.add("two");
+          throw new Error("snapshots did not previously exist");
+        }
+      },
+    });
+
+    expect(modes).toEqual(["missing", "none"]);
+  });
+
+  it("does not verify a partially written primary baseline set", () => {
+    const modes: string[] = [];
+    const written = new Set<string>();
+
+    expect(() =>
+      captureBaselineSetWithCreateVerification({
+        createOnly: true,
+        baselinesExist: () => written.size === 2,
+        capture: (mode) => {
+          modes.push(mode);
+          written.add("one");
+          throw new Error("one snapshot was not written");
+        },
+      }),
+    ).toThrow("one snapshot was not written");
+
+    expect(modes).toEqual(["missing"]);
+  });
+
   it("verifies a newly written missing interaction without further writes", () => {
     const modes: string[] = [];
     let baselineExists = false;

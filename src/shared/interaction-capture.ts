@@ -58,6 +58,34 @@ export function interactionSnapshotUpdateMode(
 export type InteractionCaptureUpdateMode = "none" | "missing" | "all";
 
 /**
+ * Recover Playwright's expected create-only missing-snapshot failure only when
+ * the complete requested baseline set was written, then verify it without
+ * allowing any further snapshot mutation.
+ */
+export function captureBaselineSetWithCreateVerification(options: {
+  createOnly: boolean | undefined;
+  baselinesExist: () => boolean;
+  capture: (mode: InteractionCaptureUpdateMode) => void;
+  onVerifyCreated?: () => void;
+}): void {
+  const baselinesExistedBefore = options.baselinesExist();
+  const updateMode = interactionSnapshotUpdateMode(options.createOnly);
+  try {
+    options.capture(updateMode);
+  } catch (error) {
+    if (
+      !options.createOnly ||
+      baselinesExistedBefore ||
+      !options.baselinesExist()
+    ) {
+      throw error;
+    }
+    options.onVerifyCreated?.();
+    options.capture("none");
+  }
+}
+
+/**
  * Run one exact interaction capture without misclassifying Playwright's
  * create-only missing-snapshot signal as a failed writer.
  *
@@ -71,21 +99,12 @@ export function captureInteractionWithCreateVerification(options: {
   capture: (mode: InteractionCaptureUpdateMode) => void;
   onVerifyCreated?: () => void;
 }): void {
-  const baselineExistedBefore = options.baselineExists();
-  const updateMode = interactionSnapshotUpdateMode(options.createOnly);
-  try {
-    options.capture(updateMode);
-  } catch (error) {
-    if (
-      !options.createOnly ||
-      baselineExistedBefore ||
-      !options.baselineExists()
-    ) {
-      throw error;
-    }
-    options.onVerifyCreated?.();
-    options.capture("none");
-  }
+  captureBaselineSetWithCreateVerification({
+    createOnly: options.createOnly,
+    baselinesExist: options.baselineExists,
+    capture: options.capture,
+    onVerifyCreated: options.onVerifyCreated,
+  });
 }
 
 /**

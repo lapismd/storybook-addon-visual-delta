@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   attachSidecars,
   managerIndexedVisualRunScope,
+  visualBaselineWriteCommandArgs,
   visualTestCommandArgs,
 } from "./middleware.js";
 import {
@@ -113,6 +114,76 @@ describe("portable Visual Delta host options", () => {
       "-g",
       "workspace-shell-tabs--top-light$",
     ]);
+  });
+
+  it("forwards the host baseline identity to create-only mutations", () => {
+    expect(
+      visualBaselineWriteCommandArgs(
+        {
+          snapshotDir: "snapshots",
+          baselinePathMode: "nested-import",
+        },
+        "/workspace",
+        {
+          createOnly: true,
+          rebuild: false,
+          browser: "chromium",
+          storyIds: ["workspace-shell-tabs--top-light"],
+          component: undefined,
+        },
+      ),
+    ).toEqual([
+      ...DEFAULT_VISUAL_UPDATE_ARGS,
+      "--create-only",
+      "--snapshot-dir",
+      "/workspace/snapshots",
+      "--baseline-path-mode",
+      "nested-import",
+      "--browser",
+      "chromium",
+      "--story-id",
+      "workspace-shell-tabs--top-light",
+    ]);
+  });
+
+  it("preserves explicit writer baseline identity overrides", () => {
+    const visualUpdateArgs = [
+      ...DEFAULT_VISUAL_UPDATE_ARGS,
+      "--snapshot-dir",
+      "custom-snapshots",
+      "--baseline-path-mode",
+      "story-id",
+    ];
+    const args = visualBaselineWriteCommandArgs(
+      {
+        snapshotDir: "snapshots",
+        baselinePathMode: "nested-import",
+        visualUpdateArgs,
+      },
+      "/workspace",
+      {
+        createOnly: false,
+        rebuild: true,
+        browser: "firefox",
+        storyIds: [],
+        component: "Workspace/Shell",
+      },
+    );
+
+    expect(args).toEqual([
+      ...visualUpdateArgs,
+      "--rebuild",
+      "--browser",
+      "firefox",
+      "--component",
+      "Workspace/Shell",
+    ]);
+    expect(args.filter((argument) => argument === "--snapshot-dir")).toHaveLength(
+      1,
+    );
+    expect(
+      args.filter((argument) => argument === "--baseline-path-mode"),
+    ).toHaveLength(1);
   });
 
   it("narrows Playwright with repeatable browser projects", () => {

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
+  captureBaselineSetWithCreateVerification,
   captureInteractionWithCreateVerification,
   interactionScreenshotRelativePath,
   slugifyStepLabel,
@@ -320,31 +321,58 @@ export async function runBaselineUpdate(
     captureTargets.map((entry) => entry.id),
     undefined,
   );
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    PLAYWRIGHT_UPDATE_SNAPSHOTS: "1",
-    VISUAL_UPDATE_APPROVED: "1",
-    ...(options.createOnly ? { PLAYWRIGHT_UPDATE_MODE: "missing" } : {}),
-    VISUAL_DELTA_BASELINE_PATH_MODE: mode,
-    VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
-    ...(options.createOnly ? { VISUAL_DELTA_FAILURE_MODE: "warn" } : {}),
-  };
-
   try {
-    execFileSync(
-      "pnpm",
-      [
-        "exec",
-        "playwright",
-        "test",
-        // Explicit mode — bare `--update-snapshots` means "all" and overrides config.
-        `--update-snapshots=${options.createOnly ? "missing" : "all"}`,
-        "--project",
-        browser,
-        ...(grep ? ["-g", grep] : []),
-      ],
-      { cwd: root, stdio: "inherit", env },
-    );
+    captureBaselineSetWithCreateVerification({
+      createOnly: options.createOnly,
+      baselinesExist: () =>
+        captureTargets.every((entry) =>
+          existsSync(
+            path.join(
+              snapshotDir,
+              snapshotFileName(entry, mode, browser),
+            ),
+          ),
+        ),
+      capture: (updateMode) => {
+        execFileSync(
+          "pnpm",
+          [
+            "exec",
+            "playwright",
+            "test",
+            // Explicit mode — bare `--update-snapshots` means "all" and overrides config.
+            `--update-snapshots=${updateMode}`,
+            "--project",
+            browser,
+            ...(grep ? ["-g", grep] : []),
+          ],
+          {
+            cwd: root,
+            stdio: "inherit",
+            env: {
+              ...process.env,
+              PLAYWRIGHT_UPDATE_SNAPSHOTS:
+                updateMode === "none" ? "0" : "1",
+              PLAYWRIGHT_UPDATE_MODE: updateMode,
+              VISUAL_UPDATE_APPROVED: "1",
+              VISUAL_DELTA_BASELINE_PATH_MODE: mode,
+              VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
+              ...(options.createOnly
+                ? { VISUAL_DELTA_FAILURE_MODE: "warn" }
+                : {}),
+            },
+          },
+        );
+      },
+      onVerifyCreated: () => {
+        invalidateVisualResultArtifacts({
+          packageRoot: root,
+          snapshotDir,
+          mode,
+          storyIds: captureTargets.map((entry) => entry.id),
+        });
+      },
+    });
   } catch (error) {
     invalidateVisualResultArtifacts({
       packageRoot: root,

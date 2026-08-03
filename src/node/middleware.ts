@@ -734,6 +734,41 @@ async function handleRebuildStatic(
   res.end();
 }
 
+export function visualBaselineWriteCommandArgs(
+  options: VisualDeltaHostOptions,
+  root: string,
+  input: {
+    createOnly: boolean;
+    rebuild: boolean;
+    browser: VisualDeltaBrowser;
+    storyIds: string[];
+    component: string | undefined;
+  },
+): string[] {
+  const configured = [
+    ...(options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS]),
+  ];
+  const baseArgs = input.rebuild
+    ? configured.filter((argument) => argument !== "--skip-build")
+    : configured;
+  return [
+    ...baseArgs,
+    ...(input.rebuild ? ["--rebuild"] : []),
+    ...(input.createOnly ? ["--create-only"] : []),
+    ...(!baseArgs.includes("--snapshot-dir")
+      ? ["--snapshot-dir", resolveSnapshotDir(options, root)]
+      : []),
+    ...(!baseArgs.includes("--baseline-path-mode")
+      ? ["--baseline-path-mode", resolveBaselinePathMode(options)]
+      : []),
+    "--browser",
+    input.browser,
+    ...(input.component
+      ? ["--component", input.component]
+      : input.storyIds.flatMap((storyId) => ["--story-id", storyId])),
+  ];
+}
+
 async function handleBaselineWrite(
   req: IncomingMessage,
   res: ServerResponse,
@@ -808,17 +843,13 @@ async function handleBaselineWrite(
     workflow: workflowFor(root),
   });
   const rebuild = Boolean(body.rebuild);
-  const baseArgs = options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS];
-  const args = [
-    ...(rebuild ? baseArgs.filter((arg) => arg !== "--skip-build") : baseArgs),
-    ...(rebuild ? ["--rebuild"] : []),
-    ...(createOnly ? ["--create-only"] : []),
-    "--browser",
+  const args = visualBaselineWriteCommandArgs(options, root, {
+    createOnly,
+    rebuild,
     browser,
-    ...(component
-      ? ["--component", component]
-      : storyIds.flatMap((storyId) => ["--story-id", storyId])),
-  ];
+    storyIds,
+    component,
+  });
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
