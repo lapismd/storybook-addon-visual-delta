@@ -558,7 +558,10 @@ export const PlacementAndGallery: Story = {
   name: "Placement and gallery",
   render: () => (
     <ThemeHost>
-      <PanelShell backend={createMockVisualBackend()} />
+      <PanelShell
+        backend={createMockVisualBackend()}
+        modeNames={["Alternate"]}
+      />
     </ThemeHost>
   ),
   play: async ({ canvasElement }) => {
@@ -592,7 +595,16 @@ export const PlacementAndGallery: Story = {
       "false",
     );
 
-    await userEvent.click(scope.getByTitle("Select image 2"));
+    await userEvent.click(
+      scope.getByRole("button", {
+        name: "Visual mode: Default, not run",
+      }),
+    );
+    await userEvent.click(
+      within(document.body).getByRole("button", {
+        name: "Alternate mode, not run",
+      }),
+    );
     await expect(scope.getByTestId("fixture-gallery-index")).toHaveTextContent(
       "1",
     );

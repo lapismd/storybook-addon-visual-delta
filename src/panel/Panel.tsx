@@ -2328,20 +2328,35 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         <>
           <PanelToolbar>
             <ToolbarRow>
-              {section.thumbSrc ? (
+              {section.id === "default" ? (
+                <ModeSelector
+                  modeNames={modeNames}
+                  value={selectedMode}
+                  onChange={handleModeChange}
+                  disabled={busy}
+                  results={modeResultStatuses}
+                  previewSources={modePreviewSources}
+                  onPreviewOpen={({ name, src, image }) => {
+                    const source = primaryImages.find(
+                      (candidate) => candidate.src === src,
+                    );
+                    const size = baselineLightboxCssSize(source, image);
+                    setToolbarLightboxImage({
+                      src,
+                      label: `${name} baseline`,
+                      width: size.width,
+                      height: size.height,
+                    });
+                  }}
+                />
+              ) : section.thumbSrc ? (
                 <SectionThumbFrame
                   type="button"
                   title={`Open ${section.label} baseline full image`}
                   aria-label={`Open ${section.label} baseline full image`}
                   onClick={(event) => {
-                    const source =
-                      section.id === "default"
-                        ? primaryImages.find(
-                            (image) => image.src === section.thumbSrc,
-                          )
-                        : undefined;
                     const size = baselineLightboxCssSize(
-                      source,
+                      undefined,
                       event.currentTarget.querySelector("img"),
                     );
                     setToolbarLightboxImage({
@@ -2354,16 +2369,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 >
                   <SectionThumb src={section.thumbSrc} alt="" />
                 </SectionThumbFrame>
-              ) : null}
-              {section.id === "default" ? (
-                <ModeSelector
-                  modeNames={modeNames}
-                  value={selectedMode}
-                  onChange={handleModeChange}
-                  disabled={busy}
-                  results={modeResultStatuses}
-                  previewSources={modePreviewSources}
-                />
               ) : null}
               <LiveVisibilityToggle
                 liveVisible={liveVisible}

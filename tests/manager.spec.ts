@@ -63,6 +63,19 @@ test.describe("Visual Delta manager integration", () => {
     );
     await expect(controls.nth(0)).toContainText("Chromium");
 
+    const singleImageControl = panel.getByRole("group", {
+      name: "Visual mode and baseline preview",
+    });
+    await expect(singleImageControl.getByRole("button")).toHaveCount(1);
+    await expect(
+      singleImageControl.getByRole("button", {
+        name: "Open Default baseline full image",
+      }),
+    ).toBeVisible();
+    await expect(
+      singleImageControl.getByRole("button", { name: /Visual mode:/ }),
+    ).toHaveCount(0);
+
     await controls.nth(0).click();
     await page.getByRole("button", { name: "Firefox", exact: true }).click();
     await expect(controls.nth(0)).toContainText("Firefox");
@@ -1201,7 +1214,7 @@ test.describe("Visual Delta manager integration", () => {
     expect(writes).toEqual([]);
   });
 
-  test("selects mode baselines only through thumbnail-backed mode choices", async ({
+  test("selects mode baselines through the split preview and image menu", async ({
     page,
   }) => {
     const writes = await mockVisualBackend(page);
@@ -1214,10 +1227,46 @@ test.describe("Visual Delta manager integration", () => {
     const trigger = panel.getByRole("button", {
       name: "Visual mode: Default, not run",
     });
-    await expect(trigger.locator("img")).toHaveAttribute(
+    const split = panel.getByRole("group", {
+      name: "Visual mode and baseline preview",
+    });
+    const preview = split.getByRole("button", {
+      name: "Open Default baseline full image",
+    });
+    await expect(preview.locator("img")).toHaveAttribute(
       "src",
       /\/visual-baselines\/examples\/modes\/default\.png/,
     );
+    await expect(preview.locator("img")).toHaveCSS("object-fit", "contain");
+    await expect(preview.locator("img")).toHaveCSS(
+      "object-position",
+      "50% 50%",
+    );
+    await expect(trigger.locator("img")).toHaveCount(0);
+    const placementPad = panel.getByRole("group", {
+      name: "Baseline position",
+    });
+    await expect
+      .poll(async () => {
+        const [splitBox, placementBox] = await Promise.all([
+          split.boundingBox(),
+          placementPad.boundingBox(),
+        ]);
+        if (!splitBox || !placementBox) return Number.POSITIVE_INFINITY;
+        return Math.max(
+          Math.abs(splitBox.height - placementBox.height),
+          Math.abs(splitBox.width - placementBox.width),
+        );
+      })
+      .toBeLessThanOrEqual(1);
+
+    await preview.click();
+    await expect(
+      page.getByRole("dialog", { name: "Default baseline full image" }),
+    ).toBeAttached();
+    await expect(page.getByTestId("image-lightbox")).toBeVisible();
+    await page.getByRole("button", { name: "Close modal" }).click();
+
     await trigger.click();
 
     const defaultChoice = page.getByRole("button", {
@@ -1234,6 +1283,14 @@ test.describe("Visual Delta manager integration", () => {
       "src",
       /\/visual-baselines\/examples\/modes\/compact\.png/,
     );
+    await expect(compactChoice.locator("img")).toHaveCSS(
+      "object-fit",
+      "contain",
+    );
+    await expect(compactChoice.locator("img")).toHaveCSS(
+      "object-position",
+      "50% 50%",
+    );
     await compactChoice.click();
 
     await expect(
@@ -1243,6 +1300,24 @@ test.describe("Visual Delta manager integration", () => {
     ).toBeVisible();
     await expect(previewFrame(page).getByTestId("examples-modes")).toContainText(
       "Compact mode",
+    );
+    await expect(
+      split.getByRole("button", {
+        name: "Open Compact baseline full image",
+      }),
+    ).toHaveAttribute(
+      "title",
+      "Open Compact baseline full image",
+    );
+    await expect(
+      split
+        .getByRole("button", {
+          name: "Open Compact baseline full image",
+        })
+        .locator("img"),
+    ).toHaveAttribute(
+      "src",
+      /\/visual-baselines\/examples\/modes\/compact\.png/,
     );
     await expect(
       previewFrame(page).locator("#visual-delta-overlay > img"),

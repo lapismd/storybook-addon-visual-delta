@@ -13,7 +13,10 @@ import type { VisualRunMode } from "../manager/VisualRunSplitButton.js";
 import { BaselineAccordion } from "../panel/BaselineAccordion.js";
 import { BaselineGeometryWarning } from "../panel/BaselineGeometryWarning.js";
 import { ConfigurationPanel } from "../panel/ConfigurationPanel.js";
-import { ImageGallery } from "../panel/ImageGallery.js";
+import {
+  ImageLightbox,
+  type LightboxImage,
+} from "../panel/ImageLightbox.js";
 import { LiveVisibilityToggle } from "../panel/LiveVisibilityToggle.js";
 import {
   PanelResultSummary,
@@ -209,6 +212,8 @@ export function PanelShell({
   const [acceptScope, setAcceptScope] = useState("none");
   const [showConfiguration, setShowConfiguration] = useState(configurationOpen);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
+  const [modeLightboxImage, setModeLightboxImage] =
+    useState<LightboxImage | null>(null);
 
   const recordActions = useCallback(() => {
     setActionLog(backend.actions.join(","));
@@ -401,6 +406,15 @@ export function PanelShell({
     ],
     [badgeStatus, diffResult, images, interactionSteps],
   );
+  const modePreviewSources = useMemo(() => {
+    const sources: Record<string, string> = {};
+    if (images[0]) sources.Default = images[0].src;
+    modeNames.forEach((name, index) => {
+      const image = images[index + 1];
+      if (image) sources[name] = image.src;
+    });
+    return sources;
+  }, [images, modeNames]);
 
   const progressRunning = isRunning || runProgress != null;
   const summaryState: PanelResultState = captureError
@@ -587,9 +601,26 @@ export function PanelShell({
               <ModeSelector
                 modeNames={modeNames}
                 value={selectedMode}
-                onChange={setSelectedMode}
+                onChange={(mode) => {
+                  setSelectedMode(mode);
+                  const nextIndex = mode
+                    ? modeNames.indexOf(mode) + 1
+                    : 0;
+                  if (nextIndex >= 0 && nextIndex < images.length) {
+                    setIndex(nextIndex);
+                  }
+                }}
                 results={modeResults}
                 disabled={busy}
+                previewSources={modePreviewSources}
+                onPreviewOpen={({ name, src, image }) => {
+                  setModeLightboxImage({
+                    src,
+                    label: `${name} baseline`,
+                    width: image?.naturalWidth || 120,
+                    height: image?.naturalHeight || 48,
+                  });
+                }}
               />
               <LiveVisibilityToggle
                 liveVisible={liveVisible}
@@ -620,11 +651,6 @@ export function PanelShell({
                   }}
                 />
               ) : null}
-              <ImageGallery
-                images={images}
-                selectedIndex={index}
-                onSelect={setIndex}
-              />
             </ToolbarRow>
             {diffResult ? <ErrorText>{diffResult}</ErrorText> : null}
           </PanelToolbar>
@@ -652,6 +678,10 @@ export function PanelShell({
                   : ""}
               </FormPlaceholder>
             )}
+          />
+          <ImageLightbox
+            image={modeLightboxImage}
+            onClose={() => setModeLightboxImage(null)}
           />
         </>
       }
