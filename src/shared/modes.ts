@@ -14,6 +14,23 @@ export type VisualDeltaModeDef = {
 
 export type VisualDeltaModes = Record<string, VisualDeltaModeDef>;
 
+/** Resolve the baseline index represented by the mode dropdown. */
+export function resolveModeImageSelection(
+  images: ReadonlyArray<{ mode?: string }>,
+  selectedMode: string | null,
+): { index: number; selectedMode: string | null } {
+  if (images.length === 0) return { index: -1, selectedMode: null };
+  if (selectedMode) {
+    const modeIndex = images.findIndex((image) => image.mode === selectedMode);
+    if (modeIndex >= 0) return { index: modeIndex, selectedMode };
+  }
+  const defaultIndex = images.findIndex((image) => !image.mode);
+  return {
+    index: defaultIndex >= 0 ? defaultIndex : 0,
+    selectedMode: null,
+  };
+}
+
 /** Filesystem / URL slug for a mode name (`Dark Desktop` → `dark-desktop`). */
 export function modeBaselineSlug(modeName: string): string {
   return modeName

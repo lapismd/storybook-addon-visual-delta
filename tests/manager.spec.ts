@@ -27,6 +27,7 @@ const FILTER_INTERACTION_FIXTURE =
 const FILTER_MISSING_FIXTURE = "filter-power-search--edit-remove-and-clear";
 const EXAMPLE_DIFFERENCE_FIXTURE =
   "examples-card--intentional-difference";
+const EXAMPLE_MODES_FIXTURE = "examples-modes--default-and-compact";
 const FIXTURE_BASELINE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -1197,6 +1198,68 @@ test.describe("Visual Delta manager integration", () => {
       page.getByRole("button", { name: "Dark desktop mode, not run" }),
     );
     await expect(previewFrame(page).locator("html")).toHaveClass(/dark/);
+    expect(writes).toEqual([]);
+  });
+
+  test("selects mode baselines only through thumbnail-backed mode choices", async ({
+    page,
+  }) => {
+    const writes = await mockVisualBackend(page);
+    await openManager(page, EXAMPLE_MODES_FIXTURE, DEV_STORYBOOK);
+
+    const panel = page.getByTestId("visual-delta-panel");
+    await expect(panel.getByTitle(/Select image \d+/)).toHaveCount(0);
+    await expect(panel.getByText("Mode", { exact: true })).toHaveCount(0);
+
+    const trigger = panel.getByRole("button", {
+      name: "Visual mode: Default, not run",
+    });
+    await expect(trigger.locator("img")).toHaveAttribute(
+      "src",
+      /\/visual-baselines\/examples\/modes\/default\.png/,
+    );
+    await trigger.click();
+
+    const defaultChoice = page.getByRole("button", {
+      name: "Default mode, not run",
+    });
+    const compactChoice = page.getByRole("button", {
+      name: "Compact mode, not run",
+    });
+    await expect(defaultChoice.locator("img")).toHaveAttribute(
+      "src",
+      /\/visual-baselines\/examples\/modes\/default\.png/,
+    );
+    await expect(compactChoice.locator("img")).toHaveAttribute(
+      "src",
+      /\/visual-baselines\/examples\/modes\/compact\.png/,
+    );
+    await compactChoice.click();
+
+    await expect(
+      panel.getByRole("button", {
+        name: "Visual mode: Compact, not run",
+      }),
+    ).toBeVisible();
+    await expect(previewFrame(page).getByTestId("examples-modes")).toContainText(
+      "Compact mode",
+    );
+    await expect(
+      previewFrame(page).locator("#visual-delta-overlay > img"),
+    ).toHaveAttribute(
+      "src",
+      /\/visual-baselines\/examples\/modes\/compact\.png/,
+    );
+
+    await panel
+      .getByRole("button", { name: "Visual mode: Compact, not run" })
+      .click();
+    await page
+      .getByRole("button", { name: "Default mode, not run" })
+      .click();
+    await expect(previewFrame(page).getByTestId("examples-modes")).toContainText(
+      "Default mode",
+    );
     expect(writes).toEqual([]);
   });
 

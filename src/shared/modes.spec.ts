@@ -4,8 +4,30 @@ import {
   modeBaselineSrc,
   modeBaselineSlug,
   modeNames,
+  resolveModeImageSelection,
   stackModes,
 } from "./modes.js";
+
+describe("resolveModeImageSelection", () => {
+  const images = [
+    { src: "/default.png" },
+    { src: "/compact.png", mode: "Compact" },
+  ];
+
+  it("retains an available selected mode across image rehydration", () => {
+    expect(resolveModeImageSelection(images, "Compact")).toEqual({
+      index: 1,
+      selectedMode: "Compact",
+    });
+  });
+
+  it("falls back to the unlabelled Default image when a mode disappears", () => {
+    expect(resolveModeImageSelection(images, "Dark")).toEqual({
+      index: 0,
+      selectedMode: null,
+    });
+  });
+});
 
 describe("modeBaselineSlug", () => {
   it("slugifies mode names", () => {

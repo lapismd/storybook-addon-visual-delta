@@ -16,14 +16,8 @@ const Wrap = styled.div({
   fontSize: 11,
 });
 
-const Label = styled.span(({ theme }) => ({
-  color: theme.textMutedColor,
-  flexShrink: 0,
-  fontWeight: 600,
-}));
-
 const Trigger = styled(Button)({
-  minWidth: 104,
+  minWidth: 112,
   justifyContent: "space-between",
   fontSize: 11,
 });
@@ -34,6 +28,17 @@ const ModeRow = styled.span({
   gap: 7,
   minWidth: 0,
 });
+
+const ModeThumbnail = styled.img(({ theme }) => ({
+  width: 32,
+  height: 22,
+  flex: "0 0 32px",
+  objectFit: "cover",
+  objectPosition: "top left",
+  border: `1px solid ${theme.appBorderColor}`,
+  borderRadius: 3,
+  background: theme.background.content,
+}));
 
 const StatusDot = styled.span<{ $status?: VisualModeResultStatus }>(
   ({ theme, $status }) => ({
@@ -69,6 +74,7 @@ export function ModeSelector({
   onChange,
   disabled = false,
   results = {},
+  previewSources = {},
 }: {
   modeNames: string[];
   value: string | null;
@@ -76,6 +82,8 @@ export function ModeSelector({
   disabled?: boolean;
   /** Result state keyed by `Default` or a configured mode name. */
   results?: Record<string, VisualModeResultStatus>;
+  /** Resolved baseline thumbnails keyed by `Default` or mode name. */
+  previewSources?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
   if (modeNames.length === 0) return null;
@@ -83,7 +91,6 @@ export function ModeSelector({
   const choices = ["Default", ...modeNames];
   return (
     <Wrap>
-      <Label id="visual-delta-mode-label">Mode</Label>
       <PopoverProvider
         ariaLabel="Choose visual mode"
         placement="bottom-start"
@@ -109,6 +116,9 @@ export function ModeSelector({
                       </ActionList.Icon>
                       <ActionList.Text>
                         <ModeRow>
+                          {previewSources[name] ? (
+                            <ModeThumbnail src={previewSources[name]} alt="" />
+                          ) : null}
                           <StatusDot $status={status} aria-hidden="true" />
                           <span>{name}</span>
                           <span className="sb-unstyled">
@@ -133,6 +143,9 @@ export function ModeSelector({
           title="Choose visual mode"
         >
           <ModeRow>
+            {previewSources[current] ? (
+              <ModeThumbnail src={previewSources[current]} alt="" />
+            ) : null}
             <StatusDot $status={results[current]} aria-hidden="true" />
             <span>{current}</span>
           </ModeRow>

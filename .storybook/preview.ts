@@ -20,6 +20,9 @@ const preview: Preview = {
   ],
   initialGlobals: {
     colorMode: "light",
+    // Visual Delta's Compact example updates this through Storybook's manager
+    // API. Storybook rejects globals absent from initialGlobals/globalTypes.
+    exampleDensity: "default",
   },
   parameters: {
     layout: "fullscreen",

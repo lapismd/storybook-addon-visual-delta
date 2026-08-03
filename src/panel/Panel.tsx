@@ -91,7 +91,6 @@ import { compareLoadedImages } from "./image-comparison.js";
 import { DiffResult } from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
-import { ImageGallery } from "./ImageGallery.js";
 import {
   BaselineAccordion,
   SectionThumb,
@@ -358,6 +357,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       unavailableBaselineSources,
     ],
   );
+  const modePreviewSources = useMemo(() => {
+    const sources: Record<string, string> = {};
+    const defaultImage = primaryImages.find((image) => !image.mode);
+    if (defaultImage) sources.Default = defaultImage.src;
+    for (const image of primaryImages) {
+      if (image.mode) sources[image.mode] = image.src;
+    }
+    return sources;
+  }, [primaryImages]);
   const interactions = useMemo(
     () =>
       configuredInteractions.filter(
@@ -1914,10 +1922,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const handleModeChange = useCallback(
     (mode: string | null) => {
       setSelectedMode(mode, primaryImages);
-      if (mode == null) return;
-      const globals = modes[mode]?.globals;
-      if (globals && typeof api.updateGlobals === "function") {
-        api.updateGlobals(globals);
+      if (typeof api.updateGlobals === "function") {
+        const clearedGlobals = Object.fromEntries(
+          Object.values(modes).flatMap((definition) =>
+            Object.keys(definition.globals ?? {}).map((key) => [key, undefined]),
+          ),
+        );
+        api.updateGlobals({
+          ...clearedGlobals,
+          ...(mode ? modes[mode]?.globals : undefined),
+        });
       }
     },
     [api, modes, primaryImages, setSelectedMode],
@@ -2321,7 +2335,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   aria-label={`Open ${section.label} baseline full image`}
                   onClick={(event) => {
                     const source =
-                      section.id === "default" ? primaryImages[0] : undefined;
+                      section.id === "default"
+                        ? primaryImages.find(
+                            (image) => image.src === section.thumbSrc,
+                          )
+                        : undefined;
                     const size = baselineLightboxCssSize(
                       source,
                       event.currentTarget.querySelector("img"),
@@ -2337,21 +2355,6 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   <SectionThumb src={section.thumbSrc} alt="" />
                 </SectionThumbFrame>
               ) : null}
-              {section.id === "default" &&
-              liveVisible &&
-              primaryImages.length > 1 ? (
-                <ImageGallery
-                  images={primaryImages}
-                  selectedIndex={
-                    selectedInteractionId
-                      ? 0
-                      : overlayOn
-                        ? Math.max(0, index)
-                        : -1
-                  }
-                  onSelect={setIndex}
-                />
-              ) : null}
               {section.id === "default" ? (
                 <ModeSelector
                   modeNames={modeNames}
@@ -2359,6 +2362,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                   onChange={handleModeChange}
                   disabled={busy}
                   results={modeResultStatuses}
+                  previewSources={modePreviewSources}
                 />
               ) : null}
               <LiveVisibilityToggle
@@ -2469,6 +2473,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       liveVisible,
       modeNames,
       modeResultStatuses,
+      modePreviewSources,
       opacity,
       overlayOn,
       passThresholdPercent,

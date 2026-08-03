@@ -53,6 +53,7 @@ import {
   mergeStoryFinished,
   type PreviewReadiness,
 } from "../shared/baseline-readiness.js";
+import { resolveModeImageSelection } from "../shared/modes.js";
 
 const PINNED_INTERACTION_SRC_KEY = "visual-delta/pinned-interaction-src";
 
@@ -633,7 +634,7 @@ export function useStoryData(currentStoryId?: string) {
                 resolvedPlacement,
               )
             : primaryImages;
-        // Keep gallery index whenever baselines exist. Soft-hide only clears
+        // Keep the selected baseline whenever baselines exist. Soft-hide only clears
         // overlay visibility (`overlayOn` / previewIndex), not Diff selection.
         const selection = initImageSelection({
           imageCount: images.length,
@@ -643,19 +644,25 @@ export function useStoryData(currentStoryId?: string) {
         });
         const modes = data.modes ?? {};
         const modeNames = data.modeNames ?? Object.keys(modes);
+        const modeSelection = resolveModeImageSelection(
+          primaryImages,
+          prev.storyId === data.storyId ? prev.selectedMode : null,
+        );
+        const selectedIndex =
+          interactionSrc != null ? selection.index : modeSelection.index;
+        const previewIndex = selection.overlayOn ? selectedIndex : -1;
         const next: StoryData = {
           images,
           interactions,
           modes,
           modeNames,
-          selectedMode:
-            prev.storyId === data.storyId ? prev.selectedMode : null,
+          selectedMode: modeSelection.selectedMode,
           storyId: data.storyId,
           storyName: data.storyName,
           layout: data.layout ?? null,
           renderGeneration: readiness.renderGeneration,
           storyFinished: readiness.storyFinished,
-          index: selection.index,
+          index: selectedIndex,
           overlayOn: selection.overlayOn,
           opacity: resolvedOpacity,
           baselineLabelOffset: data.baselineLabelOffset ?? {
@@ -717,8 +724,8 @@ export function useStoryData(currentStoryId?: string) {
         // Defer SELECT until storyFinished so early INIT (decorator mount)
         // does not burn 5s settlement timeouts / cancel loops while the
         // REQUEST_INIT interval is still polling.
-        if (readiness.storyFinished || selection.previewIndex < 0) {
-          void selectImage(selection.previewIndex, images);
+        if (readiness.storyFinished || previewIndex < 0) {
+          void selectImage(previewIndex, images);
         }
         return next;
       });
@@ -1568,7 +1575,7 @@ export function useStoryData(currentStoryId?: string) {
     [emitStyle, selectImage],
   );
 
-  /** Restore end-of-play gallery images (Default tab). */
+  /** Restore end-of-play baseline images (Default tab). */
   const restorePrimaryBaselines = useCallback(
     (
       availablePrimaryImages: VisualDeltaImage[] = primaryImagesRef.current,
@@ -1578,18 +1585,22 @@ export function useStoryData(currentStoryId?: string) {
       setStoryData((prev) => {
         const images = withPlacement(availablePrimaryImages, prev.placement);
         const hasImages = images.length > 0;
+        const modeSelection = resolveModeImageSelection(
+          images,
+          prev.selectedMode,
+        );
         const overlayOn =
           hasImages &&
           (revealForReview || prefsRef.current.overlayOn || !prev.liveVisible);
         const next: StoryData = {
           ...prev,
           images,
-          index: hasImages ? 0 : -1,
+          index: modeSelection.index,
           overlayOn,
-          selectedMode: null,
+          selectedMode: modeSelection.selectedMode,
         };
         emitStyle(next);
-        void selectImage(overlayOn ? next.index : -1, images);
+        void selectImage(overlayOn ? modeSelection.index : -1, images);
         return next;
       });
     },
@@ -1601,7 +1612,7 @@ export function useStoryData(currentStoryId?: string) {
   }, []);
 
   /**
-   * Select a Chromatic-style mode: pin matching gallery image (if any) and
+   * Select a Chromatic-style mode: pin its matching baseline image (if any) and
    * store the mode name so the panel can apply Storybook globals.
    */
   const setSelectedMode = useCallback(
@@ -1615,7 +1626,7 @@ export function useStoryData(currentStoryId?: string) {
             availablePrimaryImages,
             prev.placement,
           );
-          const index = images.length > 0 ? 0 : -1;
+          const { index } = resolveModeImageSelection(images, null);
           const next: StoryData = {
             ...prev,
             selectedMode: null,
@@ -1627,8 +1638,8 @@ export function useStoryData(currentStoryId?: string) {
           return next;
         }
         const primary = availablePrimaryImages;
-        const modeIndex = primary.findIndex((img) => img.mode === modeName);
-        if (modeIndex >= 0) {
+        const modeIndex = resolveModeImageSelection(primary, modeName).index;
+        if (modeIndex >= 0 && primary[modeIndex]?.mode === modeName) {
           const next: StoryData = {
             ...prev,
             selectedMode: modeName,
