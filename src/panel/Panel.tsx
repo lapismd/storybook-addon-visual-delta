@@ -88,9 +88,13 @@ import {
   withVerifiedPreviewViewport,
 } from "./capture.js";
 import { compareLoadedImages } from "./image-comparison.js";
-import { DiffResult } from "./DiffResult.js";
+import {
+  DiffCaptureDiagnostics,
+  DiffResult,
+} from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
+import { formatPlaywrightCaptureDiagnostics } from "./capture-diagnostics.js";
 import {
   BaselineAccordion,
   SectionThumb,
@@ -785,6 +789,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const [isDeletingBaseline, setIsDeletingBaseline] = useState(false);
   const [updateLog, setUpdateLog] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResultData | null>(null);
+  const [browserCaptureDiagnostics, setBrowserCaptureDiagnostics] = useState<{
+    storyId: string;
+    baselineStem: string;
+    note: string;
+  } | null>(null);
   const [showDistribution, setShowDistribution] = useState(false);
   const [showAllInteractions, setShowAllInteractions] = useState(false);
   const [toolbarLightboxImage, setToolbarLightboxImage] =
@@ -1173,6 +1182,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
   const selectedBaselineIndex = index >= 0 ? index : images.length > 0 ? 0 : -1;
   const baselineSrc = images[selectedBaselineIndex]?.src;
   const baselineStem = baselineSrc?.split("?")[0] ?? "";
+  const activeBrowserCaptureDiagnostics =
+    browserCaptureDiagnostics?.storyId === storyId &&
+    browserCaptureDiagnostics.baselineStem === baselineStem
+      ? browserCaptureDiagnostics.note
+      : null;
   /** True for panel-initiated runs and sidebar / Testing Module runs. */
   const runInFlight = isRunningVisual || runProgress != null;
   const runProgressLabel = runInFlight
@@ -1405,9 +1419,11 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       );
       setCaptureError(null);
       setDiffResult(null);
+      setBrowserCaptureDiagnostics(null);
       if (engine === "chromium") setUpdateLog(null);
       try {
         const selectedImage = images[diffIndex];
+        const selectedBaselineStem = selectedImage.src.split("?")[0] ?? "";
         // Soft-hide clears the preview overlay attach — load from gallery src.
         const currentOverlayInfo = await getOverlayInfo().catch(() => null);
         const baselineSrcForDiff =
@@ -1480,6 +1496,16 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             baselineSrcForDiff.split("?")[0] ??
             selectedImage.src.split("?")[0] ??
             "";
+          const captureDiagnostics = result.sidecar
+            ? formatPlaywrightCaptureDiagnostics(result.sidecar)
+            : null;
+          if (selectedBaselineStem && captureDiagnostics) {
+            setBrowserCaptureDiagnostics({
+              storyId: storyId!,
+              baselineStem: selectedBaselineStem,
+              note: captureDiagnostics,
+            });
+          }
           const loaded = stem
             ? await loadPlaywrightDiffResult(stem, Date.now())
             : null;
@@ -2448,13 +2474,19 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               result={diffResult}
               showHistogram={showDistribution}
               defaultZoom={diffResultZoomDefault}
+              captureDiagnostics={activeBrowserCaptureDiagnostics}
             />
-          ) : null}
+          ) : (
+            <DiffCaptureDiagnostics
+              note={activeBrowserCaptureDiagnostics}
+            />
+          )}
         </>
       );
     },
     [
       busy,
+      activeBrowserCaptureDiagnostics,
       captureError,
       colorInversion,
       diffEngine,

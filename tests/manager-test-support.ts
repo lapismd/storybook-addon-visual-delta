@@ -192,6 +192,10 @@ export async function mockVisualBackend(
         diffPercent: 0,
         passThresholdPercent: DEFAULT_PASS_THRESHOLD_PERCENT,
         passed: true,
+        viewport: { width: 1280, height: 900 },
+        deviceScaleFactor: 3,
+        capturedWidth: 3744,
+        capturedHeight: 1632,
       };
       await route.fulfill({
         status: 200,

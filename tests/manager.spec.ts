@@ -692,6 +692,38 @@ test.describe("Visual Delta manager integration", () => {
     expect(unrelatedRunRequests).toEqual([]);
   });
 
+  test("Diff Browser exposes terminal capture diagnostics without artifact hydration", async ({
+    page,
+  }) => {
+    await page.route("**/visual-delta-artifacts/**", async (route) => {
+      await route.fulfill({ status: 404, body: "missing test artifact" });
+    });
+    const writes = await mockVisualBackend(page);
+    await openManager(page, COMPONENT_OVERLAY_FIXTURE, DEV_STORYBOOK);
+
+    await page
+      .getByRole("button", { name: "Choose Diff HTML or Diff Browser" })
+      .click();
+    await page
+      .getByRole("button", { name: "Diff Browser", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: /Compare via the selected Playwright browser/,
+      })
+      .click();
+
+    const diagnostics = page.getByTestId("diff-capture-diagnostics");
+    await expect(diagnostics).toContainText(
+      "viewport requested 1280×900, observed 1280×900 at 3×",
+    );
+    await expect(diagnostics).toContainText("bitmap 3744×1632");
+    await expect(page.getByLabel(/Visual compare/)).toHaveCount(0);
+    expect(
+      writes.filter((pathname) => !pathname.endsWith("/compare-story")),
+    ).toEqual([]);
+  });
+
   test("Diff Browser sends the explicit browser target for an unqualified teaching baseline", async ({
     page,
   }) => {

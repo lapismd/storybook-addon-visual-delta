@@ -11,6 +11,7 @@ import {
 import { loadImage } from "./capture.js";
 import { buildFocusAssets } from "./diff-assets.js";
 import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import { formatPlaywrightCaptureDiagnostics } from "./capture-diagnostics.js";
 
 const VISUAL_BASELINES_PREFIX = "/visual-baselines/";
 const VISUAL_ARTIFACTS_PREFIX = "/visual-delta-artifacts/";
@@ -204,9 +205,13 @@ export async function loadPlaywrightDiffResult(
       height: sidecar.capturedHeight ?? actual.height,
     },
     sizeNote:
-      `playwright · viewport requested ${captureViewport.width}×${captureViewport.height}, ` +
-      `observed ${captureViewport.width}×${captureViewport.height} at ${deviceScaleFactor}× · ` +
-      `bitmap ${actual.width}×${actual.height}`,
+      formatPlaywrightCaptureDiagnostics({
+        ...sidecar,
+        viewport: captureViewport,
+        deviceScaleFactor,
+        capturedWidth: actual.width,
+        capturedHeight: actual.height,
+      }) ?? undefined,
     diffPixels,
     totalPixels,
     diffPercent,

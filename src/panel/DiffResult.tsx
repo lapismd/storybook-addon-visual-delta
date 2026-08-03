@@ -6,7 +6,7 @@ import { CompareView } from "./CompareView.js";
 import { DiffHistogram } from "./DiffHistogram.js";
 import { DiffResultContainer, DiffSummary } from "./styled.js";
 
-const CaptureDiagnostics = styled.details(({ theme }) => ({
+const CaptureDiagnosticsDetails = styled.details(({ theme }) => ({
   flex: "0 0 auto",
   margin: "0 12px 8px",
   color: theme.textMutedColor,
@@ -24,14 +24,26 @@ const CaptureDiagnostics = styled.details(({ theme }) => ({
   },
 }));
 
+export function DiffCaptureDiagnostics({ note }: { note?: string | null }) {
+  if (!note) return null;
+  return (
+    <CaptureDiagnosticsDetails data-testid="diff-capture-diagnostics">
+      <summary>Capture diagnostics</summary>
+      <code>{note}</code>
+    </CaptureDiagnosticsDetails>
+  );
+}
+
 export function DiffResult({
   result,
   showHistogram = false,
   defaultZoom = "100%",
+  captureDiagnostics,
 }: {
   result: DiffResultData;
   showHistogram?: boolean;
   defaultZoom?: VisualDeltaZoomDefault;
+  captureDiagnostics?: string | null;
 }) {
   return (
     <DiffResultContainer>
@@ -54,12 +66,9 @@ export function DiffResult({
         defaultZoom={defaultZoom}
         resultKey={`${result.baselineImage}:${result.capturedBitmap?.width ?? result.imageWidth}x${result.capturedBitmap?.height ?? result.imageHeight}`}
       />
-      {result.sizeNote ? (
-        <CaptureDiagnostics data-testid="diff-capture-diagnostics">
-          <summary>Capture diagnostics</summary>
-          <code>{result.sizeNote}</code>
-        </CaptureDiagnostics>
-      ) : null}
+      <DiffCaptureDiagnostics
+        note={captureDiagnostics ?? result.sizeNote ?? null}
+      />
     </DiffResultContainer>
   );
 }
