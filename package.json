@@ -65,6 +65,7 @@
   ],
   "scripts": {
     "build:node": "tsc -p tsconfig.node-build.json && node ./scripts/prepare-cli-bin.mjs",
+    "visual-delta:self": "pnpm build:node && node ./dist/node/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node-build.json --noEmit",
     "prepare": "pnpm build:node",
     "prepack": "pnpm build:node",

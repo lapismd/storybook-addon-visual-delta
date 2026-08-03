@@ -35,6 +35,28 @@ const exampleSnapshots = path.join(
   packageRoot,
   "tests/examples-snapshots/examples",
 );
+const packageVisualUpdateArgs = [
+  "visual-delta:self",
+  "update",
+  "--allow-dirty",
+  "--approved",
+  "--skip-build",
+  "--snapshot-dir",
+  hostSnapshots,
+  "--baseline-path-mode",
+  "nested-import",
+];
+const packageVisualInteractionUpdateArgs = [
+  "visual-delta:self",
+  "interaction-update",
+  "--allow-dirty",
+  "--approved",
+  "--skip-build",
+  "--snapshot-dir",
+  hostSnapshots,
+  "--baseline-path-mode",
+  "nested-import",
+];
 
 /** Manager Playwright sets this so acceptance story IDs stay in index.json. */
 const includeHostStubs = process.env.VISUAL_DELTA_INCLUDE_HOST_STUBS === "1";
@@ -83,6 +105,10 @@ const config: StorybookConfig = {
           allowVcsWrites: false,
           showToolbarStatusLabels: true,
           addonSrcDir: path.join(packageRoot, "src"),
+          // The package cannot discover its own published bin through
+          // `pnpm exec`; build and invoke the checkout-local CLI instead.
+          visualUpdateArgs: packageVisualUpdateArgs,
+          visualInteractionUpdateArgs: packageVisualInteractionUpdateArgs,
         },
       },
     },
