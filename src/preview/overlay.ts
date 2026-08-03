@@ -39,8 +39,11 @@ import {
   type BaselineAlignmentMismatch,
 } from "../shared/story-config.js";
 import {
+  ACTUAL_CHIP_ID,
   OVERLAY_CHIP_ID,
+  ensureActualChip,
   ensureOverlayChip,
+  positionActualChip,
   positionOverlayChip,
   syncModeBadge,
 } from "../shared/preview-chip.js";
@@ -228,6 +231,11 @@ function getOverlayChannelApi(): OverlayChannelApi {
 
 const overlayChannelApi = getOverlayChannelApi();
 
+function removeCapturedActual() {
+  document.getElementById(CAPTURED_ACTUAL_ID)?.remove();
+  document.getElementById(ACTUAL_CHIP_ID)?.remove();
+}
+
 function applyLiveVisibility(canvasElement: HTMLElement) {
   const selected = lastSelection?.images[lastSelection.index];
   const capturedMode = !currentLiveVisible;
@@ -235,7 +243,7 @@ function applyLiveVisibility(canvasElement: HTMLElement) {
   const generation = selectionGeneration;
   let actual = document.getElementById(CAPTURED_ACTUAL_ID);
   if (!actualSource || !selected) {
-    actual?.remove();
+    removeCapturedActual();
     canvasElement.style.visibility = capturedMode ? "hidden" : "";
     syncModeBadge(capturedMode);
     return;
@@ -262,10 +270,14 @@ function applyLiveVisibility(canvasElement: HTMLElement) {
   if (actual.parentElement !== host) host.appendChild(actual);
   canvasElement.style.visibility = "hidden";
   const capturedImage = actual as HTMLImageElement;
+  let actualChip = ensureActualChip(capturedImage, {
+    centered: !isSplitPlacement(currentPlacement),
+  });
   const overlay = document.getElementById(OVERLAY_ID);
   const baselinePane = document.getElementById(BASELINE_PANE_ID);
   const hideComparison = () => {
     capturedImage.style.visibility = "hidden";
+    if (actualChip) actualChip.style.visibility = "hidden";
     if (overlay instanceof HTMLElement) overlay.style.visibility = "hidden";
     if (baselinePane instanceof HTMLElement) {
       baselinePane.style.visibility = "hidden";
@@ -306,6 +318,10 @@ function applyLiveVisibility(canvasElement: HTMLElement) {
       capturedImage.style.top = `${targetRect.top - hostRect.top}px`;
       capturedImage.style.transform = "none";
     }
+    actualChip = positionActualChip(capturedImage, {
+      centered: !isSplitPlacement(currentPlacement),
+      ...(actualChip ? { chip: actualChip } : {}),
+    });
     // The baseline load transaction owns final positioning. Reveal the pair
     // only after that transaction has also completed for this generation.
     if (
@@ -313,6 +329,7 @@ function applyLiveVisibility(canvasElement: HTMLElement) {
       overlay.dataset.visualDeltaReady === "true"
     ) {
       capturedImage.style.visibility = "";
+      if (actualChip) actualChip.style.visibility = "";
       overlay.style.visibility = "";
       if (baselinePane instanceof HTMLElement) {
         baselinePane.style.visibility = "";
@@ -326,7 +343,7 @@ function applyLiveVisibility(canvasElement: HTMLElement) {
     capturedImage.addEventListener(
       "error",
       () => {
-        if (generation === selectionGeneration) capturedImage.remove();
+        if (generation === selectionGeneration) removeCapturedActual();
       },
       { once: true },
     );
@@ -1879,7 +1896,7 @@ function removeOverlayDom(retainSelection: boolean) {
     centerHostRestoreRef?.();
     centerHostRestoreRef = null;
     canvasElement.style.visibility = "";
-    document.getElementById(CAPTURED_ACTUAL_ID)?.remove();
+    removeCapturedActual();
   } else {
     // Docs / mid-navigation can drop `#storybook-root` before cleanup runs —
     // still tear down split chrome by id so the baseline PNG cannot orphan.
@@ -1892,7 +1909,7 @@ function removeOverlayDom(retainSelection: boolean) {
     centerHostRestoreRef = null;
     lastCompareSizes = null;
     document.getElementById(SPLIT_ID)?.remove();
-    document.getElementById(CAPTURED_ACTUAL_ID)?.remove();
+    removeCapturedActual();
   }
   syncModeBadge(false);
   emitBaselineGeometryStatus(null, true);

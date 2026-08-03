@@ -1,20 +1,23 @@
 /**
- * Preview chrome: the Baseline chip attached to the overlay.
+ * Preview chrome for Baseline and Actual comparison images.
  * Shared so catalog demos / tests cannot drift from the live overlay paint.
  */
 
 export const MODE_BADGE_ID = "visual-delta-mode-badge";
 export const OVERLAY_CHIP_ID = "visual-delta-overlay-chip";
 export const OVERLAY_CHIP_LABEL = "Baseline";
+export const ACTUAL_CHIP_ID = "visual-delta-actual-chip";
+export const ACTUAL_CHIP_LABEL = "Actual";
 export const BASELINE_CHIP_GAP_PX = 6;
+export const BASELINE_CHIP_BACKGROUND = "rgba(17, 119, 57, 0.94)";
+export const ACTUAL_CHIP_BACKGROUND = "rgba(2, 97, 198, 0.92)";
 
-/** Shared paint for the Baseline chip on the overlay. */
+/** Shared structural paint for comparison labels. */
 export const PREVIEW_CHIP_PAINT = `
   z-index: 10000;
   padding: 3px 8px;
   font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
   color: #fff;
-  background: rgba(2, 97, 198, 0.92);
   border-radius: 4px;
   pointer-events: none;
   user-select: none;
@@ -30,7 +33,78 @@ export function paintOverlayChip(
     top: ${BASELINE_CHIP_GAP_PX + offset.y}px;
     left: ${BASELINE_CHIP_GAP_PX + offset.x}px;
     ${PREVIEW_CHIP_PAINT}
+    background: ${BASELINE_CHIP_BACKGROUND};
   `;
+}
+
+function paintActualChip(chip: HTMLElement, actualImage: HTMLImageElement) {
+  chip.style.cssText = `
+    position: absolute;
+    top: ${actualImage.style.top || "0px"};
+    left: ${actualImage.style.left || "0px"};
+    margin-top: ${BASELINE_CHIP_GAP_PX}px;
+    transform: ${actualImage.style.transform || "none"};
+    transform-origin: top left;
+    visibility: hidden;
+    ${PREVIEW_CHIP_PAINT}
+    background: ${ACTUAL_CHIP_BACKGROUND};
+  `;
+}
+
+/**
+ * Keep an Actual chip attached to the captured bitmap without wrapping it or
+ * contributing layout. Split panes use the same top-left inset as Baseline;
+ * centered comparisons place Actual at the top-right so both labels remain
+ * legible over the shared image origin.
+ */
+export function positionActualChip(
+  actualImage: HTMLImageElement,
+  options?: { centered?: boolean; chip?: HTMLElement },
+): HTMLElement | null {
+  const chip =
+    options?.chip ??
+    ensureActualChip(actualImage, {
+      centered: options?.centered,
+      position: false,
+    });
+  if (!chip) return null;
+  paintActualChip(chip, actualImage);
+  const imageWidth = actualImage.getBoundingClientRect().width;
+  const chipWidth = chip.getBoundingClientRect().width;
+  chip.style.marginLeft = `${
+    options?.centered
+      ? Math.max(
+          BASELINE_CHIP_GAP_PX,
+          imageWidth - chipWidth - BASELINE_CHIP_GAP_PX,
+        )
+      : BASELINE_CHIP_GAP_PX
+  }px`;
+  return chip;
+}
+
+export function ensureActualChip(
+  actualImage: HTMLImageElement,
+  options?: { centered?: boolean; position?: boolean },
+): HTMLElement | null {
+  const parent = actualImage.parentElement;
+  if (!parent) return null;
+  const document = actualImage.ownerDocument;
+  let chip = document.getElementById(ACTUAL_CHIP_ID);
+  if (!chip) {
+    chip = document.createElement("div");
+    chip.id = ACTUAL_CHIP_ID;
+  }
+  if (chip.parentElement !== parent) parent.appendChild(chip);
+  chip.textContent = ACTUAL_CHIP_LABEL;
+  chip.setAttribute("data-testid", "actual-image-chip");
+  paintActualChip(chip, actualImage);
+  if (options?.position !== false) {
+    positionActualChip(actualImage, {
+      centered: options?.centered,
+      chip,
+    });
+  }
+  return chip;
 }
 
 function clamp(value: number, min: number, max: number): number {

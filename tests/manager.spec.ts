@@ -758,11 +758,32 @@ test.describe("Visual Delta manager integration", () => {
 
     const preview = previewFrame(page);
     const actual = preview.locator("#visual-delta-captured-actual");
+    const actualChip = preview.getByTestId("actual-image-chip");
     const baseline = preview.locator("#visual-delta-overlay > img");
+    const baselineChip = preview.getByTestId("baseline-overlay-chip");
     const storyRoot = preview.locator("#storybook-root");
     await expect(actual).toBeVisible({ timeout: 15_000 });
+    await expect(actualChip).toHaveText("Actual");
+    await expect(actualChip).toBeVisible();
     await expect(baseline).toBeVisible();
+    await expect(baselineChip).toHaveText("Baseline");
     await expect(storyRoot).toHaveCSS("visibility", "hidden");
+    await expect(
+      panel.getByRole("group", {
+        name: "Baseline position relative to actual",
+      }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("switch", { name: "Baseline left of actual" }),
+    ).toBeVisible();
+    await expect(baselineChip).toHaveCSS(
+      "background-color",
+      "rgba(17, 119, 57, 0.94)",
+    );
+    await expect(actualChip).toHaveCSS(
+      "background-color",
+      "rgba(2, 97, 198, 0.92)",
+    );
 
     const rendered = await Promise.all([
       actual.evaluate((element) => {
@@ -778,8 +799,23 @@ test.describe("Visual Delta manager integration", () => {
     ]);
     expect(rendered[0]).toEqual(rendered[1]);
 
+    await panel
+      .getByRole("switch", { name: "Baseline centered over actual" })
+      .click();
+    await expect(actual).toBeVisible();
+    await expect(actualChip).toBeVisible();
+    await expect(baselineChip).toBeVisible();
+    const [actualChipBox, baselineChipBox] = await Promise.all([
+      actualChip.boundingBox(),
+      baselineChip.boundingBox(),
+    ]);
+    expect(actualChipBox).not.toBeNull();
+    expect(baselineChipBox).not.toBeNull();
+    expect(actualChipBox!.x).toBeGreaterThan(baselineChipBox!.x);
+
     await panel.getByRole("switch", { name: "Show live component" }).click();
     await expect(actual).toHaveCount(0);
+    await expect(actualChip).toHaveCount(0);
     await expect(storyRoot).toHaveCSS("visibility", "visible");
     expect(writes).toEqual([]);
   });

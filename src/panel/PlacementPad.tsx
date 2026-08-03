@@ -46,47 +46,49 @@ type PlacementPadProps = {
   /** Whether a baseline overlay is currently shown. */
   active: boolean;
   onToggle: (placement: PlacementMode) => void;
+  /** The surface whose position is described by each Baseline control. */
+  comparisonTarget?: "live" | "actual";
   disabled?: boolean;
 };
 
 const BUTTONS: Array<{
   placement: PlacementMode;
-  label: string;
+  relation: string;
   row: number;
   col: number;
   icon: React.ReactNode;
 }> = [
   {
     placement: "above",
-    label: "Baseline above live",
+    relation: "above",
     row: 1,
     col: 2,
     icon: <ArrowUpIcon />,
   },
   {
     placement: "left",
-    label: "Baseline left of live",
+    relation: "left of",
     row: 2,
     col: 1,
     icon: <ArrowLeftIcon />,
   },
   {
     placement: "center",
-    label: "Baseline centered over live",
+    relation: "centered over",
     row: 2,
     col: 2,
     icon: <CircleIcon />,
   },
   {
     placement: "right",
-    label: "Baseline right of live",
+    relation: "right of",
     row: 2,
     col: 3,
     icon: <ArrowRightIcon />,
   },
   {
     placement: "below",
-    label: "Baseline below live",
+    relation: "below",
     row: 3,
     col: 2,
     icon: <ArrowDownIcon />,
@@ -97,17 +99,28 @@ export function PlacementPad({
   value,
   active,
   onToggle,
+  comparisonTarget = "live",
   disabled,
 }: PlacementPadProps) {
   return (
-    <Pad role="group" aria-label="Baseline position">
+    <Pad
+      role="group"
+      aria-label={
+        comparisonTarget === "actual"
+          ? "Baseline position relative to actual"
+          : "Baseline position"
+      }
+    >
       {Array.from({ length: 9 }, (_, i) => {
         const row = Math.floor(i / 3) + 1;
         const col = (i % 3) + 1;
         const btn = BUTTONS.find((b) => b.row === row && b.col === col);
         if (!btn) return <Cell key={`empty-${i}`} />;
         const pressed = active && value === btn.placement;
-        const label = pressed ? `Hide overlay (${btn.label})` : btn.label;
+        const placementLabel = `Baseline ${btn.relation} ${comparisonTarget}`;
+        const label = pressed
+          ? `Hide overlay (${placementLabel})`
+          : placementLabel;
         return (
           <PadButton
             key={btn.placement}

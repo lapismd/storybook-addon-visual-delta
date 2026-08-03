@@ -48,6 +48,34 @@ describe("PlacementPad", () => {
     }
   });
 
+  it("describes placements relative to the captured actual", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    renderWithTheme(
+      <PlacementPad
+        value="right"
+        active
+        comparisonTarget="actual"
+        onToggle={onToggle}
+      />,
+    );
+
+    expect(
+      screen.getByRole("group", {
+        name: "Baseline position relative to actual",
+      }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("switch", { name: "Baseline left of actual" }),
+    );
+    expect(onToggle).toHaveBeenCalledWith("left");
+    expect(
+      screen.getByRole("switch", {
+        name: "Hide overlay (Baseline right of actual)",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("shows nothing pressed when overlay is soft-hidden", () => {
     renderWithTheme(
       <PlacementPad value="center" active={false} onToggle={vi.fn()} />,

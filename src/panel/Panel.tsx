@@ -2366,11 +2366,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
                 onToggle={setLiveVisible}
                 disabled={images.length === 0}
               />
-              {liveVisible ? (
+              {liveVisible || Boolean(images[index]?.actualSrc) ? (
                 <PlacementPad
                   value={placement}
                   active={overlayOn}
                   onToggle={togglePlacement}
+                  comparisonTarget={liveVisible ? "live" : "actual"}
                   disabled={images.length === 0}
                 />
               ) : null}
