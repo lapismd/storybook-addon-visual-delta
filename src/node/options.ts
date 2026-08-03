@@ -84,8 +84,9 @@ export type VisualDeltaHostOptions = {
    */
   readOnly?: boolean;
   /**
-   * TurboSnap-style local affected selection. Disabled unless configured.
-   * Full runs remain available and continue to seed this disposable cache.
+   * TurboSnap-style local affected selection. Conservative defaults are
+   * enabled when omitted; set false to opt out. Full runs remain available
+   * and continue to seed this disposable cache.
    */
   affectedTests?: false | AffectedVisualTestsOptions;
 };

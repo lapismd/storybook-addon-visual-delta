@@ -147,9 +147,12 @@ Compare-only commands never create or update baselines.
 They write mirrored `.actual.png`, `.diff.png`, and `.result.json` evidence to
 `.visual-delta/artifacts/`; affected planning state lives in
 `.visual-delta/cache/`, including UI change-set history at
-`.visual-delta/cache/change-sets/`. Both roots are ignored by default, but
+`.visual-delta/cache/change-sets/` and verified canonical Storybook builds at
+`.visual-delta/cache/canonical-build/`. Both roots are ignored by default, but
 projects may cache or commit them. Add `--fresh` to bypass a reusable actual
-once.
+once while retaining the canonical build cache; add `--rebuild` to force a new
+canonical Storybook build. Affected selection is enabled conservatively when
+the addon option is omitted; set `affectedTests: false` to opt out.
 
 ## Configure browsers and comparison defaults
 

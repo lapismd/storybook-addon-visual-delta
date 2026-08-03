@@ -159,6 +159,7 @@ import { deleteVisualBaseline } from "./delete-baseline.js";
 import {
   planAffectedVisualTests,
   planAllVisualTests,
+  planExactVisualTests,
   recordAffectedVisualResults,
 } from "./affected-visual-tests.js";
 import {
@@ -491,7 +492,14 @@ export function attachSidecars(
         }
       : { ...item };
     if (!sidecar && modeResults.length > 0) {
-      next = { ...next, modeResults };
+      next = {
+        ...next,
+        modeResults,
+        ...(policyStatus ? { policyStatus } : {}),
+      };
+    }
+    if (policyStatus === "failed") {
+      next = { ...next, status: "failed" };
     }
     if (item.status === "failed" && !hasBaseline) {
       next = {
@@ -592,9 +600,9 @@ function disabledAffectedPlan(root: string, options: VisualDeltaHostOptions) {
 }
 
 function affectedPlan(root: string, options: VisualDeltaHostOptions) {
-  return options.affectedTests
-    ? planAffectedVisualTests(root, options)
-    : disabledAffectedPlan(root, options);
+  return options.affectedTests === false
+    ? disabledAffectedPlan(root, options)
+    : planAffectedVisualTests(root, options);
 }
 
 function selectedRunSummary(
@@ -603,7 +611,9 @@ function selectedRunSummary(
   storyIds: string[] | undefined,
   selection: VisualRunSelectionMode,
 ): AffectedVisualSummary {
-  const all = planAllVisualTests(root, options).runnableStoryIds;
+  const all = storyIds?.length
+    ? planExactVisualTests(root, storyIds, options).runnableStoryIds
+    : planAllVisualTests(root, options).runnableStoryIds;
   const selected =
     selection === "all" || !storyIds
       ? all
@@ -1137,7 +1147,8 @@ async function handleRun(
     let passed = 0;
     let failed = 0;
     let lineBuffer = "";
-    const affectedConfig = options.affectedTests || undefined;
+    const affectedConfig =
+      options.affectedTests === false ? undefined : (options.affectedTests ?? {});
     const argv = [
       "test",
       ...(selection === "all"
@@ -1168,6 +1179,7 @@ async function handleRun(
         glob,
       ]),
       ...(body.fresh ? ["--fresh"] : []),
+      ...(body.rebuild ? ["--rebuild"] : []),
     ];
     const runnerResult = await runVisualDeltaCaptureJob({
       root,
@@ -1336,7 +1348,7 @@ function handleAffectedPlan(
   plan = affectedPlan(root, options),
 ): void {
   writeJson(res, 200, {
-    enabled: Boolean(options.affectedTests),
+    enabled: options.affectedTests !== false,
     ...plan.summary,
   });
 }

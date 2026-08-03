@@ -6,7 +6,14 @@ import {
   type BaselineCliOptions,
 } from "./baseline-cli.js";
 import { runVisualDeltaInit } from "./init-scaffold.js";
-import { runVisualTestCli } from "./visual-test-cli.js";
+import {
+  formatAffectedVisualSummary,
+  runVisualTestCli,
+} from "./visual-test-cli.js";
+import {
+  planAffectedVisualTests,
+  recordAffectedVisualResultsForPlan,
+} from "./affected-visual-tests.js";
 import {
   isVisualDeltaBrowser,
   type VisualDeltaBrowser,
@@ -276,6 +283,39 @@ async function main(argv: string[]): Promise<void> {
   const options = parseShared(rest);
 
   if (
+    command === "test" &&
+    process.env[VISUAL_DELTA_CAPTURE_WORKER_ENV] !== "1" &&
+    !hasFlag(rest, "--dry-run") &&
+    hasFlag(rest, "--affected")
+  ) {
+    const preflight = planAffectedVisualTests(process.cwd(), {
+      snapshotDir: options.snapshotDir,
+      baselinePathMode: options.baselinePathMode,
+      affectedTests: {
+        cacheDir: readFlag(rest, "--cache-dir"),
+        externals: readFlags(rest, "--external"),
+        untraced: readFlags(rest, "--untraced"),
+      },
+    });
+    console.log(
+      formatAffectedVisualSummary(preflight.summary, hasFlag(rest, "--explain")),
+    );
+    if (preflight.summary.noChange) {
+      recordAffectedVisualResultsForPlan(preflight, [], {
+        snapshotDir: options.snapshotDir,
+        baselinePathMode: options.baselinePathMode,
+        affectedTests: {
+          cacheDir: readFlag(rest, "--cache-dir"),
+          externals: readFlags(rest, "--external"),
+          untraced: readFlags(rest, "--untraced"),
+        },
+      });
+      process.exitCode = 0;
+      return;
+    }
+  }
+
+  if (
     process.env[VISUAL_DELTA_CAPTURE_WORKER_ENV] !== "1" &&
     ((command === "test" && !hasFlag(rest, "--dry-run")) ||
       command === "update" ||
@@ -335,6 +375,9 @@ async function main(argv: string[]): Promise<void> {
     const failureModeValue = readFlag(rest, "--failure-mode");
     if (failureModeValue && !isVisualTestFailureMode(failureModeValue)) {
       throw new Error('failure mode must be "warn" or "strict"');
+    }
+    if (hasFlag(rest, "--rebuild")) {
+      process.env.VISUAL_DELTA_FORCE_REBUILD = "1";
     }
     const exitCode = await runVisualTestCli({
       selection: affected ? "affected" : all ? "all" : "stories",

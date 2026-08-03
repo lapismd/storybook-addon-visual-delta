@@ -129,6 +129,10 @@ describe("capture runner", () => {
     ).toBe(false);
     expect(
       shouldStageVisualDeltaWorkspacePath("storybook-static/index.json"),
+    ).toBe(true);
+    expect(shouldStageVisualDeltaWorkspacePath("storybook-static")).toBe(true);
+    expect(
+      shouldStageVisualDeltaWorkspacePath("storybook-static/iframe.html"),
     ).toBe(false);
     expect(
       shouldStageVisualDeltaWorkspacePath(

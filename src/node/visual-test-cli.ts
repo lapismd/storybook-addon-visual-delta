@@ -4,7 +4,10 @@ import type { AffectedVisualSummary } from "../shared/affected-types.js";
 import {
   planAffectedVisualTests,
   planAllVisualTests,
-  recordAffectedVisualResults,
+  planExactVisualTests,
+  recordAffectedVisualResultsForPlan,
+  visualCanonicalBuildFingerprintForPlan,
+  visualRenderFingerprintsForPlan,
   type AffectedVisualPlan,
 } from "./affected-visual-tests.js";
 import {
@@ -13,7 +16,6 @@ import {
 } from "./options.js";
 import {
   parseListReporterProgress,
-  successfulStoryIdsFromPlaywrightResults,
   type PlaywrightListResult,
 } from "./playwright-results.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
@@ -26,8 +28,16 @@ import {
 } from "./options.js";
 import { baselinePngAbs } from "../playwright/write-diff-artifacts.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
-import { visualRenderFingerprints } from "./affected-visual-tests.js";
 import { recompareCachedActualSet } from "./cached-actual.js";
+import {
+  loadModeSidecarsForStoryId,
+  loadSidecarForStoryId,
+} from "./visual-sidecars.js";
+import {
+  persistCanonicalBuildCache,
+  resolveCanonicalBuildCacheRoot,
+  restoreCanonicalBuildCache,
+} from "./canonical-build-cache.js";
 
 export type VisualTestCliOptions = {
   root?: string;
@@ -97,6 +107,10 @@ export function formatAffectedVisualSummary(
   const lines: string[] = [];
   if (summary.noChange && summary.selection === "affected") {
     lines.push(`Up to date · ${summary.unchanged} unchanged`);
+  } else if (summary.selection === "selected") {
+    lines.push(
+      `${summary.selected} selected · ${summary.unchanged} outside scope · ${summary.total} total`,
+    );
   } else {
     lines.push(
       `${summary.selected} affected · ${summary.unchanged} unchanged · ${summary.total} total`,
@@ -120,11 +134,100 @@ function printPlan(plan: AffectedVisualPlan, explain: boolean): void {
   console.log(formatAffectedVisualSummary(plan.summary, explain));
 }
 
+function planSelection(options: {
+  root: string;
+  selection: VisualTestCliOptions["selection"];
+  storyIds: string[];
+  hostOptions?: VisualDeltaHostOptions;
+}): AffectedVisualPlan {
+  if (options.selection === "affected") {
+    return planAffectedVisualTests(options.root, options.hostOptions);
+  }
+  if (options.selection === "stories") {
+    return planExactVisualTests(
+      options.root,
+      options.storyIds,
+      options.hostOptions,
+    );
+  }
+  return planAllVisualTests(options.root, options.hostOptions);
+}
+
+function variantKey(sidecar: {
+  variant?: { kind: string; id?: string };
+  mode?: string;
+}): string {
+  if (sidecar.variant?.kind === "mode") {
+    return `mode:${sidecar.variant.id ?? sidecar.mode ?? ""}`;
+  }
+  if (sidecar.variant?.kind === "interaction") {
+    return `interaction:${sidecar.variant.id ?? ""}`;
+  }
+  return sidecar.mode ? `mode:${sidecar.mode}` : "primary";
+}
+
+function policyPassingStoryIds(options: {
+  root: string;
+  snapshotDir: string;
+  baselinePathMode: ReturnType<typeof resolveBaselinePathMode>;
+  storyIds: readonly string[];
+  browsers: readonly VisualDeltaBrowser[];
+}): { passing: string[]; strictFailure: boolean } {
+  let strictFailure = false;
+  const passing = options.storyIds.filter((storyId) =>
+    options.browsers.every((browser) => {
+      const primary = loadSidecarForStoryId(
+        storyId,
+        options.root,
+        options.snapshotDir,
+        options.baselinePathMode,
+        browser,
+      );
+      if (!primary) {
+        strictFailure = true;
+        return false;
+      }
+      const sidecars = [
+        primary,
+        ...loadModeSidecarsForStoryId(
+          storyId,
+          options.root,
+          options.snapshotDir,
+          options.baselinePathMode,
+          browser,
+        ),
+      ];
+      const actualVariants = new Set(sidecars.map(variantKey));
+      const expectedVariants = new Set(
+        (primary.captureSet ?? []).map((item) => variantKey(item)),
+      );
+      const complete =
+        expectedVariants.size === 0 ||
+        [...expectedVariants].every((variant) => actualVariants.has(variant));
+      const failed = sidecars.some(
+        (sidecar) =>
+          sidecar.policyStatus === "failed" ||
+          sidecar.outcome === "error" ||
+          sidecar.passed === false,
+      );
+      if (failed || !complete) strictFailure = true;
+      return (
+        complete &&
+        sidecars.every(
+          (sidecar) =>
+            sidecar.passed === true && sidecar.policyStatus === "passed",
+        )
+      );
+    }),
+  );
+  return { passing, strictFailure };
+}
+
 /**
  * Packaged `visual-delta test` runner.
- * Every executable selection builds the static Storybook used by the
- * canonical runner. Exact story selection remains exact through Playwright
- * grep and never broadens an empty or invalid request.
+ * Every executable selection uses a verified canonical static Storybook.
+ * Exact story selection remains exact through Playwright grep and never
+ * broadens an empty or invalid request.
  */
 export async function runVisualTestCli(
   options: VisualTestCliOptions,
@@ -157,12 +260,19 @@ export async function runVisualTestCli(
     );
     return 1;
   }
-  let plan = options.selection === "affected"
-    ? planAffectedVisualTests(root, hostOptions)
-    : planAllVisualTests(root, hostOptions);
+  const requestedStoryIds = [...new Set(options.storyIds ?? [])];
+  if (options.selection === "stories" && requestedStoryIds.length === 0) {
+    console.error("Exact visual tests require at least one --story-id");
+    return 1;
+  }
+  let plan = planSelection({
+    root,
+    selection: options.selection,
+    storyIds: requestedStoryIds,
+    hostOptions,
+  });
   printPlan(plan, Boolean(options.explain));
 
-  const requestedStoryIds = [...new Set(options.storyIds ?? [])];
   if (options.dryRun) {
     if (options.selection === "stories") {
       if (requestedStoryIds.length === 0) {
@@ -178,55 +288,27 @@ export async function runVisualTestCli(
     }
     return 0;
   }
-  if (options.selection === "affected" && plan.summary.noChange) return 0;
-
-  if (
-    options.selection === "affected" ||
-    options.selection === "stories" ||
-    options.selection === "all"
-  ) {
-    const build = await execute("pnpm", ["build-storybook"], root);
-    if (build.code !== 0) return build.code;
-    plan = options.selection === "affected"
-      ? planAffectedVisualTests(root, hostOptions)
-      : planAllVisualTests(root, hostOptions);
-    printPlan(plan, Boolean(options.explain));
-    if (options.selection === "affected" && plan.summary.noChange) {
-      recordAffectedVisualResults({
-        root,
-        hostOptions,
-        passedStoryIds: [],
-      });
-      return 0;
-    }
+  if (options.selection === "affected" && plan.summary.noChange) {
+    recordAffectedVisualResultsForPlan(plan, [], hostOptions);
+    return 0;
   }
 
-  if (options.selection === "stories" && requestedStoryIds.length === 0) {
-    console.error("Exact visual tests require at least one --story-id");
-    return 1;
-  }
-  const runnable = new Set(plan.runnableStoryIds);
-  const missingStoryIds = requestedStoryIds.filter((storyId) => !runnable.has(storyId));
-  if (options.selection === "stories" && missingStoryIds.length > 0) {
-    console.error(`Stories are not runnable visual targets: ${missingStoryIds.join(", ")}`);
-    return 1;
-  }
-  const selectedStoryIds = options.selection === "all"
+  let selectedStoryIds = options.selection === "all"
     ? plan.runnableStoryIds
     : options.selection === "stories"
       ? requestedStoryIds
       : plan.selectedStoryIds;
   const snapshotDir = resolveSnapshotDir(hostOptions, root);
   const baselinePathMode = resolveBaselinePathMode(hostOptions);
+  const failureMode =
+    options.failureMode ?? projectConfig.workflow.visualTestFailureMode;
   if (
     projectConfig.workflow.reuseActualComparisons &&
     !options.fresh &&
     selectedStoryIds.length > 0
   ) {
     const entries = loadStoryIndex(root);
-    const fingerprints = visualRenderFingerprints(root, hostOptions);
-    const failureMode =
-      options.failureMode ?? projectConfig.workflow.visualTestFailureMode;
+    const fingerprints = visualRenderFingerprintsForPlan(plan);
     const cachedResults = selectedStoryIds.flatMap((storyId) =>
       browsers.map((browser) => {
         const entry = entries[storyId];
@@ -270,15 +352,81 @@ export async function runVisualTestCli(
         `[visual-delta] Reused canonical actuals for ${selectedStoryIds.length} stor${selectedStoryIds.length === 1 ? "y" : "ies"} across ${browsers.length} browser target${browsers.length === 1 ? "" : "s"}.`,
       );
       const passed = cachedResults.every((result) => result?.passed);
-      recordAffectedVisualResults({
-        root,
-        hostOptions,
-        passedStoryIds: passed ? selectedStoryIds : [],
-      });
+      const passingStoryIds = selectedStoryIds.filter((storyId) =>
+        browsers.every((browser) => {
+          const result = cachedResults.find((candidate) =>
+            candidate?.sidecars.some(
+              (sidecar) =>
+                sidecar.storyId === storyId &&
+                (sidecar.target?.browser ?? sidecar.browser) === browser,
+            ),
+          );
+          return result?.sidecars.every(
+            (sidecar) =>
+              sidecar.passed === true && sidecar.policyStatus === "passed",
+          );
+        }),
+      );
+      recordAffectedVisualResultsForPlan(plan, passingStoryIds, hostOptions);
       return passed ? 0 : 1;
     }
     console.log("[visual-delta] Cached actual set is stale or incomplete; launching canonical browser capture.");
   }
+
+  const cacheRoot = resolveCanonicalBuildCacheRoot(root);
+  const buildFingerprint = visualCanonicalBuildFingerprintForPlan(plan);
+  const restored = restoreCanonicalBuildCache({
+    root,
+    cacheRoot,
+    fingerprint: buildFingerprint,
+    forceRebuild: process.env.VISUAL_DELTA_FORCE_REBUILD === "1",
+  });
+  let built = false;
+  if (!restored.restored) {
+    console.log(
+      `[visual-delta] Canonical Storybook build cache ${restored.reason}; rebuilding.`,
+    );
+    const build = await execute("pnpm", ["build-storybook"], root);
+    if (build.code !== 0) return build.code;
+    built = true;
+  } else {
+    console.log("[visual-delta] Restored verified canonical Storybook build.");
+  }
+  plan = planSelection({
+    root,
+    selection: options.selection,
+    storyIds: requestedStoryIds,
+    hostOptions,
+  });
+  printPlan(plan, Boolean(options.explain));
+  if (built) {
+    persistCanonicalBuildCache({
+      root,
+      cacheRoot,
+      fingerprint: visualCanonicalBuildFingerprintForPlan(plan),
+    });
+  }
+  if (options.selection === "affected" && plan.summary.noChange) {
+    recordAffectedVisualResultsForPlan(plan, [], hostOptions);
+    return 0;
+  }
+
+  const runnable = new Set(plan.runnableStoryIds);
+  const missingStoryIds = requestedStoryIds.filter(
+    (storyId) => !runnable.has(storyId),
+  );
+  if (options.selection === "stories" && missingStoryIds.length > 0) {
+    console.error(
+      `Stories are not runnable visual targets: ${missingStoryIds.join(", ")}`,
+    );
+    return 1;
+  }
+  selectedStoryIds =
+    options.selection === "all"
+      ? plan.runnableStoryIds
+      : options.selection === "stories"
+        ? requestedStoryIds
+        : plan.selectedStoryIds;
   const grep = options.selection === "all" ||
     (options.selection === "affected" && plan.summary.fallbackReason)
     ? undefined
@@ -298,9 +446,8 @@ export async function runVisualTestCli(
       PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",
       VISUAL_DELTA_SNAPSHOT_DIR: snapshotDir,
       VISUAL_DELTA_BASELINE_PATH_MODE: baselinePathMode,
-      ...(options.failureMode
-        ? { VISUAL_DELTA_FAILURE_MODE: options.failureMode }
-        : {}),
+      VISUAL_DELTA_FAILURE_MODE: failureMode,
+      VISUAL_DELTA_DEFER_POLICY_FAILURES: "1",
       ...(options.interaction
         ? { PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(options.interaction) }
         : {}),
@@ -309,15 +456,29 @@ export async function runVisualTestCli(
         : {}),
     },
   );
-  const passedStoryIds = successfulStoryIdsFromPlaywrightResults({
+  const playwrightPassedStoryIds = selectedStoryIds.filter((storyId) =>
+    browsers.every((browser) =>
+      result.results.some(
+        (candidate) =>
+          candidate.storyId === storyId &&
+          candidate.browser === browser &&
+          candidate.status === "passed",
+      ),
+    ),
+  );
+  const policy = policyPassingStoryIds({
     root,
-    hostOptions,
-    results: result.results,
+    snapshotDir,
+    baselinePathMode,
+    storyIds: selectedStoryIds,
+    browsers,
   });
-  recordAffectedVisualResults({
-    root,
+  const passedByPlaywright = new Set(playwrightPassedStoryIds);
+  recordAffectedVisualResultsForPlan(
+    plan,
+    policy.passing.filter((storyId) => passedByPlaywright.has(storyId)),
     hostOptions,
-    passedStoryIds,
-  });
-  return result.code;
+  );
+  if (result.code !== 0) return result.code;
+  return failureMode === "strict" && policy.strictFailure ? 1 : 0;
 }

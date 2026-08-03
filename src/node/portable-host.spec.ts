@@ -154,4 +154,88 @@ describe("portable Visual Delta host options", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("aggregates a failed named mode into the story result", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "visual-delta-mode-sidecar-"));
+    const snapshotDir = path.join(root, "snapshots");
+    mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+    mkdirSync(snapshotDir, { recursive: true });
+    writeFileSync(
+      path.join(root, "storybook-static/index.json"),
+      JSON.stringify({ entries: { [entry.id]: entry } }),
+    );
+    const primaryBaseline = path.join(
+      snapshotDir,
+      "workspace-shell-tabs--top-light-chromium.png",
+    );
+    const modeBaseline = path.join(
+      snapshotDir,
+      "workspace-shell-tabs--top-light--compact-chromium.png",
+    );
+    writeFileSync(primaryBaseline, "baseline");
+    writeFileSync(modeBaseline, "mode baseline");
+    const primaryResult = visualArtifactPaths({
+      root,
+      snapshotDir,
+      baselinePath: primaryBaseline,
+    }).result;
+    const modeResult = visualArtifactPaths({
+      root,
+      snapshotDir,
+      baselinePath: modeBaseline,
+    }).result;
+    mkdirSync(path.dirname(primaryResult), { recursive: true });
+    writeFileSync(
+      primaryResult,
+      JSON.stringify({
+        version: 4,
+        storyId: entry.id,
+        snapshotRel: "workspace-shell-tabs--top-light.png",
+        status: "passed",
+        outcome: "passed",
+        policyStatus: "passed",
+        passed: true,
+        generatedAt: new Date(0).toISOString(),
+        tool: "playwright",
+        target: { browser: "chromium" },
+      }),
+    );
+    writeFileSync(
+      modeResult,
+      JSON.stringify({
+        version: 4,
+        storyId: entry.id,
+        mode: "compact",
+        variant: { kind: "mode", id: "compact" },
+        snapshotRel: "workspace-shell-tabs--top-light--compact.png",
+        status: "failed",
+        outcome: "mismatch",
+        policyStatus: "failed",
+        passed: false,
+        generatedAt: new Date(0).toISOString(),
+        tool: "playwright",
+        target: { browser: "chromium" },
+      }),
+    );
+    try {
+      const [result] = attachSidecars(
+        [
+          {
+            storyId: entry.id,
+            title: entry.id,
+            status: "passed",
+            target: { browser: "chromium" },
+          },
+        ],
+        root,
+        { snapshotDir: "snapshots", baselinePathMode: "story-id" },
+      );
+      expect(result).toMatchObject({ status: "failed", policyStatus: "failed" });
+      expect(result?.modeResults?.find((mode) => mode.mode === "compact")?.status).toBe(
+        "failed",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

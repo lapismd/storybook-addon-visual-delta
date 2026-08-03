@@ -4,7 +4,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -16,8 +15,9 @@ import type {
 import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const DEFAULT_CACHE_DIR = ".visual-delta/cache";
 const CACHE_FILE_NAME = "affected-state-v1.json";
 const STATS_FILE_NAME = "preview-stats.json";
@@ -56,7 +56,7 @@ type CachedStory = {
   fingerprint: string;
 };
 
-type AffectedCache = {
+type AffectedCacheV2 = {
   version: 2;
   configFingerprint: string;
   inputHashes: Record<string, string>;
@@ -66,6 +66,17 @@ type AffectedCache = {
   updatedAt: string;
 };
 
+type AffectedCache = {
+  version: 3;
+  configFingerprint: string;
+  inputHashes: Record<string, string>;
+  passingFingerprints: Record<string, string>;
+  storyFiles: string[];
+  updatedAt: string;
+};
+
+type ReadAffectedCache = AffectedCache | AffectedCacheV2;
+
 type GraphSnapshot = {
   configFingerprint: string;
   inputHashes: Record<string, string>;
@@ -73,8 +84,13 @@ type GraphSnapshot = {
   storyFiles: string[];
   runnableStoryIds: string[];
   changedInputImporters: Map<string, Set<string>>;
+  buildFingerprint: string;
+  /** Internal evidence used by focused one-read-per-input tests. */
+  hashReadCounts: Record<string, number>;
   unsupportedReason?: string;
 };
+
+type SnapshotScope = ReadonlySet<string> | undefined;
 
 export type AffectedVisualPlan = {
   root: string;
@@ -95,6 +111,16 @@ export type RecordAffectedVisualResultsOptions = {
   passedStoryIds: Iterable<string>;
 };
 
+const planSnapshots = new WeakMap<AffectedVisualPlan, GraphSnapshot>();
+
+function retainPlanSnapshot(
+  plan: AffectedVisualPlan,
+  snapshot: GraphSnapshot,
+): AffectedVisualPlan {
+  planSnapshots.set(plan, snapshot);
+  return plan;
+}
+
 function normalizeSlashes(value: string): string {
   return value.replaceAll("\\", "/");
 }
@@ -110,7 +136,17 @@ function relativeKey(root: string, absolutePath: string): string {
     : relative || ".";
 }
 
-function absoluteFromKey(root: string, key: string): string {
+function absoluteFromKey(
+  root: string,
+  key: string,
+  snapshotDir?: string,
+): string {
+  if (key.startsWith("@snapshot:")) {
+    return path.resolve(
+      snapshotDir ?? resolveSnapshotDir(undefined, root),
+      ...key.slice("@snapshot:".length).split("/"),
+    );
+  }
   return key.startsWith("@absolute:")
     ? key.slice("@absolute:".length)
     : path.resolve(root, key);
@@ -142,13 +178,28 @@ function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function hashFile(root: string, key: string): string {
-  const filePath = absoluteFromKey(root, key);
-  try {
-    return sha256(readFileSync(filePath));
-  } catch {
-    return "<missing>";
-  }
+function createHashReader(root: string, snapshotDir: string): {
+  hash: (key: string) => string;
+  counts: Record<string, number>;
+} {
+  const memo = new Map<string, string>();
+  const counts: Record<string, number> = {};
+  return {
+    counts,
+    hash(key) {
+      const cached = memo.get(key);
+      if (cached != null) return cached;
+      counts[key] = (counts[key] ?? 0) + 1;
+      let value: string;
+      try {
+        value = sha256(readFileSync(absoluteFromKey(root, key, snapshotDir)));
+      } catch {
+        value = "<missing>";
+      }
+      memo.set(key, value);
+      return value;
+    },
+  };
 }
 
 function fingerprintEntries(entries: Iterable<[string, string]>): string {
@@ -308,7 +359,8 @@ function isInsideSnapshotDir(
   file: string,
   snapshotDir: string,
 ): boolean {
-  const absolute = absoluteFromKey(root, file);
+  if (file.startsWith("@snapshot:")) return true;
+  const absolute = absoluteFromKey(root, file, snapshotDir);
   const relative = path.relative(snapshotDir, absolute);
   return (
     relative === "" ||
@@ -377,7 +429,7 @@ function baselineFilesForStories(
           ).test(candidate)
         );
       })
-      .map((file) => relativeKey(root, path.join(snapshotDir, file)));
+      .map((file) => `@snapshot:${normalizeSlashes(file)}`);
     byStory.set(entry.id, owned);
   }
   return byStory;
@@ -392,9 +444,7 @@ function configFingerprint(
   return sha256(
     JSON.stringify({
       baselinePathMode: resolveBaselinePathMode(hostOptions),
-      cacheDir: options.cacheDir ?? null,
       externals: normalizedAffectedGlobs(options.externals),
-      snapshotDir: hostOptions?.snapshotDir ?? null,
       untraced: normalizedAffectedGlobs(options.untraced),
       browsers: project.browsers,
       visualTestFailureMode: project.workflow.visualTestFailureMode,
@@ -402,12 +452,59 @@ function configFingerprint(
   );
 }
 
+function legacyConfigFingerprintCandidates(
+  root: string,
+  hostOptions: VisualDeltaHostOptions | undefined,
+): Set<string> {
+  const options = affectedOptions(hostOptions);
+  const project = readVisualDeltaProjectConfig(root);
+  const snapshotAbsolute = resolveSnapshotDir(hostOptions, root);
+  const snapshotRelative = normalizeSlashes(path.relative(root, snapshotAbsolute));
+  const cacheAbsolute = resolveCacheDir(root, hostOptions);
+  const cacheRelative = normalizeSlashes(path.relative(root, cacheAbsolute));
+  const snapshotValues = new Set<string | null>([
+    hostOptions?.snapshotDir ?? null,
+    snapshotAbsolute,
+    snapshotRelative,
+    `/workspace/${snapshotRelative}`,
+    "/workspace/.visual-delta/capture-inputs/snapshot-dir",
+  ]);
+  const cacheValues = new Set<string | null>([
+    options.cacheDir ?? null,
+    cacheAbsolute,
+    cacheRelative,
+    `/workspace/${cacheRelative}`,
+  ]);
+  const fingerprints = new Set<string>();
+  for (const snapshotDir of snapshotValues) {
+    for (const cacheDir of cacheValues) {
+      fingerprints.add(
+        sha256(
+          JSON.stringify({
+            baselinePathMode: resolveBaselinePathMode(hostOptions),
+            cacheDir,
+            externals: normalizedAffectedGlobs(options.externals),
+            snapshotDir,
+            untraced: normalizedAffectedGlobs(options.untraced),
+            browsers: project.browsers,
+            visualTestFailureMode: project.workflow.visualTestFailureMode,
+          }),
+        ),
+      );
+    }
+  }
+  return fingerprints;
+}
+
 function buildGraphSnapshot(
   root: string,
   hostOptions: VisualDeltaHostOptions | undefined,
+  scope?: SnapshotScope,
 ): GraphSnapshot {
   const cacheDir = resolveCacheDir(root, hostOptions);
   const statsPath = path.join(cacheDir, STATS_FILE_NAME);
+  const snapshotDir = resolveSnapshotDir(hostOptions, root);
+  const hashReader = createHashReader(root, snapshotDir);
   let entries: StoryIndexEntry[] = [];
   try {
     entries = readStoryIndex(root);
@@ -419,6 +516,8 @@ function buildGraphSnapshot(
       storyFiles: [],
       runnableStoryIds: [],
       changedInputImporters: new Map(),
+      buildFingerprint: "",
+      hashReadCounts: hashReader.counts,
       unsupportedReason:
         error instanceof Error
           ? `Storybook index is missing or invalid: ${error.message}`
@@ -439,6 +538,8 @@ function buildGraphSnapshot(
       ),
       runnableStoryIds: entries.map((entry) => entry.id),
       changedInputImporters: new Map(),
+      buildFingerprint: "",
+      hashReadCounts: hashReader.counts,
       unsupportedReason:
         error instanceof Error
           ? `Dependency graph is missing or invalid: ${error.message}`
@@ -461,6 +562,8 @@ function buildGraphSnapshot(
       ),
       runnableStoryIds: entries.map((entry) => entry.id),
       changedInputImporters: new Map(),
+      buildFingerprint: "",
+      hashReadCounts: hashReader.counts,
       unsupportedReason:
         "preview-stats.json is not from the supported Vite builder",
     };
@@ -488,6 +591,7 @@ function buildGraphSnapshot(
   const stories: Record<string, CachedStory> = {};
   let unresolvedStory: string | undefined;
   for (const entry of entries) {
+    if (scope && !scope.has(entry.id)) continue;
     const importPath = normalizeStatsModuleId(entry.importPath, root);
     if (!importPath || !moduleFiles.has(importPath)) {
       unresolvedStory ??= entry.id;
@@ -502,27 +606,25 @@ function buildGraphSnapshot(
       ...renderDependencies,
       ...(baselines.get(entry.id) ?? []),
     ].sort();
-    const hashes = dependencies.map(
-      (file) => [file, hashFile(root, file)] as [string, string],
-    );
     stories[entry.id] = {
       importPath,
       dependencies,
       renderFingerprint: fingerprintEntries([
         ["@story-id", sha256(entry.id)],
         ...renderDependencies.map(
-          (file) => [file, hashFile(root, file)] as [string, string],
+          (file) => [file, hashReader.hash(file)] as [string, string],
         ),
       ]),
       fingerprint: fingerprintEntries([
         ["@story-id", sha256(entry.id)],
-        ...hashes,
+        ...dependencies.map(
+          (file) => [file, hashReader.hash(file)] as [string, string],
+        ),
       ]),
     };
   }
 
   const allFiles = walkFiles(root);
-  const snapshotDir = resolveSnapshotDir(hostOptions, root);
   const externals = normalizedAffectedGlobs(
     affectedOptions(hostOptions).externals,
   );
@@ -549,7 +651,9 @@ function buildGraphSnapshot(
     for (const dependency of story.dependencies) inputFiles.add(dependency);
   }
   const inputHashes = Object.fromEntries(
-    [...inputFiles].sort().map((file) => [file, hashFile(root, file)] as const),
+    [...inputFiles]
+      .sort()
+      .map((file) => [file, hashReader.hash(file)] as const),
   );
   const globalFingerprint = fingerprintEntries(
     controlFiles.map(
@@ -565,17 +669,41 @@ function buildGraphSnapshot(
         .filter((file) => !baselineDependencies.has(file))
         .map(
           (file) =>
-            [file, inputHashes[file] ?? hashFile(root, file)] as [string, string],
+            [file, inputHashes[file] ?? hashReader.hash(file)] as [string, string],
         ),
     ]);
     story.fingerprint = fingerprintEntries([
       ["@render", story.renderFingerprint],
       ...story.dependencies.map(
         (file) =>
-          [file, inputHashes[file] ?? hashFile(root, file)] as [string, string],
+          [file, inputHashes[file] ?? hashReader.hash(file)] as [string, string],
       ),
     ]);
   }
+
+  // The canonical build cache is keyed from authored inputs plus the logical
+  // preview graph. Generated package `dist` files can appear in Vite stats, but
+  // they are absent from a clean staged workspace until the build command runs.
+  // Hashing those derived files made the pre-build and post-build keys differ,
+  // so a verified build could never be restored on the next clean capture.
+  const buildInputFiles = allFiles;
+  const graphFingerprint = fingerprintEntries(
+    [...importersByDependency.entries()].flatMap(([dependency, importers]) =>
+      [...importers].map(
+        (importer) =>
+          [`${dependency}\0${importer}`, sha256("preview-edge")] as [string, string],
+      ),
+    ),
+  );
+  const buildFingerprint = fingerprintEntries([
+    ["@schema", sha256("canonical-build-v1")],
+    ["@profile", sha256(CANONICAL_VISUAL_CAPTURE_PROFILE.id)],
+    ["@config", configFingerprint(root, hostOptions)],
+    ["@preview-graph", graphFingerprint],
+    ...buildInputFiles.map(
+      (file) => [file, hashReader.hash(file)] as [string, string],
+    ),
+  ]);
 
   return {
     configFingerprint: configFingerprint(root, hostOptions),
@@ -584,6 +712,8 @@ function buildGraphSnapshot(
     storyFiles,
     runnableStoryIds: entries.map((entry) => entry.id),
     changedInputImporters: importersByDependency,
+    buildFingerprint,
+    hashReadCounts: hashReader.counts,
     unsupportedReason: unresolvedStory
       ? `Story ${unresolvedStory} cannot be resolved in preview-stats.json`
       : undefined,
@@ -591,17 +721,18 @@ function buildGraphSnapshot(
 }
 
 function readCache(cachePath: string): {
-  value?: AffectedCache;
+  value?: ReadAffectedCache;
   error?: string;
 } {
   if (!existsSync(cachePath)) return { error: "Affected cache is missing" };
   try {
-    const value = JSON.parse(readFileSync(cachePath, "utf8")) as AffectedCache;
+    const value = JSON.parse(readFileSync(cachePath, "utf8")) as ReadAffectedCache;
     if (
-      value.version !== CACHE_VERSION ||
+      (value.version !== 2 && value.version !== CACHE_VERSION) ||
       !value.inputHashes ||
-      !value.stories ||
-      !value.passingFingerprints
+      !value.passingFingerprints ||
+      !Array.isArray(value.storyFiles) ||
+      (value.version === 2 && !value.stories)
     ) {
       return { error: "Affected cache has an unsupported or invalid format" };
     }
@@ -614,6 +745,48 @@ function readCache(cachePath: string): {
           : "Affected cache is invalid",
     };
   }
+}
+
+function revalidatedPassingFingerprints(
+  cached: ReadAffectedCache | undefined,
+  snapshot: GraphSnapshot,
+  root: string,
+  hostOptions: VisualDeltaHostOptions | undefined,
+): Record<string, string> {
+  if (!cached) return {};
+  if (cached.version === CACHE_VERSION) {
+    return cached.configFingerprint === snapshot.configFingerprint
+      ? cached.passingFingerprints
+      : {};
+  }
+  if (!legacyConfigFingerprintCandidates(root, hostOptions).has(cached.configFingerprint)) {
+    return {};
+  }
+
+  // Version 2 fingerprints included physical baseline/cache identities. A pass
+  // is retained only when its current logical render and baseline evidence is
+  // byte-for-byte equivalent to the v2 story snapshot. Everything else stays
+  // affected and is conservatively recaptured.
+  const passing: Record<string, string> = {};
+  for (const storyId of snapshot.runnableStoryIds) {
+    const previousStory = cached.stories[storyId];
+    const currentStory = snapshot.stories[storyId];
+    const currentDependencyHashes = new Set(
+      currentStory?.dependencies.map((file) => snapshot.inputHashes[file]),
+    );
+    if (
+      previousStory &&
+      currentStory &&
+      cached.passingFingerprints[storyId] === previousStory.fingerprint &&
+      previousStory.renderFingerprint === currentStory.renderFingerprint &&
+      previousStory.dependencies.every((file) =>
+        currentDependencyHashes.has(cached.inputHashes[file]),
+      )
+    ) {
+      passing[storyId] = currentStory.fingerprint;
+    }
+  }
+  return passing;
 }
 
 function changedInputs(
@@ -688,8 +861,13 @@ export function planAffectedVisualTests(
   let fallbackReason = snapshot.unsupportedReason ?? cached.error;
   let changed: string[] = [];
   if (!fallbackReason && cached.value) {
-    changed = changedInputs(cached.value.inputHashes, snapshot.inputHashes);
-    if (cached.value.configFingerprint !== snapshot.configFingerprint) {
+    changed = cached.value.version === CACHE_VERSION
+      ? changedInputs(cached.value.inputHashes, snapshot.inputHashes)
+      : [];
+    if (
+      cached.value.version === CACHE_VERSION &&
+      cached.value.configFingerprint !== snapshot.configFingerprint
+    ) {
       fallbackReason = "Affected-test configuration changed";
     } else if (
       cached.value.storyFiles.join("\n") !== snapshot.storyFiles.join("\n")
@@ -715,7 +893,7 @@ export function planAffectedVisualTests(
   }
 
   if (fallbackReason) {
-    return {
+    return retainPlanSnapshot({
       root: resolvedRoot,
       cacheDir,
       cachePath,
@@ -728,11 +906,18 @@ export function planAffectedVisualTests(
       ),
       selectedStoryIds: runnableStoryIds,
       runnableStoryIds,
-      needsRebuild: true,
-    };
+      needsRebuild:
+        runnableStoryIds.length === 0 ||
+        fallbackReason.startsWith("New story cannot be resolved"),
+    }, snapshot);
   }
 
-  const passing = cached.value!.passingFingerprints;
+  const passing = revalidatedPassingFingerprints(
+    cached.value,
+    snapshot,
+    resolvedRoot,
+    hostOptions,
+  );
   const selectedStoryIds = runnableStoryIds.filter(
     (storyId) =>
       !snapshot.stories[storyId] ||
@@ -740,7 +925,7 @@ export function planAffectedVisualTests(
   );
   const unchanged = runnableStoryIds.length - selectedStoryIds.length;
   const noChange = selectedStoryIds.length === 0;
-  return {
+  return retainPlanSnapshot({
     root: resolvedRoot,
     cacheDir,
     cachePath,
@@ -757,7 +942,7 @@ export function planAffectedVisualTests(
     selectedStoryIds,
     runnableStoryIds,
     needsRebuild: !noChange,
-  };
+  }, snapshot);
 }
 
 /** Build the full-run summary used by CLI and middleware. */
@@ -771,7 +956,7 @@ export function planAllVisualTests(
   const statsPath = path.join(cacheDir, STATS_FILE_NAME);
   const snapshot = buildGraphSnapshot(resolvedRoot, hostOptions);
   const storyIds = snapshot.runnableStoryIds;
-  return {
+  return retainPlanSnapshot({
     root: resolvedRoot,
     cacheDir,
     cachePath,
@@ -780,7 +965,43 @@ export function planAllVisualTests(
     selectedStoryIds: storyIds,
     runnableStoryIds: storyIds,
     needsRebuild: false,
-  };
+  }, snapshot);
+}
+
+/** Build an exact selected-story plan without calculating every story fingerprint. */
+export function planExactVisualTests(
+  root: string,
+  storyIds: readonly string[],
+  hostOptions?: VisualDeltaHostOptions,
+): AffectedVisualPlan {
+  const resolvedRoot = path.resolve(root);
+  const requested = [...new Set(storyIds)];
+  const snapshot = buildGraphSnapshot(
+    resolvedRoot,
+    hostOptions,
+    new Set(requested),
+  );
+  const runnable = new Set(snapshot.runnableStoryIds);
+  const selected = requested.filter((storyId) => runnable.has(storyId));
+  const cacheDir = resolveCacheDir(resolvedRoot, hostOptions);
+  const plan = {
+    root: resolvedRoot,
+    cacheDir,
+    cachePath: path.join(cacheDir, CACHE_FILE_NAME),
+    statsPath: path.join(cacheDir, STATS_FILE_NAME),
+    summary: {
+      selection: "selected" as const,
+      selected: selected.length,
+      unchanged: Math.max(0, snapshot.runnableStoryIds.length - selected.length),
+      total: snapshot.runnableStoryIds.length,
+      noChange: selected.length === 0,
+      storyIds: selected,
+    },
+    selectedStoryIds: selected,
+    runnableStoryIds: snapshot.runnableStoryIds,
+    needsRebuild: false,
+  } satisfies AffectedVisualPlan;
+  return retainPlanSnapshot(plan, snapshot);
 }
 
 /**
@@ -798,13 +1019,45 @@ export function recordAffectedVisualResults({
   const snapshot = buildGraphSnapshot(resolvedRoot, hostOptions);
   if (snapshot.unsupportedReason) return false;
 
-  const previous = readCache(cachePath).value;
+  return recordSnapshotResults({
+    snapshot,
+    cacheDir,
+    cachePath,
+    previous: readCache(cachePath).value,
+    passedStoryIds,
+    root: resolvedRoot,
+    hostOptions,
+  });
+}
+
+function recordSnapshotResults(options: {
+  snapshot: GraphSnapshot;
+  cacheDir: string;
+  cachePath: string;
+  previous?: ReadAffectedCache;
+  passedStoryIds: Iterable<string>;
+  root: string;
+  hostOptions?: VisualDeltaHostOptions;
+}): boolean {
+  const { snapshot, cacheDir, cachePath } = options;
   const passingFingerprints: Record<string, string> = {};
+  const previousPassing = revalidatedPassingFingerprints(
+    options.previous,
+    snapshot,
+    options.root,
+    options.hostOptions,
+  );
+  const scoped = Object.keys(snapshot.stories).length < snapshot.runnableStoryIds.length;
   for (const storyId of snapshot.runnableStoryIds) {
-    const oldFingerprint = previous?.passingFingerprints[storyId];
+    const oldFingerprint =
+      previousPassing[storyId] ??
+      (scoped && options.previous?.version === CACHE_VERSION
+        && options.previous.configFingerprint === snapshot.configFingerprint
+        ? options.previous.passingFingerprints[storyId]
+        : undefined);
     if (oldFingerprint) passingFingerprints[storyId] = oldFingerprint;
   }
-  for (const storyId of new Set(passedStoryIds)) {
+  for (const storyId of new Set(options.passedStoryIds)) {
     const story = snapshot.stories[storyId];
     if (story) passingFingerprints[storyId] = story.fingerprint;
   }
@@ -812,8 +1065,10 @@ export function recordAffectedVisualResults({
   const state: AffectedCache = {
     version: CACHE_VERSION,
     configFingerprint: snapshot.configFingerprint,
-    inputHashes: snapshot.inputHashes,
-    stories: snapshot.stories,
+    inputHashes:
+      scoped && options.previous?.version === CACHE_VERSION
+        ? { ...options.previous.inputHashes, ...snapshot.inputHashes }
+        : snapshot.inputHashes,
     passingFingerprints,
     storyFiles: snapshot.storyFiles,
     updatedAt: new Date().toISOString(),
@@ -821,6 +1076,25 @@ export function recordAffectedVisualResults({
   mkdirSync(cacheDir, { recursive: true });
   writeFileSync(cachePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   return true;
+}
+
+/** Reuse the exact planning snapshot instead of traversing the graph again. */
+export function recordAffectedVisualResultsForPlan(
+  plan: AffectedVisualPlan,
+  passedStoryIds: Iterable<string>,
+  hostOptions?: VisualDeltaHostOptions,
+): boolean {
+  const snapshot = planSnapshots.get(plan);
+  if (!snapshot || snapshot.unsupportedReason) return false;
+  return recordSnapshotResults({
+    snapshot,
+    cacheDir: plan.cacheDir,
+    cachePath: plan.cachePath,
+    previous: readCache(plan.cachePath).value,
+    passedStoryIds,
+    root: plan.root,
+    hostOptions,
+  });
 }
 
 export const AFFECTED_VISUAL_CACHE_FILE = CACHE_FILE_NAME;
@@ -839,4 +1113,45 @@ export function visualRenderFingerprints(
       story.renderFingerprint,
     ]),
   );
+}
+
+/** Render fingerprints already calculated for a retained plan snapshot. */
+export function visualRenderFingerprintsForPlan(
+  plan: AffectedVisualPlan,
+): Record<string, string> {
+  const snapshot = planSnapshots.get(plan);
+  if (!snapshot || snapshot.unsupportedReason) return {};
+  return Object.fromEntries(
+    Object.entries(snapshot.stories).map(([storyId, story]) => [
+      storyId,
+      story.renderFingerprint,
+    ]),
+  );
+}
+
+/** Logical source/profile input fingerprint for the canonical static cache. */
+export function visualCanonicalBuildFingerprint(
+  root: string,
+  hostOptions?: VisualDeltaHostOptions,
+): string | null {
+  const snapshot = buildGraphSnapshot(path.resolve(root), hostOptions);
+  return snapshot.unsupportedReason || !snapshot.buildFingerprint
+    ? null
+    : snapshot.buildFingerprint;
+}
+
+export function visualCanonicalBuildFingerprintForPlan(
+  plan: AffectedVisualPlan,
+): string | null {
+  const snapshot = planSnapshots.get(plan);
+  return snapshot?.unsupportedReason || !snapshot?.buildFingerprint
+    ? null
+    : snapshot.buildFingerprint;
+}
+
+/** Focused test evidence that one snapshot hashes each logical input once. */
+export function visualHashReadCountsForPlan(
+  plan: AffectedVisualPlan,
+): Record<string, number> {
+  return { ...(planSnapshots.get(plan)?.hashReadCounts ?? {}) };
 }

@@ -1,4 +1,5 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,7 +9,12 @@ import {
   matchesAffectedGlob,
   normalizeStatsModuleId,
   planAffectedVisualTests,
+  planExactVisualTests,
   recordAffectedVisualResults,
+  recordAffectedVisualResultsForPlan,
+  visualCanonicalBuildFingerprint,
+  visualHashReadCountsForPlan,
+  visualRenderFingerprints,
 } from "./affected-visual-tests.js";
 import type { VisualDeltaHostOptions } from "./options.js";
 
@@ -165,6 +171,62 @@ describe("affected visual graph normalization", () => {
 });
 
 describe("affected visual planner", () => {
+  it("plans only the requested exact story and hashes each input once", () => {
+    const fixture = createFixture();
+    const plan = planExactVisualTests(
+      fixture.root,
+      ["button--primary"],
+      fixture.hostOptions,
+    );
+    expect(plan.summary).toMatchObject({
+      selection: "selected",
+      selected: 1,
+      total: 2,
+      storyIds: ["button--primary"],
+    });
+    expect(Object.values(visualHashReadCountsForPlan(plan))).not.toContain(2);
+  });
+
+  it("keeps canonical build keys stable across clean derived output", () => {
+    const fixture = createFixture();
+    const generated = path.join(
+      fixture.root,
+      "packages/example/dist/index.js",
+    );
+    fixture.modules.push({
+      id: generated,
+      reasons: [{ moduleName: "./src/Button.stories.ts" }],
+    });
+    write(
+      fixture.root,
+      ".visual-delta/cache/preview-stats.json",
+      JSON.stringify({ modules: fixture.modules }),
+    );
+    write(
+      fixture.root,
+      "packages/example/src/index.ts",
+      "export const value = 'source';\n",
+    );
+
+    const clean = visualCanonicalBuildFingerprint(
+      fixture.root,
+      fixture.hostOptions,
+    );
+    write(fixture.root, "packages/example/dist/index.js", "export const value = 'built';\n");
+    expect(
+      visualCanonicalBuildFingerprint(fixture.root, fixture.hostOptions),
+    ).toBe(clean);
+
+    write(
+      fixture.root,
+      "packages/example/src/index.ts",
+      "export const value = 'changed';\n",
+    );
+    expect(
+      visualCanonicalBuildFingerprint(fixture.root, fixture.hostOptions),
+    ).not.toBe(clean);
+  });
+
   it("falls back to all runnable stories on a cold cache", () => {
     const fixture = createFixture();
     const plan = planAffectedVisualTests(fixture.root, fixture.hostOptions);
@@ -199,6 +261,186 @@ describe("affected visual planner", () => {
       planAffectedVisualTests(fixture.root, fixture.hostOptions).summary
         .noChange,
     ).toBe(true);
+  });
+
+  it("keeps fingerprints stable across equivalent snapshot locations", () => {
+    const fixture = createFixture();
+    seed(fixture);
+    for (const snapshotDir of [
+      undefined,
+      "tests/visual/storybook.spec.ts-snapshots",
+      path.join(fixture.root, "tests/visual/storybook.spec.ts-snapshots"),
+      "/workspace/tests/visual/storybook.spec.ts-snapshots",
+      "/workspace/.visual-delta/capture-inputs/snapshot-dir",
+    ]) {
+      expect(
+        planAffectedVisualTests(fixture.root, {
+          baselinePathMode: "story-id",
+          ...(snapshotDir ? { snapshotDir } : {}),
+        }).summary.fallbackReason,
+      ).not.toBe("Affected-test configuration changed");
+    }
+  });
+
+  it("writes compact cache v3 without repeated story dependency arrays", () => {
+    const fixture = createFixture();
+    seed(fixture);
+    const cachePath = path.join(
+      fixture.root,
+      ".visual-delta/cache",
+      AFFECTED_VISUAL_CACHE_FILE,
+    );
+    const cached = JSON.parse(readFileSync(cachePath, "utf8")) as {
+      version: number;
+      stories?: unknown;
+    };
+    expect(cached.version).toBe(3);
+    expect(cached.stories).toBeUndefined();
+    expect(statSync(cachePath).size).toBeLessThan(16_000);
+  });
+
+  it("keeps a Mira-shaped 132-story cache below one megabyte", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "visual-delta-affected-large-"));
+    roots.push(root);
+    const entries: Record<string, ReturnType<typeof story>> = {};
+    const modules: Array<{
+      id: string;
+      reasons?: Array<{ moduleName: string }>;
+    }> = [{ id: "/virtual:/@storybook/builder-vite/vite-app.js" }];
+    const passing: string[] = [];
+    for (let storyIndex = 0; storyIndex < 132; storyIndex += 1) {
+      const storyId = `story-${storyIndex}--default`;
+      const importPath = `./src/story-${storyIndex}.stories.ts`;
+      entries[storyId] = story(storyId, importPath);
+      passing.push(storyId);
+      write(root, importPath.slice(2), "export const Default = {};\n");
+      modules.push({ id: importPath, reasons: [] });
+      for (let dependencyIndex = 0; dependencyIndex < 30; dependencyIndex += 1) {
+        const dependency = `./src/generated/${storyIndex}-${dependencyIndex}.ts`;
+        write(root, dependency.slice(2), `export const value = ${dependencyIndex};\n`);
+        modules.push({
+          id: dependency,
+          reasons: [{ moduleName: importPath }],
+        });
+      }
+    }
+    write(root, "package.json", '{"name":"large-fixture"}\n');
+    write(root, "storybook-static/index.json", JSON.stringify({ entries }));
+    write(
+      root,
+      ".visual-delta/cache/preview-stats.json",
+      JSON.stringify({ modules }),
+    );
+    expect(
+      recordAffectedVisualResults({ root, passedStoryIds: passing }),
+    ).toBe(true);
+    const bytes = statSync(
+      path.join(root, ".visual-delta/cache", AFFECTED_VISUAL_CACHE_FILE),
+    ).size;
+    expect(bytes).toBeLessThan(1_000_000);
+  });
+
+  it("guardedly migrates only revalidated v2 passing fingerprints", () => {
+    const fixture = createFixture();
+    const render = visualRenderFingerprints(fixture.root, fixture.hostOptions);
+    const configFingerprint = createHash("sha256")
+      .update(
+        JSON.stringify({
+          baselinePathMode: "story-id",
+          cacheDir: null,
+          externals: [],
+          snapshotDir: null,
+          untraced: [],
+          browsers: ["chromium"],
+          visualTestFailureMode: "warn",
+        }),
+      )
+      .digest("hex");
+    const stories = Object.fromEntries(
+      Object.entries(render).map(([storyId, renderFingerprint]) => [
+        storyId,
+        {
+          importPath:
+            storyId === "button--primary"
+              ? "src/Button.stories.ts"
+              : "src/Card.stories.ts",
+          dependencies: [],
+          renderFingerprint,
+          fingerprint: `legacy-${storyId}`,
+        },
+      ]),
+    );
+    write(
+      fixture.root,
+      `.visual-delta/cache/${AFFECTED_VISUAL_CACHE_FILE}`,
+      JSON.stringify({
+        version: 2,
+        configFingerprint,
+        inputHashes: {},
+        stories,
+        passingFingerprints: Object.fromEntries(
+          Object.keys(stories).map((storyId) => [storyId, `legacy-${storyId}`]),
+        ),
+        storyFiles: ["src/Button.stories.ts", "src/Card.stories.ts", "src/Hidden.stories.ts"],
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    expect(
+      planAffectedVisualTests(fixture.root, fixture.hostOptions).summary.noChange,
+    ).toBe(true);
+
+    const exact = planExactVisualTests(
+      fixture.root,
+      ["button--primary"],
+      fixture.hostOptions,
+    );
+    expect(
+      recordAffectedVisualResultsForPlan(
+        exact,
+        ["button--primary"],
+        fixture.hostOptions,
+      ),
+    ).toBe(true);
+    const migrated = JSON.parse(
+      readFileSync(
+        path.join(
+          fixture.root,
+          ".visual-delta/cache",
+          AFFECTED_VISUAL_CACHE_FILE,
+        ),
+        "utf8",
+      ),
+    ) as { version: number; passingFingerprints: Record<string, string> };
+    expect(migrated).toMatchObject({
+      version: 3,
+      passingFingerprints: {
+        "button--primary": expect.any(String),
+      },
+    });
+    expect(Object.keys(migrated.passingFingerprints)).toEqual([
+      "button--primary",
+    ]);
+
+    stories["button--primary"].renderFingerprint = "stale";
+    write(
+      fixture.root,
+      `.visual-delta/cache/${AFFECTED_VISUAL_CACHE_FILE}`,
+      JSON.stringify({
+        version: 2,
+        configFingerprint,
+        inputHashes: {},
+        stories,
+        passingFingerprints: {
+          "button--primary": "legacy-button--primary",
+          "card--primary": "legacy-card--primary",
+        },
+        storyFiles: ["src/Button.stories.ts", "src/Card.stories.ts", "src/Hidden.stories.ts"],
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    expect(
+      planAffectedVisualTests(fixture.root, fixture.hostOptions).selectedStoryIds,
+    ).toContain("button--primary");
   });
 
   it("selects only the leaf story through cycles", () => {

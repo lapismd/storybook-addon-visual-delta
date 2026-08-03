@@ -36,6 +36,10 @@ import {
 } from "../runner/index.js";
 import type { VisualDiffSidecar } from "../visual-diff-sidecar.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import {
+  CANONICAL_BUILD_CACHE_REL,
+  VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV,
+} from "./canonical-build-cache.js";
 
 export const VISUAL_DELTA_RUNNER_MODULE_REL = ".visual-delta/runner.mjs";
 export const VISUAL_DELTA_CAPTURE_WORKER_ENV =
@@ -175,6 +179,14 @@ export function shouldStageVisualDeltaWorkspacePath(
 ): boolean {
   const relative = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
   if (!relative) return true;
+  // Exact and cached-actual preflight need the lightweight story catalog, but
+  // the generated bundle remains excluded and is restored from canonical cache.
+  if (
+    relative === "storybook-static" ||
+    relative === "storybook-static/index.json"
+  ) {
+    return true;
+  }
   if (isPathAtOrBelow(relative, CAPTURE_INPUTS_DIR_REL)) return false;
   if (relative === affectedCacheDir || isPathAncestorOf(relative, affectedCacheDir)) {
     return true;
@@ -676,6 +688,12 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
       );
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
       const storeVolume = `visual-delta-pnpm-store-${key}`;
+      const canonicalBuildCache = path.join(
+        manifest.root,
+        CANONICAL_BUILD_CACHE_REL,
+      );
+      const turboCache = path.join(canonicalBuildCache, "turbo");
+      mkdirSync(turboCache, { recursive: true });
       try {
         context.onEvent?.({ type: "start", profile });
         const packageWorkerRoot = await prepareVisualDeltaPackageWorker(
@@ -699,8 +717,14 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           `type=volume,src=${nodeModulesVolume},dst=/workspace/node_modules`,
           "--mount",
           `type=volume,src=${storeVolume},dst=/pnpm/store`,
+          "--mount",
+          `type=bind,src=${canonicalBuildCache},dst=/visual-delta/canonical-build-cache`,
+          "--mount",
+          `type=bind,src=${turboCache},dst=/workspace/.turbo`,
           "--env",
           `${VISUAL_DELTA_CAPTURE_WORKER_ENV}=1`,
+          "--env",
+          `${VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV}=/visual-delta/canonical-build-cache`,
           image,
         ];
         const installExit = await runProcess(

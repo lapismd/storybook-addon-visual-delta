@@ -112,6 +112,16 @@ function comparisonMessage(
   }`;
 }
 
+export function shouldDeferVisualPolicyFailure(options: {
+  outcome: string | undefined;
+  environment?: NodeJS.ProcessEnv;
+}): boolean {
+  return (
+    options.environment?.VISUAL_DELTA_DEFER_POLICY_FAILURES === "1" &&
+    isWarningComparisonOutcome(options.outcome)
+  );
+}
+
 function applyFailurePolicy(options: {
   label: string;
   sidecar: ReturnType<typeof writeDiffArtifactsForBaseline>;
@@ -127,6 +137,19 @@ function applyFailurePolicy(options: {
   ) {
     options.testInfo.annotations.push({
       type: "visual-warning",
+      description: message,
+    });
+    console.warn(`[visual-delta] ${message}`);
+    return;
+  }
+  if (
+    shouldDeferVisualPolicyFailure({
+      outcome: options.sidecar.outcome,
+      environment: process.env,
+    })
+  ) {
+    options.testInfo.annotations.push({
+      type: "visual-policy-failure",
       description: message,
     });
     console.warn(`[visual-delta] ${message}`);
