@@ -1,3 +1,5 @@
+import { ansiRawTail, lastMeaningfulAnsiLine } from "./ansi-log.js";
+
 /** Minimal progress shape for status streaming (mirrors VisualRunProgress). */
 export type StatusLogProgress = {
   completed: number;
@@ -8,12 +10,7 @@ export type StatusLogProgress = {
 
 /** Last non-empty line from a streamed log (for clipped status labels). */
 export function lastMeaningfulLogLine(log: string): string {
-  const lines = log.replace(/\r\n/g, "\n").split("\n");
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i]?.trim();
-    if (line) return line;
-  }
-  return "";
+  return lastMeaningfulAnsiLine(log).text.trim();
 }
 
 /** One progress line for the status streamer / Testing Module title. */
@@ -43,7 +40,7 @@ export function appendStatusLogChunk(
   limit = 16_000,
 ): string {
   const merged = `${prev ?? ""}${chunk.replace(/\r\n/g, "\n")}`;
-  return merged.length > limit ? merged.slice(-limit) : merged;
+  return ansiRawTail(merged, limit);
 }
 
 /** Compact `completed/total` for Testing Module row chips / descriptions. */

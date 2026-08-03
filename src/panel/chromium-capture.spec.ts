@@ -78,4 +78,56 @@ describe("postChromiumStoryCompare", () => {
     );
     window.removeEventListener(VISUAL_DELTA_CHANGES_EVENT, onChanges);
   });
+
+  it("preserves ANSI log bytes split across NDJSON stream chunks", async () => {
+    const ansiLine = "\u001b[32;1m✓ passed\u001b[0m\n";
+    const done = {
+      type: "done" as const,
+      ok: true as const,
+      storyId: "dialog--opens",
+      target: { browser: "chromium" as const },
+      environment: { browser: "chromium" as const, platform: "linux" },
+      sidecar: {
+        version: 4 as const,
+        storyId: "dialog--opens",
+        snapshotRel: "dialog--opens-chromium.png",
+        status: "passed" as const,
+        runnerStatus: "passed" as const,
+        outcome: "passed" as const,
+        generatedAt: "2026-08-03T10:00:00.000Z",
+        tool: "playwright" as const,
+      },
+    };
+    const payload = `${JSON.stringify({ type: "log", line: ansiLine })}\n${JSON.stringify(done)}\n`;
+    const splitAt = payload.indexOf("001b") + 2;
+    const encoder = new TextEncoder();
+    const responseBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(payload.slice(0, splitAt)));
+        controller.enqueue(encoder.encode(payload.slice(splitAt)));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(responseBody, {
+          status: 200,
+          headers: { "Content-Type": "application/x-ndjson" },
+        }),
+      ),
+    );
+    const onLog = vi.fn();
+
+    await postChromiumStoryCompare(
+      {
+        storyId: "dialog--opens",
+        baselineUrl: "/visual-baselines/dialog--opens-chromium.png",
+      },
+      { onLog },
+    );
+
+    expect(onLog).toHaveBeenCalledOnce();
+    expect(onLog).toHaveBeenCalledWith(ansiLine);
+  });
 });

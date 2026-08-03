@@ -1,6 +1,12 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderWithTheme } from "../test/render.js";
 import { lastMeaningfulLogLine, PanelStatusBar } from "./PanelStatusBar.js";
 
@@ -58,6 +64,75 @@ describe("lastMeaningfulLogLine", () => {
 });
 
 describe("PanelStatusBar", () => {
+  it("renders safe ANSI in the footer and full ANSI in the copied log", async () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 200 });
+    container.getBoundingClientRect = () =>
+      ({ right: 800, bottom: 600, width: 400 }) as DOMRect;
+    document.body.appendChild(container);
+
+    renderWithTheme(
+      <PanelStatusBar
+        container={container}
+        running
+        label="Working…"
+        log={
+          "\u001b]8;;https://example.invalid\u0007plain <script>safe</script>\u001b]8;;\u0007\n" +
+          "\u001b[31;42;1;7mFailed safely\u001b[0m"
+        }
+        error={null}
+      />,
+    );
+
+    const logButton = screen.getByRole("button", {
+      name: "Progress: Failed safely",
+    });
+    expect(logButton.textContent).not.toContain("\u001b");
+    const compactFailure = within(logButton).getByText("Failed safely");
+    expect(compactFailure).toHaveAttribute(
+      "data-ansi-foreground",
+      "standard-1",
+    );
+    expect(compactFailure.style.color).not.toBe("");
+    expect(compactFailure.style.backgroundColor).toBe("");
+    expect(compactFailure).toHaveStyle({ fontWeight: "700" });
+    fireEvent.click(logButton);
+
+    const popover = screen.getByTestId("popover");
+    const terminalFailure = within(popover).getByText("Failed safely");
+    expect(terminalFailure).toHaveAttribute(
+      "data-ansi-foreground",
+      "standard-1",
+    );
+    expect(terminalFailure).toHaveStyle({
+      color: "#98c379",
+      backgroundColor: "#e06c75",
+      fontWeight: "700",
+    });
+    expect(popover).not.toHaveTextContent("example.invalid");
+    expect(popover.textContent).not.toContain("\u001b");
+    expect(popover.querySelector("script")).toBeNull();
+    expect(popover).toHaveTextContent("plain <script>safe</script>");
+
+    fireEvent.click(within(popover).getByRole("button", { name: "Copy log" }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        "plain <script>safe</script>\nFailed safely",
+      ),
+    );
+
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("renders the clipped log line without throwing", () => {
     class ResizeObserverStub {
       observe() {}

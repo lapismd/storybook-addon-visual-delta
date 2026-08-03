@@ -66,6 +66,29 @@ for (const layout of [
           });
           await expect(status).toBeVisible();
           await expectFullWidthStatusFooter(panel);
+          const logButton = panel.getByRole("button", {
+            name: /Progress: ✓ filter-search--with-query \(7\/12\)/,
+          });
+          await logButton.click();
+          const richLines = page
+            .locator('[data-ansi-foreground="standard-2"]')
+            .filter({ hasText: "filter-search--with-query" });
+          await expect(richLines).toHaveCount(2);
+          await expect(richLines.first()).toHaveCSS(
+            "background-color",
+            "rgba(0, 0, 0, 0)",
+          );
+          await expect(richLines.last()).toHaveCSS(
+            "color",
+            "rgb(152, 195, 121)",
+          );
+          await expect(richLines.last()).toHaveCSS(
+            "background-color",
+            "rgb(97, 175, 239)",
+          );
+          expect(await page.locator("body").innerText()).not.toContain(
+            "\u001b",
+          );
           return;
         }
         await expect(

@@ -39,6 +39,7 @@ import type {
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
 import { resolveVisualActionStoryIds } from "../shared/action-scope.js";
+import { ansiRawTail } from "../shared/ansi-log.js";
 import type {
   VisualDeltaConfigDiagnostic,
   VisualDeltaResolvedConfig,
@@ -645,7 +646,7 @@ function runCommand(
       const text = chunk.toString("utf8");
       log += text;
       if (log.length > 200_000) {
-        log = log.slice(-160_000);
+        log = ansiRawTail(log, 160_000);
       }
       onChunk?.(text);
     };
@@ -1184,7 +1185,7 @@ async function handleRun(
             return;
           }
           if (event.type !== "log") return;
-          log = `${log}${event.message}`.slice(-200_000);
+          log = ansiRawTail(`${log}${event.message}`, 200_000);
           emitRun({ type: "log", line: event.message.trimEnd() });
           lineBuffer += event.message;
           const lines = lineBuffer.split("\n");
@@ -1285,7 +1286,7 @@ async function handleRun(
       grep,
       summary,
       results,
-      logTail: log.slice(-6000),
+      logTail: ansiRawTail(log, 6000),
       affected,
       browsers: selectedBrowsers,
       captureProfile: runnerResult.profile,
@@ -1304,7 +1305,7 @@ async function handleRun(
       grep,
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
       results: [],
-      logTail: log.slice(-4000),
+      logTail: ansiRawTail(log, 4000),
       affected,
       browsers: selectedBrowsers,
       captureProfile: activeProfile,
@@ -1467,7 +1468,7 @@ async function handleActionScope(
       write({
         type: "error",
         error: "build-storybook failed while refreshing the affected scope",
-        logTail: built.log.slice(-4000),
+        logTail: ansiRawTail(built.log, 4000),
       });
       res.end();
       return;

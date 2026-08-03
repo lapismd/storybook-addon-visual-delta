@@ -30,6 +30,7 @@ import type {
   VisualActionScopeStreamEvent,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
+import { ansiRawTail } from "../shared/ansi-log.js";
 import type { VisualDeltaResolvedConfig } from "../shared/config-types.js";
 import type { CompareStoryResult } from "../shared/compare-story-types.js";
 import {
@@ -1657,7 +1658,7 @@ async function postVisualBaselineWrite(
           label: runningLabel,
           kind,
           storyIds,
-          logTail: log.slice(-12_000),
+          logTail: ansiRawTail(log, 12_000),
           ...fraction,
           ...provenance,
         });
@@ -1950,7 +1951,7 @@ export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {
           label: runningLabel,
           kind,
           storyIds,
-          logTail: log.slice(-12_000),
+          logTail: ansiRawTail(log, 12_000),
         });
       }
       log += decoder.decode();
@@ -2066,7 +2067,7 @@ export async function postVisualInteractionBaseline(body: {
           kind: "interaction",
           storyIds,
           ...provenance,
-          logTail: log.slice(-12_000),
+          logTail: ansiRawTail(log, 12_000),
         });
       }
       log += decoder.decode();

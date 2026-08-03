@@ -20,6 +20,9 @@ describe("status-log helpers", () => {
     expect(lastMeaningfulLogLine("a\nb\n\n")).toBe("b");
     expect(lastMeaningfulLogLine("only")).toBe("only");
     expect(lastMeaningfulLogLine("\r\n  \r\n")).toBe("");
+    expect(lastMeaningfulLogLine("\u001b[32;1mpassed\u001b[0m\n")).toBe(
+      "passed",
+    );
   });
 
   it("visualRunProgressLogLine formats per-story and aggregate lines", () => {

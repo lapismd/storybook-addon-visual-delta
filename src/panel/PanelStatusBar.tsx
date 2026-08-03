@@ -2,6 +2,7 @@ import React, {
   memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -11,7 +12,14 @@ import {
   ScrollArea,
   useCopyButton,
 } from "storybook/internal/components";
+import {
+  ansiLogTail,
+  lastMeaningfulAnsiLine,
+  parseAnsiLog,
+  type ParsedAnsiLog,
+} from "../shared/ansi-log.js";
 import { lastMeaningfulLogLine } from "../shared/status-log.js";
+import { AnsiText } from "./AnsiText.js";
 import { EnvironmentSplitButton } from "./EnvironmentSplitButton.js";
 import {
   StatusBar,
@@ -86,12 +94,12 @@ const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
   log,
   hasError,
 }: {
-  log: string;
+  log: ParsedAnsiLog;
   hasError: boolean;
 }) {
   const logRef = useRef<HTMLDivElement | null>(null);
   const { children: copyChildren, buttonProps } = useCopyButton({
-    content: log,
+    content: log.text,
     children: <CopyIcon />,
     childrenOnCopy: <CheckIcon />,
     ariaLabel: "Copy log",
@@ -102,7 +110,7 @@ const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [log]);
+  }, [log.text]);
 
   return (
     <StatusLogShell $hasError={hasError}>
@@ -121,7 +129,9 @@ const StatusLogPopoverContent = memo(function StatusLogPopoverContent({
       </StatusLogCopyButton>
       <div style={{ height: "100%" }}>
         <ScrollArea ref={logRef} vertical>
-          <StatusLogBody>{log}</StatusLogBody>
+          <StatusLogBody>
+            <AnsiText segments={log.segments} variant="terminal" />
+          </StatusLogBody>
         </ScrollArea>
       </div>
     </StatusLogShell>
@@ -139,13 +149,18 @@ export const PanelStatusBar = memo(function PanelStatusBar({
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<FixedPos | null>(null);
-  const hasLog = Boolean(log?.trim());
+  const parsedLog = useMemo(() => parseAnsiLog(log ?? ""), [log]);
+  const displayLog = useMemo(() => ansiLogTail(parsedLog, 4000), [parsedLog]);
+  const clippedLine = useMemo(
+    () => lastMeaningfulAnsiLine(parsedLog),
+    [parsedLog],
+  );
+  const hasLog = Boolean(parsedLog.text.trim());
   const idle = !running && !hasLog;
   const clipped =
-    (log ? lastMeaningfulLogLine(log) : "") ||
+    clippedLine.text.trim() ||
     label?.trim() ||
     (idle ? "Ready" : "Working…");
-  const displayLog = log?.slice(-4000) ?? "";
   const determinate = Boolean(progress && progress.total > 0);
   const completed = Math.max(0, progress?.completed ?? 0);
   const total = Math.max(0, progress?.total ?? 0);
@@ -264,7 +279,13 @@ export const PanelStatusBar = memo(function PanelStatusBar({
               <SyncIcon />
             </StatusSpinner>
           ) : null}
-          <StatusProgressLabel>{clipped}</StatusProgressLabel>
+          <StatusProgressLabel>
+            {clippedLine.text.trim() ? (
+              <AnsiText segments={clippedLine.segments} variant="compact" />
+            ) : (
+              clipped
+            )}
+          </StatusProgressLabel>
           {running && determinate ? (
             <StatusProgressValue aria-hidden>
               {Math.min(completed, total)}/{total}

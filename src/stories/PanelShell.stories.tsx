@@ -124,7 +124,9 @@ export const RunningResult: Story = {
         initialState: "running",
         initialProgress: { completed: 7, total: 12 },
         initialStatusLog:
-          "Starting visual checks\n✓ shadcn-button--default (6/12)\n✓ filter-search--with-query (7/12)\n",
+          "\u001b[2mStarting visual checks\u001b[0m\n" +
+          "\u001b[32m✓ shadcn-button--default (6/12)\u001b[0m\n" +
+          "\u001b[1;32;44m✓ filter-search--with-query (7/12)\u001b[0m\n",
       })} />
     </ThemeHost>
   ),
@@ -149,6 +151,7 @@ export const RunningResult: Story = {
       name: /Progress: ✓ filter-search--with-query \(7\/12\)/i,
     });
     await expect(progressLog).toBeInTheDocument();
+    await expect(progressLog.textContent).not.toContain("\u001b");
   },
 };
 
