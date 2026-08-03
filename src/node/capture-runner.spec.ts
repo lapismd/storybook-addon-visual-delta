@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -14,6 +15,7 @@ import {
   createCaptureJobManifest,
   dockerVisualDeltaWorkerCommand,
   dockerWorkspaceArgv,
+  resolveTypescriptCli,
   resolveVisualDeltaCaptureRunner,
   runVisualDeltaCaptureJob,
   runVisualDeltaInCaptureRunner,
@@ -137,6 +139,39 @@ describe("capture runner", () => {
           packageRoot: root,
         }),
       ).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves the compiler through the TypeScript package manifest", () => {
+    const root = mkdtempSync(
+      path.join(process.cwd(), ".visual-delta-typescript-"),
+    );
+    const packageRoot = path.join(root, "node_modules", "typescript");
+    const typescriptCli = path.join(packageRoot, "bin", "tsc");
+    mkdirSync(path.dirname(typescriptCli), { recursive: true });
+    mkdirSync(path.join(packageRoot, "lib"), { recursive: true });
+    writeFileSync(typescriptCli, "#!/usr/bin/env node\n");
+    writeFileSync(path.join(packageRoot, "lib", "version.js"), "export {};\n");
+    writeFileSync(
+      path.join(packageRoot, "package.json"),
+      JSON.stringify({
+        name: "typescript",
+        type: "module",
+        exports: {
+          ".": "./lib/version.js",
+          "./package.json": "./package.json",
+        },
+        bin: { tsc: "./bin/tsc" },
+      }),
+    );
+    const packageRequire = createRequire(path.join(root, "consumer.cjs"));
+    try {
+      expect(() => packageRequire.resolve("typescript/bin/tsc")).toThrow(
+        "Package subpath './bin/tsc' is not defined by \"exports\"",
+      );
+      expect(resolveTypescriptCli(packageRequire)).toBe(typescriptCli);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

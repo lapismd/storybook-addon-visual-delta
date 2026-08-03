@@ -62,6 +62,32 @@ export function shouldBuildVisualDeltaPackageWorker(options: {
   );
 }
 
+export function resolveTypescriptCli(
+  packageRequire: Pick<NodeRequire, "resolve"> = currentPackageRequire,
+): string {
+  const packageJsonPath = packageRequire.resolve("typescript/package.json");
+  const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    bin?: string | Record<string, string>;
+  };
+  const configuredBin =
+    typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.tsc;
+  if (!configuredBin || path.isAbsolute(configuredBin)) {
+    throw new Error(
+      "The installed TypeScript package does not declare a tsc executable.",
+    );
+  }
+  const typescriptCli = path.resolve(
+    path.dirname(packageJsonPath),
+    configuredBin,
+  );
+  if (!existsSync(typescriptCli)) {
+    throw new Error(
+      "The installed TypeScript package is missing its tsc executable.",
+    );
+  }
+  return typescriptCli;
+}
+
 const runningPackageFromSource = shouldBuildVisualDeltaPackageWorker({
   modulePath: currentPackageModulePath,
   packageRoot: currentPackageRoot,
@@ -451,7 +477,7 @@ async function prepareVisualDeltaPackageWorker(
     });
     let typescriptCli: string;
     try {
-      typescriptCli = currentPackageRequire.resolve("typescript/bin/tsc");
+      typescriptCli = resolveTypescriptCli();
     } catch {
       throw new Error(
         "Visual Delta package worker cannot be built because TypeScript is unavailable.",

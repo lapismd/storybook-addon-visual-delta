@@ -24,7 +24,7 @@ These requirements preserve ownership and trustworthy state across process bound
 
 | ID          | Requirement                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. Executing an exported source entry from a packed dependency MUST use that package's shipped worker and MUST NOT be mistaken for a buildable source checkout. |
+| VD-ARCH-001 | The manager, preview, middleware, CLI, capture-runner, Playwright, artifact, and version-control boundaries MUST remain explicit. A component MUST delegate work outside its boundary through a documented interface. The built-in runner MUST stage and invoke the package worker that created the frozen job; it MUST NOT depend on the consumer workspace exposing a `visual-delta` script, `.bin` entry, or resolvable local-link target inside the capture container. Executing an exported source entry from a packed dependency MUST use that package's shipped worker and MUST NOT be mistaken for a buildable source checkout. A buildable source checkout MUST locate its installed TypeScript compiler through the package manifest rather than requiring an unexported package subpath. |
 | VD-ARCH-002 | Authoritative visual data MUST originate from a settled preview captured through a configured browser in the canonical Linux/ARM64 capture profile. A later comparison MAY reuse that raw actual PNG without relaunching a browser only when its exact target, render-input fingerprint, capture configuration, capture profile, dimensions, and checksum remain current; the result MUST identify cached-actual reuse and preserve the original capture provenance. Presentation state MUST NOT substitute for capture evidence. |
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Derived actual, diff, result, static-output, run, and affected-cache evidence MUST live outside `snapshotDir`, be safe to regenerate, and never be mistaken for a committed baseline. |
@@ -61,9 +61,12 @@ responsible for the consumer's Storybook and project dependencies, but worker
 selection does not resolve through the staged workspace's scripts,
 `node_modules/.bin`, or local-link topology. Source-checkout development builds
 the worker before staging it only when the executing module and package-local
-build configuration both identify a buildable checkout. Published consumers
-use the package's shipped worker even when Storybook executes an exported file
-under the tarball's included `src/` tree. Root-contained absolute snapshot and affected-cache arguments are
+build configuration both identify a buildable checkout. It resolves the
+installed compiler from TypeScript's exported package manifest, so package
+export restrictions on the `bin/tsc` subpath do not masquerade as a missing
+compiler. Published consumers use the package's shipped worker even when
+Storybook executes an exported file under the tarball's included `src/` tree.
+Root-contained absolute snapshot and affected-cache arguments are
 remapped to their equivalent `/workspace` paths before the Docker worker is
 invoked; paths outside the frozen workspace are rejected.
 
