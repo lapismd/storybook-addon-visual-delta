@@ -43,13 +43,16 @@ import {
   applyPendingVisualStatuses,
   applyVisualRunResults,
   applyVisualStatuses,
+  clearStaleVisualCreateProgress,
   clearVisualStatuses,
   compareExactStory,
   componentStoryIdsFor,
   formatVisualProgressLabel,
+  fetchVisualRunStatus,
   invalidateVisualLastRun,
   fetchVisualConfig,
   loadPersistedVisualLastRun,
+  loadPersistedVisualStatusJob,
   postVisualCreateBaseline,
   postVisualDeleteBaseline,
   postVisualInit,
@@ -66,6 +69,7 @@ import {
   subscribeVisualCreateProgress,
   subscribeVisualLastRun,
   subscribeVisualRunProgress,
+  visualRunStatusIsSettled,
   visualCreateProgressAppliesToStory,
   visualRunnableStoryIds,
   type VisualCreateProgress,
@@ -1301,6 +1305,55 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     });
   }, []);
 
+  // Manager HMR can drop the in-memory terminal progress event. Keep a
+  // visible footer/header runner synchronized with the middleware process,
+  // independently of preview readiness or rendering success.
+  useEffect(() => {
+    if (
+      (!runInFlight && !baselineJob?.running) ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    let reconciling = false;
+
+    const reconcile = async () => {
+      if (reconciling) return;
+      reconciling = true;
+      try {
+        const hub = await fetchVisualRunStatus();
+        if (cancelled || !visualRunStatusIsSettled(hub)) return;
+        setRunProgress(null);
+        setIsRunningVisual(false);
+        if (loadPersistedVisualStatusJob()) return;
+        clearStaleVisualCreateProgress();
+        setBaselineJob(null);
+        if (
+          testProviderStore.getState() === "test-provider-state:running"
+        ) {
+          testProviderStore.setState("test-provider-state:pending");
+        }
+      } finally {
+        reconciling = false;
+      }
+    };
+    const reconcileWhenVisible = () => {
+      if (document.visibilityState !== "hidden") void reconcile();
+    };
+
+    void reconcile();
+    const interval = window.setInterval(() => void reconcile(), 1_500);
+    window.addEventListener("focus", reconcileWhenVisible);
+    document.addEventListener("visibilitychange", reconcileWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcileWhenVisible);
+      document.removeEventListener("visibilitychange", reconcileWhenVisible);
+    };
+  }, [baselineJob?.running, runInFlight]);
+
   // Finished-run summary + log tail (sidebar and panel share this channel).
   useEffect(() => {
     return subscribeVisualLastRun((last) => {
@@ -1649,6 +1702,15 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     diffAbortRef.current = null;
     setIsDiffing(false);
     setDiffProgressLabel(null);
+  }, []);
+
+  const handleStopRun = useCallback(() => {
+    void abortVisualWork().finally(() => {
+      testProviderStore.setState("test-provider-state:pending");
+    });
+    setIsRunningVisual(false);
+    setRunProgress(null);
+    setBaselineJob(null);
   }, []);
 
   const handleUpdateBaselines = useCallback(async () => {
@@ -2608,14 +2670,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           onRebuildStatic: () => void handleRebuildStatic(),
           onResetSettings: resetSettings,
           onStopDiff: handleStopDiff,
-          onStopRun: () => {
-            void abortVisualWork().finally(() => {
-              testProviderStore.setState("test-provider-state:pending");
-            });
-            setIsRunningVisual(false);
-            setRunProgress(null);
-            setBaselineJob(null);
-          },
+          onStopRun: handleStopRun,
           onReviewStatus: (status) => void handleSetReviewStatus(status),
           onAccept: (scope) => void handleAcceptScope(scope),
           onUnaccept: (scope) => void handleUnacceptScope(scope),
@@ -2814,6 +2869,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             },
             captureProfileId: resolvedConfig?.captureProfile.id,
           },
+          onStop:
+            runInFlight || baselineJob?.running ? handleStopRun : undefined,
         }}
       />
       <ImageLightbox

@@ -48,6 +48,8 @@ export type PanelViewProps = {
     environment?: React.ComponentProps<
       typeof PanelStatusBar
     >["environment"];
+    /** Always-reachable cancellation for an active footer run. */
+    onStop?: React.ComponentProps<typeof PanelStatusBar>["onStop"];
   };
   /** Stable hook for Storybook stories and manager-level Playwright tests. */
   testId?: string;
@@ -127,6 +129,7 @@ export function PanelView({
         error={status.error}
         progress={status.progress}
         environment={status.environment}
+        onStop={status.onStop}
       />
     </PanelShell>
   );

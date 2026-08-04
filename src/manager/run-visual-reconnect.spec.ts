@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchVisualRunStatus,
   postVisualActionScope,
   reconnectVisualRun,
+  visualRunStatusIsSettled,
   type VisualRunProgress,
 } from "./run-visual.js";
 import type { VisualActionScopeProgress } from "../shared/affected-types.js";
@@ -79,6 +81,55 @@ describe("reconnectVisualRun", () => {
       crashed: true,
       idle: true,
       error: "Reconnect failed (503)",
+    });
+  });
+});
+
+describe("visual run status reconciliation", () => {
+  it("only treats an authoritative terminal status with no child as settled", () => {
+    expect(
+      visualRunStatusIsSettled({
+        phase: "done",
+        total: 9,
+        completed: 9,
+        passed: 9,
+        failed: 0,
+        childActive: false,
+      }),
+    ).toBe(true);
+    expect(
+      visualRunStatusIsSettled({
+        phase: "done",
+        total: 9,
+        completed: 9,
+        passed: 9,
+        failed: 0,
+        childActive: true,
+      }),
+    ).toBe(false);
+    expect(
+      visualRunStatusIsSettled({
+        phase: "idle",
+        total: 0,
+        completed: 0,
+        passed: 0,
+        failed: 0,
+        childActive: false,
+        authoritative: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("marks endpoint failures as non-authoritative", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
+    );
+
+    await expect(fetchVisualRunStatus()).resolves.toMatchObject({
+      phase: "idle",
+      childActive: false,
+      authoritative: false,
     });
   });
 });

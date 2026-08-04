@@ -964,7 +964,18 @@ export type VisualRunHubStatus = {
   failed: number;
   /** True while middleware still owns a compare or baseline-write child. */
   childActive?: boolean;
+  /** False when the status endpoint could not be reached or decoded. */
+  authoritative?: boolean;
 };
+
+/** A terminal server state that is safe to use for clearing orphaned UI. */
+export function visualRunStatusIsSettled(status: VisualRunHubStatus): boolean {
+  return (
+    status.authoritative !== false &&
+    status.phase !== "running" &&
+    !status.childActive
+  );
+}
 
 /** Lightweight phase check used before opening a reconnect stream. */
 export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
@@ -978,9 +989,13 @@ export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
         passed: 0,
         failed: 0,
         childActive: false,
+        authoritative: false,
       };
     }
-    return (await response.json()) as VisualRunHubStatus;
+    return {
+      ...((await response.json()) as VisualRunHubStatus),
+      authoritative: true,
+    };
   } catch {
     return {
       phase: "idle",
@@ -989,6 +1004,7 @@ export async function fetchVisualRunStatus(): Promise<VisualRunHubStatus> {
       passed: 0,
       failed: 0,
       childActive: false,
+      authoritative: false,
     };
   }
 }

@@ -103,6 +103,8 @@ import {
   patchStorySkipVisual,
   patchStoryVisualDeltaConfig,
   patchStoryVisualReviewStatus,
+  patchStoryVisualReviewStatuses,
+  type StoryVisualReviewUpdate,
 } from "./story-source.js";
 import {
   validateVisualDeltaStoryConfigUpdate,
@@ -1595,7 +1597,7 @@ async function handleReviewStatus(
           workflow: workflowFor(root),
         })
       : null;
-    let updated = 0;
+    const updates: StoryVisualReviewUpdate[] = [];
     const errors: string[] = [];
     for (const item of body.updates) {
       const storyId = item.storyId?.trim();
@@ -1608,13 +1610,20 @@ async function handleReviewStatus(
         errors.push(`${storyId}: ${NO_BASELINE_FAILED_ERROR}`);
         continue;
       }
-      const result = patchStoryVisualReviewStatus({
+      updates.push({ storyId, status });
+    }
+    let updated = 0;
+    if (errors.length === 0) {
+      const result = patchStoryVisualReviewStatuses({
         packageRoot: root,
-        storyId,
-        status,
+        updates,
       });
-      if (result.ok) updated += 1;
-      else errors.push(`${storyId}: ${result.error ?? "update failed"}`);
+      updated = result.updated;
+      errors.push(
+        ...result.errors.map(
+          ({ storyId, error }) => `${storyId}: ${error || "update failed"}`,
+        ),
+      );
     }
     const changes = await mutation?.finish({
       success: errors.length === 0,

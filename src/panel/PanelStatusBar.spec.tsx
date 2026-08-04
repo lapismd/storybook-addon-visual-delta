@@ -64,6 +64,38 @@ describe("lastMeaningfulLogLine", () => {
 });
 
 describe("PanelStatusBar", () => {
+  it("keeps Stop reachable in the persistent footer outside the log popover", () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 200 });
+    container.getBoundingClientRect = () =>
+      ({ right: 800, bottom: 600, width: 400 }) as DOMRect;
+    document.body.appendChild(container);
+    const onStop = vi.fn();
+
+    renderWithTheme(
+      <PanelStatusBar
+        container={container}
+        running
+        label="Testing…"
+        log="running"
+        onStop={onStop}
+      />,
+    );
+
+    const stop = screen.getByRole("button", { name: "Stop visual run" });
+    expect(stop.closest('[data-testid="status-popover"]')).toBeNull();
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledOnce();
+
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("renders safe ANSI in the footer and full ANSI in the copied log", async () => {
     class ResizeObserverStub {
       observe() {}

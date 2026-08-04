@@ -695,6 +695,10 @@ export function PanelShell({
         log: statusLog,
         error: captureError || null,
         progress: runProgress,
+        onStop:
+          busy || isDiffing || progressRunning
+            ? () => void handleStopRun()
+            : undefined,
       }}
     />
   );

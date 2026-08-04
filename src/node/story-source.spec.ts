@@ -13,6 +13,7 @@ import {
   injectTypeScriptStoryBaselines,
   patchStorySourceText,
   patchStoryVisualReviewStatus,
+  patchStoryVisualReviewStatuses,
 } from "./story-source.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
 
@@ -271,6 +272,118 @@ export const Light = { tags: ["visual-approved"] };
         readFileSync(path.join(root, "storybook-static/index.json"), "utf8"),
       ) as { entries: Record<string, { tags: string[] }> };
       expect(index.entries[entry.id]?.tags).toEqual(["visual-approved"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stages stories from one CSF and physically writes that source once", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-story-review-batch-"));
+    try {
+      mkdirSync(path.join(root, "src"), { recursive: true });
+      mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+      const storyPath = path.join(root, "src/demo.stories.ts");
+      writeFileSync(
+        storyPath,
+        `export const Light = { tags: ["visual-pending"] };
+export const Dark = { tags: ["visual-pending"] };
+`,
+      );
+      writeFileSync(
+        path.join(root, "storybook-static/index.json"),
+        JSON.stringify({
+          entries: {
+            "demo--light": {
+              id: "demo--light",
+              exportName: "Light",
+              importPath: "./src/demo.stories.ts",
+              tags: ["visual-pending"],
+            },
+            "demo--dark": {
+              id: "demo--dark",
+              exportName: "Dark",
+              importPath: "./src/demo.stories.ts",
+              tags: ["visual-pending"],
+            },
+          },
+        }),
+      );
+
+      const result = patchStoryVisualReviewStatuses({
+        packageRoot: root,
+        updates: [
+          { storyId: "demo--light", status: "ready" },
+          { storyId: "demo--dark", status: "approved" },
+        ],
+      });
+
+      expect(result).toEqual({
+        ok: true,
+        updated: 2,
+        errors: [],
+        sourceFilesUpdated: [storyPath],
+      });
+      const source = readFileSync(storyPath, "utf8");
+      expect(source).toContain(
+        'export const Light = { tags: ["visual-ready", "!visual-pending", "!visual-approved", "!visual-failed"]};',
+      );
+      expect(source).toContain(
+        'export const Dark = { tags: ["visual-approved", "!visual-pending", "!visual-ready", "!visual-failed"]};',
+      );
+      const index = JSON.parse(
+        readFileSync(path.join(root, "storybook-static/index.json"), "utf8"),
+      ) as { entries: Record<string, { tags: string[] }> };
+      expect(index.entries["demo--light"]?.tags).toEqual(["visual-ready"]);
+      expect(index.entries["demo--dark"]?.tags).toEqual([
+        "visual-approved",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not write any staged review status when one batch item is invalid", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-story-review-invalid-"));
+    try {
+      mkdirSync(path.join(root, "src"), { recursive: true });
+      mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+      const storyPath = path.join(root, "src/demo.stories.ts");
+      const source = `export const Light = { tags: ["visual-pending"] };\n`;
+      const indexPath = path.join(root, "storybook-static/index.json");
+      const indexSource = JSON.stringify({
+        entries: {
+          "demo--light": {
+            id: "demo--light",
+            exportName: "Light",
+            importPath: "./src/demo.stories.ts",
+            tags: ["visual-pending"],
+          },
+        },
+      });
+      writeFileSync(storyPath, source);
+      writeFileSync(indexPath, indexSource);
+
+      expect(
+        patchStoryVisualReviewStatuses({
+          packageRoot: root,
+          updates: [
+            { storyId: "demo--light", status: "ready" },
+            { storyId: "demo--missing", status: "approved" },
+          ],
+        }),
+      ).toEqual({
+        ok: false,
+        updated: 0,
+        errors: [
+          {
+            storyId: "demo--missing",
+            error: "Story not found in index: demo--missing",
+          },
+        ],
+        sourceFilesUpdated: [],
+      });
+      expect(readFileSync(storyPath, "utf8")).toBe(source);
+      expect(readFileSync(indexPath, "utf8")).toBe(indexSource);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

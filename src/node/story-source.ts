@@ -902,51 +902,131 @@ export function patchStoryVisualReviewStatus(options: {
   status: VisualReviewStatus;
   error?: string;
 } {
-  const entry = loadStoryIndex(options.packageRoot)[options.storyId];
-  if (!entry?.importPath) {
-    return {
-      ok: false,
-      storyId: options.storyId,
-      status: options.status,
-      error: `Story not found in index: ${options.storyId}`,
-    };
-  }
-  if ((entry.tags ?? []).includes("skip-visual")) {
-    return {
-      ok: false,
-      storyId: options.storyId,
-      status: options.status,
-      error: "Cannot set review status on skip-visual stories",
-    };
-  }
-  const desired = visualReviewTagFor(options.status);
-  const presentReviewTags = (entry.tags ?? []).filter((tag) =>
-    (VISUAL_REVIEW_TAGS as readonly string[]).includes(tag),
-  );
-  // Only skip the write when the desired tag is alone — otherwise strip
-  // stale siblings (e.g. visual-failed lingering next to visual-ready).
-  if (presentReviewTags.length === 1 && presentReviewTags[0] === desired) {
-    syncStaticIndexReviewStatus(options.packageRoot, [
-      { storyId: options.storyId, status: options.status },
-    ]);
-    return { ok: true, storyId: options.storyId, status: options.status };
-  }
-  const changed = patchStoryFile(options.packageRoot, entry, {
-    kind: "review",
-    status: options.status,
+  const result = patchStoryVisualReviewStatuses({
+    packageRoot: options.packageRoot,
+    updates: [{ storyId: options.storyId, status: options.status }],
   });
-  if (!changed) {
+  return result.ok
+    ? { ok: true, storyId: options.storyId, status: options.status }
+    : {
+        ok: false,
+        storyId: options.storyId,
+        status: options.status,
+        error: result.errors[0]?.error ?? "Review status update failed",
+      };
+}
+
+export type StoryVisualReviewUpdate = {
+  storyId: string;
+  status: VisualReviewStatus;
+};
+
+export type StoryVisualReviewBatchResult = {
+  ok: boolean;
+  updated: number;
+  errors: Array<{ storyId: string; error: string }>;
+  /** Absolute CSF paths physically written by this batch. */
+  sourceFilesUpdated: string[];
+};
+
+/**
+ * Stage a review-status batch in memory before making any source changes.
+ * Stories that share a CSF file are composed into one final string and that
+ * file is physically written at most once, preventing partial HMR importer
+ * maps while Storybook observes the batch.
+ */
+export function patchStoryVisualReviewStatuses(options: {
+  packageRoot: string;
+  updates: StoryVisualReviewUpdate[];
+}): StoryVisualReviewBatchResult {
+  const index = loadStoryIndex(options.packageRoot);
+  const stagedFiles = new Map<
+    string,
+    { source: string; next: string }
+  >();
+  const errors: StoryVisualReviewBatchResult["errors"] = [];
+
+  for (const update of options.updates) {
+    const entry = index[update.storyId];
+    if (!entry?.importPath) {
+      errors.push({
+        storyId: update.storyId,
+        error: `Story not found in index: ${update.storyId}`,
+      });
+      continue;
+    }
+    if ((entry.tags ?? []).includes("skip-visual")) {
+      errors.push({
+        storyId: update.storyId,
+        error: "Cannot set review status on skip-visual stories",
+      });
+      continue;
+    }
+
+    const filePath = resolveStoriesPath(options.packageRoot, entry.importPath);
+    if (!filePath) {
+      errors.push({
+        storyId: update.storyId,
+        error: `Could not resolve story source for ${update.storyId}`,
+      });
+      continue;
+    }
+    const staged = stagedFiles.get(filePath) ?? (() => {
+      const source = readFileSync(filePath, "utf8");
+      const initial = { source, next: source };
+      stagedFiles.set(filePath, initial);
+      return initial;
+    })();
+
+    const desired = visualReviewTagFor(update.status);
+    const presentReviewTags = (entry.tags ?? []).filter((tag) =>
+      (VISUAL_REVIEW_TAGS as readonly string[]).includes(tag),
+    );
+    // Only skip the source mutation when the desired tag is alone. Otherwise
+    // strip stale siblings (for example visual-failed next to visual-ready).
+    if (presentReviewTags.length === 1 && presentReviewTags[0] === desired) {
+      continue;
+    }
+
+    const next = patchStorySourceText(staged.next, entry, {
+      kind: "review",
+      status: update.status,
+    });
+    if (next === staged.next) {
+      errors.push({
+        storyId: update.storyId,
+        error: `Could not patch story source for ${update.storyId}`,
+      });
+      continue;
+    }
+    staged.next = next;
+  }
+
+  // Validation and source transformation are fail-closed for the whole
+  // request. No source file or static index is changed on a staging error.
+  if (errors.length > 0) {
     return {
       ok: false,
-      storyId: options.storyId,
-      status: options.status,
-      error: `Could not patch story source for ${options.storyId}`,
+      updated: 0,
+      errors,
+      sourceFilesUpdated: [],
     };
   }
-  syncStaticIndexReviewStatus(options.packageRoot, [
-    { storyId: options.storyId, status: options.status },
-  ]);
-  return { ok: true, storyId: options.storyId, status: options.status };
+
+  const sourceFilesUpdated: string[] = [];
+  for (const [filePath, staged] of stagedFiles) {
+    if (staged.next === staged.source) continue;
+    writeFileSync(filePath, staged.next, "utf8");
+    sourceFilesUpdated.push(filePath);
+  }
+  syncStaticIndexReviewStatus(options.packageRoot, options.updates);
+
+  return {
+    ok: true,
+    updated: options.updates.length,
+    errors: [],
+    sourceFilesUpdated,
+  };
 }
 
 export function patchStoryBaselineImages(options: {

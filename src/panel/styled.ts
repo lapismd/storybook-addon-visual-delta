@@ -595,6 +595,17 @@ export const StatusProgressButton = styled.button<{
   },
 }));
 
+/** Cancellation stays outside the progress-log popover and preview surface. */
+export const StatusStopButton = styled(Button)(({ theme }) => ({
+  flex: "0 0 auto",
+  height: 22,
+  color: `${theme.color.negative} !important`,
+  "& svg": {
+    width: 13,
+    height: 13,
+  },
+}));
+
 export const StatusSpinner = styled.span({
   display: "inline-flex",
   flex: "0 0 auto",

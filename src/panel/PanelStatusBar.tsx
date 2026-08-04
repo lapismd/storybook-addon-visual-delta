@@ -6,7 +6,12 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { CheckIcon, CopyIcon, SyncIcon } from "@storybook/icons";
+import {
+  CheckIcon,
+  CopyIcon,
+  StopAltIcon,
+  SyncIcon,
+} from "@storybook/icons";
 import {
   PopoverProvider,
   ScrollArea,
@@ -32,6 +37,7 @@ import {
   StatusProgressTrack,
   StatusProgressValue,
   StatusSpinner,
+  StatusStopButton,
 } from "./styled.js";
 
 export { lastMeaningfulLogLine };
@@ -76,6 +82,8 @@ export type PanelStatusBarProps = {
     completed: number;
     total: number;
   } | null;
+  /** Cancels an active run without depending on preview/header rendering. */
+  onStop?: () => void;
   environment?: {
     browser: string;
     browsers: Array<{ value: string; label: string }>;
@@ -145,6 +153,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
   log,
   error,
   progress,
+  onStop,
   environment,
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
@@ -239,6 +248,19 @@ export const PanelStatusBar = memo(function PanelStatusBar({
         </StatusProgressTrack>
       ) : null}
       {environment ? <EnvironmentSplitButton {...environment} /> : null}
+      {running && onStop ? (
+        <StatusStopButton
+          size="small"
+          variant="ghost"
+          padding="small"
+          ariaLabel="Stop visual run"
+          title="Stop visual run"
+          onClick={onStop}
+        >
+          <StopAltIcon />
+          Stop
+        </StatusStopButton>
+      ) : null}
       <PopoverProvider
         ariaLabel="Visual Delta progress log"
         placement="top-start"

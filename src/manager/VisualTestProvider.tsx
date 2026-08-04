@@ -65,6 +65,7 @@ import {
   subscribeVisualLastRun,
   subscribeVisualRunLog,
   subscribeVisualRunProgress,
+  visualRunStatusIsSettled,
   visualRunnableStoryIds,
   type VisualCreateProgress,
   type VisualLastRunSummary,
@@ -539,6 +540,52 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
 
   const isRunning = testProviderState === "test-provider-state:running";
   const crashed = testProviderState === "test-provider-state:crashed";
+  const runPresentationActive =
+    isRunning || isComparing || progress != null || isWritingBaselines;
+
+  // The progress event bus is in-memory and can miss its terminal event across
+  // manager HMR. While a runner presentation remains visible, reconcile it
+  // with the middleware process state on mount, focus, visibility, and time.
+  useEffect(() => {
+    if (!runPresentationActive || typeof window === "undefined") return;
+    let cancelled = false;
+    let reconciling = false;
+
+    const reconcile = async () => {
+      if (reconciling) return;
+      reconciling = true;
+      try {
+        const hub = await fetchVisualRunStatus();
+        if (cancelled || !visualRunStatusIsSettled(hub)) return;
+        setProgress(null);
+        setIsComparing(false);
+        if (isUpdatingStatus || loadPersistedVisualStatusJob()) return;
+        clearStaleVisualCreateProgress();
+        setCreateProgress(null);
+        if (
+          testProviderStore.getState() === "test-provider-state:running"
+        ) {
+          testProviderStore.setState("test-provider-state:pending");
+        }
+      } finally {
+        reconciling = false;
+      }
+    };
+    const reconcileWhenVisible = () => {
+      if (document.visibilityState !== "hidden") void reconcile();
+    };
+
+    void reconcile();
+    const interval = window.setInterval(() => void reconcile(), 1_500);
+    window.addEventListener("focus", reconcileWhenVisible);
+    document.addEventListener("visibilitychange", reconcileWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcileWhenVisible);
+      document.removeEventListener("visibilitychange", reconcileWhenVisible);
+    };
+  }, [isUpdatingStatus, runPresentationActive]);
 
   const runCompare = useCallback(
     async (
@@ -1050,11 +1097,11 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       const hub = await fetchVisualRunStatus();
       if (cancelled) return;
 
-      if (hub.phase !== "running") {
+      if (hub.authoritative !== false && hub.phase !== "running") {
         setProgress(null);
         setIsComparing(false);
       }
-      if (hub.phase !== "running" && !hub.childActive) {
+      if (visualRunStatusIsSettled(hub)) {
         clearStaleVisualCreateProgress();
         // Hub idle with no writer/status job: drop orphan Testing Module
         // "Running…" left by a hung/aborted runWithState after HMR.
