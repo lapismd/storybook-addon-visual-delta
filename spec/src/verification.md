@@ -148,6 +148,26 @@ captured and verified exactly ten stories, applied ten PNGs and their story
 wiring, left the existing 122 baselines untouched, and retained pending review
 status.
 
+## Inherited review-status normalization repair
+
+Mira's Comprehensive / Playground story reproduced an inherited tag conflict
+on 2026-08-04: component metadata supplied `visual-pending` while the story
+locally supplied `visual-approved`. Storybook's effective entry consequently
+exposed both tags, and the manager rendered both **Pending review** and
+**Approved** even after a status update.
+
+The story-source writer now replaces stale positive and negated review
+directives and writes Storybook exclusions for every non-selected status. This
+keeps shared component defaults intact while making the updated story's
+effective review status exclusive. Focused TypeScript and Svelte source tests
+cover the generated directives, Storybook's actual tag-combination behavior,
+the host status-update path, clearing inherited statuses, and baseline-driven
+status changes. The focused source suite passed 13 tests; the full package
+suite passed 113 files and 534 tests; package typecheck and the node build
+passed; and the aggregate `spec:check` gate passed. Downstream browser
+acceptance used the real **Accept story** action on Comprehensive / Playground,
+after which its sidebar and toolbar exposed only **Approved**.
+
 ## Required validation
 
 Use the smallest tier that covers the changed boundary, then add broader checks for cross-boundary changes.

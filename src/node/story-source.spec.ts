@@ -1,7 +1,18 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { combineTags } from "storybook/internal/csf";
 import { describe, expect, it } from "vitest";
 import {
   injectTypeScriptStoryBaselines,
   patchStorySourceText,
+  patchStoryVisualReviewStatus,
 } from "./story-source.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
 
@@ -37,7 +48,9 @@ export const Light: Story = {
       kind: "review",
       status: "pending",
     });
-    expect(reviewed).toContain('tags: ["visual-pending"]');
+    expect(reviewed).toContain(
+      'tags: ["visual-pending", "!visual-approved", "!visual-ready", "!visual-failed"]',
+    );
   });
 
   it("injects a Visual Delta parameter into an exported story", () => {
@@ -174,8 +187,93 @@ export const Light: Story = {
     const next = patchStorySourceText(source, entry, {
       kind: "clear-review",
     });
-    expect(next).toContain('tags: ["docs-only"]');
-    expect(next).not.toContain("visual-approved");
+    expect(next).toContain(
+      'tags: ["docs-only", "!visual-pending", "!visual-approved", "!visual-ready", "!visual-failed"]',
+    );
+    expect(next).not.toContain('"visual-approved"');
+  });
+
+  it("negates inherited component review tags when setting a story status", () => {
+    const source = `
+const meta = {
+  title: "Demo/Comprehensive",
+  tags: ["visual-pending"],
+};
+export default meta;
+export const Light: Story = {
+  tags: ["visual-approved", "!visual-failed"],
+};
+`;
+    const next = patchStorySourceText(source, entry, {
+      kind: "review",
+      status: "approved",
+    });
+    const localLiteral = next.match(
+      /export const Light[\s\S]*?tags:\s*(\[[^\]]*\])/,
+    )?.[1];
+    expect(localLiteral).toBeDefined();
+    const localTags = JSON.parse(localLiteral!) as string[];
+
+    expect(localTags).toEqual([
+      "visual-approved",
+      "!visual-pending",
+      "!visual-ready",
+      "!visual-failed",
+    ]);
+    expect(combineTags("visual-pending", ...localTags)).toEqual([
+      "visual-approved",
+    ]);
+  });
+
+  it("normalizes inherited review tags through the host status-update path", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-story-review-"));
+    try {
+      mkdirSync(path.join(root, "src"), { recursive: true });
+      mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+      const storyPath = path.join(root, "src/demo.stories.ts");
+      writeFileSync(
+        storyPath,
+        `const meta = { tags: ["visual-pending"] };
+export default meta;
+export const Light = { tags: ["visual-approved"] };
+`,
+      );
+      writeFileSync(
+        path.join(root, "storybook-static/index.json"),
+        JSON.stringify({
+          entries: {
+            [entry.id]: {
+              ...entry,
+              importPath: "./src/demo.stories.ts",
+              tags: ["visual-pending", "visual-approved"],
+            },
+          },
+        }),
+      );
+
+      expect(
+        patchStoryVisualReviewStatus({
+          packageRoot: root,
+          storyId: entry.id,
+          status: "approved",
+        }),
+      ).toEqual({
+        ok: true,
+        storyId: entry.id,
+        status: "approved",
+      });
+
+      const source = readFileSync(storyPath, "utf8");
+      expect(source).toContain(
+        'tags: ["visual-approved", "!visual-pending", "!visual-ready", "!visual-failed"]',
+      );
+      const index = JSON.parse(
+        readFileSync(path.join(root, "storybook-static/index.json"), "utf8"),
+      ) as { entries: Record<string, { tags: string[] }> };
+      expect(index.entries[entry.id]?.tags).toEqual(["visual-approved"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("keeps only one visual review tag when swapping ready ↔ failed", () => {
@@ -191,14 +289,20 @@ export const Light: Story = {
     });
     expect(ready).toContain('"visual-ready"');
     expect(ready).toContain('"upstream-example"');
-    expect(ready).not.toContain("visual-failed");
+    expect(ready).toContain('"!visual-pending"');
+    expect(ready).toContain('"!visual-approved"');
+    expect(ready).toContain('"!visual-failed"');
+    expect(ready).not.toContain('"visual-failed"');
 
     const failed = patchStorySourceText(ready, svelteEntry, {
       kind: "review",
       status: "failed",
     });
     expect(failed).toContain('"visual-failed"');
-    expect(failed).not.toContain("visual-ready");
+    expect(failed).toContain('"!visual-pending"');
+    expect(failed).toContain('"!visual-approved"');
+    expect(failed).toContain('"!visual-ready"');
+    expect(failed).not.toContain('"visual-ready"');
   });
 
   it("baseline wiring clears visual-pending when stamping ready", () => {
@@ -215,8 +319,8 @@ export const Light: Story = {
     });
     expect(next).toContain("visualDelta");
     expect(next).toContain('"visual-ready"');
-    expect(next).not.toContain("visual-pending");
-    expect(next).not.toContain("visual-approved");
+    expect(next).not.toContain('"visual-pending"');
+    expect(next).not.toContain('"visual-approved"');
   });
 
   it("injects story-id baselines during Vite transforms", () => {

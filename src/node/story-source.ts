@@ -70,14 +70,35 @@ function nextTags(
     { kind: "skip" | "review" | "clear-review" }
   >,
 ): string[] {
-  return normalizeVisualStoryTags(
-    current,
-    mutation.kind === "skip"
-      ? { kind: "skip", skip: mutation.skip }
-      : mutation.kind === "review"
-        ? { kind: "review", status: mutation.status }
-        : { kind: "clear-review" },
+  if (mutation.kind === "skip") {
+    return normalizeVisualStoryTags(current, {
+      kind: "skip",
+      skip: mutation.skip,
+    });
+  }
+
+  const reviewDirectives = new Set<string>([
+    ...VISUAL_REVIEW_TAGS,
+    ...VISUAL_REVIEW_TAGS.map((tag) => `!${tag}`),
+  ]);
+  const normalized = normalizeVisualStoryTags(
+    current.filter((tag) => !reviewDirectives.has(tag)),
+    mutation.kind === "review"
+      ? { kind: "review", status: mutation.status }
+      : { kind: "clear-review" },
   );
+  const selected =
+    mutation.kind === "review" ? visualReviewTagFor(mutation.status) : null;
+
+  // Storybook combines project, component, and story tags in order. A local
+  // positive tag cannot remove an inherited sibling, so write `!tag`
+  // directives for every status that must not remain effective.
+  return [
+    ...normalized,
+    ...VISUAL_REVIEW_TAGS.filter((tag) => tag !== selected).map(
+      (tag) => `!${tag}`,
+    ),
+  ];
 }
 
 function storyNameCandidates(openTag: string): string[] {
