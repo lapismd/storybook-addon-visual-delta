@@ -120,8 +120,19 @@ Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`
 | `allowVcsWrites`              | Second gate for plugin-managed commits         | `false`                                    |
 | `readOnly`                    | Force static read-only preview capabilities    | unset (`false`); static builds imply read-only via `CONFIG_TYPE` |
 | `affectedTests`               | Affected cache, external, and untraced policy  | enabled with conservative defaults; `false` opts out |
+| `storySourceFormatter`        | Optional pre-write formatter command and arguments; arguments must include `{filePath}` | unset |
 
 `affectedTests.untraced` reduces coverage and MUST remain opt-in. Invalid affected configuration MUST fall back to a full eligible-story selection.
+
+`storySourceFormatter` is an explicit host integration hook with the shape
+`{ command: string, args: string[] }`. The command reads a complete candidate
+story source from standard input and writes the formatted source to standard
+output. Visual Delta replaces every `{filePath}` token in `args` with the exact
+absolute story path and runs the command from the configured host root without
+a shell. For Prettier, a portable pnpm host can use
+`{ command: "pnpm", args: ["exec", "prettier", "--stdin-filepath", "{filePath}"] }`.
+The option is forwarded to packaged primary and interaction baseline writers;
+it does not format unrelated project files.
 
 ## Browser storage
 
