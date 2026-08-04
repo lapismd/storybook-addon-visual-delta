@@ -66,6 +66,16 @@ for (const layout of [
           });
           await expect(status).toBeVisible();
           await expectFullWidthStatusFooter(panel);
+          const stopButton = panel.getByRole("button", {
+            name: "Stop visual run",
+          });
+          await expect(stopButton).toBeVisible();
+          expect(
+            await stopButton.evaluate(
+              (button) =>
+                button.closest('[data-testid="status-popover"]') === null,
+            ),
+          ).toBe(true);
           const logButton = panel.getByRole("button", {
             name: /Progress: ✓ filter-search--with-query \(7\/12\)/,
           });
@@ -89,6 +99,8 @@ for (const layout of [
           expect(await page.locator("body").innerText()).not.toContain(
             "\u001b",
           );
+          await stopButton.click();
+          await expect(stopButton).toBeHidden();
           return;
         }
         await expect(
