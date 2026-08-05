@@ -156,6 +156,11 @@ export {
   patchStoryVisualReviewStatus,
 } from "./story-source.js";
 export {
+  formatStorySource,
+  storySourceFormatterCliArgs,
+  type StorySourceFormatter,
+} from "./story-source-formatter.js";
+export {
   deleteVisualBaseline,
   resolveVisualBaselinePath,
   type DeleteVisualBaselineRequest,

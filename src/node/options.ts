@@ -4,6 +4,8 @@
  * The UI catalog overrides argv / path mode in `.storybook/main.ts`.
  */
 
+import type { StorySourceFormatter } from "./story-source-formatter.js";
+
 export type AffectedVisualTestsOptions = {
   /**
    * Local disposable state and Storybook `preview-stats.json`.
@@ -65,6 +67,12 @@ export type VisualDeltaHostOptions = {
    * Reporter and grep flags are appended by the middleware.
    */
   visualTestArgs?: string[];
+  /**
+   * Optional shell-free formatter for changed story sources. The command reads
+   * source from stdin, writes formatted source to stdout, and must include a
+   * `{filePath}` token in its arguments.
+   */
+  storySourceFormatter?: StorySourceFormatter;
   /**
    * Port used by the visual Playwright config's static Storybook server.
    * Defaults to Storybook port + 1 (see `resolveVisualServerPort`).

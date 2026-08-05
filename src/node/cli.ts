@@ -55,6 +55,10 @@ function readFlags(argv: string[], name: string): string[] {
 
 function parseShared(argv: string[]): BaselineCliOptions {
   const browser = readFlag(argv, "--browser");
+  const storySourceFormatterCommand = readFlag(
+    argv,
+    "--story-source-formatter-command",
+  );
   return {
     storyIds: readFlags(argv, "--story-id"),
     storyId: readFlag(argv, "--story-id"),
@@ -76,6 +80,12 @@ function parseShared(argv: string[]): BaselineCliOptions {
     forceRebuild: hasFlag(argv, "--rebuild"),
     createOnly: hasFlag(argv, "--create-only"),
     browser: isVisualDeltaBrowser(browser) ? browser : undefined,
+    storySourceFormatter: storySourceFormatterCommand
+      ? {
+          command: storySourceFormatterCommand,
+          args: readFlags(argv, "--story-source-formatter-arg"),
+        }
+      : undefined,
   };
 }
 
@@ -129,6 +139,10 @@ Flags:
   --rebuild                 Force build-storybook before capture (overrides --skip-build)
   --snapshot-dir <path>     Override snapshot directory
   --baseline-path-mode      story-id | nested-import
+  --story-source-formatter-command <command>
+                            Formatter executable for changed CSF source
+  --story-source-formatter-arg <arg>
+                            Repeatable formatter arg; include {filePath}
   --runner                  Run the full capture-runner probe (doctor)
   --build                   Rebuild Storybook before ownership checks (doctor)
   --fix                     Move or quarantine safe derived state (doctor)

@@ -31,6 +31,24 @@ The following table names the primary evidence. Related tests can add confidence
 | `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`, `VD-HOST-007`, `VD-HOST-008`, `VD-HOST-009` | UI `.storybook/main.ts` + `visual-delta-preset.ts`, package `.storybook/main.ts` self-test catalog (sibling / packaged fixture mounts and checkout-local writers), `playwright.panel.config.ts`, `playwright.manager.config.ts`, host-stub stories, `src/storybook.css`, `src/storybook/catalog-layout.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json` | `src/playwright/config.spec.ts`, `scripts/package-storybook-build.spec.mjs`, Storybook process tests, `src/storybook/catalog-layout.spec.ts`, host path and static-freshness tests, middleware tests, interaction tests, package panel and manager browser tests on macOS and Linux | Partial: gap VD-GAP-002                 |
 | `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`, `VD-GOV-008`, `VD-GOV-009`, `VD-GOV-010`, `VD-GOV-011`, `VD-GOV-012`, `VD-GOV-013`, `VD-GOV-014`, `VD-GOV-015` | `spec/book.toml`, `AGENTS.md`, `package.json`, `docker/visual-delta-ci/Dockerfile`, `scripts/check-ci-image.mjs`, `scripts/check-npm-release.mjs`, `scripts/verify-npm-provenance.mjs`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/publish-visual-delta-ci.yml`, `.github/workflows/visual-delta-spec-first.yml`, `.github/workflows/visual-delta-ci.yml`, `.github/workflows/npm-publish.yml`, `.github/workflows/capture-canonical-panel-baselines.yml`, `.github/workflows/publish-storybook-pages.yml`, `README.md` | `scripts/check-ci-image.spec.mjs`, `scripts/check-npm-release.spec.mjs`, `scripts/verify-npm-provenance.spec.mjs`, `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, native x64 and ARM64 image smoke, published manifest inspection, package-tooling image-consumption inspection, Visual Delta pull-request and `master`-push trigger inspection, mdBook build, Markdown lint, workflow Node 24 action-runtime inspection, GitHub Pages workflow structure and static-build completeness checks, `pnpm audit`, release package dry-run, Sigstore verification, aggregate-check wiring, authorized canonical baseline-artifact capture, and package/panel/browser-matrix/manager CI | Partial only for the separately authorized canonical baseline capture; image publication, native smoke, and Pages workflow are verified |
 
+## 2026-08-05 story source formatting audit
+
+Mira's `Format stories` change reformatted Visual Delta review directives in
+30 TypeScript CSF files. Each affected story had the same generated compact
+four-status `tags` array expanded by the repository's Prettier configuration;
+no story behavior or baseline wiring changed. This confirms that the source
+writer emitted valid TypeScript that did not preserve the consumer formatting
+gate.
+
+`VD-MUT-008` is implemented with a shell-free `storySourceFormatter` host
+option. Direct manager mutations format staged source in process, packaged
+baseline writers receive the formatter through explicit CLI arguments, and
+grouped review writes finish all formatting before their single physical write
+pass. `pnpm spec:check`, both TypeScript configurations, all 544 package tests,
+and the Node build pass. A downstream Mira probe expands the compact
+four-status array with Mira's own Prettier installation; Mira's specification,
+catalog, full non-browser quality gate, and static Storybook build also pass.
+
 ## Current conformance gaps
 
 These gaps came from the 2026-07-28 source audit. They remain open until implementation and evidence satisfy the linked requirements.

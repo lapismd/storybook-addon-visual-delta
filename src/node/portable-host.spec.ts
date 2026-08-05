@@ -186,6 +186,35 @@ describe("portable Visual Delta host options", () => {
     ).toHaveLength(1);
   });
 
+  it("forwards the story source formatter to the packaged writer", () => {
+    const args = visualBaselineWriteCommandArgs(
+      {
+        storySourceFormatter: {
+          command: "pnpm",
+          args: ["exec", "prettier", "--stdin-filepath", "{filePath}"],
+        },
+      },
+      "/workspace",
+      {
+        createOnly: false,
+        rebuild: false,
+        browser: "chromium",
+        storyIds: ["demo--light"],
+        component: undefined,
+      },
+    );
+
+    expect(args).toContain("--story-source-formatter-command");
+    expect(args).toEqual(
+      expect.arrayContaining([
+        "--story-source-formatter-arg",
+        "--stdin-filepath",
+        "--story-source-formatter-arg",
+        "{filePath}",
+      ]),
+    );
+  });
+
   it("narrows Playwright with repeatable browser projects", () => {
     expect(
       visualTestCommandArgs({}, undefined, ["firefox", "webkit"]),

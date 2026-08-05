@@ -17,6 +17,15 @@ import {
 } from "./story-source.js";
 import type { StoryIndexEntry } from "./snapshot-paths.js";
 
+const failingFormatter = {
+  command: process.execPath,
+  args: [
+    "-e",
+    'process.stderr.write("deliberate formatter failure"); process.exit(2);',
+    "{filePath}",
+  ],
+};
+
 const entry: StoryIndexEntry = {
   id: "workspace-shell-demo--light",
   exportName: "Light",
@@ -382,6 +391,49 @@ export const Dark = { tags: ["visual-pending"] };
         ],
         sourceFilesUpdated: [],
       });
+      expect(readFileSync(storyPath, "utf8")).toBe(source);
+      expect(readFileSync(indexPath, "utf8")).toBe(indexSource);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not write source or index state when formatting fails", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vd-story-review-format-"));
+    try {
+      mkdirSync(path.join(root, "src"), { recursive: true });
+      mkdirSync(path.join(root, "storybook-static"), { recursive: true });
+      const storyPath = path.join(root, "src/demo.stories.ts");
+      const source = `export const Light = { tags: ["visual-pending"] };\n`;
+      const indexPath = path.join(root, "storybook-static/index.json");
+      const indexSource = JSON.stringify({
+        entries: {
+          "demo--light": {
+            id: "demo--light",
+            exportName: "Light",
+            importPath: "./src/demo.stories.ts",
+            tags: ["visual-pending"],
+          },
+        },
+      });
+      writeFileSync(storyPath, source);
+      writeFileSync(indexPath, indexSource);
+
+      const result = patchStoryVisualReviewStatuses({
+        packageRoot: root,
+        updates: [{ storyId: "demo--light", status: "approved" }],
+        sourceFormatter: failingFormatter,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.updated).toBe(0);
+      expect(result.sourceFilesUpdated).toEqual([]);
+      expect(result.errors).toEqual([
+        {
+          storyId: "demo--light",
+          error: expect.stringContaining("deliberate formatter failure"),
+        },
+      ]);
       expect(readFileSync(storyPath, "utf8")).toBe(source);
       expect(readFileSync(indexPath, "utf8")).toBe(indexSource);
     } finally {

@@ -43,6 +43,7 @@ import {
   resolveCanonicalBuildCacheRoot,
   restoreCanonicalBuildCache,
 } from "./canonical-build-cache.js";
+import type { StorySourceFormatter } from "./story-source-formatter.js";
 
 export type BaselineCliOptions = {
   packageRoot?: string;
@@ -66,6 +67,8 @@ export type BaselineCliOptions = {
   captureCallId?: string;
   /** Exact Playwright browser project. Defaults to Chromium. */
   browser?: VisualDeltaBrowser;
+  /** Optional formatter forwarded by the Storybook host or explicit CLI flags. */
+  storySourceFormatter?: StorySourceFormatter;
 };
 
 function packageRootOf(options: BaselineCliOptions): string {
@@ -250,6 +253,7 @@ export async function runBaselineUpdate(
           packageRoot: root,
           storyId: entry.id,
           skip: false,
+          sourceFormatter: options.storySourceFormatter,
         });
         unskipped ||= patched.ok;
       }
@@ -402,12 +406,18 @@ export async function runBaselineUpdate(
       undefined,
       browser,
     );
-    patchStoryBaselineImages({
+    const patched = patchStoryBaselineImages({
       packageRoot: root,
       storyId: entry.id,
       url,
       reviewStatus: "pending",
+      sourceFormatter: options.storySourceFormatter,
     });
+    if (!patched.ok) {
+      throw new Error(
+        patched.error ?? `Could not wire baseline for ${entry.id}`,
+      );
+    }
   }
 
   if (options.createOnly && needingCreate.length) {
@@ -563,11 +573,17 @@ export async function runInteractionUpdate(
     storyIds: [storyId],
   });
 
-  patchStoryInteraction({
+  const patched = patchStoryInteraction({
     packageRoot: root,
     storyId,
     interaction: { id: stepId, label: stepLabel, src },
+    sourceFormatter: options.storySourceFormatter,
   });
+  if (!patched.ok) {
+    throw new Error(
+      patched.error ?? `Could not wire interaction for ${storyId}`,
+    );
+  }
 }
 
 /**
@@ -601,6 +617,7 @@ export function runSkipVisualTag(
       packageRoot: root,
       storyId: entry.id,
       skip: options.skip,
+      sourceFormatter: options.storySourceFormatter,
     });
     if (result.ok) updated.push(entry.id);
     else errors.push(`${entry.id}: ${result.error ?? "patch failed"}`);

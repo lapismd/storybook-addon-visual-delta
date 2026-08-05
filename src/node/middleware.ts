@@ -38,6 +38,7 @@ import type {
   VisualActionScopeStreamEvent,
   VisualRunSelectionMode,
 } from "../shared/affected-types.js";
+import { storySourceFormatterCliArgs } from "./story-source-formatter.js";
 import { resolveVisualActionStoryIds } from "../shared/action-scope.js";
 import { ansiRawTail } from "../shared/ansi-log.js";
 import type {
@@ -765,6 +766,7 @@ export function visualBaselineWriteCommandArgs(
       : []),
     "--browser",
     input.browser,
+    ...storySourceFormatterCliArgs(options.storySourceFormatter),
     ...(input.component
       ? ["--component", input.component]
       : input.storyIds.flatMap((storyId) => ["--story-id", storyId])),
@@ -960,6 +962,7 @@ async function handleInteractionBaselineWrite(
     browser,
     "--story-id",
     storyId,
+    ...storySourceFormatterCliArgs(options.storySourceFormatter),
     "--step-label",
     stepLabel,
     ...(stepId ? ["--step-id", stepId] : []),
@@ -1617,6 +1620,7 @@ async function handleReviewStatus(
       const result = patchStoryVisualReviewStatuses({
         packageRoot: root,
         updates,
+        sourceFormatter: options.storySourceFormatter,
       });
       updated = result.updated;
       errors.push(
@@ -1672,6 +1676,7 @@ async function handleReviewStatus(
     packageRoot: root,
     storyId,
     status,
+    sourceFormatter: options.storySourceFormatter,
   });
   const changes = await mutation?.finish({
     success: result.ok,
@@ -1727,6 +1732,7 @@ async function handleSkipVisual(
     packageRoot: root,
     storyId,
     skip: body.skip,
+    sourceFormatter: options.storySourceFormatter,
   });
   if (result.ok) {
     invalidateVisualResultArtifacts({
@@ -2006,6 +2012,7 @@ async function handleStoryConfigPut(
     storyId,
     values,
     unset,
+    sourceFormatter: options.storySourceFormatter,
   });
   if (!result.ok) {
     const changes = await mutation.finish({
@@ -2279,6 +2286,7 @@ async function handleCompareStory(
         packageRoot: root,
         storyId: result.storyId,
         status: "approved",
+        sourceFormatter: options.storySourceFormatter,
       });
       const changes = await mutation.finish({
         success: review.ok,

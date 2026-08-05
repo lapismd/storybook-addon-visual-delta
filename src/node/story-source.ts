@@ -22,6 +22,10 @@ import type {
   VisualDeltaStoryConfigKey,
   VisualDeltaStoryConfigPatch,
 } from "../shared/story-config.js";
+import {
+  formatStorySource,
+  type StorySourceFormatter,
+} from "./story-source-formatter.js";
 
 export type StorySourceMutation =
   | { kind: "skip"; skip: boolean }
@@ -840,21 +844,36 @@ function patchStoryFile(
   packageRoot: string,
   entry: StoryIndexEntry,
   mutation: StorySourceMutation,
-): boolean {
-  if (!entry.importPath) return false;
+  formatter?: StorySourceFormatter,
+): { changed: boolean; error?: string } {
+  if (!entry.importPath) return { changed: false };
   const filePath = resolveStoriesPath(packageRoot, entry.importPath);
-  if (!filePath) return false;
+  if (!filePath) return { changed: false };
   const source = readFileSync(filePath, "utf8");
-  const next = patchStorySourceText(source, entry, mutation);
-  if (next === source) return false;
-  writeFileSync(filePath, next, "utf8");
-  return true;
+  const candidate = patchStorySourceText(source, entry, mutation);
+  if (candidate === source) return { changed: false };
+  try {
+    const next = formatStorySource({
+      packageRoot,
+      filePath,
+      source: candidate,
+      formatter,
+    });
+    writeFileSync(filePath, next, "utf8");
+    return { changed: true };
+  } catch (error) {
+    return {
+      changed: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function patchStorySkipVisual(options: {
   packageRoot: string;
   storyId: string;
   skip: boolean;
+  sourceFormatter?: StorySourceFormatter;
 }): {
   ok: boolean;
   storyId: string;
@@ -870,10 +889,20 @@ export function patchStorySkipVisual(options: {
       error: `Story not found in index: ${options.storyId}`,
     };
   }
-  const changed = patchStoryFile(options.packageRoot, entry, {
-    kind: "skip",
-    skip: options.skip,
-  });
+  const patch = patchStoryFile(
+    options.packageRoot,
+    entry,
+    { kind: "skip", skip: options.skip },
+    options.sourceFormatter,
+  );
+  if (patch.error) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      skip: options.skip,
+      error: patch.error,
+    };
+  }
   // CSF may already match; always synchronize eligibility in the static index.
   // Review metadata remains independent.
   syncStaticIndexSkipVisual(
@@ -881,7 +910,10 @@ export function patchStorySkipVisual(options: {
     [options.storyId],
     options.skip,
   );
-  if (!changed && (entry.tags ?? []).includes("skip-visual") !== options.skip) {
+  if (
+    !patch.changed &&
+    (entry.tags ?? []).includes("skip-visual") !== options.skip
+  ) {
     return {
       ok: false,
       storyId: options.storyId,
@@ -896,6 +928,7 @@ export function patchStoryVisualReviewStatus(options: {
   packageRoot: string;
   storyId: string;
   status: VisualReviewStatus;
+  sourceFormatter?: StorySourceFormatter;
 }): {
   ok: boolean;
   storyId: string;
@@ -905,6 +938,7 @@ export function patchStoryVisualReviewStatus(options: {
   const result = patchStoryVisualReviewStatuses({
     packageRoot: options.packageRoot,
     updates: [{ storyId: options.storyId, status: options.status }],
+    sourceFormatter: options.sourceFormatter,
   });
   return result.ok
     ? { ok: true, storyId: options.storyId, status: options.status }
@@ -938,11 +972,12 @@ export type StoryVisualReviewBatchResult = {
 export function patchStoryVisualReviewStatuses(options: {
   packageRoot: string;
   updates: StoryVisualReviewUpdate[];
+  sourceFormatter?: StorySourceFormatter;
 }): StoryVisualReviewBatchResult {
   const index = loadStoryIndex(options.packageRoot);
   const stagedFiles = new Map<
     string,
-    { source: string; next: string }
+    { source: string; next: string; storyIds: Set<string> }
   >();
   const errors: StoryVisualReviewBatchResult["errors"] = [];
 
@@ -973,7 +1008,7 @@ export function patchStoryVisualReviewStatuses(options: {
     }
     const staged = stagedFiles.get(filePath) ?? (() => {
       const source = readFileSync(filePath, "utf8");
-      const initial = { source, next: source };
+      const initial = { source, next: source, storyIds: new Set<string>() };
       stagedFiles.set(filePath, initial);
       return initial;
     })();
@@ -1000,6 +1035,7 @@ export function patchStoryVisualReviewStatuses(options: {
       continue;
     }
     staged.next = next;
+    staged.storyIds.add(update.storyId);
   }
 
   // Validation and source transformation are fail-closed for the whole
@@ -1011,6 +1047,29 @@ export function patchStoryVisualReviewStatuses(options: {
       errors,
       sourceFilesUpdated: [],
     };
+  }
+
+  for (const [filePath, staged] of stagedFiles) {
+    if (staged.next === staged.source) continue;
+    try {
+      staged.next = formatStorySource({
+        packageRoot: options.packageRoot,
+        filePath,
+        source: staged.next,
+        formatter: options.sourceFormatter,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        updated: 0,
+        errors: [...staged.storyIds].map((storyId) => ({
+          storyId,
+          error: message,
+        })),
+        sourceFilesUpdated: [],
+      };
+    }
   }
 
   const sourceFilesUpdated: string[] = [];
@@ -1033,6 +1092,7 @@ export function patchStoryBaselineImages(options: {
   packageRoot: string;
   storyId: string;
   url: string;
+  sourceFormatter?: StorySourceFormatter;
   /** Defaults to `ready` — create/update clear `visual-pending` and siblings. */
   reviewStatus?: VisualReviewStatus;
 }): { ok: boolean; storyId: string; error?: string } {
@@ -1052,11 +1112,15 @@ export function patchStoryBaselineImages(options: {
     };
   }
   const reviewStatus = options.reviewStatus ?? "ready";
-  patchStoryFile(options.packageRoot, entry, {
-    kind: "baseline",
-    url: options.url,
-    reviewStatus,
-  });
+  const patch = patchStoryFile(
+    options.packageRoot,
+    entry,
+    { kind: "baseline", url: options.url, reviewStatus },
+    options.sourceFormatter,
+  );
+  if (patch.error) {
+    return { ok: false, storyId: options.storyId, error: patch.error };
+  }
   // Always normalize index tags — CSF may already have the URL/tag pair.
   syncStaticIndexReviewStatus(options.packageRoot, [
     { storyId: options.storyId, status: reviewStatus },
@@ -1069,6 +1133,7 @@ export function patchStoryVisualDeltaConfig(options: {
   storyId: string;
   values: VisualDeltaStoryConfigPatch;
   unset: VisualDeltaStoryConfigKey[];
+  sourceFormatter?: StorySourceFormatter;
 }): {
   ok: boolean;
   storyId: string;
@@ -1083,12 +1148,25 @@ export function patchStoryVisualDeltaConfig(options: {
       error: `Story not found in index: ${options.storyId}`,
     };
   }
-  const sourceUpdated = patchStoryFile(options.packageRoot, entry, {
-    kind: "story-config",
-    values: options.values,
-    unset: options.unset,
-  });
-  if (!sourceUpdated) {
+  const patch = patchStoryFile(
+    options.packageRoot,
+    entry,
+    {
+      kind: "story-config",
+      values: options.values,
+      unset: options.unset,
+    },
+    options.sourceFormatter,
+  );
+  if (patch.error) {
+    return {
+      ok: false,
+      storyId: options.storyId,
+      sourceUpdated: false,
+      error: patch.error,
+    };
+  }
+  if (!patch.changed) {
     return {
       ok: false,
       storyId: options.storyId,
@@ -1099,7 +1177,7 @@ export function patchStoryVisualDeltaConfig(options: {
   return {
     ok: true,
     storyId: options.storyId,
-    sourceUpdated,
+    sourceUpdated: patch.changed,
   };
 }
 
@@ -1107,6 +1185,7 @@ export function patchStoryInteraction(options: {
   packageRoot: string;
   storyId: string;
   interaction: { id: string; label: string; src: string };
+  sourceFormatter?: StorySourceFormatter;
   /** Defaults to `ready` — clears `visual-pending` and other review siblings. */
   reviewStatus?: VisualReviewStatus;
 }): { ok: boolean; storyId: string; error?: string } {
@@ -1126,16 +1205,22 @@ export function patchStoryInteraction(options: {
     };
   }
   const reviewStatus = options.reviewStatus ?? "ready";
-  const changed = patchStoryFile(options.packageRoot, entry, {
-    kind: "interaction",
-    interaction: options.interaction,
-    reviewStatus,
-  });
-  if (!changed) {
+  const patch = patchStoryFile(
+    options.packageRoot,
+    entry,
+    {
+      kind: "interaction",
+      interaction: options.interaction,
+      reviewStatus,
+    },
+    options.sourceFormatter,
+  );
+  if (!patch.changed) {
     return {
       ok: false,
       storyId: options.storyId,
-      error: `Could not patch interaction for ${options.storyId}`,
+      error:
+        patch.error ?? `Could not patch interaction for ${options.storyId}`,
     };
   }
   syncStaticIndexReviewStatus(options.packageRoot, [
@@ -1154,6 +1239,7 @@ export function patchStoryRemoveBaseline(options: {
   storyId: string;
   url: string;
   interactionId?: string;
+  sourceFormatter?: StorySourceFormatter;
 }): {
   ok: boolean;
   storyId: string;
@@ -1168,15 +1254,23 @@ export function patchStoryRemoveBaseline(options: {
       error: `Story not found in index: ${options.storyId}`,
     };
   }
-  const removedReference = patchStoryFile(options.packageRoot, entry, {
-    kind: "remove-baseline",
-    url: options.url,
-    interactionId: options.interactionId,
-  });
+  const patch = patchStoryFile(
+    options.packageRoot,
+    entry,
+    {
+      kind: "remove-baseline",
+      url: options.url,
+      interactionId: options.interactionId,
+    },
+    options.sourceFormatter,
+  );
+  if (patch.error) {
+    return { ok: false, storyId: options.storyId, error: patch.error };
+  }
   return {
     ok: true,
     storyId: options.storyId,
-    sourceUpdated: removedReference,
+    sourceUpdated: patch.changed,
   };
 }
 

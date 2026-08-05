@@ -169,6 +169,7 @@ export function deleteVisualBaseline(
     storyId,
     url: baselineUrl,
     interactionId: request.interactionId?.trim() || undefined,
+    sourceFormatter: hostOptions.storySourceFormatter,
   });
   if (!patch.ok) {
     throw new Error(patch.error ?? `Could not update story ${storyId}`);
