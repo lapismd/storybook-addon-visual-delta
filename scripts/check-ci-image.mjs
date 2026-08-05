@@ -80,7 +80,7 @@ const REQUIRED_PUBLICATION_SNIPPETS = [
 const EXPECTED_CONSUMER_WORKFLOWS = {
   ".github/workflows/visual-delta-ci.yml": {
     triggerSnippet:
-      "on:\n  push:\n    branches:\n      - master\n  pull_request:",
+      "on:\n  push:\n    branches:\n      - main\n      - master\n  pull_request:",
     jobs: 4,
     mutableImageJobs: 1,
     immutableImageJobs: 3,

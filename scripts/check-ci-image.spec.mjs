@@ -13,20 +13,22 @@ test("accepts the repository CI-image publication and reuse configuration", () =
   assert.equal(result.ok, true, result.errors.join("\n"));
 });
 
-test("requires Visual Delta CI on pull requests and master pushes", () => {
+test("requires Visual Delta CI on pull requests, main, and master pushes", () => {
   const workflowPath = ".github/workflows/visual-delta-ci.yml";
-  const result = validateCiImageSources({
-    ...sources,
-    consumerWorkflows: {
-      ...sources.consumerWorkflows,
-      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
-        "  push:\n    branches:\n      - master\n",
-        "",
-      ),
-    },
-  });
-  assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /push.*master/s);
+  for (const branch of ["main", "master"]) {
+    const result = validateCiImageSources({
+      ...sources,
+      consumerWorkflows: {
+        ...sources.consumerWorkflows,
+        [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+          `      - ${branch}\n`,
+          "",
+        ),
+      },
+    });
+    assert.equal(result.ok, false, `${branch} push trigger must be required`);
+    assert.match(result.errors.join("\n"), /push.*main.*master/s);
+  }
 });
 
 test("requires a safe and complete Storybook Pages deployment", () => {
