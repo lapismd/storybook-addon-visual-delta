@@ -1,6 +1,7 @@
 import React, {
   memo,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -12,11 +13,7 @@ import {
   StopAltIcon,
   SyncIcon,
 } from "@storybook/icons";
-import {
-  PopoverProvider,
-  ScrollArea,
-  useCopyButton,
-} from "storybook/internal/components";
+import { ScrollArea, useCopyButton } from "storybook/internal/components";
 import {
   ansiLogTail,
   lastMeaningfulAnsiLine,
@@ -30,6 +27,8 @@ import {
   StatusBar,
   StatusLogBody,
   StatusLogCopyButton,
+  StatusLogPopoverRoot,
+  StatusLogPopoverSurface,
   StatusLogShell,
   StatusProgressButton,
   StatusProgressFill,
@@ -158,6 +157,9 @@ export const PanelStatusBar = memo(function PanelStatusBar({
 }: PanelStatusBarProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<FixedPos | null>(null);
+  const popoverId = useId();
+  const popoverRootRef = useRef<HTMLDivElement | null>(null);
+  const progressButtonRef = useRef<HTMLButtonElement | null>(null);
   const parsedLog = useMemo(() => parseAnsiLog(log ?? ""), [log]);
   const displayLog = useMemo(() => ansiLogTail(parsedLog, 4000), [parsedLog]);
   const clippedLine = useMemo(
@@ -176,6 +178,37 @@ export const PanelStatusBar = memo(function PanelStatusBar({
   const percent = determinate
     ? Math.min(100, Math.max(0, (completed / total) * 100))
     : 0;
+
+  useEffect(() => {
+    if (!hasLog) setOpen(false);
+  }, [hasLog]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !popoverRootRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      progressButtonRef.current?.focus();
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!container) {
@@ -261,28 +294,12 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           Stop
         </StatusStopButton>
       ) : null}
-      <PopoverProvider
-        ariaLabel="Visual Delta progress log"
-        placement="top-start"
-        padding={0}
-        visible={open && hasLog}
-        onVisibleChange={(next) => {
-          if (!hasLog) {
-            setOpen(false);
-            return;
-          }
-          setOpen(next);
-        }}
-        popover={() =>
-          hasLog ? (
-            <StatusLogPopoverContent
-              log={displayLog}
-              hasError={Boolean(error)}
-            />
-          ) : null
-        }
+      <StatusLogPopoverRoot
+        ref={popoverRootRef}
+        data-testid="status-popover"
       >
         <StatusProgressButton
+          ref={progressButtonRef}
           type="button"
           disabled={idle}
           $idle={idle}
@@ -295,6 +312,12 @@ export const PanelStatusBar = memo(function PanelStatusBar({
                 ? `Log: ${clipped}`
                 : "Ready"
           }
+          aria-haspopup="dialog"
+          aria-expanded={open && hasLog}
+          aria-controls={hasLog ? popoverId : undefined}
+          onClick={() => {
+            if (hasLog) setOpen((current) => !current);
+          }}
         >
           {running ? (
             <StatusSpinner aria-hidden>
@@ -314,7 +337,20 @@ export const PanelStatusBar = memo(function PanelStatusBar({
             </StatusProgressValue>
           ) : null}
         </StatusProgressButton>
-      </PopoverProvider>
+        {open && hasLog ? (
+          <StatusLogPopoverSurface
+            id={popoverId}
+            role="dialog"
+            aria-label="Visual Delta progress log"
+            aria-modal="false"
+          >
+            <StatusLogPopoverContent
+              log={displayLog}
+              hasError={Boolean(error)}
+            />
+          </StatusLogPopoverSurface>
+        ) : null}
+      </StatusLogPopoverRoot>
     </StatusBar>
   );
 });

@@ -636,6 +636,26 @@ export const StatusProgressValue = styled.span(({ theme }) => ({
   whiteSpace: "nowrap",
 }));
 
+/** Non-modal anchor for the progress trigger and its expanded log. */
+export const StatusLogPopoverRoot = styled.div({
+  position: "relative",
+  display: "flex",
+  flex: "1 1 auto",
+  minWidth: 0,
+});
+
+/**
+ * The log stays inside the footer stacking context without an underlay or
+ * focus trap, so adjacent environment and cancellation controls remain live.
+ */
+export const StatusLogPopoverSurface = styled.div({
+  position: "absolute",
+  right: 0,
+  bottom: "calc(100% + 8px)",
+  zIndex: 31,
+  outline: "none",
+});
+
 /** Terminal-style shell for the progress log popover. */
 export const StatusLogShell = styled.div<{ $hasError?: boolean }>(
   ({ $hasError }) => ({

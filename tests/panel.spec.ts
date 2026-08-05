@@ -96,9 +96,16 @@ for (const layout of [
             "background-color",
             "rgb(97, 175, 239)",
           );
+          const progressDialog = page.getByRole("dialog", {
+            name: "Visual Delta progress log",
+          });
+          await expect(progressDialog).toHaveAttribute("aria-modal", "false");
           expect(await page.locator("body").innerText()).not.toContain(
             "\u001b",
           );
+          await stopButton.focus();
+          await expect(stopButton).toBeFocused();
+          await expect(progressDialog).toBeVisible();
           await stopButton.click();
           await expect(stopButton).toBeHidden();
           return;

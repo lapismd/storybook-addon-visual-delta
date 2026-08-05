@@ -30,28 +30,6 @@ vi.mock("storybook/internal/components", async (importOriginal) => {
         {children}
       </div>
     ),
-    PopoverProvider: ({
-      children,
-      popover,
-      visible,
-      ariaLabel,
-      onVisibleChange,
-    }: {
-      children: React.ReactNode;
-      popover: () => React.ReactNode;
-      visible?: boolean;
-      ariaLabel?: string;
-      onVisibleChange?: (visible: boolean) => void;
-    }) => (
-      <div
-        data-testid="status-popover"
-        data-aria-label={ariaLabel}
-        onClick={() => onVisibleChange?.(!visible)}
-      >
-        {children}
-        {visible ? <div data-testid="popover">{popover()}</div> : null}
-      </div>
-    ),
   };
 });
 
@@ -67,6 +45,7 @@ describe("PanelStatusBar", () => {
   it("keeps Stop reachable in the persistent footer outside the log popover", () => {
     class ResizeObserverStub {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -89,8 +68,18 @@ describe("PanelStatusBar", () => {
 
     const stop = screen.getByRole("button", { name: "Stop visual run" });
     expect(stop.closest('[data-testid="status-popover"]')).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Progress: running" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Visual Delta progress log" }),
+    ).toHaveAttribute("aria-modal", "false");
+    fireEvent.pointerDown(stop);
     fireEvent.click(stop);
     expect(onStop).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("dialog", { name: "Visual Delta progress log" }),
+    ).toBeNull();
 
     container.remove();
     vi.unstubAllGlobals();
@@ -99,6 +88,7 @@ describe("PanelStatusBar", () => {
   it("renders safe ANSI in the footer and full ANSI in the copied log", async () => {
     class ResizeObserverStub {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -138,7 +128,9 @@ describe("PanelStatusBar", () => {
     expect(compactFailure).toHaveStyle({ fontWeight: "700" });
     fireEvent.click(logButton);
 
-    const popover = screen.getByTestId("popover");
+    const popover = screen.getByRole("dialog", {
+      name: "Visual Delta progress log",
+    });
     const terminalFailure = within(popover).getByText("Failed safely");
     expect(terminalFailure).toHaveAttribute(
       "data-ansi-foreground",
@@ -218,12 +210,18 @@ describe("PanelStatusBar", () => {
     expect(status.style.width).toBe("400px");
     expect(computedStatus.borderLeftStyle).toBe("none");
     expect(Number.parseFloat(computedStatus.borderTopLeftRadius)).toBe(0);
-    expect(screen.getByTestId("status-popover")).toHaveAttribute(
-      "data-aria-label",
-      "Visual Delta progress log",
-    );
+    expect(logButton).toHaveAttribute("aria-haspopup", "dialog");
+    expect(logButton).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(logButton);
-    expect(screen.getByTestId("popover")).toHaveTextContent("starting");
+    expect(logButton).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("dialog", { name: "Visual Delta progress log" }),
+    ).toHaveTextContent("starting");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Visual Delta progress log" }),
+    ).toBeNull();
+    expect(logButton).toHaveFocus();
 
     container.remove();
     vi.unstubAllGlobals();
@@ -306,6 +304,7 @@ describe("PanelStatusBar", () => {
   it("surfaces a read-only Profile-left and Browser-right split control", () => {
     class ResizeObserverStub {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
