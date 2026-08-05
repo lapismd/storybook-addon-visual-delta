@@ -1093,8 +1093,8 @@ export function patchStoryBaselineImages(options: {
   storyId: string;
   url: string;
   sourceFormatter?: StorySourceFormatter;
-  /** Defaults to `ready` — create/update clear `visual-pending` and siblings. */
-  reviewStatus?: VisualReviewStatus;
+  /** Defaults to `ready`; `null` preserves the existing review status. */
+  reviewStatus?: VisualReviewStatus | null;
 }): { ok: boolean; storyId: string; error?: string } {
   const entry = loadStoryIndex(options.packageRoot)[options.storyId];
   if (!entry?.importPath) {
@@ -1111,7 +1111,10 @@ export function patchStoryBaselineImages(options: {
       error: "Cannot wire baselines on skip-visual stories",
     };
   }
-  const reviewStatus = options.reviewStatus ?? "ready";
+  const reviewStatus =
+    options.reviewStatus === null
+      ? undefined
+      : (options.reviewStatus ?? "ready");
   const patch = patchStoryFile(
     options.packageRoot,
     entry,
@@ -1121,10 +1124,13 @@ export function patchStoryBaselineImages(options: {
   if (patch.error) {
     return { ok: false, storyId: options.storyId, error: patch.error };
   }
-  // Always normalize index tags — CSF may already have the URL/tag pair.
-  syncStaticIndexReviewStatus(options.packageRoot, [
-    { storyId: options.storyId, status: reviewStatus },
-  ]);
+  // Always normalize index tags when status mutation was requested — CSF may
+  // already have the URL/tag pair.
+  if (reviewStatus) {
+    syncStaticIndexReviewStatus(options.packageRoot, [
+      { storyId: options.storyId, status: reviewStatus },
+    ]);
+  }
   return { ok: true, storyId: options.storyId };
 }
 

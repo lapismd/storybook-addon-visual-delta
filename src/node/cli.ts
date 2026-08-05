@@ -75,6 +75,7 @@ function parseShared(argv: string[]): BaselineCliOptions {
       ? Number(readFlag(argv, "--port"))
       : undefined,
     approved: hasFlag(argv, "--approved"),
+    updateReviewStatus: hasFlag(argv, "--update-status"),
     allowDirty: hasFlag(argv, "--allow-dirty"),
     skipBuild: hasFlag(argv, "--skip-build"),
     forceRebuild: hasFlag(argv, "--rebuild"),
@@ -96,7 +97,7 @@ Usage:
   visual-delta init [--force] [--port <n>]
   visual-delta doctor [--runner] [--build] [--fix] [--strict] [--json] [--verbose]
   visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--fresh] [--failure-mode warn|strict] [--dry-run] [--explain]
-  visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] …
+  visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] [--update-status] …
   visual-delta interaction-update --story-id <id> --step-label <label> …
   visual-delta harness doctor
   visual-delta migrate-baselines [--snapshot-dir <path> …] [--dry-run|--apply --approved]
@@ -134,6 +135,7 @@ Flags:
   --capture-call-id <id>    Replay an exact Storybook Interactions call
   --create-only             Missing PNGs only (no overwrite)
   --approved                Required unless VISUAL_UPDATE_APPROVED=1
+  --update-status           Mark updated primary-baseline stories pending
   --allow-dirty             Reserved (host git gates may use this)
   --skip-build              Prefer existing storybook-static when complete
   --rebuild                 Force build-storybook before capture (overrides --skip-build)

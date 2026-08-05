@@ -49,6 +49,22 @@ and the Node build pass. A downstream Mira probe expands the compact
 four-status array with Mira's own Prettier installation; Mira's specification,
 catalog, full non-browser quality gate, and static Storybook build also pass.
 
+## 2026-08-05 CLI review-status safety audit
+
+Direct primary-baseline updates previously coupled an approved PNG and CSF
+wiring write to an unconditional `visual-pending` review-tag rewrite. The
+packaged `test` command was already compare-only, but this coupling meant a
+direct `visual-delta update` could alter review metadata in a developer or CI
+workspace without a separate review-status intent.
+
+Primary-baseline CLI updates now preserve review tags by default and expose
+`--update-status` as the explicit opt-in. Storybook middleware appends that flag
+to UI-triggered baseline writers so interactive review behavior remains
+unchanged. Focused baseline-writer and portable-host tests verify both the
+default preservation path and the UI opt-in without duplicate flags. The 16
+focused tests, all 546 package tests, `pnpm spec:check`, both TypeScript
+configurations, and the Node build pass.
+
 ## Current conformance gaps
 
 These gaps came from the 2026-07-28 source audit. They remain open until implementation and evidence satisfy the linked requirements.

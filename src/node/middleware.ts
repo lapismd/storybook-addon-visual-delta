@@ -756,6 +756,7 @@ export function visualBaselineWriteCommandArgs(
     : configured;
   return [
     ...baseArgs,
+    ...(!baseArgs.includes("--update-status") ? ["--update-status"] : []),
     ...(input.rebuild ? ["--rebuild"] : []),
     ...(input.createOnly ? ["--create-only"] : []),
     ...(!baseArgs.includes("--snapshot-dir")

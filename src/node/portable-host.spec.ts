@@ -134,6 +134,7 @@ describe("portable Visual Delta host options", () => {
       ),
     ).toEqual([
       ...DEFAULT_VISUAL_UPDATE_ARGS,
+      "--update-status",
       "--create-only",
       "--snapshot-dir",
       "/workspace/snapshots",
@@ -172,6 +173,7 @@ describe("portable Visual Delta host options", () => {
 
     expect(args).toEqual([
       ...visualUpdateArgs,
+      "--update-status",
       "--rebuild",
       "--browser",
       "firefox",
@@ -183,6 +185,26 @@ describe("portable Visual Delta host options", () => {
     );
     expect(
       args.filter((argument) => argument === "--baseline-path-mode"),
+    ).toHaveLength(1);
+  });
+
+  it("does not duplicate an explicit UI review-status opt-in", () => {
+    const args = visualBaselineWriteCommandArgs(
+      {
+        visualUpdateArgs: [...DEFAULT_VISUAL_UPDATE_ARGS, "--update-status"],
+      },
+      "/workspace",
+      {
+        createOnly: false,
+        rebuild: false,
+        browser: "chromium",
+        storyIds: ["demo--light"],
+        component: undefined,
+      },
+    );
+
+    expect(
+      args.filter((argument) => argument === "--update-status"),
     ).toHaveLength(1);
   });
 

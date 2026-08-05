@@ -112,7 +112,7 @@ Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`
 | `snapshotDir`                 | Baseline directory                             | `tests/visual/storybook.spec.ts-snapshots` |
 | `baselinePathMode`            | Baseline identity strategy                     | `story-id`                                 |
 | `addonSrcDir`                 | Local addon source watch path                  | unset                                      |
-| `visualUpdateArgs`            | Approved primary writer command                | Packaged `visual-delta update`             |
+| `visualUpdateArgs`            | Approved primary writer command; Storybook middleware appends the explicit review-status opt-in | Packaged `visual-delta update` |
 | `visualInteractionUpdateArgs` | Approved interaction writer command            | Packaged `visual-delta interaction-update` |
 | `visualTestArgs`              | Compare-only command                           | `pnpm exec playwright test`                |
 | `visualServerPort`            | Static Storybook server port                   | Storybook port plus one                    |

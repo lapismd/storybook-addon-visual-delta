@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -132,6 +138,45 @@ describe("baseline CLI scoped capture", () => {
     expect(args).toContain("playwright");
     expect(args[args.indexOf("-g") + 1]).toContain("fixture--two");
     expect(args[args.indexOf("-g") + 1]).not.toContain("fixture--one");
+  });
+
+  it("preserves review tags unless status mutation is explicitly enabled", async () => {
+    const current = fixture(["fixture--one"]);
+    const storyPath = path.join(current.root, "src/story-0.stories.ts");
+    writeFileSync(
+      storyPath,
+      'export const One = { tags: ["visual-approved"] };\n',
+    );
+    execute.mockImplementation((_command, args) => {
+      if ((args as string[]).includes("playwright")) {
+        writeFileSync(
+          path.join(current.snapshotDir, "fixture--one-chromium.png"),
+          "created",
+        );
+      }
+      return Buffer.from("");
+    });
+
+    await runBaselineUpdate({
+      packageRoot: current.root,
+      snapshotDir: current.snapshotDir,
+      storyId: "fixture--one",
+      approved: true,
+    });
+
+    expect(readFileSync(storyPath, "utf8")).toContain('"visual-approved"');
+    expect(readFileSync(storyPath, "utf8")).not.toContain('"visual-pending"');
+
+    await runBaselineUpdate({
+      packageRoot: current.root,
+      snapshotDir: current.snapshotDir,
+      storyId: "fixture--one",
+      approved: true,
+      updateReviewStatus: true,
+    });
+
+    expect(readFileSync(storyPath, "utf8")).toContain('"visual-pending"');
+    expect(readFileSync(storyPath, "utf8")).not.toContain('"visual-approved"');
   });
 
   it("returns immediately when a create-only interaction baseline exists", async () => {

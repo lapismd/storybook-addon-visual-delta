@@ -57,6 +57,8 @@ export type BaselineCliOptions = {
   /** Explicit component input; the only operation allowed to use broad matching. */
   component?: string;
   approved?: boolean;
+  /** Mark updated stories pending. Direct CLI updates preserve status by default. */
+  updateReviewStatus?: boolean;
   allowDirty?: boolean;
   skipBuild?: boolean;
   /** Force `build-storybook` even when storybook-static is complete. */
@@ -216,8 +218,8 @@ function interactionSnapshotFileName(
 
 /**
  * Create missing or overwrite primary baselines via Playwright, then wire CSF
- * `parameters.visualDelta.images` and stamp `visual-pending` (clears ready /
- * approved / failed). A later explicit comparison may move it to ready.
+ * `parameters.visualDelta.images`. Review status changes only when explicitly
+ * requested by an interactive host or CLI caller.
  */
 export async function runBaselineUpdate(
   options: BaselineCliOptions,
@@ -410,7 +412,7 @@ export async function runBaselineUpdate(
       packageRoot: root,
       storyId: entry.id,
       url,
-      reviewStatus: "pending",
+      reviewStatus: options.updateReviewStatus ? "pending" : null,
       sourceFormatter: options.storySourceFormatter,
     });
     if (!patched.ok) {
