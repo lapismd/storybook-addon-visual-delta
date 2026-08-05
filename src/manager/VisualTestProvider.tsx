@@ -49,6 +49,7 @@ import {
   formatVisualProgressLabel,
   acceptableStoryIdsFromLastRun,
   fetchVisualConfig,
+  hasActiveVisualBaselineWriteRequest,
   loadPersistedVisualLastRun,
   loadPersistedVisualStatusJob,
   peekVisualCreateProgress,
@@ -556,7 +557,13 @@ export function VisualTestProviderRender({ entry }: { entry?: API_HashEntry }) {
       reconciling = true;
       try {
         const hub = await fetchVisualRunStatus();
-        if (cancelled || !visualRunStatusIsSettled(hub)) return;
+        if (
+          cancelled ||
+          !visualRunStatusIsSettled(hub) ||
+          hasActiveVisualBaselineWriteRequest()
+        ) {
+          return;
+        }
         setProgress(null);
         setIsComparing(false);
         if (isUpdatingStatus || loadPersistedVisualStatusJob()) return;

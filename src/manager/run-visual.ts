@@ -1516,6 +1516,12 @@ let latestCreateProgress: VisualCreateProgress | null =
         }
       })()
     : null;
+let activeVisualBaselineWriteRequests = 0;
+
+/** True only while this manager runtime owns an unresolved baseline write. */
+export function hasActiveVisualBaselineWriteRequest(): boolean {
+  return activeVisualBaselineWriteRequests > 0;
+}
 
 /** Subscribe to create/update baseline progress from panel or sidebar. */
 export function subscribeVisualCreateProgress(
@@ -1645,16 +1651,17 @@ async function postVisualBaselineWrite(
     captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
   };
 
-  emitVisualCreateProgress({
-    running: true,
-    label: runningLabel,
-    kind,
-    storyIds,
-    logTail: "",
-    ...fraction,
-    ...provenance,
-  });
+  activeVisualBaselineWriteRequests += 1;
   try {
+    emitVisualCreateProgress({
+      running: true,
+      label: runningLabel,
+      kind,
+      storyIds,
+      logTail: "",
+      ...fraction,
+      ...provenance,
+    });
     const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1797,6 +1804,11 @@ async function postVisualBaselineWrite(
       ...provenance,
     });
     throw error instanceof Error ? error : new Error(message);
+  } finally {
+    activeVisualBaselineWriteRequests = Math.max(
+      0,
+      activeVisualBaselineWriteRequests - 1,
+    );
   }
 }
 

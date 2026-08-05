@@ -49,6 +49,7 @@ import {
   componentStoryIdsFor,
   formatVisualProgressLabel,
   fetchVisualRunStatus,
+  hasActiveVisualBaselineWriteRequest,
   invalidateVisualLastRun,
   fetchVisualConfig,
   loadPersistedVisualLastRun,
@@ -1323,7 +1324,13 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       reconciling = true;
       try {
         const hub = await fetchVisualRunStatus();
-        if (cancelled || !visualRunStatusIsSettled(hub)) return;
+        if (
+          cancelled ||
+          !visualRunStatusIsSettled(hub) ||
+          hasActiveVisualBaselineWriteRequest()
+        ) {
+          return;
+        }
         setRunProgress(null);
         setIsRunningVisual(false);
         if (loadPersistedVisualStatusJob()) return;

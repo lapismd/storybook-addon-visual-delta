@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  hasActiveVisualBaselineWriteRequest,
   postVisualCreateBaseline,
   postVisualReviewStatus,
   subscribeVisualCreateProgress,
@@ -83,5 +84,31 @@ describe("Visual Delta mutation events", () => {
       });
     }
     unsubscribe();
+  });
+
+  it("identifies a locally active baseline write until its response settles", async () => {
+    let finishRequest: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            finishRequest = resolve;
+          }),
+      ),
+    );
+
+    const request = postVisualCreateBaseline({ storyId: "filter--source" });
+    expect(hasActiveVisualBaselineWriteRequest()).toBe(true);
+
+    finishRequest?.(
+      new Response(
+        "[exit 0]\nStory visualDelta patch: 1 updated, 0 already wired\n",
+        { status: 200, headers: { "Content-Type": "text/plain" } },
+      ),
+    );
+    await request;
+
+    expect(hasActiveVisualBaselineWriteRequest()).toBe(false);
   });
 });

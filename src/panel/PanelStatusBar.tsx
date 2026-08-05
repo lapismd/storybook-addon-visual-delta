@@ -172,6 +172,11 @@ export const PanelStatusBar = memo(function PanelStatusBar({
     clippedLine.text.trim() ||
     label?.trim() ||
     (idle ? "Ready" : "Working…");
+  const statusLogAccessibleName = running
+    ? `Progress: ${clipped}`
+    : hasLog
+      ? `Log: ${clipped}`
+      : "Ready";
   const determinate = Boolean(progress && progress.total > 0);
   const completed = Math.max(0, progress?.completed ?? 0);
   const total = Math.max(0, progress?.total ?? 0);
@@ -305,13 +310,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           $idle={idle}
           $hasError={Boolean(error)}
           title={hasLog ? "Show full progress log" : clipped}
-          aria-label={
-            running
-              ? `Progress: ${clipped}`
-              : hasLog
-                ? `Log: ${clipped}`
-                : "Ready"
-          }
+          aria-label={statusLogAccessibleName}
           aria-haspopup="dialog"
           aria-expanded={open && hasLog}
           aria-controls={hasLog ? popoverId : undefined}
@@ -341,7 +340,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           <StatusLogPopoverSurface
             id={popoverId}
             role="dialog"
-            aria-label="Visual Delta progress log"
+            aria-label={statusLogAccessibleName}
             aria-modal="false"
           >
             <StatusLogPopoverContent

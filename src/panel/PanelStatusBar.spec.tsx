@@ -72,13 +72,13 @@ describe("PanelStatusBar", () => {
       screen.getByRole("button", { name: "Progress: running" }),
     );
     expect(
-      screen.getByRole("dialog", { name: "Visual Delta progress log" }),
+      screen.getByRole("dialog", { name: "Progress: running" }),
     ).toHaveAttribute("aria-modal", "false");
     fireEvent.pointerDown(stop);
     fireEvent.click(stop);
     expect(onStop).toHaveBeenCalledOnce();
     expect(
-      screen.queryByRole("dialog", { name: "Visual Delta progress log" }),
+      screen.queryByRole("dialog", { name: "Progress: running" }),
     ).toBeNull();
 
     container.remove();
@@ -129,7 +129,7 @@ describe("PanelStatusBar", () => {
     fireEvent.click(logButton);
 
     const popover = screen.getByRole("dialog", {
-      name: "Visual Delta progress log",
+      name: "Progress: Failed safely",
     });
     const terminalFailure = within(popover).getByText("Failed safely");
     expect(terminalFailure).toHaveAttribute(
@@ -215,11 +215,15 @@ describe("PanelStatusBar", () => {
     fireEvent.click(logButton);
     expect(logButton).toHaveAttribute("aria-expanded", "true");
     expect(
-      screen.getByRole("dialog", { name: "Visual Delta progress log" }),
+      screen.getByRole("dialog", {
+        name: /Progress: ✓ shadcn-disclosure-accordion--opens-a-section \(1\/2\)/,
+      }),
     ).toHaveTextContent("starting");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(
-      screen.queryByRole("dialog", { name: "Visual Delta progress log" }),
+      screen.queryByRole("dialog", {
+        name: /Progress: ✓ shadcn-disclosure-accordion--opens-a-section \(1\/2\)/,
+      }),
     ).toBeNull();
     expect(logButton).toHaveFocus();
 

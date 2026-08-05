@@ -97,7 +97,7 @@ for (const layout of [
             "rgb(97, 175, 239)",
           );
           const progressDialog = page.getByRole("dialog", {
-            name: "Visual Delta progress log",
+            name: /Progress: ✓ filter-search--with-query \(7\/12\)/,
           });
           await expect(progressDialog).toHaveAttribute("aria-modal", "false");
           expect(await page.locator("body").innerText()).not.toContain(
