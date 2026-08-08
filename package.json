@@ -96,7 +96,7 @@
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@storybook/addon-a11y": "10.5.2",
     "@storybook/addon-docs": "10.5.2",
     "@storybook/react-vite": "10.5.2",
