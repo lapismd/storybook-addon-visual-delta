@@ -347,6 +347,10 @@ describe("capture runner", () => {
       path.join(packageRoot, "pnpm-lock.yaml"),
       "lockfileVersion: '9.0'\n",
     );
+    writeFileSync(
+      path.join(packageRoot, "pnpm-workspace.yaml"),
+      "packages: []\noverrides:\n  react: 19.2.7\n",
+    );
     writeFileSync(path.join(packageRoot, "src", "preview.ts"), "export {};\n");
     writeFileSync(
       path.join(packageRoot, "dist", "node", "cli.js"),
@@ -375,6 +379,9 @@ describe("capture runner", () => {
       expect(
         readFileSync(path.join(stagedRoot, "dist", "node", "cli.js"), "utf8"),
       ).toBe("export {};\n");
+      expect(
+        readFileSync(path.join(stagedRoot, "pnpm-workspace.yaml"), "utf8"),
+      ).toContain("react: 19.2.7");
       expect(existsSync(path.join(stagedRoot, "node_modules", "host-only"))).toBe(
         false,
       );

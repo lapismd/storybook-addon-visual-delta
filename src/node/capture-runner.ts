@@ -196,6 +196,7 @@ const LINKED_PACKAGE_STAGE_ENTRIES = [
   "dist",
   "package.json",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "src",
 ] as const;
 const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
