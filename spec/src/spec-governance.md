@@ -149,8 +149,15 @@ For every protected change:
 3. Update the requirement before changing behavior.
 4. Update [Verification](./verification.md) with evidence or a declared gap.
 5. Implement the smallest conforming change and focused regression coverage.
-6. Run the specification gate and boundary-appropriate validation.
-7. Commit the verified slice with only its specification, implementation, and evidence.
+6. When the change touches portable public runtime source under `src/` or the
+   package `package.json`, add a Changeset under `.changeset/` (or an explicit
+   empty Changeset when no version bump is required) before opening or updating
+   the pull request. Do not bump the published version or edit `CHANGELOG.md`
+   by hand; do not publish.
+7. Run the specification gate and boundary-appropriate validation.
+8. Commit the verified slice with only its specification, implementation,
+   evidence, and Changeset when required. This is a standing request; do not
+   wait for the user to ask.
 
 Generated `spec/book/` output is local and disposable. Commit `book.toml`, `SUMMARY.md`, and Markdown source, never rendered HTML.
 
