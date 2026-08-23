@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
@@ -47,7 +47,7 @@ jobs:
       - name: Build static Storybook
         env:
           VISUAL_DELTA_PACKAGE_BASELINES: "1"
-        run: pnpm build-storybook
+        run: deno task build-storybook
 
       - name: Verify complete static Storybook
         run: |

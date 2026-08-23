@@ -27,7 +27,7 @@ export default defineVisualPlaywrightConfig({
     workers: 1,
     timeout: 60_000,
     webServer: {
-      command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort} VISUAL_DELTA_INCLUDE_HOST_STUBS=1 VISUAL_DELTA_PACKAGE_BASELINES=1 pnpm storybook:ci`,
+      command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort} VISUAL_DELTA_INCLUDE_HOST_STUBS=1 VISUAL_DELTA_PACKAGE_BASELINES=1 deno task storybook:ci`,
       url: `http://127.0.0.1:${panelStorybookPort}/index.json`,
       cwd: packageRoot,
       reuseExistingServer: !process.env.CI,

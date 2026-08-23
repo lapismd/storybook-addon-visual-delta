@@ -204,8 +204,8 @@ export function SpecMirrorBanner(): ReactElement {
       <strong>Browseable mirror.</strong> Storybook renders the canonical
       Markdown under <code>spec/src/</code>. Edit that tree for normative
       changes. mdBook remains the lint and build gate (
-      <code>pnpm visual-delta:spec:check</code> /{" "}
-      <code>pnpm visual-delta:spec:serve</code>).
+      <code>deno task spec:check</code> /{" "}
+      <code>deno task spec:serve</code>).
     </aside>
   );
 }

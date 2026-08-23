@@ -1944,7 +1944,7 @@ export async function postVisualDeleteBaseline(body: {
 }
 
 /**
- * Force `pnpm build-storybook` via middleware (no Playwright capture).
+ * Force `deno task build-storybook` via middleware (no Playwright capture).
  * Streams logs into the shared create/update progress channel.
  */
 export async function postVisualRebuildStatic(): Promise<VisualCreateResponse> {

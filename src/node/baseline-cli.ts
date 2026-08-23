@@ -152,7 +152,7 @@ function ensureStorybookStatic(
     throw new Error(decision.message);
   }
   if (!decision.shouldBuild) return;
-  execFileSync("pnpm", ["build-storybook"], {
+  execFileSync("deno", ["task", "build-storybook"], {
     cwd: root,
     stdio: "inherit",
   });
@@ -341,10 +341,8 @@ export async function runBaselineUpdate(
         ),
       capture: (updateMode) => {
         execFileSync(
-          "pnpm",
+          "playwright",
           [
-            "exec",
-            "playwright",
             "test",
             // Explicit mode — bare `--update-snapshots` means "all" and overrides config.
             `--update-snapshots=${updateMode}`,
@@ -536,10 +534,8 @@ export async function runInteractionUpdate(
     baselineExists: interactionPngExists,
     capture: (updateMode) => {
       execFileSync(
-        "pnpm",
+        "playwright",
         [
-          "exec",
-          "playwright",
           "test",
           `--update-snapshots=${updateMode}`,
           "--project",

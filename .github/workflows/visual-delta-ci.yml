@@ -39,16 +39,16 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
       - name: Build node exports
-        run: pnpm build:node
+        run: deno task build:node
 
       - name: Typecheck package sources
-        run: pnpm typecheck
+        run: deno task typecheck
 
       - name: Unit tests
-        run: pnpm test
+        run: deno task test
 
   panel:
     name: Panel browser acceptance
@@ -66,10 +66,10 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
       - name: Run panel acceptance
-        run: pnpm test:panel
+        run: deno task test:panel
 
   browser-matrix:
     name: Chromium, Firefox, and WebKit acceptance
@@ -87,12 +87,12 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
       - name: Run browser-matrix acceptance
         env:
           HOME: /root
-        run: pnpm test:browsers
+        run: deno task test:browsers
 
   manager:
     name: Manager browser acceptance
@@ -113,7 +113,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
       - name: Run manager acceptance
-        run: pnpm test:manager
+        run: deno task test:manager

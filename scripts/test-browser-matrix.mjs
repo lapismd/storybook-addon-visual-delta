@@ -25,10 +25,9 @@ function sidecars(directory = artifactRoot) {
 function runCase(testCase) {
   rmSync(fixtureRoot, { recursive: true, force: true });
   const result = spawnSync(
-    "pnpm",
+    "node",
     [
-      "exec",
-      "playwright",
+      "./node_modules/playwright/cli.js",
       "test",
       "-c",
       "playwright.browsers.config.ts",

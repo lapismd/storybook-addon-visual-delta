@@ -327,7 +327,7 @@ async function defaultLoadMainConfig(options: {
 }
 
 function defaultRunBuild(root: string, quiet: boolean): void {
-  execFileSync("pnpm", ["build-storybook"], {
+  execFileSync("deno", ["task", "build-storybook"], {
     cwd: root,
     stdio: quiet ? "pipe" : "inherit",
   });

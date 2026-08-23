@@ -1,12 +1,8 @@
-#!/usr/bin/env node
+import { dirname, fromFileUrl, resolve } from "jsr:@std/path@1.1.6";
 
-import { chmodSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_CLI_PATH = path.resolve(
-  SCRIPT_DIR,
+const scriptDirectory = dirname(fromFileUrl(import.meta.url));
+export const DEFAULT_CLI_PATH = resolve(
+  scriptDirectory,
   "..",
   "dist",
   "node",
@@ -15,20 +11,20 @@ export const DEFAULT_CLI_PATH = path.resolve(
 export const CLI_SHEBANG = "#!/usr/bin/env node";
 
 export function prepareCliBin(cliPath = DEFAULT_CLI_PATH) {
-  const source = readFileSync(cliPath, "utf8");
+  const source = Deno.readTextFileSync(cliPath);
   if (!source.startsWith(`${CLI_SHEBANG}\n`)) {
     throw new Error(`${cliPath} must start with ${CLI_SHEBANG}`);
   }
 
-  chmodSync(cliPath, 0o755);
-  const mode = statSync(cliPath).mode & 0o777;
+  Deno.chmodSync(cliPath, 0o755);
+  const mode = (Deno.statSync(cliPath).mode ?? 0) & 0o777;
   if ((mode & 0o111) === 0) {
     throw new Error(`${cliPath} is not executable after package preparation`);
   }
   return { cliPath, mode };
 }
 
-function main() {
+if (import.meta.main) {
   try {
     const result = prepareCliBin();
     console.log(`Prepared executable Visual Delta CLI (${result.cliPath}).`);
@@ -38,13 +34,6 @@ function main() {
         error instanceof Error ? error.message : String(error)
       }`,
     );
-    process.exitCode = 1;
+    Deno.exitCode = 1;
   }
-}
-
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-) {
-  main();
 }

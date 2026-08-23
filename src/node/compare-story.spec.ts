@@ -24,7 +24,7 @@ const runnerProfile = {
   arm64ImageDigest: `sha256:${"c".repeat(64)}`,
   nodeVersion: "24",
   npmVersion: "12",
-  pnpmVersion: "10",
+  denoVersion: "2.9.5",
   playwrightVersion: "1",
   browsers: ["chromium"],
   browserVersions: { chromium: "fixture" },

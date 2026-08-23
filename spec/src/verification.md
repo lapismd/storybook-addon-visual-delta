@@ -19,17 +19,17 @@ The following table names the primary evidence. Related tests can add confidence
 
 | Requirements                                                                                            | Primary implementation evidence                                                                                                                                                                                                                                                | Primary automated evidence                                                                                                                                                                                                                                                          | Audit state                             |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `VD-ARCH-001`, `VD-ARCH-002`, `VD-ARCH-003`, `VD-ARCH-004`, `VD-ARCH-005`                               | `src/manager.tsx`, `src/preview.ts`, `src/node/middleware.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/node/visual-artifacts.ts`, `src/node/cached-actual.ts`, `src/playwright/suite.ts`, `src/node/run-hub.ts` | Artifact-path, cached-actual, recursively dereferenced external snapshot staging, fresh-workspace warm dependency relinking, writable isolated linked-package staging including workspace configuration and build identity, capture-runner, compare-story, portable-host, runtime-instance, reload, and panel browser tests | Conforming |
+| `VD-ARCH-001`, `VD-ARCH-002`, `VD-ARCH-003`, `VD-ARCH-004`, `VD-ARCH-005`, `VD-ARCH-006`                | `src/manager.tsx`, `src/preview.ts`, `src/node/middleware.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/node/visual-artifacts.ts`, `src/node/cached-actual.ts`, `src/playwright/suite.ts`, `src/node/run-hub.ts`, `deno.json`, `lapismd-workspace.json`, `scripts/check-runtime-boundaries.ts` | Artifact-path, cached-actual, recursively dereferenced external snapshot staging, frozen Deno install and source-link synchronization, capture-runner, compare-story, portable-host, runtime-instance, Deno task graph, runtime-boundary audit, npm package lint, reload, and panel browser tests | Conforming |
 | `VD-CONF-001`, `VD-CONF-002`, `VD-CONF-003`, `VD-CONF-004`, `VD-CONF-005`, `VD-CONF-006`, `VD-CONF-007`, `VD-CONF-008` | `src/constants.ts`, `src/visual-diff-sidecar.ts`, `src/shared/project-defaults.ts`, `src/node/project-config.ts`, `src/node/options.ts`, `src/node/capture-runner.ts`, `src/preview/init.ts`, `src/shared/story-config.ts`, `src/shared/capabilities.ts`, `src/shared/manager-options.ts`, `src/panel/settings.ts`, `src/panel/image-comparison.ts`, `src/panel/load-playwright-diff.ts`, `src/panel/BaselineHistoryView.tsx`, `src/panel/ConfigurationPanel.tsx`, `src/playwright/config.ts`, `src/playwright/compare-pixels.ts`, `src/shared/environments.ts`, `src/shared/capture-profile.ts` | `src/shared/project-defaults.spec.ts`, `src/playwright/compare-pixels.spec.ts`, `src/node/playwright-threshold.spec.ts`, `src/panel/image-comparison.spec.ts`, `src/panel/settings.spec.ts`, `src/panel/ConfigurationPanel.spec.tsx`, `src/panel/BaselineHistoryView.spec.tsx`, `src/node/project-config.spec.ts` (capture workspace ignore validation and round trip), `src/node/capture-runner.spec.ts`, `src/node/options.spec.ts`, `src/shared/capabilities.spec.ts`, `src/playwright/config.spec.ts`, `src/shared/environments.spec.ts`, `src/shared/capture-profile.spec.ts`, `src/node/story-source.spec.ts` | Conforming |
-| `VD-API-001`, `VD-API-002`, `VD-API-003`, `VD-API-004`, `VD-API-005`, `VD-API-006`, `VD-API-007`, `VD-API-008`, `VD-API-009`, `VD-API-010`, `VD-API-011` | `package.json`, `scripts/check-npm-release.mjs`, `scripts/prepare-cli-bin.mjs`, `src/node/cli.ts`, `src/node/doctor.ts`, `src/node/init-scaffold.ts`, `src/node/middleware.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/node/baseline-migration.ts`, `src/node/story-facts.ts`, `src/shared/compare-story-types.ts`, `src/shared/story-facts.ts`, `src/manager/run-visual.ts`, `src/manager/visual-filters.ts`, `src/node/run-hub.ts`, `src/panel/chromium-capture.ts` | Doctor installation, inventory, read-only, output, CLI, registry/local pinned-image fallback, capture-runner, packed-source worker detection, TypeScript package-manifest compiler resolution, ANSI-preserving compare-story log-stream, explicit-target comparison, migration, story-facts, filter, run-hub, executable package-bin, package dry-run, and host middleware tests | Conforming |
+| `VD-API-001`, `VD-API-002`, `VD-API-003`, `VD-API-004`, `VD-API-005`, `VD-API-006`, `VD-API-007`, `VD-API-008`, `VD-API-009`, `VD-API-010`, `VD-API-011` | `package.json`, `scripts/check-npm-release.mjs`, `scripts/prepare-cli-bin.ts`, `src/node/cli.ts`, `src/node/doctor.ts`, `src/node/init-scaffold.ts`, `src/node/middleware.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/node/baseline-migration.ts`, `src/node/story-facts.ts`, `src/shared/compare-story-types.ts`, `src/shared/story-facts.ts`, `src/manager/run-visual.ts`, `src/manager/visual-filters.ts`, `src/node/run-hub.ts`, `src/panel/chromium-capture.ts` | Doctor installation, inventory, read-only, output, CLI, registry/local pinned-image fallback, capture-runner, packed-source worker detection, TypeScript package-manifest compiler resolution, ANSI-preserving compare-story log-stream, explicit-target comparison, migration, story-facts, filter, run-hub, executable package-bin, package dry-run, and host middleware tests | Conforming |
 | `VD-BASE-001`, `VD-BASE-002`, `VD-BASE-003`, `VD-BASE-004`, `VD-BASE-005`, `VD-BASE-006`, `VD-BASE-007`, `VD-BASE-008` | `src/node/snapshot-paths.ts`, `src/node/visual-artifacts.ts`, `src/shared/baseline-url.ts`, `src/node/baseline-vite-plugin.ts`, `src/node/story-facts.ts`, `src/node/visual-sidecars.ts`, `src/manager/run-visual.ts`, `src/playwright/suite.ts`, `src/preview/normalize.ts` | Artifact path, version 4 result, browser-only path, migration, story-facts, preview, manager, host baseline, interaction tests, and browser-matrix inspection of `.visual-delta/artifacts` | Partial: gaps VD-GAP-001 and VD-GAP-002; committed PNG cutover separately gated |
-| `VD-CAP-001`, `VD-CAP-002`, `VD-CAP-003`, `VD-CAP-004`, `VD-CAP-005`, `VD-CAP-006`, `VD-CAP-007` | `src/playwright/config.ts`, `src/playwright/readiness.ts`, `src/playwright/suite.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/panel/capture.ts`, `src/preview/capture-ready.ts`, `src/preview/render-lifecycle.ts`, `src/shared/capture-target.ts`, `src/shared/preview-layout.ts`, `src/shared/geometry-mismatch.ts`, `src/shared/failure-mode.ts`, `scripts/capture-example-baselines.mjs` | `src/playwright/config.spec.ts`, `src/playwright/write-diff-artifacts.spec.ts`, `src/node/capture-runner.spec.ts`, `src/node/compare-story.spec.ts`, `src/shared/failure-mode.spec.ts`, `src/shared/baseline-readiness.spec.ts`, `src/shared/capture-target.spec.ts`, `src/shared/preview-layout.spec.ts`, `src/shared/geometry-mismatch.spec.ts`, `src/preview/capture-ready.spec.ts`, `src/preview/render-lifecycle.spec.ts`, `src/panel/capture.spec.ts`, responsive manager geometry acceptance, `scripts/capture-example-baselines.spec.mjs`, `pnpm test:browsers`, overlay browser tests | Partial: gap VD-GAP-003 |
+| `VD-CAP-001`, `VD-CAP-002`, `VD-CAP-003`, `VD-CAP-004`, `VD-CAP-005`, `VD-CAP-006`, `VD-CAP-007` | `src/playwright/config.ts`, `src/playwright/readiness.ts`, `src/playwright/suite.ts`, `src/node/capture-runner.ts`, `src/node/compare-story.ts`, `src/panel/capture.ts`, `src/preview/capture-ready.ts`, `src/preview/render-lifecycle.ts`, `src/shared/capture-target.ts`, `src/shared/preview-layout.ts`, `src/shared/geometry-mismatch.ts`, `src/shared/failure-mode.ts`, `scripts/capture-example-baselines.mjs` | `src/playwright/config.spec.ts`, `src/playwright/write-diff-artifacts.spec.ts`, `src/node/capture-runner.spec.ts`, `src/node/compare-story.spec.ts`, `src/shared/failure-mode.spec.ts`, `src/shared/baseline-readiness.spec.ts`, `src/shared/capture-target.spec.ts`, `src/shared/preview-layout.spec.ts`, `src/shared/geometry-mismatch.spec.ts`, `src/preview/capture-ready.spec.ts`, `src/preview/render-lifecycle.spec.ts`, `src/panel/capture.spec.ts`, responsive manager geometry acceptance, `scripts/capture-example-baselines.spec.mjs`, `deno task test:browsers`, overlay browser tests | Partial: gap VD-GAP-003 |
 | `VD-UI-001`, `VD-UI-002`, `VD-UI-003`, `VD-UI-004`, `VD-UI-005`, `VD-UI-006`, `VD-UI-007`, `VD-UI-008`, `VD-UI-009`, `VD-UI-010`, `VD-UI-011`, `VD-UI-012`, `VD-UI-013` | `.storybook/preview.ts`, `src/panel/Panel.tsx`, `src/panel/PanelView.tsx`, `src/panel/PanelStatusBar.tsx`, `src/panel/EnvironmentSplitButton.tsx`, `src/panel/environment-selection.ts`, `src/panel/VisualDeltaHeader.tsx`, `src/panel/BaselineAccordion.tsx`, `src/panel/ModeSelector.tsx`, `src/panel/PlacementPad.tsx`, `src/panel/CompareZoomControl.tsx`, `src/panel/hooks.ts`, `src/panel/settings.ts`, `src/panel/capture.ts`, `src/panel/capture-diagnostics.ts`, `src/panel/load-playwright-diff.ts`, `src/preview/init.ts`, `src/preview/normalize.ts`, `src/preview/overlay.ts`, `src/preview/capture-ready.ts`, `src/panel/usePlaySteps.ts`, `src/manager/review-layout.ts`, `src/manager/run-visual.ts`, `src/manager.tsx`, `src/manager/VisualTestProvider.tsx`, `src/manager/VisualFiltersMenu.tsx`, `src/manager/visual-filters.ts`, `src/shared/overlay-session.ts`, `src/shared/baseline-image-readiness.ts`, `src/shared/compare-zoom.ts`, `src/shared/preview-chip.ts`, `src/shared/capabilities.ts`, `src/shared/ansi-log.ts` | Panel component tests including `src/panel/ModeSelector.spec.tsx`, `src/panel/PlacementPad.spec.tsx`, `src/panel/CompareZoomControl.spec.tsx`, `src/panel/capture-diagnostics.spec.ts`, `src/panel/settings.spec.ts`, `src/panel/environment-selection.spec.ts`, `src/panel/PanelStatusBar.spec.tsx` (running footer Stop remains operable while the dynamically labelled non-modal log is open), `src/shared/ansi-log.spec.ts`, `src/manager/run-visual-mutation-events.spec.ts` (locally active baseline-write identity), `src/manager/review-layout.spec.ts`, `src/manager/VisualFiltersMenu.spec.tsx`, `src/manager/visual-filters.spec.ts`, `src/preview/init.spec.ts`, `src/preview/normalize.spec.ts`, `src/preview/overlay-image-error.spec.ts`, `src/shared/overlay-session.spec.ts`, `src/shared/baseline-image-readiness.spec.ts`, `src/shared/preview-layout.spec.ts`, `src/shared/preview-chip.spec.ts`, `src/shared/capabilities.spec.ts`, embedded placement reset, diagonal converging Fit icon and reduced-motion styling, icon-only zoom tooltip coverage, placement-pad-sized column split mode preview/lightbox, centered menu-thumbnail and single-choice image-only coverage, ANSI-running Panel Shell and wide/narrow panel acceptance including cancellation with the expanded log open, compare-story stream preservation with immediate sidecar capture diagnostics independent of artifact hydration, compare-view and preview lifecycle tests, manager story-switch including pre-dispatch baseline progress, authoritative mode selection and globals-remount persistence, persisted overlay/zoom navigation and reload, delayed image paint, responsive canonical-width Fit, fingerprinted and labelled actual-versus-baseline hydration with captured-mode placement controls, teaching-fixture mutation gating, long-accordion geometry and scroll acceptance, mobile review-drawer restoration, and manager/panel profile-browser selector, exact-overlay, dynamic browser-filter, coverage-gap, persistence, and footer-geometry coverage | Partial: gap VD-GAP-005                 |
 | `VD-RUN-001`, `VD-RUN-002`, `VD-RUN-003`, `VD-RUN-004`, `VD-RUN-005`, `VD-RUN-006`, `VD-RUN-007` | `package.json`, `playwright.config.ts`, `tests/visual/storybook.spec.ts`, `src/shared/action-scope.ts`, `src/node/static-build.ts`, `src/node/canonical-build-cache.ts`, `src/node/affected-visual-tests.ts`, `src/node/capture-runner.ts`, `src/node/visual-test-cli.ts`, `src/node/compare-story.ts`, `src/playwright/suite.ts`, `src/node/run-hub.ts`, `src/manager/run-visual.ts`, `src/manager/VisualTestProvider.tsx`, `src/manager/visual-test-module-prefs.ts`, `src/manager/VisualTestModuleUI.tsx`, `src/panel/Panel.tsx` | Package self-test Playwright and stats-generation configuration, exact-baseline capture-selection tests, `scripts/package-storybook-build.spec.mjs`, `src/shared/action-scope.spec.ts`, `src/node/static-build.spec.ts`, `src/node/canonical-build-cache.spec.ts` including bounded retention, `src/node/affected-visual-tests.spec.ts` including scoped v2-to-v3 migration, `src/node/affected-plan-cache.spec.ts`, middleware index-only selected and visible-scope planning tests, `src/node/capture-runner.spec.ts` including one-container dependency-install reuse, `src/node/visual-test-cli.spec.ts` including partial story-browser reuse, `src/playwright/suite.spec.ts`, `src/node/compare-story.spec.ts`, `src/node/run-hub.spec.ts`, `src/manager/run-visual-reconnect.spec.ts`, run-presentation reconciliation tests, `src/manager/review-updates-from-results.spec.ts`, `tests/manager.spec.ts`; downstream read-only exact/affected planning, cached and repeated fresh exact capture, partial multi-story reuse, and strict missing-baseline scope validation | Conforming |
 | `VD-MUT-001`, `VD-MUT-002`, `VD-MUT-003`, `VD-MUT-004`, `VD-MUT-005`, `VD-MUT-006`, `VD-MUT-007`, `VD-MUT-008` | `src/shared/interaction-capture.ts`, `src/node/baseline-cli.ts`, `src/node/middleware.ts`, `src/node/delete-baseline.ts`, `src/node/story-source.ts`, `src/node/story-source-formatter.ts`, `src/node/doctor.ts`, `src/node/change-set-store.ts`, `src/manager/run-visual.ts`, `src/panel/Panel.tsx`, `src/manager/AcceptSplitButton.tsx`, `scripts/ui-generator/pipeline/visual-interaction-update.ts` | `src/node/baseline-cli.spec.ts`, `src/shared/interaction-capture.spec.ts`, `src/node/delete-baseline.spec.ts`, `src/node/story-source.spec.ts` (single-write grouped review batches and fail-closed formatter staging), `src/node/story-source-formatter.spec.ts`, `src/node/init-scaffold.spec.ts`, `src/node/doctor.spec.ts`, `src/node/change-set-store.spec.ts`, `src/node/portable-host.spec.ts` (resolved mutation path identity and formatter forwarding), `src/manager/review-updates-from-results.spec.ts`, host middleware and writer tests | Conforming |
 | `VD-VCS-001`, `VD-VCS-002`, `VD-VCS-003`, `VD-VCS-004`, `VD-VCS-005`, `VD-VCS-006`                      | `src/node/baseline-history-vcs.ts`, `src/node/change-set-store.ts`, `src/node/change-set-vcs.ts`, `src/shared/workflow-config.ts`                                                                                                                                              | `src/node/baseline-history-vcs.spec.ts`, `src/node/change-set-store.spec.ts`, and `src/node/change-set-vcs.spec.ts`; real Jujutsu fixtures are skipped only when `jj` is unavailable, while mock-based adapter coverage always runs | Conforming                              |
 | `VD-HOST-001`, `VD-HOST-002`, `VD-HOST-003`, `VD-HOST-004`, `VD-HOST-005`, `VD-HOST-006`, `VD-HOST-007`, `VD-HOST-008`, `VD-HOST-009` | UI `.storybook/main.ts` + `visual-delta-preset.ts`, package `.storybook/main.ts` self-test catalog (sibling / packaged fixture mounts and checkout-local writers), `playwright.panel.config.ts`, `playwright.manager.config.ts`, host-stub stories, `src/storybook.css`, `src/storybook/catalog-layout.ts`, `scripts/ui-generator`, `scripts/storybook-process.mjs`, root `package.json` | `src/playwright/config.spec.ts`, `scripts/package-storybook-build.spec.mjs`, Storybook process tests, `src/storybook/catalog-layout.spec.ts`, host path and static-freshness tests, middleware tests, interaction tests, package panel and manager browser tests on macOS and Linux | Partial: gap VD-GAP-002                 |
-| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`, `VD-GOV-008`, `VD-GOV-009`, `VD-GOV-010`, `VD-GOV-011`, `VD-GOV-012`, `VD-GOV-013`, `VD-GOV-014`, `VD-GOV-015` | `spec/book.toml`, `AGENTS.md`, `package.json`, `docker/visual-delta-ci/Dockerfile`, `scripts/check-ci-image.mjs`, `scripts/check-npm-release.mjs`, `scripts/verify-npm-provenance.mjs`, `scripts/check-spec-structure.mjs`, `scripts/check-spec-first.mjs`, `.github/workflows/publish-visual-delta-ci.yml`, `.github/workflows/visual-delta-spec-first.yml`, `.github/workflows/visual-delta-ci.yml`, `.github/workflows/npm-publish.yml`, `.github/workflows/capture-canonical-panel-baselines.yml`, `.github/workflows/publish-storybook-pages.yml`, `README.md` | `scripts/check-ci-image.spec.mjs`, `scripts/check-npm-release.spec.mjs`, `scripts/verify-npm-provenance.spec.mjs`, `scripts/check-spec-structure.spec.mjs`, `scripts/check-spec-first.spec.mjs`, native x64 and ARM64 image smoke, published manifest inspection, package-tooling image-consumption inspection, Visual Delta pull-request plus `main`- and `master`-push trigger inspection, mdBook build, Markdown lint, workflow Node 24 action-runtime inspection, GitHub Pages workflow structure and static-build completeness checks, `pnpm audit`, release package dry-run, Sigstore verification, aggregate-check wiring, authorized canonical baseline-artifact capture, and package/panel/browser-matrix/manager CI | Partial only for the separately authorized canonical baseline capture; image publication, native smoke, and Pages workflow are verified |
+| `VD-GOV-001`, `VD-GOV-002`, `VD-GOV-003`, `VD-GOV-004`, `VD-GOV-005`, `VD-GOV-006`, `VD-GOV-007`, `VD-GOV-008`, `VD-GOV-009`, `VD-GOV-010`, `VD-GOV-011`, `VD-GOV-012`, `VD-GOV-013`, `VD-GOV-014`, `VD-GOV-015`, `VD-GOV-016`, `VD-GOV-017` | `spec/book.toml`, `AGENTS.md`, `CHANGELOG.md`, `package.json`, `.changeset/config.json`, `docker/visual-delta-ci/Dockerfile`, `scripts/check-ci-image.mjs`, `scripts/check-npm-release.mjs`, `scripts/verify-npm-provenance.mjs`, `scripts/check-release-intent.mjs`, `scripts/ensure-release-tag.mjs`, `spec-validator.config.mjs`, `.github/workflows/publish-visual-delta-ci.yml`, `.github/workflows/visual-delta-spec-first.yml`, `.github/workflows/visual-delta-ci.yml`, `.github/workflows/release.yml`, `.github/workflows/npm-publish.yml`, `.github/workflows/capture-canonical-panel-baselines.yml`, `.github/workflows/publish-storybook-pages.yml`, `README.md` | `scripts/check-ci-image.spec.mjs`, `scripts/check-npm-release.spec.mjs`, `scripts/verify-npm-provenance.spec.mjs`, `scripts/check-release-intent.spec.mjs`, `scripts/ensure-release-tag.spec.mjs`, shared validator regression tests, configured repository script lanes, native x64 and ARM64 image smoke, published manifest inspection, package-tooling image-consumption inspection, Visual Delta pull-request plus `main`- and `master`-push trigger inspection, mdBook build, Markdown lint, workflow Node 24 action-runtime inspection, GitHub Pages workflow structure and static-build completeness checks, `deno task audit:runtime`, `deno task audit:dependencies`, release package dry-run, Sigstore verification, aggregate-check wiring, authorized canonical baseline-artifact capture, and package/panel/browser-matrix/manager CI | Partial: Deno 2.9.5 image publication and native smoke require separate authorization; canonical baseline capture remains separately authorized |
 
 ## 2026-08-05 story source formatting audit
 
@@ -44,7 +44,7 @@ gate.
 option. Direct manager mutations format staged source in process, packaged
 baseline writers receive the formatter through explicit CLI arguments, and
 grouped review writes finish all formatting before their single physical write
-pass. `pnpm spec:check`, both TypeScript configurations, all 544 package tests,
+pass. `deno task spec:check`, both TypeScript configurations, all 544 package tests,
 and the Node build pass. A downstream Mira probe expands the compact
 four-status array with Mira's own Prettier installation; Mira's specification,
 catalog, full non-browser quality gate, and static Storybook build also pass.
@@ -62,7 +62,7 @@ Primary-baseline CLI updates now preserve review tags by default and expose
 to UI-triggered baseline writers so interactive review behavior remains
 unchanged. Focused baseline-writer and portable-host tests verify both the
 default preservation path and the UI opt-in without duplicate flags. The 16
-focused tests, all 546 package tests, `pnpm spec:check`, both TypeScript
+focused tests, all 546 package tests, `deno task spec:check`, both TypeScript
 configurations, and the Node build pass.
 
 ## Current conformance gaps
@@ -145,17 +145,17 @@ The 2026-07-28 audit began from the current package source and excluded unrelate
 
 | Check                                                    | Result                               | Scope                                                                           |
 | -------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
-| `pnpm --filter @lapismd/storybook-addon-visual-delta typecheck` | Passed                        | Package TypeScript                                                              |
-| `pnpm exec vitest run --project visual-delta`            | Passed: 85 files, 341 tests          | Package unit and component behavior                                             |
+| `deno task typecheck` | Passed                        | Package TypeScript                                                              |
+| `deno task test --project visual-delta`            | Passed: 85 files, 341 tests          | Package unit and component behavior                                             |
 | Focused host baseline, middleware, and interaction tests | Passed: 3 files, 59 tests            | Catalog adapters and exact mutation behavior                                    |
 | Same-story preview readiness browser regression          | Passed                               | Exact marker, manager readiness, and stopped progress after a controls rerender |
 | Specification link and requirement validation            | Passed: 13 pages, 68 requirements    | Markdown links, index coverage, IDs, traceability, and package-root policy      |
 | Specification structure and spec-first checker tests     | Passed: 19 tests                     | Governance classifier and structural failure modes                              |
 | Canonical Markdown lint and mdBook build                 | Passed                               | Source formatting and generated-book integrity                                  |
-| `pnpm visual-delta test --affected --dry-run --explain`  | Passed: conservative 358-story scope | Read-only full-suite fallback after configuration change                        |
-| `pnpm test:panel` (sibling package)                      | Passed after gated panel baseline refresh | Panel shell screenshots refreshed for baseline-row action chrome after sibling extract |
+| `deno task visual-delta:self test --affected --dry-run --explain`  | Passed: conservative 358-story scope | Read-only full-suite fallback after configuration change                        |
+| `deno task test:panel` (sibling package)                      | Passed after gated panel baseline refresh | Panel shell screenshots refreshed for baseline-row action chrome after sibling extract |
 
-Panel shell screenshot mismatches from the prior monorepo audit (baseline-row action icons) were refreshed with an explicit gated Playwright update after sibling extract. Compare-only `pnpm test:panel` is the ongoing gate.
+Panel shell screenshot mismatches from the prior monorepo audit (baseline-row action icons) were refreshed with an explicit gated Playwright update after sibling extract. Compare-only `deno task test:panel` is the ongoing gate.
 
 This table records one audit, not a permanent guarantee. Update it when a specification change adds evidence or changes a conformance state.
 
@@ -265,7 +265,7 @@ Use the smallest tier that covers the changed boundary, then add broader checks 
 Run:
 
 ```bash
-pnpm spec:check
+deno task spec:check
 ```
 
 The command validates:
@@ -285,8 +285,8 @@ The command validates:
 Run:
 
 ```bash
-pnpm --filter @lapismd/storybook-addon-visual-delta typecheck
-pnpm exec vitest run --project visual-delta
+deno task typecheck
+deno task test --project visual-delta
 ```
 
 Add focused host tests when paths, source patches, middleware, interactions, or review tags change.
@@ -296,8 +296,8 @@ Add focused host tests when paths, source patches, middleware, interactions, or 
 Run:
 
 ```bash
-pnpm exec vitest run src/node/doctor.spec.ts src/node/change-set-store.spec.ts
-pnpm build:node
+deno task test src/node/doctor.spec.ts src/node/change-set-store.spec.ts
+deno task build:node
 node dist/node/cli.js doctor --json
 ```
 
@@ -311,7 +311,7 @@ also run the same read-only command from a freshly packed tarball.
 Run:
 
 ```bash
-pnpm visual-delta test --affected --dry-run --explain
+deno task visual-delta:self test --affected --dry-run --explain
 ```
 
 The explanation must show selected stories, changed inputs, and any conservative fallback. This command must not build, capture, or update snapshots.
@@ -321,7 +321,7 @@ The explanation must show selected stories, changed inputs, and any conservative
 Run panel browser acceptance on an unused checkout-local lane:
 
 ```bash
-STORYBOOK_PORT=your_unused_base_port pnpm test:visual-delta-panel
+STORYBOOK_PORT=your_unused_base_port deno task test:panel
 ```
 
 Do not stop another checkout’s listener. Browser acceptance remains compare-only.
@@ -331,7 +331,7 @@ Do not stop another checkout’s listener. Browser acceptance remains compare-on
 Run:
 
 ```bash
-pnpm test:browsers
+deno task test:browsers
 ```
 
 This creates an ignored temporary Storybook fixture, runs Chromium, Firefox,
@@ -344,7 +344,7 @@ creates or updates a committed baseline.
 Run focused package and host tests, panel browser acceptance, then the complete compare suite:
 
 ```bash
-pnpm test:visual
+deno task test:visual
 ```
 
 Never pass `--update-snapshots` during verification. Baseline changes require the explicit mutation workflow from [Mutations and review](./mutations-and-review.md).
@@ -358,19 +358,19 @@ no snapshot updates):
 
 | Job | Command surface |
 | --- | --- |
-| Package typecheck and unit tests | `pnpm typecheck`, `pnpm test` |
-| Browser-matrix acceptance | `pnpm test:browsers` |
-| Panel browser acceptance | `pnpm test:panel` |
-| Manager browser acceptance | `pnpm test:manager` (live Storybook + host stubs; packaged fixture baselines under `tests/fixtures/visual-baselines`) |
+| Package typecheck and unit tests | `deno task typecheck`, `deno task test` |
+| Browser-matrix acceptance | `deno task test:browsers` |
+| Panel browser acceptance | `deno task test:panel` |
+| Manager browser acceptance | `deno task test:manager` (live Storybook + host stubs; packaged fixture baselines under `tests/fixtures/visual-baselines`) |
 
-Specification-first enforcement remains a separate required workflow (see [Specification governance](./spec-governance.md)). Host catalog `pnpm test:visual` stays in the UI repository.
+Specification-first enforcement remains a separate required workflow (see [Specification governance](./spec-governance.md)). Host catalog `deno task test:visual` stays in the UI repository.
 
 ### GitHub Pages Storybook deployment
 
 `.github/workflows/publish-storybook-pages.yml` builds the package Storybook
 after pushes to `main` and on manual dispatch. Its x64 build job uses the
 repository CI image, installs the frozen dependency graph, runs
-`pnpm build-storybook` with `VISUAL_DELTA_PACKAGE_BASELINES=1`, verifies
+`deno task build-storybook` with `VISUAL_DELTA_PACKAGE_BASELINES=1`, verifies
 `index.html`, `iframe.html`, and `index.json`, and uploads only
 `storybook-static`. The explicit baseline-fixture selection prevents an
 optional sibling host checkout from entering the public artifact. The build
@@ -381,11 +381,11 @@ separate `github-pages` job deploys that artifact with `pages: write` and
 Before relying on the first deployment, run:
 
 ```bash
-VISUAL_DELTA_PACKAGE_BASELINES=1 pnpm build-storybook
+VISUAL_DELTA_PACKAGE_BASELINES=1 deno task build-storybook
 test -f storybook-static/index.html
 test -f storybook-static/iframe.html
 test -f storybook-static/index.json
-pnpm spec:check
+deno task spec:check
 ```
 
 These commands are read-only with respect to committed baselines. The workflow
@@ -397,7 +397,7 @@ source before the first deployment.
 `src/shared/preview-layout.spec.ts` MUST prove that CSSOM border widths for
 non-painted `none` and `hidden` sides do not alter reconstructed geometry under
 the supported DOM test runtime. `scripts/check-ci-image.spec.mjs` MUST prove
-that each `pnpm test:browsers` run step restores `HOME=/root` inside its job
+that each `deno task test:browsers` run step restores `HOME=/root` inside its job
 container, without introducing workflow- or job-scoped root HOME.
 
 ### Manual CI-image publication
@@ -410,11 +410,11 @@ publishes one Linux AMD64/ARM64 manifest as both the requested audit tag and
 Architecture verification parses the manifest JSON and requires exactly one
 Linux AMD64 and one Linux ARM64 child; JSON whitespace or key formatting cannot
 change that outcome.
-The Dockerfile warms the pnpm store without running project lifecycle scripts
-and installs the exact Node.js, npm, pnpm, mdBook, and Playwright Chromium,
+The Dockerfile warms the Deno dependency cache without running project lifecycle scripts
+and installs the exact Node.js, npm, Deno, mdBook, and Playwright Chromium,
 Firefox, and WebKit versions required by repository workflows.
 The native smoke runs with container-scoped `HOME=/root` and still
-requires pnpm `10.32.1` from the fixed image-owned Corepack cache. Every
+requires Deno `2.9.5` from the fixed image-owned Deno cache. Every
 publication command uses Bash, matching the workflow syntax being checked. The
 native smoke jobs and every repository run step that launches Firefox
 explicitly restore `HOME=/root` inside its container; Firefox MUST launch rather
@@ -516,7 +516,7 @@ dispatched from the default branch. It uses the immutable Linux/ARM64 profile an
 `--update-snapshots=missing` to create Linux references without replacing an
 existing one. Playwright reports a non-zero result for those newly written
 references, so the workflow continues only to its exact-set assertion and
-compare-only `pnpm test:panel` gate; both must pass before it records a checksum
+compare-only `deno task test:panel` gate; both must pass before it records a checksum
 manifest or uploads only browser-qualified panel references plus that
 manifest. Its capture job has only `contents: write` and
 `pull-requests: write`: it commits only the exact verified PNG paths to a new
@@ -524,6 +524,12 @@ automation branch and opens a review pull request, never writing to the
 selected revision. A reviewer must inspect and merge that pull request.
 
 ### npm release CI
+
+`.github/workflows/release.yml` runs on pushes to `main`. With pending
+Changesets it opens or updates the Version Packages pull request. With no
+pending Changesets on a Version Packages commit it creates the exact `vX.Y.Z`
+tag matching `package.json` when absent. Pull-request Spec First enforces
+`deno task release:intent` except on the `changeset-release/main` branch.
 
 `.github/workflows/npm-publish.yml` runs only on `v*` tag pushes. It validates
 the exact stable version and public manifest, runs all release gates, publishes

@@ -4,9 +4,7 @@ LABEL org.opencontainers.image.source="https://github.com/lapismd/storybook-addo
 
 ENV CI=true \
     DEBIAN_FRONTEND=noninteractive \
-    COREPACK_HOME=/corepack \
-    PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH \
+    DENO_DIR=/deno-dir \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update \
@@ -16,14 +14,35 @@ RUN apt-get update \
     fontconfig \
     git \
     jq \
+    unzip \
   && rm -rf /var/lib/apt/lists/* \
   && npm install --global npm@12.0.2 \
-  && npm cache clean --force \
-  && corepack enable \
-  && corepack prepare pnpm@10.32.1 --activate \
-  && pnpm config set store-dir /pnpm/store
+  && npm cache clean --force
 
 ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+    amd64) \
+      deno_target="x86_64-unknown-linux-gnu"; \
+      deno_sha256="8b010a3b1a4a0188a67cdb8a7a27348b2a501af78aec7fc74f2ace167368d530" \
+      ;; \
+    arm64) \
+      deno_target="aarch64-unknown-linux-gnu"; \
+      deno_sha256="6b7cae3a8fc4385a59dea3146fcb8bad7fea4230e0ad36a8c692afacbc254be0" \
+      ;; \
+    *) \
+      echo "Unsupported Deno architecture: $TARGETARCH" >&2; \
+      exit 1 \
+      ;; \
+  esac \
+  && deno_archive="deno-${deno_target}.zip" \
+  && curl --fail --location --silent --show-error \
+    "https://github.com/denoland/deno/releases/download/v2.9.5/${deno_archive}" \
+    --output "/tmp/${deno_archive}" \
+  && echo "${deno_sha256}  /tmp/${deno_archive}" | sha256sum --check --strict \
+  && unzip -q "/tmp/${deno_archive}" -d /usr/local/bin \
+  && rm "/tmp/${deno_archive}" \
+  && deno --version | head -n 1 | grep -Fx "deno 2.9.5 (stable, release, ${deno_target})"
+
 RUN case "$TARGETARCH" in \
     amd64) \
       mdbook_target="x86_64-unknown-linux-musl"; \
@@ -49,17 +68,21 @@ RUN case "$TARGETARCH" in \
 
 WORKDIR /build
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json deno.json deno.lock ./
 
-RUN pnpm install --frozen-lockfile --ignore-scripts \
-  && pnpm exec playwright install --with-deps chromium firefox webkit \
+RUN jq 'del(.links)' deno.json > deno.container.json \
+  && mv deno.container.json deno.json \
+  && jq 'del(.workspace.links)' deno.lock > deno.container.lock \
+  && mv deno.container.lock deno.lock \
+  && deno ci \
+  && node ./node_modules/playwright/cli.js install --with-deps chromium firefox webkit \
   && rm -rf /var/lib/apt/lists/*
 
 RUN test "$(node --version)" = "v24.15.0" \
   && test "$(npm --version)" = "12.0.2" \
-  && test "$(pnpm --version)" = "10.32.1" \
+  && test "$(deno --version | head -n 1 | cut -d' ' -f2)" = "2.9.5" \
   && mdbook --version | grep -Fx "mdbook v0.5.4" \
-  && pnpm exec playwright --version | grep -Fx "Version 1.61.1" \
+  && node ./node_modules/playwright/cli.js --version | grep -Fx "Version 1.61.1" \
   && test -n "$(find /ms-playwright -type f \( -name chrome -o -name headless_shell \) -perm -u=x -print -quit)" \
   && test -n "$(find /ms-playwright -type f -name firefox -perm -u=x -print -quit)" \
   && test -n "$(find /ms-playwright -type f -name MiniBrowser -perm -u=x -print -quit)"

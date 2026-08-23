@@ -35,22 +35,17 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: deno task ci:install
 
-      - name: Lint the canonical specification
-        run: pnpm spec:lint
-
-      - name: Validate the canonical specification
-        run: pnpm spec:validate
-
-      - name: Build the mdBook
-        run: pnpm spec:build
-
-      - name: Test the specification checkers
-        run: pnpm spec:test
-
-      - name: Enforce specification-first changes
+      - name: Run configured specification gate
         run: >-
-          pnpm spec:first --
+          deno task spec:check
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
+
+      - name: Enforce public package release intent
+        if: github.head_ref != 'changeset-release/main'
+        run: >-
+          deno task release:intent
           --base "${{ github.event.pull_request.base.sha }}"
           --head "${{ github.event.pull_request.head.sha }}"

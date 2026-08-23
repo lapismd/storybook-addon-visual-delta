@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "name": "storybook-addon-visual-delta",
+    "packages": ["@lapismd/storybook-addon-visual-delta"],
+    "workspaceRoot": ".."
+  },
+  "links": [
+    {
+      "name": "@lapismd/spec-validator",
+      "path": "../spec-validator",
+      "revision": "de3048715910942b86160cefb6ac413abd32da3b",
+      "range": "0.1.0",
+      "requiredExports": ["."],
+      "requiredFiles": ["dist/index.js", "dist/cli.js"]
+    },
+    {
+      "name": "@lapismd/workspace-tools",
+      "path": "../spec-validator/packages/workspace-tools",
+      "revision": "de3048715910942b86160cefb6ac413abd32da3b",
+      "range": "0.1.0",
+      "requiredExports": [".", "./cli"],
+      "requiredFiles": ["src/cli.ts"]
+    }
+  ]
+}

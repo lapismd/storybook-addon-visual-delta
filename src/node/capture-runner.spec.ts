@@ -46,7 +46,7 @@ const fixtureProfile = {
   arm64ImageDigest: `sha256:${"c".repeat(64)}`,
   nodeVersion: "24",
   npmVersion: "12",
-  pnpmVersion: "10",
+  denoVersion: "2.9.5",
   playwrightVersion: "1",
   browsers: ["chromium"],
   browserVersions: { chromium: "fixture" },
@@ -132,7 +132,7 @@ describe("capture runner", () => {
       false,
     );
     expect(
-      shouldStageVisualDeltaWorkspacePath(".turbo/cache/manifest.json"),
+      shouldStageVisualDeltaWorkspacePath(".deno/cache/manifest.json"),
     ).toBe(false);
     expect(
       shouldStageVisualDeltaWorkspacePath("storybook-static/index.json"),
@@ -223,16 +223,16 @@ describe("capture runner", () => {
     }
   });
 
-  it("excludes generated Turbo manifests from the post-run artifact inventory", () => {
+  it("excludes generated Deno manifests from the post-run artifact inventory", () => {
     const root = mkdtempSync(path.join(process.cwd(), ".visual-delta-audit-"));
     const original = path.join(root, "original");
     const staged = path.join(root, "staged");
     mkdirSync(path.join(original, "snapshots"), { recursive: true });
     mkdirSync(path.join(staged, "snapshots"), { recursive: true });
-    mkdirSync(path.join(staged, ".turbo", "cache"), { recursive: true });
+    mkdirSync(path.join(staged, ".deno", "cache"), { recursive: true });
     writeFileSync(path.join(staged, "snapshots", "card-chromium.json"), "{}\n");
     writeFileSync(
-      path.join(staged, ".turbo", "cache", "manifest.json"),
+      path.join(staged, ".deno", "cache", "manifest.json"),
       "{}\n",
     );
     mkdirSync(path.join(staged, ".nx", "cache"), { recursive: true });
@@ -305,9 +305,9 @@ describe("capture runner", () => {
     expect(command.slice(0, 2)).toEqual(["bash", "-lc"]);
     expect(command[2]).toContain('if [ -f "$marker" ]');
     expect(command[2]).toContain(
-      "pnpm install --frozen-lockfile --offline",
+      "deno install --frozen --cached-only",
     );
-    expect(command[2]).toContain("pnpm install --frozen-lockfile");
+    expect(command[2]).toContain("deno ci");
     expect(command[2]).toContain('exec "$@"');
     expect(command.slice(4)).toEqual([
       "node",
@@ -344,12 +344,12 @@ describe("capture runner", () => {
       JSON.stringify({ name: "@lapismd/storybook-addon-visual-delta" }),
     );
     writeFileSync(
-      path.join(packageRoot, "pnpm-lock.yaml"),
-      "lockfileVersion: '9.0'\n",
+      path.join(packageRoot, "deno.lock"),
+      '{"version":"5"}\n',
     );
     writeFileSync(
-      path.join(packageRoot, "pnpm-workspace.yaml"),
-      "packages: []\noverrides:\n  react: 19.2.7\n",
+      path.join(packageRoot, "deno.json"),
+      '{"nodeModulesDir":"auto","links":["../missing"]}\n',
     );
     writeFileSync(path.join(packageRoot, "src", "preview.ts"), "export {};\n");
     writeFileSync(
@@ -380,8 +380,8 @@ describe("capture runner", () => {
         readFileSync(path.join(stagedRoot, "dist", "node", "cli.js"), "utf8"),
       ).toBe("export {};\n");
       expect(
-        readFileSync(path.join(stagedRoot, "pnpm-workspace.yaml"), "utf8"),
-      ).toContain("react: 19.2.7");
+        readFileSync(path.join(stagedRoot, "deno.json"), "utf8"),
+      ).not.toContain("links");
       expect(existsSync(path.join(stagedRoot, "node_modules", "host-only"))).toBe(
         false,
       );
@@ -416,7 +416,7 @@ describe("capture runner", () => {
         linkedPackageRoot: linkedPackage!.containerRoot,
       });
       expect(command[2]).toContain(
-        'pnpm --dir "$linked_root" install --frozen-lockfile --ignore-scripts',
+        '(cd "$linked_root" && deno ci)',
       );
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -429,8 +429,8 @@ describe("capture runner", () => {
     const seed = (root: string) => {
       mkdirSync(path.join(root, "packages", "ui", "src"), { recursive: true });
       writeFileSync(path.join(root, "package.json"), '{"name":"fixture"}\n');
-      writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-      writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+      writeFileSync(path.join(root, "deno.lock"), '{"version":"5"}\n');
+      writeFileSync(path.join(root, "deno.json"), '{"workspace":["packages/*"]}\n');
       writeFileSync(path.join(root, "packages/ui/package.json"), '{"name":"ui"}\n');
       writeFileSync(path.join(root, "packages/ui/src/index.ts"), "export {};\n");
     };
@@ -584,7 +584,7 @@ describe("capture runner", () => {
     mkdirSync(configDir, { recursive: true });
     writeFileSync(
       path.join(configDir, "runner.mjs"),
-      `export default { id: "fixture", kind: "custom", profile: { schemaVersion: 1, id: "fixture", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", pnpmVersion: "10", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }, async run() { return { exitCode: 0, profile: this.profile }; } };\n`,
+      `export default { id: "fixture", kind: "custom", profile: { schemaVersion: 1, id: "fixture", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", denoVersion: "2.9.5", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }, async run() { return { exitCode: 0, profile: this.profile }; } };\n`,
     );
     try {
       await expect(resolveVisualDeltaCaptureRunner(root)).resolves.toMatchObject({
@@ -608,7 +608,7 @@ describe("capture runner", () => {
     writeFileSync(path.join(stage, "generated.txt"), contents);
     writeFileSync(
       path.join(configDir, "runner.mjs"),
-      `const profile = { schemaVersion: 1, id: "fixture", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", pnpmVersion: "10", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }; export default { id: "fixture", kind: "custom", profile, async run() { return { exitCode: 0, profile, stagedArtifactRoot: ${JSON.stringify(stage)}, stagedArtifacts: [{ relativePath: "generated.txt", sha256: ${JSON.stringify(hash)} }] }; } };\n`,
+      `const profile = { schemaVersion: 1, id: "fixture", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", denoVersion: "2.9.5", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }; export default { id: "fixture", kind: "custom", profile, async run() { return { exitCode: 0, profile, stagedArtifactRoot: ${JSON.stringify(stage)}, stagedArtifacts: [{ relativePath: "generated.txt", sha256: ${JSON.stringify(hash)} }] }; } };\n`,
     );
     try {
       await expect(
@@ -632,7 +632,7 @@ describe("capture runner", () => {
     mkdirSync(configDir, { recursive: true });
     writeFileSync(
       path.join(configDir, "runner.mjs"),
-      `const profile = { schemaVersion: 1, id: "declared", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", pnpmVersion: "10", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }; export default { id: "fixture", kind: "custom", profile, async run() { return { exitCode: 0, profile: { ...profile, id: "different" } }; } };\n`,
+      `const profile = { schemaVersion: 1, id: "declared", os: "linux", architecture: "arm64", image: "fixture", imageDigest: "sha256:${"a".repeat(64)}", arm64ImageDigest: "sha256:${"c".repeat(64)}", nodeVersion: "24", npmVersion: "12", denoVersion: "2.9.5", playwrightVersion: "1", browsers: ["chromium"], browserVersions: { chromium: "fixture" }, locale: "en-GB", timezoneId: "Europe/London", colorScheme: "light", reducedMotion: "reduce", viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1, rendering: { animations: "disabled", caret: "hide", screenshotScale: "device" }, fontManifestSha256: "sha256:${"b".repeat(64)}" }; export default { id: "fixture", kind: "custom", profile, async run() { return { exitCode: 0, profile: { ...profile, id: "different" } }; } };\n`,
     );
     try {
       await expect(

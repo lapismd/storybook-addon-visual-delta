@@ -27,7 +27,7 @@ const WALK_IGNORES = new Set([
   ".jj",
   ".cache",
   ".svelte-kit",
-  ".turbo",
+  ".deno",
   "blob-report",
   "coverage",
   "dist",
@@ -375,7 +375,7 @@ function isBuiltInGlobalInput(file: string): boolean {
     file === ".visual-delta/runner.mjs" ||
     file === "package.json" ||
     file.endsWith("/package.json") ||
-    /^(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?)$/i.test(
+    /^(?:deno\.lock|package-lock\.json)$/i.test(
       file,
     ) ||
     /^playwright(?:\.[^/]+)?\.config\.[cm]?[jt]s$/i.test(file) ||

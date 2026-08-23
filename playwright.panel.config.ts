@@ -20,7 +20,7 @@ const panelVisualPort = Number(
 const skipStaticBuild = process.env.VISUAL_DELTA_PANEL_SKIP_STATIC_BUILD === "1";
 const staticServerCommand = skipStaticBuild
   ? `python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`
-  : `pnpm build-storybook && python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`;
+  : `deno task build-storybook && python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`;
 
 /** Shared webServer + ports for package Storybook acceptance. */
 export function visualDeltaPackageStorybookOverride(
@@ -51,7 +51,7 @@ export function visualDeltaPackageStorybookOverride(
           options.includeHostStubs
             ? " VISUAL_DELTA_INCLUDE_HOST_STUBS=1"
             : ""
-        } pnpm storybook:ci`,
+        } deno task storybook:ci`,
         url: `http://127.0.0.1:${panelStorybookPort}/index.json`,
         cwd: packageRoot,
         reuseExistingServer: false,

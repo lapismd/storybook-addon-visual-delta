@@ -9,12 +9,10 @@ import {
 } from "./story-source-formatter.js";
 
 const passthroughScript = `
-let source = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => { source += chunk; });
-process.stdin.on("end", () => {
-  process.stdout.write("// formatted " + process.argv[1] + "\\n" + source);
-});
+const source = await new Response(Deno.stdin.readable).text();
+await Deno.stdout.write(
+  new TextEncoder().encode("// formatted " + Deno.args[0] + "\\n" + source),
+);
 `;
 
 describe("story source formatter", () => {
@@ -28,7 +26,7 @@ describe("story source formatter", () => {
         source: "export const Demo = {};\n",
         formatter: {
           command: process.execPath,
-          args: ["-e", passthroughScript, "{filePath}"],
+          args: ["eval", passthroughScript, "{filePath}"],
         },
       });
 
@@ -53,15 +51,11 @@ describe("story source formatter", () => {
 
   it("forwards a formatter through repeatable CLI arguments", () => {
     const formatter: StorySourceFormatter = {
-      command: "pnpm",
-      args: ["exec", "prettier", "--stdin-filepath", "{filePath}"],
+      command: "prettier",
+      args: ["--stdin-filepath", "{filePath}"],
     };
     expect(storySourceFormatterCliArgs(formatter)).toEqual([
       "--story-source-formatter-command",
-      "pnpm",
-      "--story-source-formatter-arg",
-      "exec",
-      "--story-source-formatter-arg",
       "prettier",
       "--story-source-formatter-arg",
       "--stdin-filepath",

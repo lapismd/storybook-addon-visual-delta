@@ -230,8 +230,8 @@ export function decideStorybookStaticBuild(options: {
         shouldBuild: false,
         reason: "skip-build-missing",
         message: !indexExists
-          ? "storybook-static/index.json missing — run `pnpm build-storybook` once"
-          : "storybook-static incomplete (missing iframe.html) — run `pnpm build-storybook`",
+          ? "storybook-static/index.json missing — run `deno task build-storybook` once"
+          : "storybook-static incomplete (missing iframe.html) — run `deno task build-storybook`",
       };
     }
     return {

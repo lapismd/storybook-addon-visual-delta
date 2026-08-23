@@ -104,7 +104,7 @@ const config: StorybookConfig = {
           showToolbarStatusLabels: true,
           addonSrcDir: path.join(packageRoot, "src"),
           // The package cannot discover its own published bin through
-          // `pnpm exec`; build and invoke the checkout-local CLI instead.
+          // a package-manager bin; build and invoke the checkout-local CLI instead.
           visualUpdateArgs: packageVisualUpdateArgs,
           visualInteractionUpdateArgs: packageVisualInteractionUpdateArgs,
         },

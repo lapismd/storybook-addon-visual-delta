@@ -141,9 +141,9 @@ jobs:
           test "$(uname -m)" = "x86_64"
           cd /build
           node --version
-          pnpm --version
+          deno --version
           mdbook --version
-          pnpm exec playwright --version
+          playwright --version
           node --input-type=module <<'NODE'
           import { chromium, firefox, webkit } from "playwright";
           for (const browserType of [chromium, firefox, webkit]) {
@@ -159,7 +159,7 @@ jobs:
     outputs:
       node_version: ${{ steps.provenance.outputs.node_version }}
       npm_version: ${{ steps.provenance.outputs.npm_version }}
-      pnpm_version: ${{ steps.provenance.outputs.pnpm_version }}
+      deno_version: ${{ steps.provenance.outputs.deno_version }}
       playwright_version: ${{ steps.provenance.outputs.playwright_version }}
       browser_versions: ${{ steps.provenance.outputs.browser_versions }}
       font_manifest_sha256: ${{ steps.provenance.outputs.font_manifest_sha256 }}
@@ -181,12 +181,12 @@ jobs:
           cd /build
           node_version="$(node -p 'process.versions.node')"
           npm_version="$(npm --version)"
-          pnpm_version="$(pnpm --version)"
-          playwright_version="$(pnpm exec playwright --version | awk '{print $2}')"
+          deno_version="$(deno --version | sed -n '1s/^deno //p')"
+          playwright_version="$(playwright --version | awk '{print $2}')"
           mdbook_version="$(mdbook --version | awk '{print $2}')"
           test "$node_version" = "24.15.0"
           test "$npm_version" = "12.0.2"
-          test "$pnpm_version" = "10.32.1"
+          test "$deno_version" = "2.9.5"
           test "$playwright_version" = "1.61.1"
           test "$mdbook_version" = "v0.5.4"
           command -v fc-list >/dev/null
@@ -224,17 +224,17 @@ jobs:
             --arg architecture "arm64" \
             --arg nodeVersion "$node_version" \
             --arg npmVersion "$npm_version" \
-            --arg pnpmVersion "$pnpm_version" \
+            --arg denoVersion "$deno_version" \
             --arg playwrightVersion "$playwright_version" \
             --arg mdbookVersion "$mdbook_version" \
             --argjson browserVersions "$browser_versions" \
             --arg fontManifestSha256 "$font_manifest_sha256" \
-            '{architecture: $architecture, nodeVersion: $nodeVersion, npmVersion: $npmVersion, pnpmVersion: $pnpmVersion, playwrightVersion: $playwrightVersion, mdbookVersion: $mdbookVersion, browserVersions: $browserVersions, fontManifestSha256: $fontManifestSha256}' \
+            '{architecture: $architecture, nodeVersion: $nodeVersion, npmVersion: $npmVersion, denoVersion: $denoVersion, playwrightVersion: $playwrightVersion, mdbookVersion: $mdbookVersion, browserVersions: $browserVersions, fontManifestSha256: $fontManifestSha256}' \
             > "$evidence_dir/native-evidence.json"
           {
             printf 'node_version=%s\n' "$node_version"
             printf 'npm_version=%s\n' "$npm_version"
-            printf 'pnpm_version=%s\n' "$pnpm_version"
+            printf 'deno_version=%s\n' "$deno_version"
             printf 'playwright_version=%s\n' "$playwright_version"
             printf 'browser_versions=%s\n' "$browser_versions"
             printf 'font_manifest_sha256=%s\n' "$font_manifest_sha256"
@@ -262,7 +262,7 @@ jobs:
           ARM64_IMAGE_DIGEST: ${{ needs.publish.outputs.arm64_digest }}
           NODE_VERSION: ${{ needs.smoke-arm64.outputs.node_version }}
           NPM_VERSION: ${{ needs.smoke-arm64.outputs.npm_version }}
-          PNPM_VERSION: ${{ needs.smoke-arm64.outputs.pnpm_version }}
+          DENO_VERSION: ${{ needs.smoke-arm64.outputs.deno_version }}
           PLAYWRIGHT_VERSION: ${{ needs.smoke-arm64.outputs.playwright_version }}
           BROWSER_VERSIONS: ${{ needs.smoke-arm64.outputs.browser_versions }}
           FONT_MANIFEST_SHA256: ${{ needs.smoke-arm64.outputs.font_manifest_sha256 }}
@@ -277,7 +277,7 @@ jobs:
             --arg arm64ImageDigest "$ARM64_IMAGE_DIGEST" \
             --arg nodeVersion "$NODE_VERSION" \
             --arg npmVersion "$NPM_VERSION" \
-            --arg pnpmVersion "$PNPM_VERSION" \
+            --arg denoVersion "$DENO_VERSION" \
             --arg playwrightVersion "$PLAYWRIGHT_VERSION" \
             --argjson browserVersions "$BROWSER_VERSIONS" \
             --arg fontManifestSha256 "$FONT_MANIFEST_SHA256" \
@@ -291,7 +291,7 @@ jobs:
               arm64ImageDigest: $arm64ImageDigest,
               nodeVersion: $nodeVersion,
               npmVersion: $npmVersion,
-              pnpmVersion: $pnpmVersion,
+              denoVersion: $denoVersion,
               playwrightVersion: $playwrightVersion,
               browsers: ["chromium", "firefox", "webkit"],
               browserVersions: $browserVersions,

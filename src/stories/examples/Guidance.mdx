@@ -68,7 +68,7 @@ warnings stay off for happy-path stories.
   failure or empty state. Treat panel warnings / heatmaps as the demo, not a
   broken catalog.
 - Match baselines are live captures of the Example stage
-  (<code>pnpm examples:baselines:capture</code>). Diff HTML should pass on Match
+  (<code>deno task examples:baselines:capture</code>). Diff HTML should pass on Match
   stories at 1×. A **geometry** warning (mismatched CSS box sizes) is not
   expected — report that as a bug in the Examples wiring. Intentional Difference
   and similar demos are meant to fail Diff HTML.

@@ -29,6 +29,7 @@ These requirements preserve ownership and trustworthy state across process bound
 | VD-ARCH-003 | A story lifecycle MUST distinguish unknown, rendering, ready, running, complete, cancelled, and failed states where applicable. Actions that need a ready render MUST stay disabled while readiness is unknown or rendering. |
 | VD-ARCH-004 | Baseline PNGs and story configuration are durable inputs. Derived actual, diff, result, static-output, run, and affected-cache evidence MUST live outside `snapshotDir`, be safe to regenerate, and never be mistaken for a committed baseline. |
 | VD-ARCH-005 | Failure in one boundary MUST produce a typed or structured failure at its caller. It MUST NOT silently mutate another boundary, broaden scope, or report success.                                                            |
+| VD-ARCH-006 | Deno 2.9.5 MUST own dependency installation, the repository task graph, first-party test and automation entry points, and the root lockfile. Root dependencies MUST use manually installed isolated `node_modules` with a reviewed lifecycle-script allowlist. Compatible npm tooling MAY run through Deno, and established npm exports plus the explicit Node and Playwright adapters MUST remain supported. No other package-manager or task-graph orchestration may remain active. Colocated LapisMD packages MUST be declared, validated, built source-first, and synchronized without rewriting tracked source or publishing local paths. |
 
 ## End-to-end data flow
 
@@ -66,7 +67,7 @@ installed compiler from TypeScript's exported package manifest, so package
 export restrictions on the `bin/tsc` subpath do not masquerade as a missing
 compiler. Published consumers use the package's shipped worker even when
 Storybook executes an exported file under the tarball's included `src/` tree.
-Each fresh consumer staging directory runs a frozen install so pnpm recreates
+Each fresh consumer staging directory runs a frozen install so Deno recreates
 package-local links omitted from the staged copy. A completed dependency-volume
 marker changes that install to offline mode; it never suppresses the install.
 When the consumer's package manifest explicitly links the initiating Visual
@@ -74,7 +75,7 @@ Delta source checkout from outside the workspace, the runner copies the current
 source, built output, lockfile, and workspace configuration into disposable
 writable staging, mounts it at the
 link's resolved container path, and supplies a separate container dependency
-volume. The writable copy lets pnpm set executable package bins without
+volume. The writable copy lets Deno set executable package bins without
 mutating the host checkout. This keeps linked development live without importing
 host-platform `node_modules` into the canonical Linux profile.
 The runner also records a content-only fingerprint of the linked package

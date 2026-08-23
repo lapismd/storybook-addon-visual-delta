@@ -115,7 +115,7 @@ async function getBrowser(
     launched = await playwright[browserName].launch({ headless: true });
   } catch (error) {
     throw new Error(
-      `Could not launch ${visualDeltaBrowserLabel(browserName)}. Run \`pnpm exec playwright install ${browserName}\`. ${
+      `Could not launch ${visualDeltaBrowserLabel(browserName)}. Run \`deno task playwright:install\`. ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
