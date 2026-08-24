@@ -1,26 +1,48 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "repository": {
     "name": "storybook-addon-visual-delta",
     "packages": ["@lapismd/storybook-addon-visual-delta"],
-    "workspaceRoot": ".."
+    "workspaceRoot": "..",
+    "tasks": {
+      "build": {
+        "inputs": ["src", "scripts", "package.json", "deno.json"],
+        "outputs": ["dist/node/index.js", "dist/node/cli.js"]
+      }
+    }
   },
   "links": [
     {
       "name": "@lapismd/spec-validator",
       "path": "../spec-validator",
-      "revision": "de3048715910942b86160cefb6ac413abd32da3b",
+      "revision": "91327a119b1cf7c081feb6c54c6190f277e382d6",
       "range": "0.1.0",
+      "direction": "dependency",
       "requiredExports": ["."],
-      "requiredFiles": ["dist/index.js", "dist/cli.js"]
+      "build": {
+        "task": "build",
+        "inputs": [
+          "src",
+          "scripts",
+          "packages/workspace-tools/src",
+          "package.json",
+          "deno.json"
+        ],
+        "outputs": ["dist/index.js", "dist/cli.js"]
+      }
     },
     {
       "name": "@lapismd/workspace-tools",
       "path": "../spec-validator/packages/workspace-tools",
-      "revision": "de3048715910942b86160cefb6ac413abd32da3b",
+      "revision": "91327a119b1cf7c081feb6c54c6190f277e382d6",
       "range": "0.1.0",
-      "requiredExports": [".", "./cli"],
-      "requiredFiles": ["src/cli.ts"]
+      "direction": "dependency",
+      "requiredExports": [".", "./cli", "./schema"],
+      "build": {
+        "task": null,
+        "inputs": [],
+        "outputs": ["src/cli.ts", "schema/lapismd-workspace.schema.json"]
+      }
     }
   ]
 }

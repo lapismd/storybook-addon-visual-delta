@@ -71,6 +71,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "build": "deno task build",
     "build:node": "deno task build:node",
     "visual-delta:self": "deno task visual-delta:self",
     "typecheck": "deno task typecheck",

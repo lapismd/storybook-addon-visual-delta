@@ -5,6 +5,19 @@
 Addon demos, panel/manager acceptance stories, and **browseable documentation**
 live in this package Storybook. The root Deno tasks are canonical.
 
+From a clean checkout with the declared sibling repositories in their expected
+adjacent paths, bootstrap the repository with:
+
+```bash
+deno task ci
+deno task workspace:check
+deno task workspace:sync
+```
+
+The committed `deno.json.links` entries provide native Deno resolution.
+Workspace synchronization complements them only for npm-compatible tools that
+require package and executable links under `node_modules`.
+
 ```bash
 deno task storybook
 deno task build-storybook

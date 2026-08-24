@@ -1,4 +1,16 @@
 {
+  "name": "@lapismd/storybook-addon-visual-delta",
+  "version": "0.0.6",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preview": "./src/preview.ts",
+    "./preset": "./src/preset.ts",
+    "./manager": "./src/manager.tsx",
+    "./visual-capture": "./src/shared/visual-capture-step.ts",
+    "./playwright": "./dist/playwright/index.js",
+    "./node": "./dist/node/index.js",
+    "./runner": "./dist/runner/index.js"
+  },
   "nodeModulesDir": "manual",
   "nodeModulesLinker": "isolated",
   "links": [
@@ -17,6 +29,7 @@
     "ci:install": "deno task ci:bootstrap && deno task ci && deno task workspace:sync",
     "workspace:check": "deno run --no-prompt --allow-read ../spec-validator/packages/workspace-tools/src/cli.ts links check",
     "workspace:sync": "deno run --no-prompt --allow-read --allow-write ../spec-validator/packages/workspace-tools/src/cli.ts links sync",
+    "build": "deno task build:node",
     "build:node": "deno task version:check && tsc -p tsconfig.node-build.json && deno run --no-prompt --allow-read=./dist --allow-write=./dist ./scripts/prepare-cli-bin.ts",
     "visual-delta:self": "deno task build:node && deno run -A ./dist/node/cli.js",
     "typecheck": "deno task version:check && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node-build.json --noEmit",

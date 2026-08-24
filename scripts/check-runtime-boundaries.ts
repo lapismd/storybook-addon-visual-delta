@@ -140,10 +140,42 @@ for (const adapter of compatibilityAdapters) {
 const config = JSON.parse(
   Deno.readTextFileSync(new URL("deno.json", repositoryRoot)),
 ) as {
+  name?: string;
+  version?: string;
+  exports?: Record<string, string>;
+  links?: string[];
   nodeModulesDir?: string;
   nodeModulesLinker?: string;
   tasks?: Record<string, string>;
 };
+const packageManifest = JSON.parse(
+  Deno.readTextFileSync(new URL("package.json", repositoryRoot)),
+) as { name?: string; version?: string };
+if (
+  config.name !== packageManifest.name ||
+  config.version !== packageManifest.version
+) {
+  findings.push("deno.json: package name and version must match package.json");
+}
+for (
+  const packageExport of [
+    ".",
+    "./preview",
+    "./preset",
+    "./manager",
+    "./visual-capture",
+    "./playwright",
+    "./node",
+    "./runner",
+  ]
+) {
+  if (typeof config.exports?.[packageExport] !== "string") {
+    findings.push(`deno.json: missing portable export ${packageExport}`);
+  }
+}
+if (!Array.isArray(config.links)) {
+  findings.push("deno.json: native sibling links must be explicit");
+}
 if (!config.tasks?.["version:check"] || !config.tasks?.["workspace:sync"]) {
   findings.push("deno.json: exact-version or workspace-link task is missing");
 }

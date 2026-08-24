@@ -28,9 +28,11 @@ Keep portable behavior in the package and repository policy in host adapters. Do
 ## Colocated sibling dependencies
 
 - Declare each colocated LapisMD sibling in `lapismd-workspace.json`; validate
-  and synchronize only those owned links with `deno task workspace:check` and
-  `deno task workspace:sync`. Do not add a sibling repository as a Deno
-  workspace member.
+  its dependency path in the tracked root `deno.json.links`, and validate both
+  contracts with `deno task workspace:check`. Use `deno task workspace:sync`
+  only for the owned `node_modules` package and bin links required by
+  npm-compatible tooling. Do not add a sibling repository as a Deno workspace
+  member or run `deno link` during bootstrap.
 - Keep publishable manifests portable. Do not vendor sibling source, edit its
   `node_modules`, or replace a local checkout with a registry copy.
 - When a sibling exports built output, rebuild it before validating this
