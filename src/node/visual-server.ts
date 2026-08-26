@@ -28,6 +28,7 @@ async function isStaticServerHealthy(port: number): Promise<boolean> {
   try {
     for (const url of urls) {
       const response = await fetch(url, {
+        method: "HEAD",
         signal: AbortSignal.timeout(2_000),
       });
       if (!response.ok) return false;

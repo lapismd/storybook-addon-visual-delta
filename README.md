@@ -6,6 +6,9 @@
 
 Visual Delta is a local-first visual regression testing addon for Storybook. It compares stories with committed Playwright screenshots and adds baseline review, overlays, diffs, and visual test controls to Storybook.
 
+Public npm releases use Changesets and exact `vX.Y.Z` tags; see
+[npm release administration](./DEVELOPMENT.md#npm-release-administration).
+
 ## Requirements
 
 - A Storybook project using Vite
