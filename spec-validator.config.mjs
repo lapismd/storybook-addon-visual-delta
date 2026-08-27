@@ -87,7 +87,7 @@ export default defineConfig(tableRequirements(), {
       ],
       conditional: {
         "package.json":
-          'visual-delta|storybook|test:|spec:|markdownlint|playwright|"checks"|publishConfig|repository|private|"version"|release:',
+          'visual-delta|storybook|test:|spec:|markdownlint|playwright|"checks"|publishConfig|repository|private|release:',
       },
     },
   },

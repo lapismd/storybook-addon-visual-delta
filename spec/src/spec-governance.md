@@ -77,6 +77,17 @@ On a pull request, the required **Visual Delta Spec First / Validate Visual Delt
 
 The gate reports every protected path when no canonical content page changed. If it cannot obtain or parse a trustworthy change set, it fails closed. Remediation is to update the relevant stable requirement and [verification evidence](./verification.md), not to add a token spec edit or weaken path protection.
 
+Generated Version Packages pull requests apply release metadata that was already
+authorized by merged Changesets. The pull-request Spec First workflow still
+validates the generated branch, but a `package.json` version-only line change,
+generated `CHANGELOG.md` entry, and deletion of consumed `.changeset/` files do
+not require a fresh canonical chapter edit. Protected package-manifest behavior
+remains guarded: scripts, Storybook and Visual Delta wiring, checks, repository
+metadata, publish configuration, privacy, Playwright wiring, markdownlint/spec
+tooling, and release commands still trigger Spec First when their lines change.
+The generated release commit remains gated later by exact tag, package,
+publication, provenance, audit, and clean-consumer checks.
+
 Structural validation MUST reject a reintroduced `specs/` tree and any package-root Markdown set other than `AGENTS.md`, `DEVELOPMENT.md`, `README.md`, and `CHANGELOG.md`.
 
 ## CI image publication

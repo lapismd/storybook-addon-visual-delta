@@ -531,6 +531,18 @@ pending Changesets on a Version Packages commit it creates the exact `vX.Y.Z`
 tag matching `package.json` when absent. Pull-request Spec First enforces
 `pnpm release:intent` except on the `changeset-release/main` branch.
 
+Version Packages PR
+[`14`](https://github.com/lapismd/storybook-addon-visual-delta/pull/14)
+showed that the generated `package.json` version bump was being treated as a
+fresh protected manifest behavior change, even though the PR only deleted
+consumed Changesets, updated `CHANGELOG.md`, and changed `"version"` from
+`0.0.6` to `0.0.7`. The configured package-manifest Spec First matcher now
+leaves generated version-only metadata outside the protected line set while
+retaining protection for scripts, repository metadata, publish configuration,
+privacy, checks, Storybook/Visual Delta wiring, Playwright, markdownlint/spec
+tooling, and release commands. The repository script coverage asserts this
+distinction.
+
 `.github/workflows/npm-publish.yml` runs only on `v*` tag pushes. It validates
 the exact stable version and public manifest, runs all release gates, publishes
 through the approved bootstrap or trusted-publisher Environment, then verifies
