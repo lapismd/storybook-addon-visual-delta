@@ -82,18 +82,14 @@ If you do not want to use `visual-delta init`, create the suite and Playwright c
 
 ```ts
 // tests/visual/storybook.spec.ts
-import {
-  defineVisualSuite,
-} from "@lapismd/storybook-addon-visual-delta/playwright";
+import { defineVisualSuite } from "@lapismd/storybook-addon-visual-delta/playwright";
 
 defineVisualSuite();
 ```
 
 ```ts
 // playwright.config.ts
-import {
-  defineVisualPlaywrightConfig,
-} from "@lapismd/storybook-addon-visual-delta/playwright";
+import { defineVisualPlaywrightConfig } from "@lapismd/storybook-addon-visual-delta/playwright";
 
 export default defineVisualPlaywrightConfig();
 ```
