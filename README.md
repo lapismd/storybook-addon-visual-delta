@@ -199,5 +199,3 @@ The default runner executes authoritative comparisons in the pinned Linux ARM64 
 ## License
 
 [MIT](./LICENSE)
-
-jj b s -r @- main &&  jj tag set --allow-move v0.0.4 -r main && jj git push -b main && git push -f origin v0.0.4
