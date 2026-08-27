@@ -18,7 +18,7 @@ export type VisualCaptureProfile = {
   arm64ImageDigest: `sha256:${string}` | null;
   nodeVersion: string;
   npmVersion: string;
-  denoVersion: string;
+  pnpmVersion: string;
   playwrightVersion: string;
   browsers: readonly VisualDeltaBrowser[];
   browserVersions: Partial<Record<VisualDeltaBrowser, string>>;
@@ -48,7 +48,7 @@ export const CANONICAL_VISUAL_CAPTURE_PROFILE: VisualCaptureProfile = {
     "sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
   nodeVersion: "24.15.0",
   npmVersion: "12.0.2",
-  denoVersion: "2.9.5",
+  pnpmVersion: "10.32.1",
   playwrightVersion: "1.61.1",
   browsers: ["chromium", "firefox", "webkit"],
   browserVersions: {

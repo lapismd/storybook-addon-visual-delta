@@ -1,9 +1,9 @@
 /**
  * Capture Example baselines from a running package Storybook (Vite).
  * Usage:
- *   VISUAL_DELTA_STORYBOOK_PORT=9109 deno task examples:baselines:capture
+ *   VISUAL_DELTA_STORYBOOK_PORT=9109 pnpm examples:baselines:capture
  *
- * Requires `deno task storybook` (or storybook:ci) on that port.
+ * Requires `pnpm storybook` (or storybook:ci) on that port.
  */
 import { chromium } from "@playwright/test";
 import { settleVisualStoryPage } from "../dist/playwright/index.js";

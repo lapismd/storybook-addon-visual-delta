@@ -125,8 +125,8 @@ test("restores root-owned HOME in every browser-matrix run step", () => {
     consumerWorkflows: {
       ...sources.consumerWorkflows,
       [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
-        "      - name: Run browser-matrix acceptance\n        env:\n          HOME: /root\n        run: deno task test:browsers",
-        "      - name: Run browser-matrix acceptance\n        run: deno task test:browsers",
+        "      - name: Run browser-matrix acceptance\n        env:\n          HOME: /root\n        run: pnpm test:browsers",
+        "      - name: Run browser-matrix acceptance\n        run: pnpm test:browsers",
       ),
     },
   });
@@ -142,7 +142,7 @@ test("requires every referenced JavaScript action to use an audited Node 24 rele
       ...sources.consumerWorkflows,
       [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
         "actions/checkout@v5",
-        "actions/checkout@v3",
+        "actions/checkout@v4",
       ),
     },
     publishWorkflow: sources.publishWorkflow.replace(
@@ -151,7 +151,7 @@ test("requires every referenced JavaScript action to use an audited Node 24 rele
     ),
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /actions\/checkout@v3/);
+  assert.match(result.errors.join("\n"), /actions\/checkout@v4/);
   assert.match(result.errors.join("\n"), /docker\/login-action@v3/);
   assert.match(result.errors.join("\n"), /Node\.js 24 allowlist/);
 });
@@ -341,12 +341,12 @@ test("rejects drift in pinned runtime and browser versions", () => {
   assert.match(result.errors.join("\n"), /devDependencies\.playwright/);
 });
 
-test("requires fixed Deno storage and Bash in publication containers", () => {
+test("requires fixed Corepack storage and Bash in publication containers", () => {
   const result = validateCiImageSources({
     ...sources,
     dockerfile: sources.dockerfile.replace(
-      "DENO_DIR=/deno-dir",
-      "DENO_DIR=/root/.cache/deno",
+      "COREPACK_HOME=/corepack",
+      "COREPACK_HOME=/root/.cache/node/corepack",
     ),
     publishWorkflow: sources.publishWorkflow.replace(
       "defaults:\n  run:\n    shell: bash",
@@ -354,7 +354,7 @@ test("requires fixed Deno storage and Bash in publication containers", () => {
     ),
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /DENO_DIR/);
+  assert.match(result.errors.join("\n"), /COREPACK_HOME/);
   assert.match(result.errors.join("\n"), /shell: bash/);
 });
 

@@ -4,6 +4,14 @@ export type {
   VisualDeltaBrowser,
 } from "../shared/environments.js";
 export {
+  isVisualReviewStatus,
+  VISUAL_COMPARE_PANE_PAD_PX,
+  VISUAL_REVIEW_TAGS,
+  visualReviewStatusFromTags,
+  visualReviewTagFor,
+  type VisualReviewStatus,
+} from "../constants.js";
+export {
   CANONICAL_VISUAL_CAPTURE_PROFILE,
   CANONICAL_VISUAL_CAPTURE_PROFILE_ID,
   validateVisualCaptureProfile,
@@ -168,7 +176,11 @@ export {
 } from "./delete-baseline.js";
 export {
   decideStorybookStaticBuild,
+  hasStorybookStaticFreshnessToken,
+  invalidateStorybookStaticFreshness,
   isStorybookStaticComplete,
+  markStorybookStaticFresh,
+  previewModulesNewerThanIndex,
   runStaticBuildSingleFlight,
   staticConfigNewerThanIndex,
   storySourcesNewerThanIndex,
@@ -195,6 +207,10 @@ export {
   type VisualRunResultItem,
   type VisualRunStreamEvent,
 } from "./middleware.js";
+export {
+  baselinePngExistsForStoryId,
+  invalidateVisualResultArtifacts,
+} from "./visual-sidecars.js";
 export {
   parseListReporterProgress,
   stripAnsi,

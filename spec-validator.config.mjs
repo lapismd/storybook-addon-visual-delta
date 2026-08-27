@@ -78,14 +78,12 @@ export default defineConfig(tableRequirements(), {
         "^(?:playwright\\.panel\\.config\\.ts|tsconfig(?:\\.[^.]+)*\\.json|AGENTS\\.md)$",
         "^(?:\\.markdownlint-cli2\\.jsonc|spec/(?:book\\.toml|Makefile))$",
         "^(?:\\.dockerignore|docker/visual-delta-ci/Dockerfile)$",
-        "^(?:deno\\.json|deno\\.lock|lapismd-workspace\\.json|\\.node-version)$",
         "^scripts/check-ci-image\\.mjs$",
-        "^scripts/audit-dependencies\\.ts$",
-        "^scripts/check-runtime-boundaries\\.ts$",
         "^scripts/check-spec-.+\\.mjs$",
         "^\\.storybook/.+\\.[cm]?[jt]sx?$",
         "^\\.github/workflows/.+\\.ya?ml$",
         "^spec-validator\\.config\\.mjs$",
+        "^pnpm-workspace\\.yaml$",
       ],
       conditional: {
         "package.json":
@@ -97,13 +95,23 @@ export default defineConfig(tableRequirements(), {
     lanes: [
       {
         name: "repository script tests",
-        command: "deno",
-        args: ["task", "test:scripts"],
+        command: "node",
+        args: [
+          "--test",
+          "./scripts/capture-example-baselines.spec.mjs",
+          "./scripts/check-ci-image.spec.mjs",
+          "./scripts/check-npm-release.spec.mjs",
+          "./scripts/check-release-intent.spec.mjs",
+          "./scripts/ensure-release-tag.spec.mjs",
+          "./scripts/package-storybook-build.spec.mjs",
+          "./scripts/prepare-cli-bin.spec.mjs",
+          "./scripts/verify-npm-provenance.spec.mjs",
+        ],
       },
       {
         name: "CI image contract",
-        command: "deno",
-        args: ["task", "ci:image:check"],
+        command: "corepack",
+        args: ["pnpm@10.32.1", "ci:image:check"],
       },
     ],
     build: true,

@@ -212,8 +212,8 @@ describe("portable Visual Delta host options", () => {
     const args = visualBaselineWriteCommandArgs(
       {
         storySourceFormatter: {
-          command: "prettier",
-          args: [ "--stdin-filepath", "{filePath}"],
+          command: "pnpm",
+          args: ["exec", "prettier", "--stdin-filepath", "{filePath}"],
         },
       },
       "/workspace",

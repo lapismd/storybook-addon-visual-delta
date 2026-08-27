@@ -35,17 +35,17 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install dependencies
-        run: deno task ci:install
+        run: pnpm install --frozen-lockfile
 
       - name: Run configured specification gate
         run: >-
-          deno task spec:check
+          pnpm spec:check
           --base "${{ github.event.pull_request.base.sha }}"
           --head "${{ github.event.pull_request.head.sha }}"
 
       - name: Enforce public package release intent
         if: github.head_ref != 'changeset-release/main'
         run: >-
-          deno task release:intent
+          pnpm release:intent
           --base "${{ github.event.pull_request.base.sha }}"
           --head "${{ github.event.pull_request.head.sha }}"

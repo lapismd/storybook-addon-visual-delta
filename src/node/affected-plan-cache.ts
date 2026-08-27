@@ -5,7 +5,7 @@ const GENERATED_DIRECTORIES = new Set([
   ".git",
   ".jj",
   ".svelte-kit",
-  ".deno",
+  ".turbo",
   "blob-report",
   "coverage",
   "dist",

@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CLI_SHEBANG, prepareCliBin } from "./prepare-cli-bin.ts";
+import { CLI_SHEBANG, prepareCliBin } from "./prepare-cli-bin.mjs";
 
 function temporaryCli(t, source) {
   const directory = mkdtempSync(path.join(os.tmpdir(), "visual-delta-cli-"));

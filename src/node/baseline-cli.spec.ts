@@ -115,8 +115,8 @@ describe("baseline CLI scoped capture", () => {
       path.join(current.snapshotDir, "fixture--one-chromium.png"),
       "existing",
     );
-    execute.mockImplementation((command, _args) => {
-      if (command === "playwright") {
+    execute.mockImplementation((_command, args) => {
+      if ((args as string[]).includes("playwright")) {
         writeFileSync(
           path.join(current.snapshotDir, "fixture--two-chromium.png"),
           "created",
@@ -135,6 +135,7 @@ describe("baseline CLI scoped capture", () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     const args = execute.mock.calls[0]?.[1] as string[];
+    expect(args).toContain("playwright");
     expect(args[args.indexOf("-g") + 1]).toContain("fixture--two");
     expect(args[args.indexOf("-g") + 1]).not.toContain("fixture--one");
   });
@@ -146,8 +147,8 @@ describe("baseline CLI scoped capture", () => {
       storyPath,
       'export const One = { tags: ["visual-approved"] };\n',
     );
-    execute.mockImplementation((command, _args) => {
-      if (command === "playwright") {
+    execute.mockImplementation((_command, args) => {
+      if ((args as string[]).includes("playwright")) {
         writeFileSync(
           path.join(current.snapshotDir, "fixture--one-chromium.png"),
           "created",

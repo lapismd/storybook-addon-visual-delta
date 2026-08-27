@@ -12,7 +12,6 @@ import {
 } from "./affected-visual-tests.js";
 import {
   DEFAULT_VISUAL_TEST_ARGS,
-  resolveVisualToolCommand,
   type VisualDeltaHostOptions,
 } from "./options.js";
 import {
@@ -442,7 +441,7 @@ export async function runVisualTestCli(
     console.log(
       `[visual-delta] Canonical Storybook build cache ${restored.reason}; rebuilding.`,
     );
-    const build = await execute("deno", ["task", "build-storybook"], root);
+    const build = await execute("pnpm", ["build-storybook"], root);
     if (build.code !== 0) return build.code;
     built = true;
   } else {
@@ -508,7 +507,8 @@ export async function runVisualTestCli(
           (options.selection === "affected" && plan.summary.fallbackReason))
       ? undefined
       : playwrightStoryIdGrep(group.storyIds);
-    const command = resolveVisualToolCommand(
+    const result = await execute(
+      "pnpm",
       [
         ...(options.testArgs?.length
           ? options.testArgs
@@ -517,10 +517,6 @@ export async function runVisualTestCli(
         ...group.browsers.flatMap((browser) => ["--project", browser]),
         ...(grep ? ["-g", grep] : []),
       ],
-    );
-    const result = await execute(
-      command.command,
-      command.args,
       root,
       {
         PLAYWRIGHT_UPDATE_SNAPSHOTS: "0",

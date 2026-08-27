@@ -32,19 +32,19 @@ jobs:
         with:
           node-version: 24.15.0
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: 2.9.5
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
 
       - name: Install dependencies
-        run: deno task ci:install
+        run: pnpm install --frozen-lockfile
 
       - name: Create or update Version Packages pull request
         id: changesets
         uses: changesets/action@v1.8.0
         with:
-          version: deno task release:version
+          version: pnpm release:version
           commit: Version Packages
           title: Version Packages
           commitMode: github-api
@@ -80,13 +80,13 @@ jobs:
         with:
           node-version: 24.15.0
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: 2.9.5
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
 
       - name: Install dependencies
-        run: deno task ci:install
+        run: pnpm install --frozen-lockfile
 
       - name: Ensure exact stable release tag
-        run: deno task release:tag --push
+        run: pnpm release:tag --push

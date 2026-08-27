@@ -80,7 +80,6 @@ import {
   resolveRoot,
   resolveSnapshotDir,
   resolveStorybookPort,
-  resolveVisualToolCommand,
   resolveVisualServerPort,
   type VisualDeltaHostOptions,
 } from "./options.js";
@@ -699,7 +698,7 @@ function runCommand(
 }
 
 /**
- * Run `deno task build-storybook` only (no Playwright capture). Streams plain-text
+ * Run `pnpm build-storybook` only (no Playwright capture). Streams plain-text
  * logs like baseline create/update so the panel status bar can show progress.
  */
 async function handleRebuildStatic(
@@ -716,7 +715,7 @@ async function handleRebuildStatic(
 
   try {
     const { code } = await runStaticBuildSingleFlight(root, () =>
-      runCommand("deno", ["task", "build-storybook"], root, undefined, (chunk) => {
+      runCommand("pnpm", ["build-storybook"], root, undefined, (chunk) => {
         res.write(chunk);
       }),
     );
@@ -876,10 +875,9 @@ async function handleBaselineWrite(
   }
 
   try {
-    const command = resolveVisualToolCommand(args);
     const { code } = await runCommand(
-      command.command,
-      command.args,
+      "pnpm",
+      args,
       root,
       { VISUAL_UPDATE_APPROVED: "1" },
       (chunk) => {
@@ -982,10 +980,9 @@ async function handleInteractionBaselineWrite(
   );
 
   try {
-    const command = resolveVisualToolCommand(args);
     const { code } = await runCommand(
-      command.command,
-      command.args,
+      "pnpm",
+      args,
       root,
       { VISUAL_UPDATE_APPROVED: "1" },
       (chunk) => {
@@ -1829,7 +1826,7 @@ function resolvedConfigPayload(
       severity: "error",
       setting: "onboarding",
       message: onboardingStatus.hint,
-      suggestion: "Run visual-delta init from the package root.",
+      suggestion: "Run pnpm exec visual-delta init from the package root.",
     });
   }
   const staticHint =

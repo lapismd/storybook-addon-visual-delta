@@ -1,4 +1,3 @@
 *
 !package.json
-!deno.json
-!deno.lock
+!pnpm-lock.yaml

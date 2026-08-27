@@ -53,17 +53,17 @@ export type VisualDeltaHostOptions = {
    */
   addonSrcDir?: string;
   /**
-   * Deno task argv, or legacy `exec <bin>` argv, for primary baseline writes.
+   * CLI argv after `pnpm` for primary baseline writes.
    * Mode flags (`--create-only`, `--story-id`, …) are appended.
    */
   visualUpdateArgs?: string[];
   /**
-   * Deno task argv, or legacy `exec <bin>` argv, for interaction baseline writes.
+   * CLI argv after `pnpm` for interaction baseline writes.
    * Story/step flags are appended.
    */
   visualInteractionUpdateArgs?: string[];
   /**
-   * Deno task argv, or legacy `exec <bin>` argv, for compare-only visual runs.
+   * CLI argv after `pnpm` for compare-only visual runs.
    * Reporter and grep flags are appended by the middleware.
    */
   visualTestArgs?: string[];
@@ -127,16 +127,6 @@ export const DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS = [
 ] as const;
 
 export const DEFAULT_VISUAL_TEST_ARGS = ["exec", "playwright", "test"] as const;
-
-export function resolveVisualToolCommand(argv: readonly string[]): {
-  command: string;
-  args: string[];
-} {
-  if (argv[0] === "exec" && argv[1]) {
-    return { command: argv[1], args: [...argv.slice(2)] };
-  }
-  return { command: "deno", args: ["task", ...argv] };
-}
 
 /** Upstream Storybook `storybook dev` default when `STORYBOOK_PORT` is unset. */
 export const DEFAULT_STORYBOOK_PORT = 6006;

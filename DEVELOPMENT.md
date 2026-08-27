@@ -3,28 +3,23 @@
 ## Package Storybook (self-test catalog)
 
 Addon demos, panel/manager acceptance stories, and **browseable documentation**
-live in this package Storybook. The root Deno tasks are canonical.
-
-From a clean checkout with the declared sibling repositories in their expected
-adjacent paths, bootstrap the repository with:
+live in this package Storybook. Prefer package scripts (standalone-ready); root
+`pnpm visual-delta:*` aliases delegate here.
 
 ```bash
-deno task ci
-deno task workspace:check
-deno task workspace:sync
-```
+# from this package
+pnpm storybook
+pnpm build-storybook
+pnpm test:panel
+pnpm test:manager
+pnpm spec:check
+pnpm examples:baselines
 
-The committed `deno.json.links` entries provide native Deno resolution.
-Workspace synchronization complements them only for npm-compatible tools that
-require package and executable links under `node_modules`.
-
-```bash
-deno task storybook
-deno task build-storybook
-deno task test:panel
-deno task test:manager
-deno task spec:check
-deno task examples:baselines
+# from the monorepo root (same commands via filter)
+pnpm visual-delta:storybook
+pnpm visual-delta:build-storybook
+pnpm test:visual-delta-panel
+pnpm visual-delta:spec:check
 ```
 
 Default port is `9109` (`VISUAL_DELTA_STORYBOOK_PORT`). Panel Playwright uses
@@ -35,7 +30,7 @@ catalog — not the UI Storybook.
 
 - **Visual Delta → Specification** — live mirror of canonical `spec/src/*.md`
   (edit the Markdown tree; Storybook does not fork the contract). mdBook remains
-  the lint/build gate (`deno task spec:check` / `spec:serve`).
+  the lint/build gate (`pnpm visual-delta:spec:check` / `spec:serve`).
 - **Examples/** — realistic demos (match/drift, gallery, interactions, modes,
   layer-flavored subjects). Baselines live under
   `tests/examples-snapshots/examples/` and are served at
@@ -44,8 +39,8 @@ catalog — not the UI Storybook.
   (`../../tests/visual/storybook.spec.ts-snapshots/examples`); nested
   `staticDirs` under `/visual-baselines` are shadowed in development. Prefer
   live captures from a running package Storybook
-  (`deno task examples:baselines:capture`, port `VISUAL_DELTA_STORYBOOK_PORT` /
-  `9109`) so Diff HTML matches the React subjects. `deno task examples:baselines`
+  (`pnpm examples:baselines:capture`, port `VISUAL_DELTA_STORYBOOK_PORT` /
+  `9109`) so Diff HTML matches the React subjects. `pnpm examples:baselines`
   is the pngjs painter fallback for geometry-only placeholders.
 - **Family Guidance** pages (Panel Shell, Panel Chrome, Testing Module, Diff
   Result, Compare Alignment, Readiness Fixture) explain self-test fixtures.
@@ -63,7 +58,7 @@ sets `VISUAL_DELTA_INCLUDE_HOST_STUBS=1` when launching `storybook:ci`.
 ### Static read-only deploy
 
 ```bash
-deno task build-storybook
+pnpm build-storybook
 # serve storybook-static — Visual Delta panel is read-only (VD-UI-008)
 ```
 
@@ -77,12 +72,12 @@ Preview fonts: `.storybook/preview.ts` and `ThemeHost` apply Storybook theming
 on `ThemeProvider` alone — it does not inject the manager’s Global styles.
 
 ```bash
-deno task test:panel      # gated panel.spec.ts (root: deno task test:panel)
-deno task test:manager    # manager/overlay (include host stubs)
-deno task spec:check      # lint + validate + mdBook + gates
+pnpm test:panel      # gated panel.spec.ts (root: pnpm test:visual-delta-panel)
+pnpm test:manager    # manager/overlay (include host stubs)
+pnpm spec:check      # lint + validate + mdBook + gates
 ```
 
-Consumer acceptance invokes these same package-owned tasks after link synchronization.
+Monorepo `pnpm checks` runs the panel suite via the root alias.
 
 ## CI image administration
 
@@ -91,8 +86,8 @@ Repository workflows use a manually published toolchain image at
 and consumption policies are
 [VD-GOV-012 and VD-GOV-013](./spec/src/spec-governance.md#normative-requirements).
 Package-tooling jobs pull `:latest` with the repository `GITHUB_TOKEN`, then run
-`deno task ci:install` to link the checkout. They do not compile
-mdBook or reinstall Node.js, npm, Deno, Playwright browsers, or Linux browser
+`pnpm install --frozen-lockfile` to link the checkout. They do not compile
+mdBook or reinstall Node.js, npm, pnpm, Playwright browsers, or Linux browser
 dependencies during the workflow.
 
 After merging an image, dependency, or pinned-tool change, dispatch **Publish
@@ -101,18 +96,18 @@ are lowercase Docker tags and cannot be reused; `latest` moves to the same
 verified multi-platform manifest. The initial tag is:
 
 ```text
-node24.15.0-deno2.9.5-playwright1.61.1-r1
+node24.15.0-pnpm10.32.1-playwright1.61.1-r1
 ```
 
-The normal rebuild triggers are changes to `package.json`, `deno.lock`,
-the CI Dockerfile, or the Node.js, npm, Deno, mdBook, or Playwright pins. A
+The normal rebuild triggers are changes to `package.json`, `pnpm-lock.yaml`,
+the CI Dockerfile, or the Node.js, npm, pnpm, mdBook, or Playwright pins. A
 stale image does not override the checked-out lockfile: every consumer still
-runs `deno task ci:install`, downloading only missing deltas.
+runs `pnpm install --frozen-lockfile`, downloading only missing deltas.
 
 Validate the policy and build the host architecture locally with:
 
 ```bash
-deno task ci:image:check
+pnpm ci:image:check
 docker buildx build --load \
   --file docker/visual-delta-ci/Dockerfile \
   --tag visual-delta-ci:local \
@@ -136,9 +131,9 @@ The repository and npm package must be public before the first release.
 ### Authoring a release change
 
 1. Make the public package change and update the canonical specification.
-2. Run `deno task changeset`. Choose a bump when consumers need a new version, or an
+2. Run `pnpm changeset`. Choose a bump when consumers need a new version, or an
    empty Changeset when the change does not require a release.
-3. Run `deno task spec:check` and the affected package gates.
+3. Run `pnpm spec:check` and the affected package gates.
 4. Merge the reviewed pull request. `.github/workflows/release.yml` creates or
    updates the Version Packages pull request.
 5. Review and merge Version Packages. The same workflow creates the exact
@@ -199,7 +194,7 @@ The Storybook preview iframe is served by Vite, so preview and overlay source
 changes use Vite HMR. Storybook's manager is different: its local addon entries
 are compiled into a one-shot esbuild bundle.
 
-The host Storybook wrapper watches Visual Delta manager and panel
+The workspace `pnpm storybook` wrapper watches Visual Delta manager and panel
 sources and restarts the **UI** Storybook to rebuild that bundle. The package
 Storybook uses the same local-source preset pattern
 (`.storybook/local-preset.ts`).

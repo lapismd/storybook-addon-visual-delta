@@ -79,11 +79,11 @@ export function inspectVisualDeltaOnboarding(
     hint = "Playwright suite and config are present.";
   } else if (!suiteReady && !playwrightConfigReady) {
     hint =
-      "Missing visual suite and Playwright config. Run: visual-delta init";
+      "Missing visual suite and Playwright config. Run: pnpm exec visual-delta init";
   } else if (!suiteReady) {
-    hint = `Missing ${SUITE_REL}. Run: visual-delta init`;
+    hint = `Missing ${SUITE_REL}. Run: pnpm exec visual-delta init`;
   } else {
-    hint = `Missing ${PLAYWRIGHT_CONFIG_REL}. Run: visual-delta init`;
+    hint = `Missing ${PLAYWRIGHT_CONFIG_REL}. Run: pnpm exec visual-delta init`;
   }
   return {
     suiteReady,

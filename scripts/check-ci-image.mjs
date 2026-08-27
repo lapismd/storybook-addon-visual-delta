@@ -9,35 +9,31 @@ export const DEFAULT_REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 const EXPECTED_DOCKERIGNORE = `*
 !package.json
-!deno.json
-!deno.lock
+!pnpm-lock.yaml
 `;
 
 const REQUIRED_DOCKERFILE_SNIPPETS = [
   "FROM node:24.15.0-bookworm",
   "fontconfig",
   "jq",
-  "unzip",
   "npm install --global npm@12.0.2",
-  "DENO_DIR=/deno-dir",
-  "deno 2.9.5",
-  "8b010a3b1a4a0188a67cdb8a7a27348b2a501af78aec7fc74f2ace167368d530",
-  "6b7cae3a8fc4385a59dea3146fcb8bad7fea4230e0ad36a8c692afacbc254be0",
+  "COREPACK_HOME=/corepack",
+  "corepack prepare pnpm@10.32.1 --activate",
   "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+  "pnpm config set store-dir /pnpm/store",
   'mdbook_target="x86_64-unknown-linux-musl"',
   'mdbook_target="aarch64-unknown-linux-musl"',
   'mdbook_sha256="5222beabd3e37dc5be0d18ff99b79058469354db5c220153a1b92db5ba12be89"',
   'mdbook_sha256="753e5c5c363ee8a56972344dcf91466f005a51db84a7aeffe427ae3ef83d6d44"',
   "https://github.com/rust-lang/mdBook/releases/download/v0.5.4/",
   "sha256sum --check --strict",
-  "deno ci",
-  "jq 'del(.workspace.links)' deno.lock",
-  "node ./node_modules/playwright/cli.js install --with-deps chromium firefox webkit",
+  "pnpm install --frozen-lockfile --ignore-scripts",
+  "pnpm exec playwright install --with-deps chromium firefox webkit",
   'test "$(node --version)" = "v24.15.0"',
   'test "$(npm --version)" = "12.0.2"',
-  'cut -d\' \' -f2)" = "2.9.5"',
+  'test "$(pnpm --version)" = "10.32.1"',
   'mdbook --version | grep -Fx "mdbook v0.5.4"',
-  'node ./node_modules/playwright/cli.js --version | grep -Fx "Version 1.61.1"',
+  'pnpm exec playwright --version | grep -Fx "Version 1.61.1"',
   "find /ms-playwright -type f -name firefox",
   "find /ms-playwright -type f -name MiniBrowser",
 ];
@@ -165,15 +161,11 @@ const PROHIBITED_CONSUMER_INSTALLS = [
   [/\bapt(?:-get)?\s+install\b/, "Linux package installation"],
 ];
 const AUDITED_NODE24_ACTIONS = new Set([
-  "actions/checkout@v4",
   "actions/checkout@v5",
-  "actions/setup-node@v4",
   "actions/configure-pages@v6",
   "actions/deploy-pages@v5",
   "actions/upload-pages-artifact@v5",
   "actions/upload-artifact@v6",
-  "changesets/action@v1.8.0",
-  "denoland/setup-deno@v2",
   "peter-evans/create-pull-request@v8",
   "docker/login-action@v4",
   "docker/setup-qemu-action@v4",
@@ -292,7 +284,7 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
     [CONSUMER_USERNAME_LINE, expected.jobs, "container username"],
     [CONSUMER_PASSWORD_LINE, expected.jobs, "container token"],
     [
-      "deno task ci:install",
+      "pnpm install --frozen-lockfile",
       expected.frozenInstalls,
       "frozen install",
     ],
@@ -354,7 +346,7 @@ function validateConsumerWorkflow(errors, pathLabel, source, expected) {
   }
   for (const step of workflowStepSections(source)) {
     if (
-      step.includes("        run: deno task test:browsers") &&
+      step.includes("        run: pnpm test:browsers") &&
       countExactLines(step, STEP_HOME_LINE) !== 1
     ) {
       errors.push(
@@ -396,10 +388,10 @@ function validateStorybookPagesWorkflow(errors, source, readme) {
     "  group: github-pages",
     "  cancel-in-progress: true",
     "  build:",
-    "deno task ci:install",
+    "pnpm install --frozen-lockfile",
     "actions/configure-pages@v6",
     'VISUAL_DELTA_PACKAGE_BASELINES: "1"',
-    "deno task build-storybook",
+    "pnpm build-storybook",
     "test -f storybook-static/index.html",
     "test -f storybook-static/iframe.html",
     "test -f storybook-static/index.json",
@@ -447,10 +439,10 @@ function validateStorybookPagesWorkflow(errors, source, readme) {
   for (const prohibited of [
     "--update-snapshots",
     "examples:baselines:capture",
-    "deno task test:panel",
-    "deno task test:manager",
-    "deno task test:browsers",
-    "deno task visual-delta:self test",
+    "pnpm test:panel",
+    "pnpm test:manager",
+    "pnpm test:browsers",
+    "pnpm visual-delta test",
   ]) {
     if ((source ?? "").includes(prohibited)) {
       errors.push(`${label}: prohibited visual command ${prohibited}`);
@@ -465,27 +457,19 @@ function validateStorybookPagesWorkflow(errors, source, readme) {
 export function validateCiImageSources({
   dockerfile,
   dockerignore,
-  denoJson,
   packageJson,
   publishWorkflow,
   consumerWorkflows,
   captureProfile,
   pagesWorkflow,
-  versionWorkflow,
   readme,
 }) {
   const errors = [];
   let manifest;
-  let denoConfig;
   try {
     manifest = JSON.parse(packageJson);
   } catch {
     errors.push("package.json: invalid JSON");
-  }
-  try {
-    denoConfig = JSON.parse(denoJson);
-  } catch {
-    errors.push("deno.json: invalid JSON");
   }
 
   if (manifest) {
@@ -497,9 +481,8 @@ export function validateCiImageSources({
       }
     }
     if (
-      manifest.scripts?.["build:node"] !== "deno task build:node" ||
-      denoConfig?.tasks?.["build:node"] !==
-        "deno task version:check && tsc -p tsconfig.node-build.json && deno run --no-prompt --allow-read=./dist --allow-write=./dist ./scripts/prepare-cli-bin.ts"
+      manifest.scripts?.["build:node"] !==
+      "tsc -p tsconfig.node-build.json && node ./scripts/prepare-cli-bin.mjs"
     ) {
       errors.push(
         "package.json: build:node must prepare the executable CLI bin",
@@ -531,7 +514,7 @@ export function validateCiImageSources({
   }
   if (dockerignore !== EXPECTED_DOCKERIGNORE) {
     errors.push(
-      ".dockerignore: build context must contain only package.json, deno.json, and deno.lock",
+      ".dockerignore: build context must contain only package.json and pnpm-lock.yaml",
     );
   }
 
@@ -580,7 +563,6 @@ export function validateCiImageSources({
       "needs: [package-gate, visual-gate]",
       "needs.visual-gate.result == 'success'",
       "test -x dist/node/cli.js",
-      "deno task audit:dependencies",
       'select(.path? == "dist/node/cli.js" and .mode? == 493)',
       'bootstrap_npmrc="$RUNNER_TEMP/visual-delta-bootstrap.npmrc"',
       "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}",
@@ -609,7 +591,7 @@ export function validateCiImageSources({
       'test "$BASELINE_WRITE_APPROVED" = "true"',
       'VISUAL_DELTA_CANONICAL_PANEL_SNAPSHOTS: "1"',
       "*-chromium.png",
-      "deno task test:panel",
+      "pnpm test:panel",
     ]) {
       requireSnippet(
         errors,
@@ -653,7 +635,6 @@ export function validateCiImageSources({
     ".github/workflows/publish-visual-delta-ci.yml": publishWorkflow,
     ...consumerWorkflows,
     ".github/workflows/publish-storybook-pages.yml": pagesWorkflow,
-    ".github/workflows/release.yml": versionWorkflow,
   })) {
     for (const reference of actionReferences(source ?? "")) {
       if (!reference || !AUDITED_NODE24_ACTIONS.has(reference)) {
@@ -673,12 +654,10 @@ export function loadCiImageSources(repoRoot = DEFAULT_REPO_ROOT) {
   return {
     dockerfile: read("docker/visual-delta-ci/Dockerfile"),
     dockerignore: read(".dockerignore"),
-    denoJson: read("deno.json"),
     packageJson: read("package.json"),
     publishWorkflow: read(".github/workflows/publish-visual-delta-ci.yml"),
     captureProfile: read("src/shared/capture-profile.ts"),
     pagesWorkflow: read(".github/workflows/publish-storybook-pages.yml"),
-    versionWorkflow: read(".github/workflows/release.yml"),
     readme: read("README.md"),
     consumerWorkflows: Object.fromEntries(
       Object.keys(EXPECTED_CONSUMER_WORKFLOWS).map((relativePath) => [

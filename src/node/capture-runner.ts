@@ -152,10 +152,10 @@ export function visualDeltaDependencyInstallKey(root: string): string {
       const relative = path.relative(root, absolute).replaceAll(path.sep, "/");
       if (
         entry.name === "package.json" ||
-        relative === "deno.lock" ||
-        relative === "deno.json" ||
+        relative === "pnpm-lock.yaml" ||
+        relative === "pnpm-workspace.yaml" ||
         relative === ".npmrc" ||
-        relative === "lapismd-workspace.json"
+        relative === ".pnpmfile.cjs"
       ) {
         inputs.push(relative);
       }
@@ -182,7 +182,7 @@ const STAGE_COPY_IGNORES = new Set([
   ".git",
   ".jj",
   ".cache",
-  ".deno",
+  ".turbo",
   "blob-report",
   "dist",
   "node_modules",
@@ -192,11 +192,11 @@ const STAGE_COPY_IGNORES = new Set([
 ]);
 const LINKED_PACKAGE_STAGE_ENTRIES = [
   ".npmrc",
-  "lapismd-workspace.json",
+  ".pnpmfile.cjs",
   "dist",
   "package.json",
-  "deno.lock",
-  "deno.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "src",
 ] as const;
 const DEFAULT_AFFECTED_CACHE_DIR_REL = ".visual-delta/cache";
@@ -458,8 +458,8 @@ export function resolveLinkedVisualDeltaPackage(options: {
     containerRoot === "/" ||
     containerRoot === DOCKER_VISUAL_DELTA_WORKER_ROOT ||
     containerRoot.startsWith(`${DOCKER_VISUAL_DELTA_WORKER_ROOT}/`) ||
-    containerRoot === "/deno-dir" ||
-    containerRoot.startsWith("/deno-dir/")
+    containerRoot === "/pnpm" ||
+    containerRoot.startsWith("/pnpm/")
   ) {
     throw new Error(
       `The Visual Delta link target cannot be mounted safely at ${containerRoot}.`,
@@ -495,8 +495,7 @@ export function stageLinkedVisualDeltaPackage(options: {
   }
   if (
     !existsSync(path.join(linkedRoot, "package.json")) ||
-    !existsSync(path.join(linkedRoot, "deno.json")) ||
-    !existsSync(path.join(linkedRoot, "deno.lock")) ||
+    !existsSync(path.join(linkedRoot, "pnpm-lock.yaml")) ||
     !existsSync(path.join(linkedRoot, "src")) ||
     !existsSync(path.join(linkedRoot, "dist", "node", "cli.js"))
   ) {
@@ -504,12 +503,6 @@ export function stageLinkedVisualDeltaPackage(options: {
       "The linked Visual Delta source is incomplete. Build it and install its frozen lockfile before capture.",
     );
   }
-  const denoConfigPath = path.join(linkedRoot, "deno.json");
-  const denoConfig = JSON.parse(readFileSync(denoConfigPath, "utf8")) as {
-    links?: unknown;
-  };
-  delete denoConfig.links;
-  writeFileSync(denoConfigPath, `${JSON.stringify(denoConfig, null, 2)}\n`);
   mkdirSync(path.join(linkedRoot, "node_modules"), { recursive: true });
   return linkedRoot;
 }
@@ -536,13 +529,7 @@ export function stageLinkedVisualDeltaBuildInput(options: {
       ]);
     }
   };
-  for (const entry of [
-    "package.json",
-    "deno.json",
-    "deno.lock",
-    "lapismd-workspace.json",
-    "src",
-  ] as const) {
+  for (const entry of ["package.json", "pnpm-lock.yaml", "src"] as const) {
     const absolute = path.join(packageRoot, entry);
     if (existsSync(absolute)) visit(absolute, entry);
   }
@@ -597,10 +584,8 @@ export function dockerVisualDeltaWorkerTransactionCommand(
         `linked_root=${JSON.stringify(options.linkedPackageRoot)}`,
         'linked_marker="$linked_root/node_modules/.visual-delta-install-ready"',
         'if [ ! -f "$linked_marker" ]; then',
-        '  (cd "$linked_root" && deno ci)',
+        '  pnpm --dir "$linked_root" install --frozen-lockfile --ignore-scripts',
         '  touch "$linked_marker"',
-        "else",
-        '  (cd "$linked_root" && deno install --frozen --cached-only)',
         "fi",
       ]
     : [];
@@ -609,9 +594,9 @@ export function dockerVisualDeltaWorkerTransactionCommand(
     ...linkedInstall,
     'marker="/workspace/node_modules/.visual-delta-install-ready"',
     'if [ -f "$marker" ]; then',
-    "  deno install --frozen --cached-only",
+    "  pnpm install --frozen-lockfile --offline",
     "else",
-    "  deno ci",
+    "  pnpm install --frozen-lockfile",
     '  touch "$marker"',
     "fi",
     'exec "$@"',
@@ -902,8 +887,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
             [
               'test "$(uname -m)" = "aarch64"',
               "test -r /workspace/package.json",
-              'test "$(deno --version | head -n 1)" = "deno 2.9.5 (stable, release, aarch64-unknown-linux-gnu)"',
-              'cd /build && playwright --version | grep -Fx "Version 1.61.1"',
+              'cd /build && pnpm exec playwright --version | grep -Fx "Version 1.61.1"',
               "test -n \"$(find /ms-playwright -type f -name firefox -perm -u=x -print -quit)\"",
               "test -n \"$(find /ms-playwright -type f -name MiniBrowser -perm -u=x -print -quit)\"",
             ].join(" && "),
@@ -942,11 +926,13 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
         manifest.argv,
       );
       const nodeModulesVolume = `visual-delta-node-modules-${key}`;
-      const denoDirVolume = `visual-delta-deno-dir-${key}`;
+      const storeVolume = `visual-delta-pnpm-store-${key}`;
       const canonicalBuildCache = path.join(
         manifest.root,
         CANONICAL_BUILD_CACHE_REL,
       );
+      const turboCache = path.join(canonicalBuildCache, "turbo");
+      mkdirSync(turboCache, { recursive: true });
       try {
         context.onEvent?.({ type: "start", profile });
         const packageWorkerRoot = await prepareVisualDeltaPackageWorker(
@@ -995,11 +981,11 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           "--mount",
           `type=volume,src=${nodeModulesVolume},dst=/workspace/node_modules`,
           "--mount",
-          `type=volume,src=${denoDirVolume},dst=/deno-dir`,
+          `type=volume,src=${storeVolume},dst=/pnpm/store`,
           "--mount",
           `type=bind,src=${canonicalBuildCache},dst=/visual-delta/canonical-build-cache`,
-          "--env",
-          "DENO_DIR=/deno-dir",
+          "--mount",
+          `type=bind,src=${turboCache},dst=/workspace/.turbo`,
           "--env",
           `${VISUAL_DELTA_CAPTURE_WORKER_ENV}=1`,
           "--env",

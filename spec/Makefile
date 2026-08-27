@@ -1,4 +1,4 @@
-DENO ?= deno
+PNPM ?= pnpm
 MDBOOK ?= mdbook
 
 .PHONY: build serve lint validate first check
@@ -10,13 +10,13 @@ serve:
 	$(MDBOOK) serve . --open
 
 lint:
-	cd .. && $(DENO) task spec:lint
+	cd ../../.. && $(PNPM) visual-delta:spec:lint
 
 validate:
-	cd .. && $(DENO) task spec:validate
+	cd ../../.. && $(PNPM) visual-delta:spec:validate
 
 first:
-	cd .. && $(DENO) task spec:first
+	cd ../../.. && $(PNPM) visual-delta:spec:first
 
 check:
-	cd .. && $(DENO) task spec:check
+	cd ../../.. && $(PNPM) visual-delta:spec:check

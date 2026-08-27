@@ -188,7 +188,7 @@ describe("runVisualTestCli exact stories", () => {
         }),
       ).resolves.toBe(0);
       expect(execute).toHaveBeenCalledTimes(2);
-      expect(execute.mock.calls[0]?.[1]).toEqual(["task", "build-storybook"]);
+      expect(execute.mock.calls[0]?.[1]).toEqual(["build-storybook"]);
 
       execute.mockClear();
       await expect(
@@ -202,10 +202,7 @@ describe("runVisualTestCli exact stories", () => {
         }),
       ).resolves.toBe(0);
       expect(execute).toHaveBeenCalledTimes(1);
-      expect(execute.mock.calls[0]?.[1]).not.toEqual([
-        "task",
-        "build-storybook",
-      ]);
+      expect(execute.mock.calls[0]?.[1]).not.toEqual(["build-storybook"]);
 
       execute.mockClear();
       vi.stubEnv("VISUAL_DELTA_FORCE_REBUILD", "1");
@@ -217,7 +214,7 @@ describe("runVisualTestCli exact stories", () => {
         fresh: true,
         runCommand: execute,
       });
-      expect(execute.mock.calls[0]?.[1]).toEqual(["task", "build-storybook"]);
+      expect(execute.mock.calls[0]?.[1]).toEqual(["build-storybook"]);
     } finally {
       vi.unstubAllEnvs();
       rmSync(root, { recursive: true, force: true });
@@ -280,7 +277,7 @@ describe("runVisualTestCli exact stories", () => {
         }),
       ).resolves.toBe(0);
       expect(execute).toHaveBeenCalledTimes(2);
-      expect(execute.mock.calls[0]?.[1]).toEqual(["task", "build-storybook"]);
+      expect(execute.mock.calls[0]?.[1]).toEqual(["build-storybook"]);
       const playwrightArgs = execute.mock.calls[1]?.[1] ?? [];
       expect(playwrightArgs).toContain("--reporter=list");
       expect(playwrightArgs).toContain("--project");

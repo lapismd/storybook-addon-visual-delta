@@ -27,12 +27,9 @@ Keep portable behavior in the package and repository policy in host adapters. Do
 
 ## Colocated sibling dependencies
 
-- Declare each colocated LapisMD sibling in `lapismd-workspace.json`; validate
-  its dependency path in the tracked root `deno.json.links`, and validate both
-  contracts with `deno task workspace:check`. Use `deno task workspace:sync`
-  only for the owned `node_modules` package and bin links required by
-  npm-compatible tooling. Do not add a sibling repository as a Deno workspace
-  member or run `deno link` during bootstrap.
+- Consume a colocated LapisMD sibling through an explicit `link:` dependency or
+  a `link:`-valued root `pnpm-workspace.yaml` override; do not add the sibling
+  repository as a workspace member.
 - Keep publishable manifests portable. Do not vendor sibling source, edit its
   `node_modules`, or replace a local checkout with a registry copy.
 - When a sibling exports built output, rebuild it before validating this
@@ -46,20 +43,19 @@ Keep portable behavior in the package and repository policy in host adapters. Do
 4. Add focused regression evidence for the changed boundary.
 5. If the change touches portable public runtime source under `src/` or root
    `package.json`, record release intent with a Changeset before the PR:
-   - Prefer `deno task changeset` (interactive), or add `.changeset/<slug>.md`
+   - Prefer `pnpm changeset` (interactive), or add `.changeset/<slug>.md`
      manually.
    - Choose `patch` / `minor` / `major` when consumers need a new version.
    - Use an empty Changeset (frontmatter with no package bump) when the public
      files changed but no release is required.
    - Summarize the consumer-visible result; do not edit `package.json` version
      or `CHANGELOG.md` by hand, and do not publish.
-   - PR CI enforces this via `deno task release:intent` (see
+   - PR CI enforces this via `pnpm release:intent` (see
      [Package releases](./spec/src/spec-governance.md#package-releases) and
      [DEVELOPMENT.md](./DEVELOPMENT.md#npm-release-administration)).
-6. Run `deno task spec:check`.
+6. Run `pnpm visual-delta:spec:check` (or `pnpm spec:check` in this package).
 7. Run package typecheck and focused unit or browser acceptance as required by [Verification](./spec/src/verification.md).
 8. Commit the verified slice with Jujutsu, including the Changeset when required.
-   This is a standing request; do not wait for the user to ask.
 
 Before handoff, run the repository checks appropriate to the change and report unrelated failures separately.
 

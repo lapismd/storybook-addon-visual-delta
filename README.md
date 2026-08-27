@@ -6,9 +6,6 @@
 
 Visual Delta is a local-first visual regression testing addon for Storybook. It compares stories with committed Playwright screenshots and adds baseline review, overlays, diffs, and visual test controls to Storybook.
 
-Public npm releases use Changesets and exact `vX.Y.Z` tags; see
-[npm release administration](./DEVELOPMENT.md#npm-release-administration).
-
 ## Requirements
 
 - A Storybook project using Vite
@@ -24,9 +21,9 @@ From your Storybook project, install and register the addon:
 
 ```bash
 npx storybook add @lapismd/storybook-addon-visual-delta
-npm install --save-dev playwright react
-npx playwright install chromium
-npx visual-delta init
+pnpm add -D playwright react
+pnpm exec playwright install chromium
+pnpm exec visual-delta init
 ```
 
 `visual-delta init` creates the Playwright suite, Playwright configuration, snapshot directory, and package scripts. It preserves existing files unless you pass `--force`.
@@ -46,7 +43,7 @@ It also adds `build-storybook`, `test:visual`, `test:visual:affected`, and `visu
 Run the fast, read-only doctor after setup or an upgrade:
 
 ```bash
-npx visual-delta doctor
+pnpm exec visual-delta doctor
 ```
 
 It validates Storybook registration, the portable Playwright suite, package
@@ -57,10 +54,10 @@ Storybook, start Docker, launch a browser, or write files.
 Use the opt-in checks and repairs when needed:
 
 ```bash
-npx visual-delta doctor --runner
-npx visual-delta doctor --build
-npx visual-delta doctor --strict --json
-npx visual-delta doctor --fix
+pnpm exec visual-delta doctor --runner
+pnpm exec visual-delta doctor --build
+pnpm exec visual-delta doctor --strict --json
+pnpm exec visual-delta doctor --fix
 ```
 
 `--runner` performs the existing Docker or custom-runner probe. `--build`
@@ -106,7 +103,7 @@ export default defineVisualPlaywrightConfig();
 Start Storybook and open a story:
 
 ```bash
-deno task storybook
+pnpm storybook
 ```
 
 Open the **Visual Delta** panel, select the browser, and choose **Create visual**. Review the captured PNG before committing it to your repository.
@@ -119,31 +116,31 @@ Check the full capture environment before the first authoritative run (the
 legacy runner-only spelling remains supported):
 
 ```bash
-npx visual-delta doctor --runner
+pnpm exec visual-delta doctor --runner
 ```
 
 Run every eligible story:
 
 ```bash
-deno task test:visual
+pnpm test:visual
 ```
 
 Run only stories affected by local changes:
 
 ```bash
-deno task test:visual:affected
+pnpm test:visual:affected
 ```
 
 Missing baselines and visual mismatches are warnings by default. Use strict mode when they should fail CI:
 
 ```bash
-npx visual-delta test --all --failure-mode strict
+pnpm exec visual-delta test --all --failure-mode strict
 ```
 
 Compare one exact story with the same runner-backed suite used by Diff Browser:
 
 ```bash
-npx visual-delta test --story-id examples-card--default --browser chromium
+pnpm exec visual-delta test --story-id examples-card--default --browser chromium
 ```
 
 Compare-only commands never create or update baselines.
@@ -175,12 +172,12 @@ Add `.visual-delta/config.json` when the built-in defaults are not suitable:
 Install local browser binaries only when developing the host-local diagnostic capture path or invoking Playwright directly:
 
 ```bash
-npx playwright install chromium firefox webkit
+pnpm exec playwright install chromium firefox webkit
 ```
 
 `captureWorkspaceIgnore` accepts root-relative derived-cache directories that
 the clean runner should omit. The runner already excludes common caches such as
-`.nx/cache`; use this setting for tool-specific caches without waiting for another
+`.turbo`; use this setting for tool-specific caches without waiting for another
 package release.
 
 The built-in comparison allows up to `0.063%` differing pixels and uses a
@@ -202,3 +199,5 @@ The default runner executes authoritative comparisons in the pinned Linux ARM64 
 ## License
 
 [MIT](./LICENSE)
+
+jj b s -r @- main &&  jj tag set --allow-move v0.0.4 -r main && jj git push -b main && git push -f origin v0.0.4

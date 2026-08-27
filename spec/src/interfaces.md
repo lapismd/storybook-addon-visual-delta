@@ -8,7 +8,7 @@ These requirements keep callers on validated, recoverable interfaces.
 
 | ID         | Requirement                                                                                                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-API-001 | Portable consumers MUST use declared package exports. Internal source paths are not stable unless `package.json` exports them for a named integration purpose.                  |
+| VD-API-001 | Portable consumers MUST use declared package exports. Internal source paths are not stable unless `package.json` exports them for a named integration purpose. The compiled `/node` adapter MUST expose review-tag helpers, static-build freshness helpers, baseline-existence checks, and result-artifact invalidation for host-owned workflows. |
 | VD-API-002 | The command-line interface MUST reject conflicting selection flags, require exact targets for writes, and preserve compare-only behavior for `test`. Direct `update` commands MUST preserve existing review tags unless `--update-status` is explicit. Storybook UI baseline actions MUST pass that opt-in so their review workflow continues to mark written stories pending. |
 | VD-API-003 | Development HTTP routes MUST validate method, payload, target, and host capability before acting. Mutation routes MUST reject static or unsupported hosts.                      |
 | VD-API-004 | Storybook channel events MUST carry serializable state and tolerate manager or preview remounts. A remount MUST be able to request current state again.                         |

@@ -12,7 +12,7 @@
  * export default defineVisualPlaywrightConfig();
  * ```
  *
- * Or scaffold both with `visual-delta init`.
+ * Or scaffold both with `pnpm exec visual-delta init`.
  */
 
 export {

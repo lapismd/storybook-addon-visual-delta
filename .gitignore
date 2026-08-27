@@ -3,7 +3,7 @@ dist
 storybook-static
 spec/book
 .cache
-.deno
+.turbo
 .visual-delta/artifacts/
 .visual-delta/cache/
 coverage

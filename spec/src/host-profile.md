@@ -1,6 +1,6 @@
 # UI catalog Visual Delta host profile
 
-This reference defines how the `/Users/stevejuma/ui` catalog hosts the portable Visual Delta package (sibling checkout `../storybook-addon-visual-delta`, consumed via local `link:`). It covers local package registration, writers, paths, ports, scripts, ownership, and repository-specific safety policy.
+This reference defines how the `/Users/stevejuma/ui` catalog hosts the portable Visual Delta package (sibling checkout `../storybook-addon-visual-delta`, consumed via pnpm `link:`). It covers local package registration, writers, paths, ports, scripts, ownership, and repository-specific safety policy.
 
 ## Normative requirements
 
@@ -12,11 +12,11 @@ These requirements bind the portable package to this repository without merging 
 | VD-HOST-002 | The catalog MUST use `nested-import` baseline paths and the committed snapshot root `tests/visual/storybook.spec.ts-snapshots`. Host writers and package readers MUST resolve identical paths.                                                                                                                                                                       |
 | VD-HOST-003 | Catalog baseline writes MUST use the `scripts/ui-generator` writers because they own Svelte CSF patches and repository layout. Those adapters MUST consume package-owned static freshness, target resolution, and capture identity contracts for primary and interaction writes. Compare runs MUST use the package CLI and Playwright without snapshot updates.      |
 | VD-HOST-004 | One `STORYBOOK_PORT` MUST derive every secondary lane. At most one supervisor and one Storybook child MAY own a checkout-and-port lane. Duplicate start MUST reuse that owner; restart and stop MUST replace or terminate only the matching owner and descendants. A checkout MUST NOT stop or reuse another checkout’s listener.                                    |
-| VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `deno task checks`.                                                                                                                                                                                              |
+| VD-HOST-005 | Full checks MUST retain complete visual comparison as the safety gate. Affected comparison is an optimization and MUST NOT replace the complete suite in `pnpm checks`.                                                                                                                                                                                              |
 | VD-HOST-006 | Portable behavior belongs in the package, including the package-owned self-test Storybook and Visual Delta panel/manager acceptance fixtures. Authoritative screenshot acceptance and baseline writes MUST use browser-qualified references produced by the canonical Linux/ARM64 profile; host operating systems MUST NOT create alternate reference identities. Package-owned screenshot acceptance MUST resolve its changed-pixel allowance through the shared Visual Delta threshold contract and MUST NOT define a separate tolerance. Repository layout, Svelte source writers, generator approval gates, **product** catalog stories, and UI catalog port supervision belong to the host. Duplicate contract logic MUST converge on shared package helpers. |
 | VD-HOST-007 | Regular fullscreen catalog stories MUST retain the established `1.5rem` `#storybook-root` inset. Only explicitly classified Workspace and Shell application surfaces MAY use the full capture viewport. Capture and overlay code MUST measure the active layout instead of assuming either frame, and changing this host layout requires deliberate baseline review. |
-| VD-HOST-008 | The package-owned self-test Storybook MUST NOT assume a monorepo `packages/` path. It MUST resolve `/visual-baselines` from the sibling UI catalog checkout `../ui/tests/visual/storybook.spec.ts-snapshots` when that directory exists; otherwise it MUST mount packaged fixture baselines under `tests/fixtures/visual-baselines` so Storybook can start without the host. Example PNGs MUST mount from `tests/examples-snapshots/examples`. Regenerating an example baseline with a committed comparison fixture MUST recompare its proven actual through the canonical derived-artifact writer so the result, diff, baseline hash, and default thresholds remain coherent. The package self-test MUST register its own portable Playwright configuration and suite so Diff Browser and package command-line comparisons resolve the configured browser projects without depending on the sibling host's Playwright files. Its baseline writers MUST build and invoke the checkout-local CLI because a package cannot rely on its own published binary being linked into its workspace, and MUST pass the same snapshot root and baseline path mode exposed by the self-test host; packaged consumer defaults MUST continue to invoke `npx visual-delta`. |
-| VD-HOST-009 | Manager and overlay browser acceptance (`deno task test:manager`) MUST drive the **live** package Storybook with host stubs enabled, not the static panel build. Host-stub stories and manager integration fixtures MUST NOT remain tagged `skip-visual` in a way that leaves the real Visual Delta panel in the skipped state; panel-only harness stories MAY keep `skip-visual`. Manager acceptance MUST use packaged fixture baselines (`VISUAL_DELTA_PACKAGE_BASELINES=1` → `tests/fixtures/visual-baselines`) so CI does not depend on a sibling UI checkout. |
+| VD-HOST-008 | The package-owned self-test Storybook MUST NOT assume a monorepo `packages/` path. It MUST resolve `/visual-baselines` from the sibling UI catalog checkout `../ui/tests/visual/storybook.spec.ts-snapshots` when that directory exists; otherwise it MUST mount packaged fixture baselines under `tests/fixtures/visual-baselines` so Storybook can start without the host. Example PNGs MUST mount from `tests/examples-snapshots/examples`. Regenerating an example baseline with a committed comparison fixture MUST recompare its proven actual through the canonical derived-artifact writer so the result, diff, baseline hash, and default thresholds remain coherent. The package self-test MUST register its own portable Playwright configuration and suite so Diff Browser and package command-line comparisons resolve the configured browser projects without depending on the sibling host's Playwright files. Its baseline writers MUST build and invoke the checkout-local CLI because a package cannot rely on its own published binary being linked into its workspace, and MUST pass the same snapshot root and baseline path mode exposed by the self-test host; packaged consumer defaults MUST continue to invoke `pnpm exec visual-delta`. |
+| VD-HOST-009 | Manager and overlay browser acceptance (`pnpm test:manager`) MUST drive the **live** package Storybook with host stubs enabled, not the static panel build. Host-stub stories and manager integration fixtures MUST NOT remain tagged `skip-visual` in a way that leaves the real Visual Delta panel in the skipped state; panel-only harness stories MAY keep `skip-visual`. Manager acceptance MUST use packaged fixture baselines (`VISUAL_DELTA_PACKAGE_BASELINES=1` → `tests/fixtures/visual-baselines`) so CI does not depend on a sibling UI checkout. |
 
 ## Local package registration
 
@@ -63,7 +63,7 @@ The repository derives lanes from `STORYBOOK_PORT`:
 
 The default checkout uses base port `9009`. Another Jujutsu workspace uses ignored `.env.storybook.local` with an unused base. Explicit shell environment values take precedence over the ignored file.
 
-`deno task storybook:stop` operates only on the lane selected by the current checkout. Tests MUST use an unused explicit base rather than reclaiming an active listener.
+`pnpm storybook:stop` operates only on the lane selected by the current checkout. Tests MUST use an unused explicit base rather than reclaiming an active listener.
 
 Supervisor ownership is keyed by checkout root and base port in ignored cache state. An ordinary duplicate start reports and reuses the live owner. Explicit restart replaces that owner, while stop terminates its descendants before the supervisor and releases ownership. Preview-only source changes use Vite HMR; manager, shared, and Node changes produce one debounced supervised restart.
 
@@ -79,19 +79,19 @@ The authoritative host entry points are:
 
 | Command                        | Contract                                                       |
 | ------------------------------ | -------------------------------------------------------------- |
-| `deno task storybook`               | Start the UI catalog and its supervised local lane             |
-| `deno task storybook:ui`            | Start the UI catalog without inventing a different launch path |
-| `deno task visual-delta:storybook`  | Start the package-owned Visual Delta self-test Storybook       |
-| `deno task storybook:stop`          | Stop only this checkout’s UI catalog lane                      |
-| `deno task build-storybook`         | Produce UI static Storybook plus `preview-stats.json`          |
-| `deno task test:visual`             | Complete compare-only visual suite                             |
-| `deno task test:visual:affected`    | Conservative affected compare-only suite                       |
-| `deno task test:visual-delta-panel` | Package Storybook panel self-test (`panel.spec.ts`; not UI)    |
-| `deno task test:visual-delta-manager` | Package Storybook manager/overlay suite (stub fidelity WIP)  |
-| `deno task storybook:check`         | Storybook tests, build, panel acceptance, and visual compare   |
-| `deno task checks`                  | Repository aggregate gate including complete visual compare    |
+| `pnpm storybook`               | Start the UI catalog and its supervised local lane             |
+| `pnpm storybook:ui`            | Start the UI catalog without inventing a different launch path |
+| `pnpm visual-delta:storybook`  | Start the package-owned Visual Delta self-test Storybook       |
+| `pnpm storybook:stop`          | Stop only this checkout’s UI catalog lane                      |
+| `pnpm build-storybook`         | Produce UI static Storybook plus `preview-stats.json`          |
+| `pnpm test:visual`             | Complete compare-only visual suite                             |
+| `pnpm test:visual:affected`    | Conservative affected compare-only suite                       |
+| `pnpm test:visual-delta-panel` | Package Storybook panel self-test (`panel.spec.ts`; not UI)    |
+| `pnpm test:visual-delta-manager` | Package Storybook manager/overlay suite (stub fidelity WIP)  |
+| `pnpm storybook:check`         | Storybook tests, build, panel acceptance, and visual compare   |
+| `pnpm checks`                  | Repository aggregate gate including complete visual compare    |
 
-`deno task test:visual:update` is a writer and requires explicit approval and an exact component or story target. It is not part of compare-only verification.
+`pnpm test:visual:update` is a writer and requires explicit approval and an exact component or story target. It is not part of compare-only verification.
 
 ## Host safety policy
 

@@ -103,7 +103,6 @@ describe("Visual Delta change VCS adapters", () => {
       const root = mkdtempSync(join(tmpdir(), "visual-delta-git-"));
       command("git", ["init", "--quiet"], root);
       command("git", ["config", "user.name", "Visual Delta Test"], root);
-      command("git", ["config", "commit.gpgSign", "false"], root);
       command(
         "git",
         ["config", "user.email", "visual-delta@example.invalid"],
