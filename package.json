@@ -1,6 +1,6 @@
 {
   "name": "@lapismd/storybook-addon-visual-delta",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Local-first visual regression testing for Storybook with Playwright baselines, pixel diffs, and in-Storybook review.",
   "keywords": [
     "storybook",
