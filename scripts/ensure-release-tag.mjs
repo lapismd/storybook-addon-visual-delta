@@ -13,6 +13,16 @@ const REPO_ROOT = path.resolve(
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export const VERSION_PACKAGES_SUBJECT = "Version Packages";
 
+export function isVersionPackagesReleaseCommit({
+  subject,
+  mergedParentSubjects = [],
+} = {}) {
+  return (
+    subject === VERSION_PACKAGES_SUBJECT ||
+    mergedParentSubjects.includes(VERSION_PACKAGES_SUBJECT)
+  );
+}
+
 export function resolveReleaseTagPlan({
   version,
   headSha,
@@ -106,8 +116,20 @@ function existingTagSha(tag) {
   return run("git", ["rev-list", "-n", "1", tag], { allowFailure: true });
 }
 
-function headSubject() {
-  return run("git", ["log", "-1", "--pretty=%s"]);
+function commitSubject(revision = "HEAD") {
+  return run("git", ["log", "-1", "--pretty=%s", revision]);
+}
+
+function mergedParentSubjects(revision = "HEAD") {
+  const parentsLine = run("git", [
+    "rev-list",
+    "--parents",
+    "-n",
+    "1",
+    revision,
+  ]);
+  const parts = parentsLine.split(/\s+/).filter(Boolean);
+  return parts.slice(2).map((parent) => commitSubject(parent));
 }
 
 function main() {
@@ -122,7 +144,10 @@ function main() {
   const version = packageVersion();
   const headSha = run("git", ["rev-parse", "HEAD"]);
   const parentVersion = packageVersion("HEAD^");
-  const versionPackagesCommit = headSubject() === VERSION_PACKAGES_SUBJECT;
+  const versionPackagesCommit = isVersionPackagesReleaseCommit({
+    subject: commitSubject(),
+    mergedParentSubjects: mergedParentSubjects(),
+  });
   const plan = resolveReleaseTagPlan({
     version,
     headSha,
@@ -138,7 +163,7 @@ function main() {
   if (plan.action === "noop") {
     if (!versionPackagesCommit) {
       console.log(
-        "Skipping release tag: HEAD is not a Version Packages commit.",
+        "Skipping release tag: HEAD is not a Version Packages commit or merge.",
       );
       return;
     }

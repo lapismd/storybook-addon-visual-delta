@@ -527,8 +527,9 @@ selected revision. A reviewer must inspect and merge that pull request.
 
 `.github/workflows/release.yml` runs on pushes to `main`. With pending
 Changesets it opens or updates the Version Packages pull request. With no
-pending Changesets on a Version Packages commit it creates the exact `vX.Y.Z`
-tag matching `package.json` when absent. Pull-request Spec First enforces
+pending Changesets on a Version Packages commit, or on a GitHub merge commit
+whose merged parent is the Version Packages commit, it creates the exact
+`vX.Y.Z` tag matching `package.json` when absent. Pull-request Spec First enforces
 `pnpm release:intent` except on the `changeset-release/main` branch.
 
 Version Packages PR
@@ -542,6 +543,19 @@ retaining protection for scripts, repository metadata, publish configuration,
 privacy, checks, Storybook/Visual Delta wiring, Playwright, markdownlint/spec
 tooling, and release commands. The repository script coverage asserts this
 distinction.
+
+The same release also showed that GitHub's merge-commit strategy can leave
+`HEAD` with a `Merge pull request ...` subject while the merged parent remains
+the Version Packages commit. `scripts/ensure-release-tag.spec.mjs` now covers
+that shape so the tag guard recognizes the merged parent without allowing
+ordinary non-versioning merges to create release tags.
+
+The first `v0.0.7` backfill attempt reached `npm-publish.yml` but failed the
+x64 package gate before publication because `package.json` used npm's
+`git+https://` repository shorthand while `scripts/check-npm-release.mjs`
+requires the canonical GitHub URL. The manifest now uses the same canonical URL
+as the release guard, and the exact metadata check is part of the release
+retarget validation.
 
 `.github/workflows/npm-publish.yml` runs only on `v*` tag pushes. It validates
 the exact stable version and public manifest, runs all release gates, publishes
