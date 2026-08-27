@@ -554,6 +554,17 @@ evidence contains the tarball SHA-512 and exact release tag, repository, and
 workflow. Focused verification now derives npm's canonical PURL, accepts that
 release evidence, and rejects the former non-canonical subject fixture.
 
+### 2026-08-27 release audit dependency remediation
+
+`pnpm audit` found release-blocking advisories in the checked-out dependency
+graph: Mermaid and its DOMPurify dependency resolved below their patched
+versions, and Vite's PostCSS dependency resolved a vulnerable nanoid version.
+The remediation updates the direct Mermaid development dependency to a patched
+release, pins PostCSS as an explicit development dependency at its patched
+resolution, and preserves the existing Vite major. The resulting graph resolves
+DOMPurify and nanoid to patched versions, and `pnpm audit` reports no known
+vulnerabilities. No visual baselines are created, replaced, or deleted.
+
 Also fix EditRemoveAndClear to use its own baseline path for primary image (optional consistency).
 
 Kill any leftover storybook on panel ports, then run focused failing tests first.
