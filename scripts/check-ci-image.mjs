@@ -107,12 +107,12 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/npm-publish.yml": {
-    jobs: 5,
-    mutableImageJobs: 4,
+    jobs: 6,
+    mutableImageJobs: 5,
     immutableImageJobs: 1,
     frozenInstalls: 4,
-    packagesRead: 4,
-    x64Runners: 4,
+    packagesRead: 5,
+    x64Runners: 5,
     arm64Runners: 1,
     canaryJobs: 0,
     pendingProfileLocks: 0,
@@ -567,6 +567,12 @@ export function validateCiImageSources({
       'bootstrap_npmrc="$RUNNER_TEMP/visual-delta-bootstrap.npmrc"',
       "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}",
       'NPM_CONFIG_USERCONFIG="$bootstrap_npmrc"',
+      "release-notes:",
+      "needs: [package-gate, verify-provenance]",
+      '"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases"',
+      "tag_name: $tag",
+      "draft: false",
+      "prerelease: false",
     ]) {
       requireSnippet(errors, "npm publish workflow", releaseWorkflow, snippet);
     }

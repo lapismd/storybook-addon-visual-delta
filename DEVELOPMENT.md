@@ -141,6 +141,8 @@ The repository and npm package must be public before the first release.
    Version Packages commit).
 6. `.github/workflows/npm-publish.yml` runs on that tag. Approve the `npm` or
    `npm-bootstrap` Environment as required.
+7. After npm installation and Sigstore provenance verification pass, the same
+   workflow creates or retains the GitHub Release for that exact tag.
 
 Do not edit the published version or changelog by hand, publish from a
 workstation, or call `changeset publish`.

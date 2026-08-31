@@ -255,3 +255,83 @@ jobs:
           path: npm-signatures.json
           if-no-files-found: warn
           retention-days: 90
+
+  release-notes:
+    name: Create GitHub release
+    needs: [package-gate, verify-provenance]
+    if: needs.verify-provenance.result == 'success'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      env:
+        HOME: /root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Create or retain the exact tag release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.package-gate.outputs.version }}
+        run: |
+          title="@lapismd/storybook-addon-visual-delta v${VERSION}"
+          api_headers=(
+            --header "Accept: application/vnd.github+json"
+            --header "Authorization: Bearer $GH_TOKEN"
+            --header "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          tag_json="$(curl --fail --silent --show-error "${api_headers[@]}" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          test "$(jq -r .object.sha <<< "$tag_json")" = "$GITHUB_SHA"
+
+          release_json="$RUNNER_TEMP/visual-delta-release.json"
+          release_status="$(curl --silent --show-error \
+            --output "$release_json" \
+            --write-out "%{http_code}" \
+            "${api_headers[@]}" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME")"
+
+          if [ "$release_status" = "200" ]; then
+            release_id="$(jq -r .id "$release_json")"
+            payload="$(jq -n --arg name "$title" '{name: $name}')"
+            curl --fail --silent --show-error \
+              --request PATCH \
+              "${api_headers[@]}" \
+              --data "$payload" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/$release_id" \
+              > "$release_json"
+          elif [ "$release_status" = "404" ]; then
+            notes="$(cat <<EOF
+          Published \`@lapismd/storybook-addon-visual-delta@${VERSION}\`.
+
+          ### Release verification
+
+          - Tag: \`${GITHUB_REF_NAME}\` at \`${GITHUB_SHA}\`
+          - npm publication and Sigstore provenance verification passed.
+          - Workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )"
+            payload="$(jq -n \
+              --arg tag "$GITHUB_REF_NAME" \
+              --arg name "$title" \
+              --arg body "$notes" \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')"
+            curl --fail --silent --show-error \
+              --request POST \
+              "${api_headers[@]}" \
+              --data "$payload" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases" \
+              > "$release_json"
+          else
+            cat "$release_json" >&2
+            echo "Unexpected GitHub release lookup status: $release_status" >&2
+            exit 1
+          fi
+
+          jq -e --arg tag "$GITHUB_REF_NAME" \
+            '.tag_name == $tag and .draft == false and .prerelease == false' \
+            "$release_json" >/dev/null

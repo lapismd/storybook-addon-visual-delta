@@ -310,6 +310,22 @@ test("requires the split release gates and browser-only authorized capture workf
   assert.match(result.errors.join("\n"), /platform-qualified/);
 });
 
+test("requires a post-provenance GitHub release record", () => {
+  const workflowPath = ".github/workflows/npm-publish.yml";
+  const result = validateCiImageSources({
+    ...sources,
+    consumerWorkflows: {
+      ...sources.consumerWorkflows,
+      [workflowPath]: sources.consumerWorkflows[workflowPath].replace(
+        "release-notes:",
+        "release-record:",
+      ),
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /release-notes/);
+});
+
 test("rejects duplicated toolchain and browser installation", () => {
   const workflowPath = ".github/workflows/visual-delta-spec-first.yml";
   const result = validateCiImageSources({

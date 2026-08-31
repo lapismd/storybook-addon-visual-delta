@@ -567,7 +567,9 @@ an environment-variable token reference, and the package gate verifies the
 packed CLI mapping and executable mode before either publication path runs. The
 workflow retains `npm-signatures.json` for successful or failed
 verification; a successful release confirms the package, tag, repository,
-workflow, and Sigstore bundle.
+workflow, and Sigstore bundle, then creates or retains a non-draft,
+non-prerelease GitHub Release on the exact existing tag. The CI-image workflow
+contract test rejects removal of that post-verification release job.
 
 Release run
 [`30745135562`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30745135562)
