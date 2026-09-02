@@ -62,3 +62,13 @@ Before handoff, run the repository checks appropriate to the change and report u
 Never create, replace, or delete a committed visual baseline unless the user explicitly authorizes that mutation. Compare-only validation must not pass snapshot-update flags or broaden an empty target.
 
 Generated `spec/book/` output is ignored and non-normative. Commit only mdBook configuration, source, and enforcement tooling.
+
+## Cursor Cloud specific instructions
+
+This package is the application: `pnpm storybook` serves the self-test/demo catalog (the Visual Delta panel, manager, and example stories) on port `9109`. Standard scripts live in `package.json` and [`DEVELOPMENT.md`](./DEVELOPMENT.md); the notes below are only the non-obvious cloud caveats.
+
+- Toolchain: the repo pins Node `24.15.0` and pnpm `10.32.1` (see `docker/visual-delta-ci/Dockerfile`). The VM's bundled `/exec-daemon/node` (Node 22) sits early on `PATH`, so `~/.bashrc` prepends the nvm Node 24 bin (and `~/.local/bin`) to win. Run commands in a shell that sources `~/.bashrc` (login shells do); a bare `bash -c` that skips `~/.bashrc` resolves the wrong Node. `pnpm` is provided by corepack for Node 24 only.
+- `mdbook` v0.5.4 is installed at `~/.local/bin/mdbook` (prebuilt binary, not Cargo). It is required by `pnpm spec:build` / `pnpm spec:check`; without `~/.local/bin` on `PATH` those fail.
+- Everyday checks that run cleanly on this x64 VM: `pnpm build:node`, `pnpm typecheck`, `pnpm test` (vitest), and `pnpm spec:check` (markdownlint + spec gates + mdBook).
+- Playwright browser acceptance (`pnpm test:panel`, `pnpm test:manager`, `pnpm test:browsers`) compares committed 3× device-pixel PNG baselines captured on the canonical **Linux ARM64** CI image. On this x64 dev VM font/rasterization differences make those screenshot assertions mismatch by design — that is a platform difference, not a regression. Never regenerate/`--update-snapshots` those baselines (see Baseline safety). Only Chromium is installed by the update flow; run `pnpm exec playwright install firefox webkit` before the browser matrix.
+- Docker is not installed here. The authoritative Linux ARM64 capture runner and CI image build need Docker; skip those locally unless it is added.
