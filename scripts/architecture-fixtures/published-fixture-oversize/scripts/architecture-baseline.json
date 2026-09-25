@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sourceCommit": "fixture",
+  "limits": {
+    "newProductionCountedLines": 300,
+    "newTestCountedLines": 500,
+    "newStoryCountedLines": 400,
+    "newScriptCountedLines": 300
+  },
+  "files": {
+    "src/shared/ok.ts": {
+      "countedLines": 1,
+      "physicalLines": 1,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    }
+  }
+}

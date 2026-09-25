@@ -57,6 +57,17 @@ Keep portable behavior in the package and repository policy in host adapters. Do
 
 Before handoff, run the repository checks appropriate to the change and report unrelated failures separately.
 
+## Source organisation
+
+`spec/src` stays canonical; VD-ARCH-006 owns the file-size contract.
+
+- Run `pnpm check:architecture` for any change under `src`, `scripts`, `tests`, or `.storybook`. It also runs inside `pnpm check` and `pnpm spec:check` as two `spec-validator check` lanes.
+- Add behaviour in the owning `panel/`, `node/`, `preview/`, `manager/`, `shared/`, `playwright/`, or `runner/` module rather than extending an existing hotspot. Keep new production and script files at or under 300 counted lines, new tests at or under 500, and new stories at or under 400.
+- Lower `scripts/architecture-baseline.json` in the same change when you extract a module. A recorded budget above its limit is debt to extract later, not permission to grow.
+- Never name a module or directory `utils`, `helpers`, `common`, or `services`, and never import a test or spec module from production code.
+- Kind follows the published contract. Only `*.stories.*` files are story code, so published `src/stories` fixtures such as `PanelShell.tsx` budget as production. The `tests` acceptance tree and the `src/test` harness budget as test code.
+- Do not flatten the existing component folders and do not move a component into another boundary to satisfy a budget.
+
 ## Baseline safety
 
 Never create, replace, or delete a committed visual baseline unless the user explicitly authorizes that mutation. Compare-only validation must not pass snapshot-update flags or broaden an empty target.

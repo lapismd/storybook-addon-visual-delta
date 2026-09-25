@@ -1,0 +1,2100 @@
+{
+  "version": 1,
+  "sourceCommit": "e33b091e1259e5e0c4dbe5b96a07462c2143f687",
+  "limits": {
+    "newProductionCountedLines": 300,
+    "newTestCountedLines": 500,
+    "newStoryCountedLines": 400,
+    "newScriptCountedLines": 300
+  },
+  "files": {
+    ".storybook/local-preset.ts": {
+      "countedLines": 15,
+      "physicalLines": 23,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    ".storybook/main.ts": {
+      "countedLines": 115,
+      "physicalLines": 140,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    ".storybook/preview.ts": {
+      "countedLines": 27,
+      "physicalLines": 35,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/architecture-lines.mjs": {
+      "countedLines": 49,
+      "physicalLines": 54,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/architecture-policy.mjs": {
+      "countedLines": 44,
+      "physicalLines": 66,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/architecture.spec.mjs": {
+      "countedLines": 162,
+      "physicalLines": 186,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/capture-example-baselines.mjs": {
+      "countedLines": 228,
+      "physicalLines": 250,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/capture-example-baselines.spec.mjs": {
+      "countedLines": 116,
+      "physicalLines": 124,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-architecture.mjs": {
+      "countedLines": 250,
+      "physicalLines": 273,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-ci-image.mjs": {
+      "countedLines": 653,
+      "physicalLines": 693,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-ci-image.spec.mjs": {
+      "countedLines": 442,
+      "physicalLines": 471,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-npm-release.mjs": {
+      "countedLines": 108,
+      "physicalLines": 119,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-npm-release.spec.mjs": {
+      "countedLines": 69,
+      "physicalLines": 76,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-release-intent.mjs": {
+      "countedLines": 108,
+      "physicalLines": 116,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-release-intent.spec.mjs": {
+      "countedLines": 44,
+      "physicalLines": 51,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/ensure-release-tag.mjs": {
+      "countedLines": 184,
+      "physicalLines": 204,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/ensure-release-tag.spec.mjs": {
+      "countedLines": 112,
+      "physicalLines": 123,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/generate-example-baselines.mjs": {
+      "countedLines": 179,
+      "physicalLines": 203,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/package-storybook-build.spec.mjs": {
+      "countedLines": 58,
+      "physicalLines": 63,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/prepare-cli-bin.mjs": {
+      "countedLines": 44,
+      "physicalLines": 50,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/prepare-cli-bin.spec.mjs": {
+      "countedLines": 31,
+      "physicalLines": 38,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/run-storybook.mjs": {
+      "countedLines": 25,
+      "physicalLines": 28,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/test-browser-matrix.mjs": {
+      "countedLines": 148,
+      "physicalLines": 153,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/verify-npm-provenance.mjs": {
+      "countedLines": 145,
+      "physicalLines": 162,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/verify-npm-provenance.spec.mjs": {
+      "countedLines": 153,
+      "physicalLines": 163,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/constants.spec.ts": {
+      "countedLines": 77,
+      "physicalLines": 83,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/constants.ts": {
+      "countedLines": 238,
+      "physicalLines": 400,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/index.ts": {
+      "countedLines": 3,
+      "physicalLines": 4,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager.tsx": {
+      "countedLines": 82,
+      "physicalLines": 92,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/abort-visual-work.spec.ts": {
+      "countedLines": 136,
+      "physicalLines": 148,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/AcceptSplitButton.tsx": {
+      "countedLines": 193,
+      "physicalLines": 217,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/defer-until-preview-ready.spec.ts": {
+      "countedLines": 82,
+      "physicalLines": 92,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/defer-until-preview-ready.ts": {
+      "countedLines": 51,
+      "physicalLines": 58,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/DiffCaptureSplitButton.tsx": {
+      "countedLines": 245,
+      "physicalLines": 272,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/HighlightIgnoreTool.tsx": {
+      "countedLines": 96,
+      "physicalLines": 111,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/PanelTitle.spec.tsx": {
+      "countedLines": 45,
+      "physicalLines": 52,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/PanelTitle.tsx": {
+      "countedLines": 27,
+      "physicalLines": 36,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/reload-on-restart.spec.ts": {
+      "countedLines": 114,
+      "physicalLines": 131,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/reload-on-restart.ts": {
+      "countedLines": 95,
+      "physicalLines": 120,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/review-layout.spec.ts": {
+      "countedLines": 210,
+      "physicalLines": 235,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/review-layout.ts": {
+      "countedLines": 196,
+      "physicalLines": 243,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/review-updates-from-results.spec.ts": {
+      "countedLines": 177,
+      "physicalLines": 187,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/ReviewLayoutTool.tsx": {
+      "countedLines": 60,
+      "physicalLines": 74,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/run-visual-mutation-events.spec.ts": {
+      "countedLines": 103,
+      "physicalLines": 114,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/run-visual-reconnect.spec.ts": {
+      "countedLines": 239,
+      "physicalLines": 253,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/run-visual.ts": {
+      "countedLines": 1915,
+      "physicalLines": 2166,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/visual-filters.spec.ts": {
+      "countedLines": 234,
+      "physicalLines": 249,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/visual-filters.ts": {
+      "countedLines": 472,
+      "physicalLines": 526,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/visual-test-module-prefs.spec.ts": {
+      "countedLines": 85,
+      "physicalLines": 91,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/visual-test-module-prefs.ts": {
+      "countedLines": 81,
+      "physicalLines": 99,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualBaselineSplitButton.tsx": {
+      "countedLines": 291,
+      "physicalLines": 333,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualFiltersMenu.spec.tsx": {
+      "countedLines": 210,
+      "physicalLines": 225,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualFiltersMenu.tsx": {
+      "countedLines": 358,
+      "physicalLines": 384,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualRunSplitButton.spec.ts": {
+      "countedLines": 44,
+      "physicalLines": 50,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualRunSplitButton.tsx": {
+      "countedLines": 287,
+      "physicalLines": 318,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualStatusLabel.spec.tsx": {
+      "countedLines": 103,
+      "physicalLines": 114,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualStatusLabel.tsx": {
+      "countedLines": 204,
+      "physicalLines": 223,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualStatusToolbarTool.tsx": {
+      "countedLines": 22,
+      "physicalLines": 30,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualTestModuleUI.spec.tsx": {
+      "countedLines": 248,
+      "physicalLines": 261,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualTestModuleUI.tsx": {
+      "countedLines": 463,
+      "physicalLines": 493,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/VisualTestProvider.tsx": {
+      "countedLines": 1361,
+      "physicalLines": 1435,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/affected-plan-cache.spec.ts": {
+      "countedLines": 46,
+      "physicalLines": 53,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/affected-plan-cache.ts": {
+      "countedLines": 58,
+      "physicalLines": 73,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/affected-visual-tests.spec.ts": {
+      "countedLines": 557,
+      "physicalLines": 596,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/affected-visual-tests.ts": {
+      "countedLines": 1057,
+      "physicalLines": 1157,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-cli.spec.ts": {
+      "countedLines": 184,
+      "physicalLines": 204,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-cli.ts": {
+      "countedLines": 576,
+      "physicalLines": 634,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-design.spec.ts": {
+      "countedLines": 17,
+      "physicalLines": 18,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-design.ts": {
+      "countedLines": 66,
+      "physicalLines": 97,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-diff.spec.ts": {
+      "countedLines": 62,
+      "physicalLines": 67,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-diff.ts": {
+      "countedLines": 170,
+      "physicalLines": 183,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-endpoint.spec.ts": {
+      "countedLines": 219,
+      "physicalLines": 234,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-endpoint.ts": {
+      "countedLines": 386,
+      "physicalLines": 401,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-vcs.spec.ts": {
+      "countedLines": 186,
+      "physicalLines": 204,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-history-vcs.ts": {
+      "countedLines": 375,
+      "physicalLines": 408,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-migration.spec.ts": {
+      "countedLines": 56,
+      "physicalLines": 59,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-migration.ts": {
+      "countedLines": 235,
+      "physicalLines": 246,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/baseline-vite-plugin.ts": {
+      "countedLines": 252,
+      "physicalLines": 286,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/cache-paths.ts": {
+      "countedLines": 105,
+      "physicalLines": 116,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/cached-actual.spec.ts": {
+      "countedLines": 126,
+      "physicalLines": 135,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/cached-actual.ts": {
+      "countedLines": 184,
+      "physicalLines": 197,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/canonical-build-cache.spec.ts": {
+      "countedLines": 180,
+      "physicalLines": 192,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/canonical-build-cache.ts": {
+      "countedLines": 300,
+      "physicalLines": 322,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-runner.spec.ts": {
+      "countedLines": 758,
+      "physicalLines": 785,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-runner.ts": {
+      "countedLines": 1183,
+      "physicalLines": 1229,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-subject.ts": {
+      "countedLines": 321,
+      "physicalLines": 360,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/change-set-store.spec.ts": {
+      "countedLines": 327,
+      "physicalLines": 352,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/change-set-store.ts": {
+      "countedLines": 639,
+      "physicalLines": 686,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/change-set-vcs.spec.ts": {
+      "countedLines": 169,
+      "physicalLines": 183,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/change-set-vcs.ts": {
+      "countedLines": 335,
+      "physicalLines": 362,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/cli.ts": {
+      "countedLines": 463,
+      "physicalLines": 484,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/compare-story.spec.ts": {
+      "countedLines": 195,
+      "physicalLines": 203,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/compare-story.ts": {
+      "countedLines": 230,
+      "physicalLines": 248,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/delete-baseline.spec.ts": {
+      "countedLines": 106,
+      "physicalLines": 110,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/delete-baseline.ts": {
+      "countedLines": 180,
+      "physicalLines": 196,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/doctor.spec.ts": {
+      "countedLines": 551,
+      "physicalLines": 582,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/doctor.ts": {
+      "countedLines": 1574,
+      "physicalLines": 1643,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/index.ts": {
+      "countedLines": 257,
+      "physicalLines": 257,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/init-scaffold.spec.ts": {
+      "countedLines": 86,
+      "physicalLines": 95,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/init-scaffold.ts": {
+      "countedLines": 207,
+      "physicalLines": 234,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/middleware.ts": {
+      "countedLines": 2547,
+      "physicalLines": 2748,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/options.spec.ts": {
+      "countedLines": 51,
+      "physicalLines": 58,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/options.ts": {
+      "countedLines": 97,
+      "physicalLines": 208,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/playwright-results.spec.ts": {
+      "countedLines": 157,
+      "physicalLines": 163,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/playwright-results.ts": {
+      "countedLines": 116,
+      "physicalLines": 134,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/playwright-threshold.spec.ts": {
+      "countedLines": 46,
+      "physicalLines": 51,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/playwright-threshold.ts": {
+      "countedLines": 54,
+      "physicalLines": 69,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/portable-host.spec.ts": {
+      "countedLines": 383,
+      "physicalLines": 399,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/project-config.spec.ts": {
+      "countedLines": 151,
+      "physicalLines": 164,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/project-config.ts": {
+      "countedLines": 326,
+      "physicalLines": 337,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/run-hub.spec.ts": {
+      "countedLines": 59,
+      "physicalLines": 63,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/run-hub.ts": {
+      "countedLines": 253,
+      "physicalLines": 312,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/runtime-instance.spec.ts": {
+      "countedLines": 52,
+      "physicalLines": 62,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/runtime-instance.ts": {
+      "countedLines": 24,
+      "physicalLines": 33,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/snapshot-environments.spec.ts": {
+      "countedLines": 53,
+      "physicalLines": 60,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/snapshot-environments.ts": {
+      "countedLines": 44,
+      "physicalLines": 51,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/snapshot-paths.spec.ts": {
+      "countedLines": 53,
+      "physicalLines": 57,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/snapshot-paths.ts": {
+      "countedLines": 90,
+      "physicalLines": 110,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/source-utils.ts": {
+      "countedLines": 53,
+      "physicalLines": 56,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/static-build.spec.ts": {
+      "countedLines": 43,
+      "physicalLines": 48,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/static-build.ts": {
+      "countedLines": 268,
+      "physicalLines": 295,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-facts.spec.ts": {
+      "countedLines": 204,
+      "physicalLines": 214,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-facts.ts": {
+      "countedLines": 142,
+      "physicalLines": 149,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-id-grep.ts": {
+      "countedLines": 15,
+      "physicalLines": 21,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-source-formatter.spec.ts": {
+      "countedLines": 67,
+      "physicalLines": 72,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-source-formatter.ts": {
+      "countedLines": 87,
+      "physicalLines": 97,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-source.spec.ts": {
+      "countedLines": 482,
+      "physicalLines": 511,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-source.ts": {
+      "countedLines": 1225,
+      "physicalLines": 1309,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-artifacts.spec.ts": {
+      "countedLines": 50,
+      "physicalLines": 54,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-artifacts.ts": {
+      "countedLines": 70,
+      "physicalLines": 76,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-server.spec.ts": {
+      "countedLines": 24,
+      "physicalLines": 28,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-server.ts": {
+      "countedLines": 130,
+      "physicalLines": 157,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-sidecars.spec.ts": {
+      "countedLines": 152,
+      "physicalLines": 159,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-sidecars.ts": {
+      "countedLines": 290,
+      "physicalLines": 319,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-test-cli.spec.ts": {
+      "countedLines": 542,
+      "physicalLines": 553,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-test-cli.ts": {
+      "countedLines": 542,
+      "physicalLines": 567,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/watch-src.spec.ts": {
+      "countedLines": 26,
+      "physicalLines": 29,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/watch-src.ts": {
+      "countedLines": 14,
+      "physicalLines": 27,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/AnsiText.tsx": {
+      "countedLines": 102,
+      "physicalLines": 110,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/baseline-source-availability.spec.ts": {
+      "countedLines": 45,
+      "physicalLines": 51,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/baseline-source-availability.ts": {
+      "countedLines": 38,
+      "physicalLines": 45,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineAccordion.spec.tsx": {
+      "countedLines": 223,
+      "physicalLines": 236,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineAccordion.tsx": {
+      "countedLines": 567,
+      "physicalLines": 617,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineGeometryWarning.spec.tsx": {
+      "countedLines": 81,
+      "physicalLines": 87,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineGeometryWarning.tsx": {
+      "countedLines": 122,
+      "physicalLines": 129,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineHistoryView.spec.tsx": {
+      "countedLines": 205,
+      "physicalLines": 216,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/BaselineHistoryView.tsx": {
+      "countedLines": 793,
+      "physicalLines": 840,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/capture-diagnostics.spec.ts": {
+      "countedLines": 49,
+      "physicalLines": 53,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/capture-diagnostics.ts": {
+      "countedLines": 27,
+      "physicalLines": 35,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/capture.spec.ts": {
+      "countedLines": 329,
+      "physicalLines": 371,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/capture.ts": {
+      "countedLines": 896,
+      "physicalLines": 1036,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ChangeSetsView.spec.tsx": {
+      "countedLines": 117,
+      "physicalLines": 124,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ChangeSetsView.tsx": {
+      "countedLines": 690,
+      "physicalLines": 732,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/chromium-capture.spec.ts": {
+      "countedLines": 126,
+      "physicalLines": 133,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/chromium-capture.ts": {
+      "countedLines": 198,
+      "physicalLines": 219,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/CompareView.spec.tsx": {
+      "countedLines": 300,
+      "physicalLines": 333,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/CompareView.tsx": {
+      "countedLines": 1131,
+      "physicalLines": 1207,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/CompareZoomControl.spec.tsx": {
+      "countedLines": 64,
+      "physicalLines": 73,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/CompareZoomControl.tsx": {
+      "countedLines": 151,
+      "physicalLines": 157,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ConfigurationPanel.spec.tsx": {
+      "countedLines": 297,
+      "physicalLines": 316,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ConfigurationPanel.tsx": {
+      "countedLines": 1781,
+      "physicalLines": 1861,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/diff-assets.spec.ts": {
+      "countedLines": 49,
+      "physicalLines": 54,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/diff-assets.ts": {
+      "countedLines": 117,
+      "physicalLines": 145,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/DiffHistogram.tsx": {
+      "countedLines": 62,
+      "physicalLines": 66,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/DiffResult.tsx": {
+      "countedLines": 71,
+      "physicalLines": 74,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/environment-selection.spec.ts": {
+      "countedLines": 123,
+      "physicalLines": 131,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/environment-selection.ts": {
+      "countedLines": 110,
+      "physicalLines": 122,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/EnvironmentSplitButton.tsx": {
+      "countedLines": 158,
+      "physicalLines": 167,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/hooks.ts": {
+      "countedLines": 1529,
+      "physicalLines": 1686,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/image-comparison.spec.ts": {
+      "countedLines": 36,
+      "physicalLines": 41,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/image-comparison.ts": {
+      "countedLines": 129,
+      "physicalLines": 143,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ImageGallery.spec.tsx": {
+      "countedLines": 38,
+      "physicalLines": 43,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ImageGallery.tsx": {
+      "countedLines": 40,
+      "physicalLines": 42,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ImageLightbox.spec.tsx": {
+      "countedLines": 107,
+      "physicalLines": 116,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ImageLightbox.tsx": {
+      "countedLines": 190,
+      "physicalLines": 206,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/InteractionsPanel.tsx": {
+      "countedLines": 154,
+      "physicalLines": 164,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/LiveVisibilityToggle.spec.tsx": {
+      "countedLines": 28,
+      "physicalLines": 31,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/LiveVisibilityToggle.tsx": {
+      "countedLines": 47,
+      "physicalLines": 55,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/load-playwright-diff.ts": {
+      "countedLines": 201,
+      "physicalLines": 222,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ModeSelector.spec.tsx": {
+      "countedLines": 117,
+      "physicalLines": 129,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ModeSelector.tsx": {
+      "countedLines": 286,
+      "physicalLines": 303,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/Panel.tsx": {
+      "countedLines": 2767,
+      "physicalLines": 2889,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelResultSummary.spec.tsx": {
+      "countedLines": 29,
+      "physicalLines": 32,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelResultSummary.tsx": {
+      "countedLines": 111,
+      "physicalLines": 117,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelStatusBar.spec.tsx": {
+      "countedLines": 330,
+      "physicalLines": 362,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelStatusBar.tsx": {
+      "countedLines": 327,
+      "physicalLines": 355,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelView.spec.tsx": {
+      "countedLines": 86,
+      "physicalLines": 94,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PanelView.tsx": {
+      "countedLines": 128,
+      "physicalLines": 142,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PlacementPad.spec.tsx": {
+      "countedLines": 101,
+      "physicalLines": 113,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/PlacementPad.tsx": {
+      "countedLines": 155,
+      "physicalLines": 164,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/RangeNumberInput.spec.tsx": {
+      "countedLines": 49,
+      "physicalLines": 55,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/RangeNumberInput.tsx": {
+      "countedLines": 108,
+      "physicalLines": 116,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ReviewStatusPad.spec.tsx": {
+      "countedLines": 60,
+      "physicalLines": 68,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/ReviewStatusPad.tsx": {
+      "countedLines": 78,
+      "physicalLines": 83,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/settings.spec.ts": {
+      "countedLines": 105,
+      "physicalLines": 116,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/settings.ts": {
+      "countedLines": 132,
+      "physicalLines": 155,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/styled.ts": {
+      "countedLines": 602,
+      "physicalLines": 704,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/usePlaySteps.spec.ts": {
+      "countedLines": 117,
+      "physicalLines": 124,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/usePlaySteps.ts": {
+      "countedLines": 405,
+      "physicalLines": 477,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/VisualDeltaHeader.tsx": {
+      "countedLines": 451,
+      "physicalLines": 469,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/VisualStatusBadge.spec.tsx": {
+      "countedLines": 15,
+      "physicalLines": 17,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/VisualStatusBadge.tsx": {
+      "countedLines": 69,
+      "physicalLines": 80,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/compare-pixels.spec.ts": {
+      "countedLines": 39,
+      "physicalLines": 47,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/compare-pixels.ts": {
+      "countedLines": 220,
+      "physicalLines": 236,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/config.spec.ts": {
+      "countedLines": 80,
+      "physicalLines": 87,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/config.ts": {
+      "countedLines": 132,
+      "physicalLines": 176,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/index.ts": {
+      "countedLines": 33,
+      "physicalLines": 50,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/readiness.ts": {
+      "countedLines": 48,
+      "physicalLines": 58,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/suite.spec.ts": {
+      "countedLines": 52,
+      "physicalLines": 57,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/suite.ts": {
+      "countedLines": 725,
+      "physicalLines": 776,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/write-diff-artifacts.spec.ts": {
+      "countedLines": 156,
+      "physicalLines": 168,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/write-diff-artifacts.ts": {
+      "countedLines": 311,
+      "physicalLines": 323,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preset.ts": {
+      "countedLines": 105,
+      "physicalLines": 149,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview.ts": {
+      "countedLines": 194,
+      "physicalLines": 214,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/capture-params.ts": {
+      "countedLines": 104,
+      "physicalLines": 112,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/capture-ready.spec.ts": {
+      "countedLines": 86,
+      "physicalLines": 94,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/capture-ready.ts": {
+      "countedLines": 97,
+      "physicalLines": 114,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/highlight-ignore.ts": {
+      "countedLines": 74,
+      "physicalLines": 81,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/init.spec.ts": {
+      "countedLines": 80,
+      "physicalLines": 84,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/init.ts": {
+      "countedLines": 184,
+      "physicalLines": 191,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/normalize.spec.ts": {
+      "countedLines": 143,
+      "physicalLines": 150,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/normalize.ts": {
+      "countedLines": 133,
+      "physicalLines": 142,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/overlay-image-error.spec.ts": {
+      "countedLines": 12,
+      "physicalLines": 19,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/overlay-info.ts": {
+      "countedLines": 77,
+      "physicalLines": 79,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/overlay.ts": {
+      "countedLines": 2046,
+      "physicalLines": 2278,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/render-lifecycle.spec.ts": {
+      "countedLines": 30,
+      "physicalLines": 33,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/preview/render-lifecycle.ts": {
+      "countedLines": 68,
+      "physicalLines": 77,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/runner/index.ts": {
+      "countedLines": 59,
+      "physicalLines": 67,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/action-scope.spec.ts": {
+      "countedLines": 166,
+      "physicalLines": 179,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/action-scope.ts": {
+      "countedLines": 58,
+      "physicalLines": 76,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/affected-types.ts": {
+      "countedLines": 31,
+      "physicalLines": 55,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/ansi-log.spec.ts": {
+      "countedLines": 132,
+      "physicalLines": 144,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/ansi-log.ts": {
+      "countedLines": 396,
+      "physicalLines": 429,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-history.ts": {
+      "countedLines": 134,
+      "physicalLines": 149,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-image-readiness.spec.ts": {
+      "countedLines": 25,
+      "physicalLines": 28,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-image-readiness.ts": {
+      "countedLines": 22,
+      "physicalLines": 24,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-readiness.spec.ts": {
+      "countedLines": 68,
+      "physicalLines": 74,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-readiness.ts": {
+      "countedLines": 49,
+      "physicalLines": 59,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-url.spec.ts": {
+      "countedLines": 80,
+      "physicalLines": 88,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/baseline-url.ts": {
+      "countedLines": 83,
+      "physicalLines": 101,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capabilities.spec.ts": {
+      "countedLines": 62,
+      "physicalLines": 67,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capabilities.ts": {
+      "countedLines": 80,
+      "physicalLines": 103,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-params-attrs.ts": {
+      "countedLines": 13,
+      "physicalLines": 16,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-profile.spec.ts": {
+      "countedLines": 49,
+      "physicalLines": 51,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-profile.ts": {
+      "countedLines": 108,
+      "physicalLines": 115,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-subject-types.ts": {
+      "countedLines": 35,
+      "physicalLines": 45,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-target.spec.ts": {
+      "countedLines": 84,
+      "physicalLines": 96,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/capture-target.ts": {
+      "countedLines": 64,
+      "physicalLines": 76,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/change-events.ts": {
+      "countedLines": 23,
+      "physicalLines": 26,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/change-sets.ts": {
+      "countedLines": 136,
+      "physicalLines": 148,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-insets.spec.ts": {
+      "countedLines": 68,
+      "physicalLines": 72,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-insets.ts": {
+      "countedLines": 65,
+      "physicalLines": 86,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-story-types.ts": {
+      "countedLines": 65,
+      "physicalLines": 79,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-viewport.spec.ts": {
+      "countedLines": 22,
+      "physicalLines": 24,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-viewport.ts": {
+      "countedLines": 43,
+      "physicalLines": 56,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-zoom.spec.ts": {
+      "countedLines": 109,
+      "physicalLines": 116,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/compare-zoom.ts": {
+      "countedLines": 93,
+      "physicalLines": 117,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/config-types.ts": {
+      "countedLines": 91,
+      "physicalLines": 119,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/environments.spec.ts": {
+      "countedLines": 40,
+      "physicalLines": 43,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/environments.ts": {
+      "countedLines": 116,
+      "physicalLines": 134,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/failure-mode.spec.ts": {
+      "countedLines": 31,
+      "physicalLines": 33,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/failure-mode.ts": {
+      "countedLines": 26,
+      "physicalLines": 30,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/geometry-mismatch.spec.ts": {
+      "countedLines": 50,
+      "physicalLines": 53,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/geometry-mismatch.ts": {
+      "countedLines": 58,
+      "physicalLines": 69,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/ignore.spec.ts": {
+      "countedLines": 32,
+      "physicalLines": 34,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/ignore.ts": {
+      "countedLines": 50,
+      "physicalLines": 59,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/interaction-capture.spec.ts": {
+      "countedLines": 164,
+      "physicalLines": 190,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/interaction-capture.ts": {
+      "countedLines": 164,
+      "physicalLines": 248,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/manager-options.spec.ts": {
+      "countedLines": 25,
+      "physicalLines": 28,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/manager-options.ts": {
+      "countedLines": 14,
+      "physicalLines": 20,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/mode-results.spec.ts": {
+      "countedLines": 45,
+      "physicalLines": 48,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/mode-results.ts": {
+      "countedLines": 36,
+      "physicalLines": 43,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/modes.spec.ts": {
+      "countedLines": 97,
+      "physicalLines": 106,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/modes.ts": {
+      "countedLines": 113,
+      "physicalLines": 142,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/overlay-session.spec.ts": {
+      "countedLines": 204,
+      "physicalLines": 225,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/overlay-session.ts": {
+      "countedLines": 147,
+      "physicalLines": 186,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-background.spec.ts": {
+      "countedLines": 79,
+      "physicalLines": 84,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-background.ts": {
+      "countedLines": 49,
+      "physicalLines": 62,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-chip.spec.ts": {
+      "countedLines": 162,
+      "physicalLines": 184,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-chip.ts": {
+      "countedLines": 174,
+      "physicalLines": 209,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-layout.spec.ts": {
+      "countedLines": 251,
+      "physicalLines": 270,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/preview-layout.ts": {
+      "countedLines": 241,
+      "physicalLines": 284,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/project-defaults.spec.ts": {
+      "countedLines": 21,
+      "physicalLines": 22,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/project-defaults.ts": {
+      "countedLines": 178,
+      "physicalLines": 186,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/status-log.spec.ts": {
+      "countedLines": 61,
+      "physicalLines": 66,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/status-log.ts": {
+      "countedLines": 41,
+      "physicalLines": 53,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/story-config.spec.ts": {
+      "countedLines": 82,
+      "physicalLines": 89,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/story-config.ts": {
+      "countedLines": 301,
+      "physicalLines": 321,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/story-facts.ts": {
+      "countedLines": 45,
+      "physicalLines": 61,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/visual-capture-step.ts": {
+      "countedLines": 60,
+      "physicalLines": 87,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/visual-result-classification.spec.ts": {
+      "countedLines": 121,
+      "physicalLines": 127,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/visual-result-classification.ts": {
+      "countedLines": 108,
+      "physicalLines": 127,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/workflow-config.spec.ts": {
+      "countedLines": 82,
+      "physicalLines": 87,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/shared/workflow-config.ts": {
+      "countedLines": 158,
+      "physicalLines": 175,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/CompareAlignment.stories.tsx": {
+      "countedLines": 146,
+      "physicalLines": 158,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/DiffResult.stories.tsx": {
+      "countedLines": 154,
+      "physicalLines": 163,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/DiffResultFixture.tsx": {
+      "countedLines": 73,
+      "physicalLines": 76,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/docs/spec-chapters.spec.ts": {
+      "countedLines": 32,
+      "physicalLines": 34,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/docs/spec-chapters.ts": {
+      "countedLines": 101,
+      "physicalLines": 117,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/docs/spec-links.ts": {
+      "countedLines": 57,
+      "physicalLines": 60,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/docs/SpecMarkdown.tsx": {
+      "countedLines": 196,
+      "physicalLines": 211,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/AiReply.stories.tsx": {
+      "countedLines": 43,
+      "physicalLines": 46,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/Card.stories.tsx": {
+      "countedLines": 70,
+      "physicalLines": 78,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/demo-subjects.tsx": {
+      "countedLines": 352,
+      "physicalLines": 368,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/example-sizes.ts": {
+      "countedLines": 41,
+      "physicalLines": 57,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/FilterChip.stories.tsx": {
+      "countedLines": 43,
+      "physicalLines": 46,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/FormField.stories.tsx": {
+      "countedLines": 67,
+      "physicalLines": 75,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/Gallery.stories.tsx": {
+      "countedLines": 68,
+      "physicalLines": 73,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/Interactions.stories.tsx": {
+      "countedLines": 73,
+      "physicalLines": 79,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/examples/Modes.stories.tsx": {
+      "countedLines": 57,
+      "physicalLines": 61,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/FormPlaceholder.tsx": {
+      "countedLines": 17,
+      "physicalLines": 23,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/Button.stories.tsx": {
+      "countedLines": 23,
+      "physicalLines": 26,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/Dialog.stories.tsx": {
+      "countedLines": 43,
+      "physicalLines": 46,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/Empty.stories.tsx": {
+      "countedLines": 21,
+      "physicalLines": 22,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/Popover.stories.tsx": {
+      "countedLines": 27,
+      "physicalLines": 28,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/PowerSearch.stories.tsx": {
+      "countedLines": 73,
+      "physicalLines": 77,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/SendButton.stories.tsx": {
+      "countedLines": 25,
+      "physicalLines": 26,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/StubSubject.tsx": {
+      "countedLines": 30,
+      "physicalLines": 32,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/host-stubs/TaskDueCalendar.stories.tsx": {
+      "countedLines": 38,
+      "physicalLines": 39,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/mock-visual-backend.ts": {
+      "countedLines": 163,
+      "physicalLines": 173,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/OverlayChipDemo.svelte": {
+      "countedLines": 238,
+      "physicalLines": 270,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/OverlaySessionDemo.svelte": {
+      "countedLines": 154,
+      "physicalLines": 174,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/panel-fixtures.tsx": {
+      "countedLines": 357,
+      "physicalLines": 372,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/PanelChrome.stories.tsx": {
+      "countedLines": 274,
+      "physicalLines": 293,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/PanelShell.stories.tsx": {
+      "countedLines": 788,
+      "physicalLines": 834,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/PanelShell.tsx": {
+      "countedLines": 670,
+      "physicalLines": 705,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/ReactThemeHost.svelte": {
+      "countedLines": 33,
+      "physicalLines": 42,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/ReadinessFixture.stories.tsx": {
+      "countedLines": 35,
+      "physicalLines": 38,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/ResponsiveViewportCanary.tsx": {
+      "countedLines": 35,
+      "physicalLines": 39,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/SplitInsetDemo.svelte": {
+      "countedLines": 169,
+      "physicalLines": 197,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/svelte-shims.d.ts": {
+      "countedLines": 5,
+      "physicalLines": 5,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/SvelteHost.tsx": {
+      "countedLines": 36,
+      "physicalLines": 47,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/TestingModule.stories.tsx": {
+      "countedLines": 214,
+      "physicalLines": 231,
+      "kind": "story",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/TestingModuleShell.tsx": {
+      "countedLines": 157,
+      "physicalLines": 170,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/theme.tsx": {
+      "countedLines": 18,
+      "physicalLines": 25,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/stories/ThemeHost.tsx": {
+      "countedLines": 24,
+      "physicalLines": 27,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/test/render.tsx": {
+      "countedLines": 15,
+      "physicalLines": 18,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/test/setup.ts": {
+      "countedLines": 87,
+      "physicalLines": 101,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/types.ts": {
+      "countedLines": 65,
+      "physicalLines": 82,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/visual-diff-sidecar.ts": {
+      "countedLines": 88,
+      "physicalLines": 135,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "tests/manager-sidebar.spec.ts": {
+      "countedLines": 289,
+      "physicalLines": 317,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/manager-test-support.ts": {
+      "countedLines": 380,
+      "physicalLines": 389,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/manager.spec.ts": {
+      "countedLines": 2071,
+      "physicalLines": 2219,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/overlay-placement.spec.ts": {
+      "countedLines": 481,
+      "physicalLines": 511,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/panel.spec.ts": {
+      "countedLines": 126,
+      "physicalLines": 133,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/visual-matrix/fixture.ts": {
+      "countedLines": 103,
+      "physicalLines": 110,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/visual-matrix/storybook.spec.ts": {
+      "countedLines": 11,
+      "physicalLines": 13,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "tests/visual/storybook.spec.ts": {
+      "countedLines": 2,
+      "physicalLines": 3,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    }
+  }
+}

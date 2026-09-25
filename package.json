@@ -81,6 +81,7 @@
     "test:browsers": "node ./scripts/test-browser-matrix.mjs",
     "changeset": "changeset",
     "ci:image:check": "node ./scripts/check-ci-image.mjs",
+    "check:architecture": "node ./scripts/check-architecture.mjs",
     "spec:lint": "markdownlint-cli2 --config .markdownlint-cli2.jsonc",
     "spec:validate": "spec-validator validate",
     "spec:build": "spec-validator build",
