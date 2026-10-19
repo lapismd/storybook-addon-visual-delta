@@ -22,6 +22,7 @@ import { playwrightStoryIdGrep } from "./story-id-grep.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
 import type { VisualTestFailureMode } from "../shared/failure-mode.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
+import { isStorybookStaticComplete } from "./static-build.js";
 import {
   resolveBaselinePathMode,
   resolveSnapshotDir,
@@ -311,10 +312,6 @@ export async function runVisualTestCli(
 
   if (options.dryRun) {
     if (options.selection === "stories") {
-      if (requestedStoryIds.length === 0) {
-        console.error("Exact visual tests require at least one --story-id");
-        return 1;
-      }
       const runnable = new Set(plan.runnableStoryIds);
       const missing = requestedStoryIds.filter((storyId) => !runnable.has(storyId));
       if (missing.length > 0) {
@@ -324,7 +321,10 @@ export async function runVisualTestCli(
     }
     return 0;
   }
-  if (options.selection === "affected" && plan.summary.noChange) {
+  if (
+    options.selection === "affected" && plan.summary.noChange &&
+    isStorybookStaticComplete(root)
+  ) {
     recordAffectedVisualResultsForPlan(plan, [], hostOptions);
     return 0;
   }
@@ -420,7 +420,7 @@ export async function runVisualTestCli(
   };
 
   let cachedTargets = resolveCachedTargets(plan, selectedStoryIds);
-  if (!forceRebuild) {
+  if (!forceRebuild && selectedStoryIds.length > 0) {
     const cachedExit = completeCachedRun(cachedTargets, selectedStoryIds);
     if (cachedExit != null) return cachedExit;
   }

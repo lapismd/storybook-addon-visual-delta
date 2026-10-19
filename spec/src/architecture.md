@@ -93,6 +93,13 @@ outside the frozen workspace remains invalid.
 
 Baseline mutation adds a write gate before Playwright starts and an invalidation step after the requested files are written. Repository automation occurs after the mutation succeeds and cannot affect capture semantics.
 
+Under VD-ARCH-001, cleanup of a private Docker stage MUST work for an
+unprivileged Linux host even when the canonical container created root-owned
+files. A permission-only recovery MAY use that same immutable image to empty
+only the generated private staging directory; it MUST reject symlinked or
+out-of-root targets, use no shell interpolation, and leave consumer source,
+baselines and unrelated files untouched. Other cleanup errors MUST remain fatal.
+
 Compare-only artifact return is a narrow exception to the otherwise read-only
 host workspace boundary. The runner may stage only result sidecars, their
 `.actual.png` / `.diff.png` diagnostics, and the two package-owned affected

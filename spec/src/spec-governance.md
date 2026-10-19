@@ -1,5 +1,17 @@
 # Visual Delta specification governance
 
+The cold Linux capture correction adds a native non-root ARM64 CI proof using
+the existing immutable canonical image. It creates genuinely root-owned private
+stage files, proves ordinary host deletion fails, and verifies bounded recovery
+preserves external user data. The image, browser profile and release approval
+policy remain unchanged; no new image is published.
+This separate host-only ownership probe uses pinned Node 24.15.0/pnpm 10.32.1
+because a root-owned job container cannot prove non-root host deletion. Existing
+package and browser jobs retain their authenticated image-only toolchain policy.
+Maintained Changesets 3 and its changelog adapter retain the single-package pnpm
+reader contract. Patched same-major Vite/Markdown-it development resolutions do
+not authorize publication or transfer the consumed 0.0.8 audit exception.
+
 This reference defines how the specification leads implementation, which changes require a specification update, and how local and continuous-integration checks enforce that contract.
 
 ## Normative requirements

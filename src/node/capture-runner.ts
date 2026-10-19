@@ -12,7 +12,6 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -20,6 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import { cleanupCaptureStage } from "./capture-stage-cleanup.js";
 import {
   CANONICAL_VISUAL_CAPTURE_PROFILE,
   validateVisualCaptureProfile,
@@ -1033,7 +1033,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           };
         }
         if (exitCode !== 0) {
-          rmSync(staged.parent, { recursive: true, force: true });
+          cleanupCaptureStage(staged.parent, image);
           return { exitCode, profile };
         }
         return {
@@ -1047,7 +1047,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
           ),
         };
       } catch (error) {
-        rmSync(staged.parent, { recursive: true, force: true });
+        cleanupCaptureStage(staged.parent, image);
         throw error;
       }
     },
@@ -1206,10 +1206,10 @@ export async function runVisualDeltaCaptureJob(options: {
     }
   } finally {
     if (cleanupDockerStage && result.stagedArtifactRoot) {
-      rmSync(path.dirname(result.stagedArtifactRoot), {
-        recursive: true,
-        force: true,
-      });
+      cleanupCaptureStage(
+        path.dirname(result.stagedArtifactRoot),
+        visualCaptureProfileImageReference(result.profile),
+      );
     }
   }
   return result;
