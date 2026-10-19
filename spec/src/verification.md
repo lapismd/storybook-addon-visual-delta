@@ -401,6 +401,19 @@ the supported DOM test runtime. `scripts/check-ci-image.spec.mjs` MUST prove
 that each `pnpm test:browsers` run step restores `HOME=/root` inside its job
 container, without introducing workflow- or job-scoped root HOME.
 
+### Exact-source image bootstrap regression
+
+VD-GOV-012 now binds manual publication to an exact approved source SHA and a
+protected `ci-image` environment. A false publication input skips publication.
+The source validator rejects floating/changed revisions and unpaired Playwright
+versions; image builds retain workspace overrides and verify the selected
+Playwright version rather than hardcoding a previous browser cohort. Candidate
+image publication remains separately approved and does not promote the current
+capture-profile lock. See
+[`2026-10-19-image-bootstrap.md`](../records/2026-10-19-image-bootstrap.md) for
+commands and remaining qualification. `scripts/check-ci-image-source.spec.mjs`
+and the publication guard tests cover this boundary.
+
 ### Manual CI-image publication
 
 `.github/workflows/publish-visual-delta-ci.yml` runs only through manual

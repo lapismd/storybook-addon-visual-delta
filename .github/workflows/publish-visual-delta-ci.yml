@@ -3,6 +3,15 @@ name: Publish Visual Delta CI image
 on:
   workflow_dispatch:
     inputs:
+      source:
+        description: Exact reviewed source SHA for the image (40 characters)
+        required: true
+        type: string
+      publish:
+        description: Explicitly approve publication of this exact reviewed image source
+        required: true
+        default: false
+        type: boolean
       tag:
         description: Unique audit tag, for example node24.15.0-pnpm10.32.1-playwright1.61.1-r1
         required: true
@@ -26,9 +35,14 @@ defaults:
 jobs:
   publish:
     name: Build and publish CI image
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'lapismd/storybook-addon-visual-delta' && inputs.publish
+    environment: ci-image
     runs-on: ubuntu-latest
     timeout-minutes: 120
     outputs:
+      source_revision: ${{ steps.source.outputs.source_revision }}
+      playwright_version: ${{ steps.source.outputs.playwright_version }}
+      lock_sha256: ${{ steps.source.outputs.lock_sha256 }}
       image_reference: ${{ steps.manifest.outputs.image_reference }}
       manifest_digest: ${{ steps.manifest.outputs.manifest_digest }}
       amd64_digest: ${{ steps.manifest.outputs.amd64_digest }}
@@ -46,8 +60,28 @@ jobs:
           test "$IMAGE_TAG" != "latest"
           [[ "$IMAGE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,127}$ ]]
 
+      - name: Require an exact reviewed image source
+        env:
+          CI_IMAGE_SOURCE: ${{ inputs.source }}
+        run: '[[ "$CI_IMAGE_SOURCE" =~ ^[a-f0-9]{40}$ ]]'
+
       - name: Check out the selected revision
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source }}
+          persist-credentials: false
+
+      - name: Verify source and paired browser versions
+        id: source
+        env:
+          CI_IMAGE_SOURCE: ${{ inputs.source }}
+          CI_IMAGE_PUBLICATION_APPROVED: ${{ inputs.publish }}
+        run: |
+          docker run --rm \
+            -e CI_IMAGE_SOURCE -e CI_IMAGE_PUBLICATION_APPROVED \
+            -v "$GITHUB_WORKSPACE:/source:ro" -w /source \
+            ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a \
+            node scripts/check-ci-image-source.mjs --stdout >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -81,12 +115,14 @@ jobs:
           file: docker/visual-delta-ci/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            PLAYWRIGHT_VERSION=${{ steps.source.outputs.playwright_version }}
           tags: |
             ${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}
             ${{ env.VISUAL_DELTA_CI_IMAGE }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ inputs.source }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -137,13 +173,15 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Verify native x64 tooling and browsers
+        env:
+          EXPECTED_PLAYWRIGHT_VERSION: ${{ needs.publish.outputs.playwright_version }}
         run: |
           test "$(uname -m)" = "x86_64"
           cd /build
           node --version
           pnpm --version
           mdbook --version
-          pnpm exec playwright --version
+          pnpm exec playwright --version | grep -Fx "Version ${EXPECTED_PLAYWRIGHT_VERSION}"
           node --input-type=module <<'NODE'
           import { chromium, firefox, webkit } from "playwright";
           for (const browserType of [chromium, firefox, webkit]) {
@@ -176,6 +214,8 @@ jobs:
     steps:
       - name: Verify native ARM64 tooling and browsers
         id: provenance
+        env:
+          EXPECTED_PLAYWRIGHT_VERSION: ${{ needs.publish.outputs.playwright_version }}
         run: |
           test "$(uname -m)" = "aarch64"
           cd /build
@@ -187,7 +227,7 @@ jobs:
           test "$node_version" = "24.15.0"
           test "$npm_version" = "12.0.2"
           test "$pnpm_version" = "10.32.1"
-          test "$playwright_version" = "1.61.1"
+          test "$playwright_version" = "$EXPECTED_PLAYWRIGHT_VERSION"
           test "$mdbook_version" = "v0.5.4"
           command -v fc-list >/dev/null
           evidence_dir="$GITHUB_WORKSPACE/visual-delta-arm64-native-evidence"
@@ -257,6 +297,8 @@ jobs:
     steps:
       - name: Assemble profile from published and native ARM64 evidence
         env:
+          SOURCE_REVISION: ${{ needs.publish.outputs.source_revision }}
+          LOCK_SHA256: ${{ needs.publish.outputs.lock_sha256 }}
           IMAGE: ${{ env.VISUAL_DELTA_CI_IMAGE }}
           IMAGE_DIGEST: ${{ needs.publish.outputs.manifest_digest }}
           ARM64_IMAGE_DIGEST: ${{ needs.publish.outputs.arm64_digest }}
@@ -272,6 +314,8 @@ jobs:
           [[ "$FONT_MANIFEST_SHA256" =~ ^sha256:[a-f0-9]{64}$ ]]
           test "$(jq -r 'keys | sort | join(",")' <<<"$BROWSER_VERSIONS")" = "chromium,firefox,webkit"
           jq -n \
+            --arg sourceRevision "$SOURCE_REVISION" \
+            --arg lockSha256 "$LOCK_SHA256" \
             --arg image "$IMAGE" \
             --arg imageDigest "$IMAGE_DIGEST" \
             --arg arm64ImageDigest "$ARM64_IMAGE_DIGEST" \
@@ -282,6 +326,8 @@ jobs:
             --argjson browserVersions "$BROWSER_VERSIONS" \
             --arg fontManifestSha256 "$FONT_MANIFEST_SHA256" \
             '{
+              sourceRevision: $sourceRevision,
+              lockSha256: $lockSha256,
               schemaVersion: 1,
               id: "visual-delta-linux-arm64-v1",
               os: "linux",

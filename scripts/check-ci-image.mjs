@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { REQUIRED_PUBLICATION_SNIPPETS } from "./ci-image-publication-policy.mjs";
+
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -10,6 +12,7 @@ export const DEFAULT_REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const EXPECTED_DOCKERIGNORE = `*
 !package.json
 !pnpm-lock.yaml
+!pnpm-workspace.yaml
 `;
 
 const REQUIRED_DOCKERFILE_SNIPPETS = [
@@ -33,48 +36,11 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
   'test "$(npm --version)" = "12.0.2"',
   'test "$(pnpm --version)" = "10.32.1"',
   'mdbook --version | grep -Fx "mdbook v0.5.4"',
-  'pnpm exec playwright --version | grep -Fx "Version 1.61.1"',
+  "ARG PLAYWRIGHT_VERSION",
+  "COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./",
+  'pnpm exec playwright --version | grep -Fx "Version ${PLAYWRIGHT_VERSION}"',
   "find /ms-playwright -type f -name firefox",
   "find /ms-playwright -type f -name MiniBrowser",
-];
-
-const REQUIRED_PUBLICATION_SNIPPETS = [
-  "workflow_dispatch:",
-  "defaults:\n  run:\n    shell: bash",
-  "contents: read",
-  "packages: write",
-  "cancel-in-progress: false",
-  'test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"',
-  'test "$IMAGE_TAG" != "latest"',
-  'if docker buildx imagetools inspect "$AUDIT_IMAGE" >/dev/null 2>&1; then',
-  "docker/login-action@v4",
-  "docker/setup-qemu-action@v4",
-  "docker/setup-buildx-action@v4",
-  "docker/build-push-action@v7",
-  "platforms: linux/amd64,linux/arm64",
-  "${{ env.VISUAL_DELTA_CI_IMAGE }}:${{ inputs.tag }}",
-  "${{ env.VISUAL_DELTA_CI_IMAGE }}:latest",
-  "cache-from: type=gha",
-  "cache-to: type=gha,mode=max",
-  'test "$audit_manifest" = "$latest_manifest"',
-  'test "$amd64_count" = "1"',
-  'test "$arm64_count" = "1"',
-  'anonymous_docker_config="$(mktemp -d)"',
-  'DOCKER_CONFIG="$anonymous_docker_config"',
-  "arm64_digest=",
-  "browser.version()",
-  "fc-list --format='%{file}\\n'",
-  "fontManifestSha256",
-  "visual-delta-arm64-native-evidence",
-  "path: visual-delta-arm64-native-evidence/",
-  "needs: [publish, smoke-x64, smoke-arm64]",
-  'id: "visual-delta-linux-arm64-v1"',
-  "arm64ImageDigest",
-  "visual-delta-capture-profile.json",
-  "Smoke published image on x64",
-  "Smoke published image on ARM64",
-  "runs-on: ubuntu-24.04-arm",
-  "image: ${{ needs.publish.outputs.image_reference }}",
 ];
 
 const EXPECTED_CONSUMER_WORKFLOWS = {
@@ -514,7 +480,7 @@ export function validateCiImageSources({
   }
   if (dockerignore !== EXPECTED_DOCKERIGNORE) {
     errors.push(
-      ".dockerignore: build context must contain only package.json and pnpm-lock.yaml",
+      ".dockerignore: build context must contain only package.json, pnpm-lock.yaml and pnpm-workspace.yaml",
     );
   }
 

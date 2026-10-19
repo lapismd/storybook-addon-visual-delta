@@ -63,8 +63,8 @@
       "forbiddenImportCount": 0
     },
     "scripts/check-ci-image.mjs": {
-      "countedLines": 653,
-      "physicalLines": 693,
+      "countedLines": 619,
+      "physicalLines": 659,
       "kind": "script",
       "forbiddenImportCount": 0
     },
