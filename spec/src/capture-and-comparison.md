@@ -24,6 +24,11 @@ subject under test.
 
 ## Deterministic browser environment
 
+Under VD-CAP-006, the built-in runner's doctor verifies the exact Playwright
+version from the resolved canonical profile. It must not retain a separate
+browser version when a reviewed image/profile is upgraded. Image provenance
+and compare-only acceptance remain required before promoting a new profile.
+
 The authoritative environment is:
 
 | Setting                    | Value                                                           |

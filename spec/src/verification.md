@@ -628,6 +628,22 @@ use Playwright 1.61.1. Existing image checks must reject that mismatch. Native
 image publication, immutable profile promotion and ARM64 canary remain pending,
 as does the independent audit decision. No baseline is changed.
 
+## 2026-10-19 approved browser-image cutover
+
+The user approved publishing the exact 1.62.1 CI-image candidate after producer
+PR #29 passed all five required checks. Its immutable source is
+`2fa7976031bd24cbfa646596c22586c1ad6992e7`; publication run
+[`39320101643`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/39320101643)
+records the build and native smoke. Profile promotion waits for that measured
+artifact and a successful compare-only canary on the dependency PR. No baseline
+mutation or npm publication is approved by this image decision.
+
+The built-in doctor now checks the selected profile version. Its new
+`src/node/capture-runner-doctor.spec.ts` regression fails twice before repair
+when profiles select newer Playwright versions; it must pass after repair.
+Exact publication identities, verification and remaining gates are recorded in
+[`2026-10-19-playwright-profile-cutover.md`](../records/2026-10-19-playwright-profile-cutover.md).
+
 ## Review checklist
 
 Before declaring conformance:

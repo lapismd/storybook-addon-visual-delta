@@ -887,7 +887,7 @@ export function createDockerVisualDeltaCaptureRunner(): VisualDeltaCaptureRunner
             [
               'test "$(uname -m)" = "aarch64"',
               "test -r /workspace/package.json",
-              'cd /build && pnpm exec playwright --version | grep -Fx "Version 1.61.1"',
+              `cd /build && pnpm exec playwright --version | grep -Fx "Version ${profile.playwrightVersion}"`,
               "test -n \"$(find /ms-playwright -type f -name firefox -perm -u=x -print -quit)\"",
               "test -n \"$(find /ms-playwright -type f -name MiniBrowser -perm -u=x -print -quit)\"",
             ].join(" && "),
