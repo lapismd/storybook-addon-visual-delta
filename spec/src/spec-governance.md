@@ -167,6 +167,13 @@ updates a visual baseline.
 
 ## Agent workflow
 
+The Wave 1 dependency repair retains the blocking release audit. Patched
+development-tool resolutions and scoped Markdown-tool overrides must pass the
+same frozen-install, package and hosted browser gates. The separately recorded
+two-advisory exception proposal is non-normative, unapproved and inactive; it
+cannot authorize an audit suppression or public release. VD-GOV-016 approval
+and existing publication/provenance obligations remain unchanged.
+
 For every protected change:
 
 1. Inspect Jujutsu status and preserve unrelated work.
