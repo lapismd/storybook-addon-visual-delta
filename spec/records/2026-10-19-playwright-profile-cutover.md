@@ -98,3 +98,19 @@ two-advisory npm audit and clean-consumer/public-package gates remain open.
   the committed candidate contains no local artifacts or baseline modifications.
 - Hosted PR CI qualifies the exact pushed candidate; no local browser run is
   substituted for its cold panel/manager/all-browser ARM64 acceptance.
+
+## Hosted candidate formatting regression
+
+At head `0900233c33ad5cdf62956441faf5fc923303f4ec`, hosted spec run
+`39325798630` passes 93/94 script tests. Architecture test `passes the current
+repository tree against its baseline` rejects the profile spec growing from
+49 to 51 counted lines. A final formatter had wrapped one existing assertion
+after the local architecture run. Restore that assertion's original layout;
+retain every assertion and the existing 49-line budget. No baseline or product
+behavior changes. Focused architecture and full spec qualification are rerun
+after this correction, then the exact pushed head must pass hosted checks.
+
+The correction passes the exact architecture regression (1/1), profile unit
+suite (2/2), and all six spec lanes (94/94 scripts). The prior package run
+already passed 553 tests; only the existing assertion's whitespace and its
+verification record changed. Hosted CI is rerun on the final corrected head.

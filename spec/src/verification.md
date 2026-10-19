@@ -649,6 +649,8 @@ mutation or npm publication is approved by this image decision.
 The built-in doctor now checks the selected profile version. Its new
 `src/node/capture-runner-doctor.spec.ts` regression fails twice before repair
 when profiles select newer Playwright versions; it must pass after repair.
+The profile-lock assertion retains its existing counted-line budget; a hosted
+formatting regression and correction are recorded with the candidate evidence.
 Exact publication identities, verification and remaining gates are recorded in
 [`2026-10-19-playwright-profile-cutover.md`](../records/2026-10-19-playwright-profile-cutover.md).
 

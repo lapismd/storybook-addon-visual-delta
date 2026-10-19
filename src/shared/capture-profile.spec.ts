@@ -26,9 +26,7 @@ describe("canonical capture profile", () => {
     expect(visualCaptureProfileImageReference()).toBe(
       "ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4",
     );
-    expect(
-      validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE),
-    ).toEqual([]);
+    expect(validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE)).toEqual([]);
   });
 
   it("builds an immutable reference for a locked profile", () => {
