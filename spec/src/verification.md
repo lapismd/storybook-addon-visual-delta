@@ -693,3 +693,14 @@ back without exposing a fresh actual. This extraction lowers the oversized
 manager test's counted-line budget under unchanged VD-ARCH-006. Native image
 and provider evidence remain distinct from synthetic presentation fixtures.
 See [`2026-10-19-manager-capture-fixture.md`](../records/2026-10-19-manager-capture-fixture.md).
+
+### Approved 0.0.8 publication preflight
+
+The user has approved the public 0.0.8 release under VD-GOV-009 and VD-GOV-016.
+Exact Version Packages source, public version/tag absence, artifact inspection
+and current audit results are recorded in
+[`2026-10-19-release-0.0.8-audit-decision.md`](../records/2026-10-19-release-0.0.8-audit-decision.md).
+VD-GOV-008 still blocks on two development-only findings; production audit is
+clean. A trial Changesets 3 upgrade leaves the Markdownlint braces path and is
+not the release candidate. No exception is approved or implemented, and the
+unconditional release audit remains unchanged.
