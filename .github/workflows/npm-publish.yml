@@ -11,6 +11,7 @@ permissions:
 
 env:
   VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+  RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
 
 defaults:
   run:
@@ -69,8 +70,18 @@ jobs:
       - name: Run unit tests
         run: pnpm test
 
-      - name: Audit dependencies
-        run: pnpm audit
+      - name: Audit dependencies with exact approved release policy
+        run: node scripts/check-release-audit.mjs
+
+      - name: Retain raw dependency audit and candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-audit-package-${{ github.sha }}
+          path: .cache/release-audit/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Verify npm package contents
         run: |
@@ -170,14 +181,29 @@ jobs:
       - name: Check out the release tag
         uses: actions/checkout@v5
 
+      - name: Trust the checkout for approved audit source identity
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build publishable exports
         run: pnpm build:node
 
-      - name: Publish trusted release with provenance
-        run: npm publish --provenance --access public --registry=https://registry.npmjs.org
+      - name: Publish trusted release with audited provenance
+        run: |
+          node scripts/check-release-audit.mjs
+          npm publish .cache/release-audit/candidate.tgz --provenance --access public --registry=https://registry.npmjs.org
+
+      - name: Retain protected publication audit evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-audit-publisher-${{ github.sha }}
+          path: .cache/release-audit/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
 
   verify-provenance:
     name: Verify npm Sigstore provenance

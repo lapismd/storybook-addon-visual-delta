@@ -19,6 +19,25 @@ test("accepts the explicitly approved exact versioning source", () => {
   assert.doesNotThrow(() => validateReleaseApproval(approved));
 });
 
+test("0.0.8 tagging requires its separately reviewed exception source", () => {
+  assert.doesNotThrow(() =>
+    validateReleaseApproval({
+      ...approved,
+      version: "0.0.8",
+      auditApprovedSource: source,
+    })
+  );
+  for (const auditApprovedSource of [undefined, "b".repeat(40)]) {
+    assert.throws(() =>
+      validateReleaseApproval({
+        ...approved,
+        version: "0.0.8",
+        auditApprovedSource,
+      })
+    );
+  }
+});
+
 test("pushes, forks, other branches and unchecked dispatches cannot approve tags", () => {
   for (const change of [
     { event: "push" },
@@ -55,22 +74,22 @@ test("unconsumed changesets and ordinary commits are not release candidates", ()
 test("workflow keeps automatic version PRs separate from approved tag creation", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
-    "utf8",
+    "utf8"
   );
   const tagJob = workflow.split("\n  tag:\n")[1];
   assert.match(workflow, /create_tag:[\s\S]*?default: false/);
   assert.match(
     workflow,
-    /name: Update Version Packages pull request\n    if: github.event_name == 'push'/,
+    /name: Update Version Packages pull request\n    if: github.event_name == 'push'/
   );
   assert.match(
     tagJob,
-    /if: github.event_name == 'workflow_dispatch'.*inputs.create_tag/,
+    /if: github.event_name == 'workflow_dispatch'.*inputs.create_tag/
   );
   assert.match(tagJob, /ref: \$\{\{ inputs.source \}\}/);
   assert.match(tagJob, /run: node scripts\/check-release-source.mjs/);
   assert.ok(
     tagJob.indexOf("check-release-source.mjs") <
-      tagJob.indexOf("pnpm release:tag --push"),
+      tagJob.indexOf("pnpm release:tag --push")
   );
 });

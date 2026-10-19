@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isVersionPackagesReleaseCommit } from "./ensure-release-tag.mjs";
@@ -19,15 +19,21 @@ export function validateReleaseApproval(context) {
   }
   if (!/^[a-f0-9]{40}$/.test(context.source || "")) {
     throw new Error(
-      "Release approval requires an exact 40-character source SHA",
+      "Release approval requires an exact 40-character source SHA"
     );
   }
   if (context.head !== context.source) {
     throw new Error("Checked-out source differs from the approved source");
   }
+  if (
+    context.version === "0.0.8" &&
+    context.auditApprovedSource !== context.source
+  ) {
+    throw new Error("0.0.8 requires its exact reviewed audit-exception source");
+  }
   if (!context.versionPackagesCommit || context.pendingChangesets.length) {
     throw new Error(
-      "Approved source must be a completed Version Packages commit",
+      "Approved source must be a completed Version Packages commit"
     );
   }
 }
@@ -50,8 +56,11 @@ function main() {
     approved: process.env.RELEASE_APPROVED,
     source: process.env.RELEASE_SOURCE,
     head,
+    version: JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"))
+      .version,
+    auditApprovedSource: process.env.RELEASE_AUDIT_APPROVED_SOURCE,
     pendingChangesets: readdirSync(path.join(root, ".changeset")).filter(
-      (name) => name.endsWith(".md") && name !== "README.md",
+      (name) => name.endsWith(".md") && name !== "README.md"
     ),
     versionPackagesCommit: isVersionPackagesReleaseCommit({
       subject: git("log", "-1", "--pretty=%s", head),
