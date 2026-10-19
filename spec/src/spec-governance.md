@@ -250,3 +250,17 @@ published version. The protected publisher MUST re-run the guard immediately
 before publication and publish only that checksum-verified pnpm tarball. Normal
 source, package, license, browser, protected review, provenance and clean registry
 consumer gates remain mandatory. Future releases require a clean audit.
+
+### Verified GitHub release completion
+
+VD-GOV-009 release completion MUST explicitly use `always()` with successful
+package and provenance conditions so the deliberately skipped bootstrap branch
+cannot suppress the downstream GitHub release. A default-branch manual recovery
+MAY create or retain the missing GitHub release for an existing immutable tag.
+It MUST require explicit approval, stable version, exact source SHA and original
+publication run ID; verify the tag and canonical tag-push workflow/source; and
+require successful package, ARM64, correct publisher and Sigstore jobs from that
+run. Unknown, incomplete or failed evidence MUST reject. Recovery MUST NOT
+create/move tags or invoke npm publication, and MUST preserve an existing public
+release for the same tag. Network failures retain unknown-outcome semantics;
+a retry MUST read the existing release before any creation.

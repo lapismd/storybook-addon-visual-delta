@@ -1,0 +1,58 @@
+name: Complete verified npm GitHub release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing public stable npm version
+        required: true
+        type: string
+      source:
+        description: Exact approved 40-character tag source SHA
+        required: true
+        type: string
+      publication_run:
+        description: Original qualified npm-publish run ID
+        required: true
+        type: string
+      complete_release:
+        description: Approve completion of the missing GitHub release only
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  complete:
+    if: github.repository == 'lapismd/storybook-addon-visual-delta' && github.ref == 'refs/heads/main' && inputs.complete_release
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+      env:
+        HOME: /root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+      actions: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Complete only the existing qualified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_SOURCE: ${{ inputs.source }}
+          PUBLICATION_RUN_ID: ${{ inputs.publication_run }}
+          COMPLETION_APPROVED: ${{ inputs.complete_release }}
+        run: node scripts/complete-github-release.mjs

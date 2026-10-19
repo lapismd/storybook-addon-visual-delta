@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { publicationPolicyErrors } from "./ci-image-publication-policy.mjs";
+import { EXPECTED_CONSUMER_WORKFLOWS } from "./ci-workflow-contracts.mjs";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -43,62 +44,7 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
   "find /ms-playwright -type f -name MiniBrowser",
 ];
 
-const EXPECTED_CONSUMER_WORKFLOWS = {
-  ".github/workflows/visual-delta-ci.yml": {
-    triggerSnippet:
-      "on:\n  push:\n    branches:\n      - main\n      - master\n  pull_request:",
-    jobs: 4,
-    mutableImageJobs: 1,
-    immutableImageJobs: 3,
-    frozenInstalls: 4,
-    packagesRead: 1,
-    x64Runners: 1,
-    arm64Runners: 3,
-    canaryJobs: 0,
-    pendingProfileLocks: 0,
-    trustedCheckoutJobs: ["manager"],
-    allowedPermissions: new Set(["contents", "packages"]),
-  },
-  ".github/workflows/visual-delta-spec-first.yml": {
-    jobs: 1,
-    mutableImageJobs: 1,
-    immutableImageJobs: 0,
-    frozenInstalls: 1,
-    packagesRead: 1,
-    x64Runners: 1,
-    arm64Runners: 0,
-    canaryJobs: 0,
-    pendingProfileLocks: 0,
-    trustedCheckoutJobs: ["validate"],
-    allowedPermissions: new Set(["contents", "packages"]),
-  },
-  ".github/workflows/npm-publish.yml": {
-    jobs: 6,
-    mutableImageJobs: 5,
-    immutableImageJobs: 1,
-    frozenInstalls: 4,
-    packagesRead: 5,
-    x64Runners: 5,
-    arm64Runners: 1,
-    canaryJobs: 0,
-    pendingProfileLocks: 0,
-    trustedCheckoutJobs: ["package-gate", "visual-gate", "publish-oidc"],
-    allowedPermissions: new Set(["contents", "packages", "id-token"]),
-  },
-  ".github/workflows/capture-canonical-panel-baselines.yml": {
-    jobs: 1,
-    mutableImageJobs: 0,
-    immutableImageJobs: 1,
-    frozenInstalls: 1,
-    packagesRead: 1,
-    x64Runners: 0,
-    arm64Runners: 1,
-    canaryJobs: 0,
-    pendingProfileLocks: 0,
-    trustedCheckoutJobs: [],
-    allowedPermissions: new Set(["contents", "packages", "pull-requests"]),
-  },
-};
+
 
 const TOOLCHAIN_CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
@@ -533,10 +479,7 @@ export function validateCiImageSources({
       'NPM_CONFIG_USERCONFIG="$bootstrap_npmrc"',
       "release-notes:",
       "needs: [package-gate, verify-provenance]",
-      '"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases"',
-      "tag_name: $tag",
-      "draft: false",
-      "prerelease: false",
+      "run: node scripts/complete-github-release.mjs",
     ]) {
       requireSnippet(errors, "npm publish workflow", releaseWorkflow, snippet);
     }
