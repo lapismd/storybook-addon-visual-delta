@@ -136,9 +136,11 @@ The repository and npm package must be public before the first release.
 3. Run `pnpm spec:check` and the affected package gates.
 4. Merge the reviewed pull request. `.github/workflows/release.yml` creates or
    updates the Version Packages pull request.
-5. Review and merge Version Packages. The same workflow creates the exact
-   `vX.Y.Z` tag matching `package.json` when that tag is absent (only on the
-   Version Packages commit).
+5. Review and merge Version Packages, then prepare and review the candidate.
+   After explicit publication approval, dispatch `release.yml` from `main` with
+   the exact 40-character Version Packages commit or merge SHA as `source` and
+   `create_tag=true`. Ordinary merges never create a public tag. The workflow
+   verifies that checkout and main ancestry before applying immutable-tag checks.
 6. `.github/workflows/npm-publish.yml` runs on that tag. Approve the `npm` or
    `npm-bootstrap` Environment as required.
 7. After npm installation and Sigstore provenance verification pass, the same
@@ -165,9 +167,9 @@ Before the first tag:
 3. Store the one-time npm automation token only as
    `NPM_BOOTSTRAP_TOKEN` in `npm-bootstrap`; never add it as a repository
    secret or to `npm`.
-4. Merge the release workflows, then merge a Version Packages pull request that
-   leaves `package.json` at `0.0.1` (or otherwise ensure CI creates `v0.0.1`)
-   and approve the bootstrap Environment.
+4. Merge the release workflows and a Version Packages pull request that leaves
+   `package.json` at `0.0.1`. Explicitly approve and dispatch its exact source
+   for `v0.0.1`, then approve the bootstrap Environment.
 
 After that release succeeds, register the normal tokenless npm Trusted
 Publisher and confirm it before deleting and revoking the bootstrap token:

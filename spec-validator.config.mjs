@@ -98,15 +98,22 @@ export default defineConfig(tableRequirements(), {
         command: "node",
         args: [
           "--test",
+          "./scripts/architecture.spec.mjs",
           "./scripts/capture-example-baselines.spec.mjs",
           "./scripts/check-ci-image.spec.mjs",
           "./scripts/check-npm-release.spec.mjs",
           "./scripts/check-release-intent.spec.mjs",
+          "./scripts/check-release-source.spec.mjs",
           "./scripts/ensure-release-tag.spec.mjs",
           "./scripts/package-storybook-build.spec.mjs",
           "./scripts/prepare-cli-bin.spec.mjs",
           "./scripts/verify-npm-provenance.spec.mjs",
         ],
+      },
+      {
+        name: "architecture counted-line budget",
+        command: "node",
+        args: ["./scripts/check-architecture.mjs"],
       },
       {
         name: "CI image contract",

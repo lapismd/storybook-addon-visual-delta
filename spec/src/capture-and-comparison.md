@@ -46,6 +46,11 @@ Hosts MAY set project or story `deviceScaleFactor` (for example `3` for existing
 
 The preview assigns a monotonically increasing generation to each render, including same-story rerenders and remounts. Every generation starts unfinished. For a normal target, the preview marks readiness only after Storybook’s exact `storyFinished` event for the active story and generation. For a requested mid-play target, completion of the exact parked named step or instrumenter call marks that active generation ready because the play function intentionally cannot reach end-of-play. Delayed completion or cleanup from an older generation MUST NOT finish or clear a newer generation.
 
+Under `VD-CAP-002`, a temporarily absent document root during navigation MUST
+remain unfinished until the exact requested story marker is present; waiting
+MUST retain its configured deadline rather than throwing or accepting a missing
+root.
+
 Capture then waits for:
 
 1. The requested viewport to match exactly
