@@ -681,3 +681,15 @@ both source labels and the embedded lock before running the same native smoke
 and profile jobs. The policy regression compares those jobs across workflows.
 See [`2026-10-19-native-smoke-recovery.md`](../records/2026-10-19-native-smoke-recovery.md)
 for exact before/after results and remaining profile qualification.
+
+### Captured comparison presentation fixtures
+
+VD-UI-003 and VD-UI-005 retain exact capture-profile freshness checks. The
+committed example result records Playwright 1.61.1 and must remain historical.
+`tests/manager-captured-actual.spec.ts` supplies explicitly synthetic current-profile
+sidecars only for captured-pane layout acceptance; original PNGs and result
+metadata stay unchanged. The same suite proves the historical profile falls
+back without exposing a fresh actual. This extraction lowers the oversized
+manager test's counted-line budget under unchanged VD-ARCH-006. Native image
+and provider evidence remain distinct from synthetic presentation fixtures.
+See [`2026-10-19-manager-capture-fixture.md`](../records/2026-10-19-manager-capture-fixture.md).
