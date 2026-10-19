@@ -103,6 +103,7 @@ export default defineConfig(tableRequirements(), {
           "./scripts/check-ci-image.spec.mjs",
           "./scripts/check-npm-release.spec.mjs",
           "./scripts/check-release-intent.spec.mjs",
+          "./scripts/check-release-source.spec.mjs",
           "./scripts/ensure-release-tag.spec.mjs",
           "./scripts/package-storybook-build.spec.mjs",
           "./scripts/prepare-cli-bin.spec.mjs",

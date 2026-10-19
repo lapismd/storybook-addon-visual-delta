@@ -1,9 +1,20 @@
-name: Version and tag release
+name: Prepare version and approve release tag
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Exact approved Version Packages commit on main (40-character SHA)
+        required: true
+        type: string
+      create_tag:
+        description: Create the approved public tag and start npm release qualification
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -15,6 +26,7 @@ concurrency:
 jobs:
   version:
     name: Update Version Packages pull request
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,13 +64,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tag:
-    name: Create release tag
-    needs: version
-    if: needs.version.outputs.has_changesets != 'true'
+    name: Create explicitly approved release tag
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'lapismd/storybook-addon-visual-delta' && github.ref == 'refs/heads/main' && inputs.create_tag
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Require an exact approved revision
+        env:
+          RELEASE_SOURCE: ${{ inputs.source }}
+        run: node -e 'if (!/^[a-f0-9]{40}$/.test(process.env.RELEASE_SOURCE || "")) throw Error("An exact approved source SHA is required");'
+
       - name: Require workflow-triggering tag token
         env:
           RELEASE_TAG_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
@@ -68,11 +84,12 @@ jobs:
             exit 1
           fi
 
-      - name: Check out main
+      - name: Check out the approved source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
+          ref: ${{ inputs.source }}
           token: ${{ secrets.RELEASE_TAG_TOKEN }}
 
       - name: Set up Node.js
@@ -87,6 +104,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate approved source and release intent
+        env:
+          RELEASE_SOURCE: ${{ inputs.source }}
+          RELEASE_APPROVED: ${{ inputs.create_tag }}
+        run: node scripts/check-release-source.mjs
 
       - name: Ensure exact stable release tag
         run: pnpm release:tag --push
