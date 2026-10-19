@@ -41,14 +41,60 @@ src/node/capture-runner-doctor.spec.ts` fails 2/2 cases. Both show the stale
 
 ## Publication and cutover results
 
-The publication is in progress. No invented digest or declared browser version
-is used as qualification. The selected artifact must report the approved source
-and unchanged lock SHA-256
+The build in publication run `39320101643` succeeded, publishing the approved
+R1 tag and `latest`, but both native smokes failed at Firefox HOME ownership.
+No profile was emitted. Source repair PR #30 at
+`7e922c6f0bcfd10d9483499359faa8720b9f6d76` passed all five required checks in
+runs `39324439150` and `39324439079` and merged as
+`ce7676d502474a7dd02f889722f73a4ff2530b9e`. It restores step HOME and adds
+read-only verification; see the separate native recovery record.
+
+Recovery run
+[`39325220413`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/39325220413)
+passes identity inspection, native x64 smoke, native ARM64 smoke and profile
+assembly against the existing published bytes. No image is rebuilt or replaced.
+Downloaded artifacts confirm the approved source and unchanged lock SHA-256
 `7aef952f349b6fcc06b924d521d27cf9a6df1728d3d84c1e317032b99166d189`.
-Image manifest/ARM64 digests, browser versions and font hash come from successful
-native evidence, followed by anonymous registry verification and a compare-only
-ARM64 canary through all required PR jobs before source integration.
+
+- Index: `sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71`.
+- ARM64: `sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4`.
+- Native browsers: Chromium 151.0.7922.34, Firefox 153.0, WebKit 26.5.
+- Font hash: `sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3`.
+  Hashing the retained 55-entry manifest independently reproduces it.
+- Profile browser inventory equals the native inventory. Node 24.15.0,
+  npm 12.0.2, pnpm 10.32.1 and mdBook 0.5.4 are reported by the image.
+
+Normal merges retain published PR history and newer main source. The coordinated
+candidate updates the runtime profile, guard tests and all five canonical ARM64
+job containers together. The producer's existing metadata helper keeps its
+separately verified old Node image digest; historical records are retained.
+Before pin changes on the combined candidate, `node --test
+scripts/check-ci-image.spec.mjs` passes 26/27 with only the intended positive pin
+check failing. The doctor/profile focused suite still passes 25/25. Complete
+candidate verification and the required hosted ARM64 canary follow below.
 
 Current baseline files and thresholds are retained. Any rendering mismatch is a
 failure to investigate, not authorization to refresh snapshots. The separate
 two-advisory npm audit and clean-consumer/public-package gates remain open.
+
+## Final candidate checks
+
+- `node --test scripts/check-ci-image.spec.mjs scripts/ci-image-publication-policy.spec.mjs`:
+  35/35 pass after the measured pins, including the repaired positive guard.
+- `corepack pnpm@10.32.1 check:architecture`: pass, no budget growth.
+- The first full spec command passed 94/94 scripts, architecture, image contract
+  and mdBook but its default `@-` spec-first base was ambiguous in the normal
+  two-parent merge. `corepack pnpm@10.32.1 spec:check --base main --head @`
+  passes all six lanes with explicit comparison scope, matching PR CI's model.
+- `corepack pnpm@10.32.1 typecheck`: pass.
+- `corepack pnpm@10.32.1 test`: 553 tests / 117 files pass.
+- `corepack pnpm@10.32.1 build:node` and `publint`: pass. Publint's existing
+  optional repository URL scheme suggestion remains non-blocking.
+- Actionlint finds no new workflow issue. It reports SC2016 on the unchanged npm
+  auth placeholder line; the exact main workflow reproduces it. That single-quoted
+  literal intentionally defers token expansion to npm. No credential behavior or
+  publication gate is changed for this informational diagnostic.
+- Downloaded native artifacts were moved under ignored `.cache/verification`;
+  the committed candidate contains no local artifacts or baseline modifications.
+- Hosted PR CI qualifies the exact pushed candidate; no local browser run is
+  substituted for its cold panel/manager/all-browser ARM64 acceptance.

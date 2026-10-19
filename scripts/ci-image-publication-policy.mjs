@@ -47,3 +47,28 @@ export const REQUIRED_PUBLICATION_SNIPPETS = [
   "runs-on: ubuntu-24.04-arm",
   "image: ${{ needs.publish.outputs.image_reference }}",
 ];
+
+export function publicationPolicyErrors(source) {
+  const errors = REQUIRED_PUBLICATION_SNIPPETS.filter(
+    (snippet) => !source.includes(snippet),
+  ).map((snippet) => `publish workflow: missing ${snippet}`);
+  for (const architecture of ["x64", "arm64"]) {
+    const job =
+      source
+        .split(`  smoke-${architecture}:`)[1]
+        ?.split(/\n  [a-z][a-z0-9-]*:/)[0] ?? "";
+    const step = job.split("    steps:\n")[1]?.split("      - name:")[1] ?? "";
+    if (!step.includes("        env:\n          HOME: /root\n"))
+      errors.push(
+        `publish workflow: native ${architecture} smoke must restore root-owned HOME for Firefox`,
+      );
+    if (
+      !step.includes("EXPECTED_LOCK_SHA256:") ||
+      !step.includes('= "$EXPECTED_LOCK_SHA256"')
+    )
+      errors.push(
+        `publish workflow: native ${architecture} smoke must verify embedded lock identity`,
+      );
+  }
+  return errors;
+}

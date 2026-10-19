@@ -43,17 +43,17 @@ export const CANONICAL_VISUAL_CAPTURE_PROFILE: VisualCaptureProfile = {
   architecture: "arm64",
   image: VISUAL_DELTA_CI_IMAGE,
   imageDigest:
-    "sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a",
+    "sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71",
   arm64ImageDigest:
-    "sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
+    "sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4",
   nodeVersion: "24.15.0",
   npmVersion: "12.0.2",
   pnpmVersion: "10.32.1",
-  playwrightVersion: "1.61.1",
+  playwrightVersion: "1.62.1",
   browsers: ["chromium", "firefox", "webkit"],
   browserVersions: {
-    chromium: "149.0.7827.0",
-    firefox: "151.0",
+    chromium: "151.0.7922.34",
+    firefox: "153.0",
     webkit: "26.5",
   },
   locale: "en-GB",

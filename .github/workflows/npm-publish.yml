@@ -84,7 +84,7 @@ jobs:
     name: Validate canonical visuals on ARM64
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4
       env:
         HOME: /root
       credentials:

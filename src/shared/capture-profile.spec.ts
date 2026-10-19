@@ -10,23 +10,25 @@ describe("canonical capture profile", () => {
     expect(CANONICAL_VISUAL_CAPTURE_PROFILE).toMatchObject({
       os: "linux",
       architecture: "arm64",
-      playwrightVersion: "1.61.1",
+      playwrightVersion: "1.62.1",
       imageDigest:
-        "sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a",
+        "sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71",
       arm64ImageDigest:
-        "sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
+        "sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4",
       browserVersions: {
-        chromium: "149.0.7827.0",
-        firefox: "151.0",
+        chromium: "151.0.7922.34",
+        firefox: "153.0",
         webkit: "26.5",
       },
       fontManifestSha256:
         "sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3",
     });
     expect(visualCaptureProfileImageReference()).toBe(
-      "ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705",
+      "ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4",
     );
-    expect(validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE)).toEqual([]);
+    expect(
+      validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE),
+    ).toEqual([]);
   });
 
   it("builds an immutable reference for a locked profile", () => {

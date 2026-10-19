@@ -101,6 +101,12 @@ moves to the same verified multi-platform manifest. The initial historical tag i
 node24.15.0-pnpm10.32.1-playwright1.61.1-r1
 ```
 
+For a post-publication verification failure, dispatch **Verify published Visual
+Delta CI image** from main with its existing audit `tag`, exact approved `source`
+and immutable multi-platform `digest`. This read-only path verifies source labels
+and the embedded lock, launches all browsers on both native architectures, then
+assembles profile evidence. It does not rebuild, republish or move image tags.
+
 The normal rebuild triggers are changes to `package.json`, `pnpm-lock.yaml`,
 `pnpm-workspace.yaml`, the CI Dockerfile, or the Node.js, npm, pnpm, mdBook, or Playwright pins. A
 stale image does not override the checked-out lockfile: every consumer still
