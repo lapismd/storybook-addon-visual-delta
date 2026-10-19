@@ -3,3 +3,8 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+overrides:
+  markdownlint-cli2>smol-toml: 1.9.0
+  micromark-extension-math>katex: 0.18.2
+  mermaid>katex: 0.18.2
