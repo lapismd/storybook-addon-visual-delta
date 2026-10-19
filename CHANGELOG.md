@@ -1,5 +1,15 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.0.8
+
+### Patch Changes
+
+- [#28](https://github.com/lapismd/storybook-addon-visual-delta/pull/28) [`34cdb66`](https://github.com/lapismd/storybook-addon-visual-delta/commit/34cdb6633df81b0b9c212adc929e3ac382f39bd1) Thanks [@stevejuma](https://github.com/stevejuma)! - Use the reviewed Playwright 1.62.1 browser image for canonical captures and
+  verify its selected version in the Docker runner's doctor.
+
+- [#24](https://github.com/lapismd/storybook-addon-visual-delta/pull/24) [`979a4d3`](https://github.com/lapismd/storybook-addon-visual-delta/commit/979a4d3ca02b33a6806a4a0696b460abc2951296) Thanks [@stevejuma](https://github.com/stevejuma)! - Keep the exact-story readiness wait pending while navigation temporarily removes
+  the document root, preserving its configured timeout and story identity.
+
 ## 0.0.7
 
 ### Patch Changes
