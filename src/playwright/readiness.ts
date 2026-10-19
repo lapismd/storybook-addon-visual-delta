@@ -12,7 +12,7 @@ export async function waitForVisualStoryFinished(
 ): Promise<void> {
   await page.waitForFunction(
     ({ attr, expected }) =>
-      document.documentElement.getAttribute(attr) === expected,
+      document.documentElement?.getAttribute(attr) === expected,
     { attr: VISUAL_DELTA_STORY_FINISHED_ATTR, expected: storyId },
     { timeout },
   );
