@@ -49,7 +49,9 @@ RUN case "$TARGETARCH" in \
 
 WORKDIR /build
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+ARG PLAYWRIGHT_VERSION
 
 RUN pnpm install --frozen-lockfile --ignore-scripts \
   && pnpm exec playwright install --with-deps chromium firefox webkit \
@@ -59,7 +61,7 @@ RUN test "$(node --version)" = "v24.15.0" \
   && test "$(npm --version)" = "12.0.2" \
   && test "$(pnpm --version)" = "10.32.1" \
   && mdbook --version | grep -Fx "mdbook v0.5.4" \
-  && pnpm exec playwright --version | grep -Fx "Version 1.61.1" \
+  && pnpm exec playwright --version | grep -Fx "Version ${PLAYWRIGHT_VERSION}" \
   && test -n "$(find /ms-playwright -type f \( -name chrome -o -name headless_shell \) -perm -u=x -print -quit)" \
   && test -n "$(find /ms-playwright -type f -name firefox -perm -u=x -print -quit)" \
   && test -n "$(find /ms-playwright -type f -name MiniBrowser -perm -u=x -print -quit)"

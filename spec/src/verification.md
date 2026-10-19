@@ -401,6 +401,19 @@ the supported DOM test runtime. `scripts/check-ci-image.spec.mjs` MUST prove
 that each `pnpm test:browsers` run step restores `HOME=/root` inside its job
 container, without introducing workflow- or job-scoped root HOME.
 
+### Exact-source image bootstrap regression
+
+VD-GOV-012 now binds manual publication to an exact approved source SHA and a
+protected `ci-image` environment. A false publication input skips publication.
+The source validator rejects floating/changed revisions and unpaired Playwright
+versions; image builds retain workspace overrides and verify the selected
+Playwright version rather than hardcoding a previous browser cohort. Candidate
+image publication remains separately approved and does not promote the current
+capture-profile lock. See
+[`2026-10-19-image-bootstrap.md`](../records/2026-10-19-image-bootstrap.md) for
+commands and remaining qualification. `scripts/check-ci-image-source.spec.mjs`
+and the publication guard tests cover this boundary.
+
 ### Manual CI-image publication
 
 `.github/workflows/publish-visual-delta-ci.yml` runs only through manual
@@ -608,8 +621,9 @@ Dependabot proposals are already covered or exceeded by the merged repair.
 The inventory, exact commands and results are recorded in
 [`2026-10-19-dependabot-consolidation.md`](../records/2026-10-19-dependabot-consolidation.md).
 
-VD-GOV-008, VD-GOV-012 and VD-GOV-013 remain unchanged. The candidate is not
-qualified for merging or release: the current image and capture profile still
+VD-GOV-008 and VD-GOV-013 remain unchanged; VD-GOV-012 now admits the separately
+approved exact-source image bootstrap described above. The candidate remains
+unqualified for merging or release: the current image and capture profile still
 use Playwright 1.61.1. Existing image checks must reject that mismatch. Native
 image publication, immutable profile promotion and ARM64 canary remain pending,
 as does the independent audit decision. No baseline is changed.
