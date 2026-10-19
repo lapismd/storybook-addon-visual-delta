@@ -727,3 +727,15 @@ bytes are identical. VD-GOV-008 now pins the exact canonical Linux archive plus
 the unchanged reviewed tar payload. The archive identity regression rejects
 either changed compression or changed payload. This does not admit additional
 findings, alter the lock or package contents, or broaden exception lifetime.
+
+### Verified immutable release completion recovery
+
+Run 39337032314 publishes and verifies the exact 0.0.8 npm artifact after slow
+registry metadata/tarball visibility. The downstream release job remains skipped
+even after its successful provenance dependency is rerun. VD-GOV-009 now requires
+an explicit `always()`/success condition and permits approval-bound, read-proof
+GitHub release recovery. `scripts/complete-github-release.mjs` validates the
+original source/tag and all four successful release gates before idempotent
+completion; its regressions reject failed or mismatched evidence. The manual
+recovery workflow contains no npm publish or tag mutation. Package bytes, version,
+lock, existing tag and consumed audit exception remain unchanged.

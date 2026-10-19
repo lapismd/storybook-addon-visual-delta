@@ -104,6 +104,7 @@ export default defineConfig(tableRequirements(), {
           "./scripts/check-ci-image-source.spec.mjs",
           "./scripts/ci-image-publication-policy.spec.mjs",
           "./scripts/check-npm-release.spec.mjs",
+          "./scripts/complete-github-release.spec.mjs",
           "./scripts/release-audit-policy.spec.mjs",
           "./scripts/check-release-intent.spec.mjs",
           "./scripts/check-release-source.spec.mjs",
