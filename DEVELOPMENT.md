@@ -90,17 +90,25 @@ Package-tooling jobs pull `:latest` with the repository `GITHUB_TOKEN`, then run
 mdBook or reinstall Node.js, npm, pnpm, Playwright browsers, or Linux browser
 dependencies during the workflow.
 
-After merging an image, dependency, or pinned-tool change, dispatch **Publish
-Visual Delta CI image** from the default branch with a new audit tag. Audit tags
-are lowercase Docker tags and cannot be reused; `latest` moves to the same
-verified multi-platform manifest. The initial tag is:
+After explicit publication approval, dispatch **Publish Visual Delta CI image**
+from the default branch with the full reviewed `source` SHA, a new audit tag and
+`publish=true`. The protected `ci-image` environment requires reviewer approval.
+An approved unmerged candidate can bootstrap a browser image before its dependency
+PR merges. Audit tags are lowercase Docker tags and cannot be reused; `latest`
+moves to the same verified multi-platform manifest. The initial historical tag is:
 
 ```text
 node24.15.0-pnpm10.32.1-playwright1.61.1-r1
 ```
 
+For a post-publication verification failure, dispatch **Verify published Visual
+Delta CI image** from main with its existing audit `tag`, exact approved `source`
+and immutable multi-platform `digest`. This read-only path verifies source labels
+and the embedded lock, launches all browsers on both native architectures, then
+assembles profile evidence. It does not rebuild, republish or move image tags.
+
 The normal rebuild triggers are changes to `package.json`, `pnpm-lock.yaml`,
-the CI Dockerfile, or the Node.js, npm, pnpm, mdBook, or Playwright pins. A
+`pnpm-workspace.yaml`, the CI Dockerfile, or the Node.js, npm, pnpm, mdBook, or Playwright pins. A
 stale image does not override the checked-out lockfile: every consumer still
 runs `pnpm install --frozen-lockfile`, downloading only missing deltas.
 
@@ -110,9 +118,15 @@ Validate the policy and build the host architecture locally with:
 pnpm ci:image:check
 docker buildx build --load \
   --file docker/visual-delta-ci/Dockerfile \
+  --build-arg PLAYWRIGHT_VERSION=1.62.1 \
   --tag visual-delta-ci:local \
   .
 ```
+
+Use the exact paired Playwright version from the selected source manifest for
+the build argument. The workflow derives and verifies it automatically. Lock the
+actual published image/browser/font provenance and pass the compare-only ARM64
+canary before merging a browser-profile update; no baseline write is implied.
 
 Smoke-test every installed browser without mounting the checkout:
 

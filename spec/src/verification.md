@@ -75,15 +75,21 @@ These gaps came from the 2026-07-28 source audit. They remain open until impleme
 The package contracts, browser-only path resolver, staged capture runner,
 migration inventory, ARM64 workflow lanes, and `0.063%` defaults are implemented.
 Publication run
-[`30713531516`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/30713531516)
-verified native AMD64 and ARM64 containers before emitting the reviewed lock:
+[`39320101643`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/39320101643)
+published the approved 1.62.1 image. Both original smoke jobs failed at Firefox
+HOME ownership. Read-only recovery
+[`39325220413`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/39325220413)
+verified those existing bytes on native AMD64 and ARM64 before emitting the lock:
 multi-platform digest
-`sha256:5ddf2fdea54c34ce52e6eae564512d417b024739ce47bc51d81216e10c27623a`,
+`sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71`,
 ARM64 child digest
-`sha256:71968d021eb75280f66dec675bc2b8b9e2224734cf58ca1ea0c06019969df705`,
-Chromium `149.0.7827.0`, Firefox `151.0`, WebKit `26.5`, and font-manifest
+`sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4`,
+Chromium `151.0.7922.34`, Firefox `153.0`, WebKit `26.5`, and font-manifest
 digest
 `sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3`.
+The 55-entry font manifest reproduces that hash. The previous 1.61.1 profile
+remains historical evidence in run `30713531516`. Required compare-only ARM64
+PR jobs qualify the new dependency/profile candidate before merge.
 
 Existing committed package and fixture PNGs remain platform-qualified and
 direct story wiring is retained only until a separately authorized recapture
@@ -613,6 +619,41 @@ Also fix EditRemoveAndClear to use its own baseline path for primary image (opti
 
 Kill any leftover storybook on panel ports, then run focused failing tests first.
 
+## 2026-10-19 dependency consolidation candidate
+
+The draft dependency candidate upgrades the Storybook cohort to 10.5.10, Svelte
+to 5.56.10, Node types to 26.3.0 and both Playwright packages to 1.62.1. Other
+Dependabot proposals are already covered or exceeded by the merged repair.
+The inventory, exact commands and results are recorded in
+[`2026-10-19-dependabot-consolidation.md`](../records/2026-10-19-dependabot-consolidation.md).
+
+VD-GOV-008 and VD-GOV-013 remain unchanged; VD-GOV-012 now admits the separately
+approved exact-source image bootstrap described above. The initial candidate correctly failed its 1.62.1 dependency/1.61.1 image
+mismatch. The approved image is now native-qualified by recovery run
+`39325220413`; the candidate uses its measured profile. Required ARM64 PR jobs
+remain the consumer canary before merge. The independent npm audit and release
+decisions remain open. No baseline is changed.
+
+## 2026-10-19 approved browser-image cutover
+
+The user approved publishing the exact 1.62.1 CI-image candidate after producer
+PR #29 passed all five required checks. Its immutable source is
+`2fa7976031bd24cbfa646596c22586c1ad6992e7`; publication run
+[`39320101643`](https://github.com/lapismd/storybook-addon-visual-delta/actions/runs/39320101643)
+records the successful build and original failed smoke. Read-only recovery run
+`39325220413` passes both native smokes and emits the measured profile artifact.
+Its browser inventory, source/lock identities and font hash are verified before
+the candidate pin changes. Promotion requires the dependency PR canary. No baseline
+mutation or npm publication is approved by this image decision.
+
+The built-in doctor now checks the selected profile version. Its new
+`src/node/capture-runner-doctor.spec.ts` regression fails twice before repair
+when profiles select newer Playwright versions; it must pass after repair.
+The profile-lock assertion retains its existing counted-line budget; a hosted
+formatting regression and correction are recorded with the candidate evidence.
+Exact publication identities, verification and remaining gates are recorded in
+[`2026-10-19-playwright-profile-cutover.md`](../records/2026-10-19-playwright-profile-cutover.md).
+
 ## Review checklist
 
 Before declaring conformance:
@@ -640,3 +681,15 @@ both source labels and the embedded lock before running the same native smoke
 and profile jobs. The policy regression compares those jobs across workflows.
 See [`2026-10-19-native-smoke-recovery.md`](../records/2026-10-19-native-smoke-recovery.md)
 for exact before/after results and remaining profile qualification.
+
+### Captured comparison presentation fixtures
+
+VD-UI-003 and VD-UI-005 retain exact capture-profile freshness checks. The
+committed example result records Playwright 1.61.1 and must remain historical.
+`tests/manager-captured-actual.spec.ts` supplies explicitly synthetic current-profile
+sidecars only for captured-pane layout acceptance; original PNGs and result
+metadata stay unchanged. The same suite proves the historical profile falls
+back without exposing a fresh actual. This extraction lowers the oversized
+manager test's counted-line budget under unchanged VD-ARCH-006. Native image
+and provider evidence remain distinct from synthetic presentation fixtures.
+See [`2026-10-19-manager-capture-fixture.md`](../records/2026-10-19-manager-capture-fixture.md).

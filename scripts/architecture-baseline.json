@@ -2061,8 +2061,8 @@
       "forbiddenImportCount": 0
     },
     "tests/manager.spec.ts": {
-      "countedLines": 2071,
-      "physicalLines": 2219,
+      "countedLines": 1891,
+      "physicalLines": 2028,
       "kind": "test",
       "forbiddenImportCount": 0
     },
