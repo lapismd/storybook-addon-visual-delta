@@ -717,3 +717,13 @@ rejection boundaries; the tag and protected publisher both retain exact-source
 approval. No dependency or packaged source bytes change. Full audit remains
 non-clean; qualification and publication results belong in the new owning
 release record.
+
+### Canonical release archive compression
+
+The pre-tag guard in run 39335863411 correctly rejected a nonportable local
+gzip checksum before creating any tag. Hosted Node 24.15.0 produces different
+gzip bytes from the local pnpm runtime while the complete decompressed tar
+bytes are identical. VD-GOV-008 now pins the exact canonical Linux archive plus
+the unchanged reviewed tar payload. The archive identity regression rejects
+either changed compression or changed payload. This does not admit additional
+findings, alter the lock or package contents, or broaden exception lifetime.

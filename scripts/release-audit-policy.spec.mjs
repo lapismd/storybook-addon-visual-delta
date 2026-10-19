@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { gzipSync } from "node:zlib";
 import {
   AUDIT_EXCEPTION,
+  archiveIdentity,
   verifyReleaseAudit,
 } from "./release-audit-policy.mjs";
 
@@ -51,6 +53,7 @@ function candidate() {
     ref: "refs/tags/v0.0.8",
     lock: AUDIT_EXCEPTION.lock,
     artifact: AUDIT_EXCEPTION.artifact,
+    payload: AUDIT_EXCEPTION.payload,
     publishedVersions: ["0.0.7"],
     registryVersions: { braces: ["3.0.3"], "sprintf-js": ["1.0.3", "1.1.3"] },
   };
@@ -104,6 +107,9 @@ const rejections = {
   },
   "different tarball": (value) => {
     value.artifact = "changed";
+  },
+  "different decompressed payload": (value) => {
+    value.payload = "changed";
   },
   "release already published": (value) => {
     value.publishedVersions.push("0.0.8");
@@ -204,4 +210,17 @@ test("tag gate and publisher retain exact source and audited tarball wiring", ()
     release,
     /RELEASE_AUDIT_APPROVED_SOURCE: \$\{\{ vars\.VD_008_AUDIT_APPROVED_SOURCE \}\}/
   );
+});
+
+test("distinguishes gzip bytes while retaining exact tar payload identity", () => {
+  const payload = Buffer.from("reviewed tar payload ".repeat(300));
+  const first = archiveIdentity(gzipSync(payload, { level: 1 }));
+  const second = archiveIdentity(gzipSync(payload, { level: 9 }));
+  assert.notEqual(first.artifact, second.artifact);
+  assert.equal(first.payload, second.payload);
+  assert.notEqual(
+    first.payload,
+    archiveIdentity(gzipSync(Buffer.from("changed"))).payload
+  );
+  assert.throws(() => archiveIdentity(Buffer.from("invalid gzip")));
 });
