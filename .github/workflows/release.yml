@@ -109,7 +109,26 @@ jobs:
         env:
           RELEASE_SOURCE: ${{ inputs.source }}
           RELEASE_APPROVED: ${{ inputs.create_tag }}
+          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
         run: node scripts/check-release-source.mjs
+
+      - name: Qualify exact audit and artifact before creating an immutable tag
+        env:
+          RELEASE_SOURCE: ${{ inputs.source }}
+          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
+        run: |
+          version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')"
+          GITHUB_SHA="$RELEASE_SOURCE" GITHUB_REF="refs/tags/v$version" node scripts/check-release-audit.mjs
+
+      - name: Retain pre-tag audit and candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-audit-pre-tag-${{ inputs.source }}
+          path: .cache/release-audit/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Ensure exact stable release tag
         run: pnpm release:tag --push

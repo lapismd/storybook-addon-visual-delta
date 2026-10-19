@@ -693,3 +693,27 @@ back without exposing a fresh actual. This extraction lowers the oversized
 manager test's counted-line budget under unchanged VD-ARCH-006. Native image
 and provider evidence remain distinct from synthetic presentation fixtures.
 See [`2026-10-19-manager-capture-fixture.md`](../records/2026-10-19-manager-capture-fixture.md).
+
+### Approved 0.0.8 publication preflight
+
+The user has approved the public 0.0.8 release under VD-GOV-009 and VD-GOV-016.
+Exact Version Packages source, public version/tag absence, artifact inspection
+and current audit results are recorded in
+[`2026-10-19-release-0.0.8-audit-decision.md`](../records/2026-10-19-release-0.0.8-audit-decision.md).
+VD-GOV-008 still blocks on two development-only findings; production audit is
+clean. A trial Changesets 3 upgrade leaves the Markdownlint braces path and is
+not the release candidate. At that preflight no exception was approved or implemented. The subsequent
+bounded approval and implementation below supersede that pending decision.
+
+### Approved bounded audit exception implementation
+
+The user explicitly approved the two exact development-tool findings for 0.0.8.
+VD-GOV-008 now permits the bounded risk decision under its canonical exception.
+`scripts/release-audit-policy.mjs` and `scripts/check-release-audit.mjs` enforce
+exact source/lock/tarball identities, raw full and clean production reports,
+expiry, published-version absence and no available upstream fix. Regression
+coverage in `scripts/release-audit-policy.spec.mjs` exercises acceptance and
+rejection boundaries; the tag and protected publisher both retain exact-source
+approval. No dependency or packaged source bytes change. Full audit remains
+non-clean; qualification and publication results belong in the new owning
+release record.

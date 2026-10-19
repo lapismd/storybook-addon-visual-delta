@@ -82,7 +82,7 @@ const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 1,
     canaryJobs: 0,
     pendingProfileLocks: 0,
-    trustedCheckoutJobs: ["package-gate", "visual-gate"],
+    trustedCheckoutJobs: ["package-gate", "visual-gate", "publish-oidc"],
     allowedPermissions: new Set(["contents", "packages", "id-token"]),
   },
   ".github/workflows/capture-canonical-panel-baselines.yml": {
