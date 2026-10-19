@@ -165,6 +165,24 @@ tag, repository, and workflow. The JSON evidence is retained as a workflow
 artifact. A missing or invalid attestation fails the release workflow; it never
 updates a visual baseline.
 
+## Dependency maintenance candidates
+
+Review dependency proposals against the current default branch before a release
+source push. Consolidate compatible updates, upgrade tightly coupled Storybook
+and Playwright packages together, and record proposals already covered by newer
+locked versions. Do not replay stale bot lockfiles over security repairs.
+
+Under VD-GOV-012 and VD-GOV-013, a proposed Playwright 1.62.1 upgrade remains a
+draft until its reviewed image, native smoke evidence, immutable capture-profile
+lock and ARM64 canary are qualified. The currently qualified profile remains
+1.61.1. A candidate manifest alone does not authorize image publication, profile
+promotion, baseline changes or merging with mismatched browser revisions. Keep
+the existing pin validation blocking until the coordinated cutover is ready.
+
+VD-GOV-008 still requires a clean audit. Dependency consolidation does not apply
+the separately proposed audit exception; changing the lock invalidates the old
+proposal's candidate digest and requires fresh review.
+
 ## Agent workflow
 
 The Wave 1 dependency repair retains the blocking release audit. Patched

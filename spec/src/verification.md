@@ -600,6 +600,20 @@ Also fix EditRemoveAndClear to use its own baseline path for primary image (opti
 
 Kill any leftover storybook on panel ports, then run focused failing tests first.
 
+## 2026-10-19 dependency consolidation candidate
+
+The draft dependency candidate upgrades the Storybook cohort to 10.5.10, Svelte
+to 5.56.10, Node types to 26.3.0 and both Playwright packages to 1.62.1. Other
+Dependabot proposals are already covered or exceeded by the merged repair.
+The inventory, exact commands and results are recorded in
+[`2026-10-19-dependabot-consolidation.md`](../records/2026-10-19-dependabot-consolidation.md).
+
+VD-GOV-008, VD-GOV-012 and VD-GOV-013 remain unchanged. The candidate is not
+qualified for merging or release: the current image and capture profile still
+use Playwright 1.61.1. Existing image checks must reject that mismatch. Native
+image publication, immutable profile promotion and ARM64 canary remain pending,
+as does the independent audit decision. No baseline is changed.
+
 ## Review checklist
 
 Before declaring conformance:
