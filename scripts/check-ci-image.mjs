@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { REQUIRED_PUBLICATION_SNIPPETS } from "./ci-image-publication-policy.mjs";
+import { publicationPolicyErrors } from "./ci-image-publication-policy.mjs";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -491,9 +491,7 @@ export function validateCiImageSources({
       "publish workflow: only workflow_dispatch may trigger publication",
     );
   }
-  for (const snippet of REQUIRED_PUBLICATION_SNIPPETS) {
-    requireSnippet(errors, "publish workflow", publishWorkflow, snippet);
-  }
+  errors.push(...publicationPolicyErrors(publishWorkflow));
   const smokeArm64Index = publishWorkflow.indexOf("  smoke-arm64:");
   const profileIndex = publishWorkflow.indexOf("  profile:");
   if (smokeArm64Index < 0 || profileIndex <= smokeArm64Index) {

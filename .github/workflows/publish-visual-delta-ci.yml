@@ -174,10 +174,13 @@ jobs:
     steps:
       - name: Verify native x64 tooling and browsers
         env:
+          HOME: /root
+          EXPECTED_LOCK_SHA256: ${{ needs.publish.outputs.lock_sha256 }}
           EXPECTED_PLAYWRIGHT_VERSION: ${{ needs.publish.outputs.playwright_version }}
         run: |
           test "$(uname -m)" = "x86_64"
           cd /build
+          test "$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
           node --version
           pnpm --version
           mdbook --version
@@ -215,10 +218,13 @@ jobs:
       - name: Verify native ARM64 tooling and browsers
         id: provenance
         env:
+          HOME: /root
+          EXPECTED_LOCK_SHA256: ${{ needs.publish.outputs.lock_sha256 }}
           EXPECTED_PLAYWRIGHT_VERSION: ${{ needs.publish.outputs.playwright_version }}
         run: |
           test "$(uname -m)" = "aarch64"
           cd /build
+          test "$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
           node_version="$(node -p 'process.versions.node')"
           npm_version="$(npm --version)"
           pnpm_version="$(pnpm --version)"

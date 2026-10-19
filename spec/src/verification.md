@@ -627,3 +627,16 @@ Before declaring conformance:
 - Existing unrelated working-copy changes remain untouched
 
 Related contracts: [System specification](./index.md), [Specification governance](./spec-governance.md), [Test runs and scopes](./test-runs-and-scopes.md), and [UI catalog host profile](./host-profile.md).
+
+### Native smoke HOME recovery
+
+VD-GOV-012 and VD-GOV-013 cover verification-only recovery in
+`.github/workflows/verify-visual-delta-ci.yml`. Run `39320101643` published the
+approved 1.62.1 image, but both native jobs failed because GitHub injected its
+uid-1001-owned HOME before Firefox launch. The producer now restores root HOME
+in each launching step. Publication policy guards test both steps individually.
+The recovery workflow has only read permissions and verifies the immutable tag,
+both source labels and the embedded lock before running the same native smoke
+and profile jobs. The policy regression compares those jobs across workflows.
+See [`2026-10-19-native-smoke-recovery.md`](../records/2026-10-19-native-smoke-recovery.md)
+for exact before/after results and remaining profile qualification.
