@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
   AUDIT_EXCEPTION,
+  archiveIdentity,
   verifyReleaseAudit,
 } from "./release-audit-policy.mjs";
 
@@ -71,7 +72,7 @@ try {
     repository: process.env.GITHUB_REPOSITORY,
     ref: process.env.GITHUB_REF,
     lock: hash(path.join(root, "pnpm-lock.yaml")),
-    artifact: hash(tarball),
+    ...archiveIdentity(readFileSync(tarball)),
   };
   if (Object.keys(full.report.advisories ?? {}).length) {
     const versions = (name) =>
@@ -110,6 +111,7 @@ try {
         version: context.version,
         lock: context.lock,
         artifact: context.artifact,
+        payload: context.payload,
         checkedAt: new Date().toISOString(),
       },
       null,

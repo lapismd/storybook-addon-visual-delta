@@ -1,8 +1,17 @@
+import { createHash } from "node:crypto";
+import { gunzipSync } from "node:zlib";
+
+export function archiveIdentity(archive) {
+  const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  return { artifact: sha(archive), payload: sha(gunzipSync(archive)) };
+}
+
 export const AUDIT_EXCEPTION = Object.freeze({
   version: "0.0.8",
   expires: "2026-11-02T00:00:00.000Z",
   lock: "7aef952f349b6fcc06b924d521d27cf9a6df1728d3d84c1e317032b99166d189",
-  artifact: "f445b1d12ebd1241360d210eca324cfd2bcb9df4c1517bb2abb6504280279182",
+  artifact: "3d3c126cf7309e12ac1bc86adbad7ef97ffd67539cceb48f36a18b9068566bd5",
+  payload: "6f3aa1c5af1bf61448c823e58be3bec866acbdcde4017fa10cad5cba94d65ff1",
   findings: [
     {
       id: "GHSA-vfj7-8cjw-p6xm",
@@ -114,7 +123,9 @@ export function verifyReleaseAudit(context) {
     "Audit exception requires the exact reviewed release source and tag"
   );
   requireValue(
-    context.lock === policy.lock && context.artifact === policy.artifact,
+    context.lock === policy.lock &&
+      context.artifact === policy.artifact &&
+      context.payload === policy.payload,
     "Reviewed lock or artifact differs"
   );
   requireValue(

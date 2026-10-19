@@ -231,8 +231,12 @@ owns it. Production audit MUST remain clean.
 
 The reviewed lock SHA-256 is
 `7aef952f349b6fcc06b924d521d27cf9a6df1728d3d84c1e317032b99166d189`;
-the reviewed pnpm tarball SHA-256 is
-`f445b1d12ebd1241360d210eca324cfd2bcb9df4c1517bb2abb6504280279182`.
+the canonical Linux Node 24.15.0 pnpm tarball SHA-256 is
+`3d3c126cf7309e12ac1bc86adbad7ef97ffd67539cceb48f36a18b9068566bd5`.
+Its decompressed tar SHA-256 MUST equal the original reviewed payload:
+`6f3aa1c5af1bf61448c823e58be3bec866acbdcde4017fa10cad5cba94d65ff1`.
+The original local gzip checksum `f445b1d...` differs only in compression;
+complete decompressed tar bytes, file metadata and contents are identical.
 Only repository-owned release maintenance may be added to qualified source
 `9b52f76c723e9e836c27581f5e71a53482862c7a`; packed bytes remain identical.
 After protected PR and Version Packages checks pass, the operator MUST pin
