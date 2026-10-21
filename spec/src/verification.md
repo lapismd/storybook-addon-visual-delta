@@ -1,5 +1,13 @@
 # Visual Delta verification
 
+Mira Wave 3 exposes two cold Linux runner regressions: a missing static index
+was accepted as an empty cached run, and container-root stage files prevented
+unprivileged cleanup. `visual-test-cold.spec.ts` and
+`capture-stage-cleanup.spec.ts` qualify VD-RUN-004/007 and VD-ARCH-001 without
+changing capture identity, baseline policy or publication approval.
+Commands and retained failed attempts are in
+[cold Linux evidence](../records/2026-10-21-cold-linux-capture.md).
+
 This reference maps every stable requirement to implementation evidence, records the current conformance audit, and defines validation commands. A passing test is evidence for the specification, not permission to redefine it.
 
 ## Conformance states

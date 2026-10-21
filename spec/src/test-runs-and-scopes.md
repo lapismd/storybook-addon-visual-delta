@@ -18,6 +18,12 @@ These requirements keep every run conservative, reconnectable, and compare-only 
 
 ## Scope resolution
 
+Under VD-RUN-004, a cold missing/incomplete static index MUST NOT make an empty
+cached-target set look like a completed comparison. Non-dry runs MUST first
+obtain the canonical complete build and resolve eligible targets again. A
+verified empty catalog may remain empty; exact empty requests and dry-run
+planning MUST retain their existing no-expansion/no-build behavior.
+
 Invocation context resolves as:
 
 | Context                   | Base scope                                                                         |
