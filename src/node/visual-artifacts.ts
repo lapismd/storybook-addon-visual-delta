@@ -1,3 +1,4 @@
+import { captureNamespace } from "./capture-configuration.js";
 import path from "node:path";
 
 export const VISUAL_DELTA_ARTIFACT_DIR_REL = ".visual-delta/artifacts";
@@ -16,7 +17,10 @@ export type VisualArtifactPaths = {
 };
 
 function normalizedRelative(directory: string, candidate: string): string {
-  const relative = path.relative(path.resolve(directory), path.resolve(candidate));
+  const relative = path.relative(
+    path.resolve(directory),
+    path.resolve(candidate),
+  );
   if (
     !relative ||
     path.isAbsolute(relative) ||
@@ -28,7 +32,10 @@ function normalizedRelative(directory: string, candidate: string): string {
 }
 
 export function resolveVisualArtifactRoot(root: string): string {
-  return path.resolve(root, VISUAL_DELTA_ARTIFACT_DIR_REL);
+  return (
+    process.env.VISUAL_DELTA_STAGED_ARTIFACT_ROOT ||
+    path.resolve(root, VISUAL_DELTA_ARTIFACT_DIR_REL)
+  );
 }
 
 export function visualArtifactPaths(options: {
@@ -43,7 +50,10 @@ export function visualArtifactPaths(options: {
   if (!/\.png$/i.test(baselineRelative)) {
     throw new Error("Visual artifact baseline must be a PNG");
   }
-  const stemRelative = baselineRelative.replace(/\.png$/i, "");
+  const namespace = captureNamespace(options.root);
+  const stemRelative = [namespace, baselineRelative.replace(/\.png$/i, "")]
+    .filter(Boolean)
+    .join("/");
   const artifactRoot = resolveVisualArtifactRoot(options.root);
   const resolveArtifact = (relative: string) =>
     path.resolve(artifactRoot, ...relative.split("/"));

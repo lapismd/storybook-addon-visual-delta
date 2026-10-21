@@ -6,7 +6,7 @@ export const CANONICAL_VISUAL_CAPTURE_PROFILE_ID =
 export const VISUAL_DELTA_CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci" as const;
 
-export type VisualCaptureProfile = {
+export type ContainerVisualCaptureProfile = {
   schemaVersion: typeof VISUAL_CAPTURE_PROFILE_SCHEMA_VERSION;
   id: string;
   os: "linux";
@@ -36,7 +36,29 @@ export type VisualCaptureProfile = {
   fontManifestSha256: `sha256:${string}` | null;
 };
 
-export const CANONICAL_VISUAL_CAPTURE_PROFILE: VisualCaptureProfile = {
+export type NativeVisualCaptureProfile = Omit<
+  ContainerVisualCaptureProfile,
+  | "schemaVersion"
+  | "os"
+  | "architecture"
+  | "image"
+  | "imageDigest"
+  | "arm64ImageDigest"
+> & {
+  schemaVersion: 2;
+  kind: "native";
+  os: "darwin" | "linux";
+  architecture: "arm64" | "x64";
+  osVersion: string;
+  image: null;
+  imageDigest: null;
+  arm64ImageDigest: null;
+};
+export type VisualCaptureProfile =
+  | ContainerVisualCaptureProfile
+  | NativeVisualCaptureProfile;
+
+export const CANONICAL_VISUAL_CAPTURE_PROFILE: ContainerVisualCaptureProfile = {
   schemaVersion: VISUAL_CAPTURE_PROFILE_SCHEMA_VERSION,
   id: CANONICAL_VISUAL_CAPTURE_PROFILE_ID,
   os: "linux",
@@ -83,6 +105,38 @@ export function validateVisualCaptureProfile(
   profile: VisualCaptureProfile,
 ): string[] {
   const errors: string[] = [];
+  if ("kind" in profile && profile.kind === "native") {
+    if (
+      profile.schemaVersion !== 2 ||
+      !["darwin", "linux"].includes(profile.os) ||
+      !["arm64", "x64"].includes(profile.architecture)
+    )
+      errors.push("Native capture requires macOS or Linux on ARM64 or x64.");
+    if (
+      !profile.id ||
+      !profile.osVersion ||
+      !profile.nodeVersion ||
+      !/^\d+\./.test(profile.playwrightVersion)
+    )
+      errors.push(
+        "Native capture runtime metadata is incomplete; install project Playwright dependencies.",
+      );
+    if (
+      !profile.browsers.length ||
+      profile.browsers.some((browser) => !profile.browserVersions[browser])
+    )
+      errors.push("Native browser version metadata is incomplete.");
+    if (profile.image || profile.imageDigest || profile.arm64ImageDigest)
+      errors.push("Native capture must not claim a container image.");
+    if (
+      profile.fontManifestSha256 &&
+      !/^sha256:[a-f0-9]{64}$/.test(profile.fontManifestSha256)
+    )
+      errors.push(
+        "Native font manifest must be a sha256 digest when supplied.",
+      );
+    return errors;
+  }
   if (profile.schemaVersion !== VISUAL_CAPTURE_PROFILE_SCHEMA_VERSION) {
     errors.push(`Unsupported capture profile schema ${profile.schemaVersion}.`);
   }

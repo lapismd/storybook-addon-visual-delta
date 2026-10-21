@@ -1,3 +1,5 @@
+import { pruneCanonicalBuildCache } from "./canonical-build-retention.js";
+export { pruneCanonicalBuildCache } from "./canonical-build-retention.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   cpSync,
@@ -11,12 +13,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import {
+  currentVisualCaptureProfile,
+  captureCacheDir,
+} from "./capture-profile.js";
 
 export const VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV =
   "VISUAL_DELTA_CANONICAL_BUILD_CACHE";
-export const CANONICAL_BUILD_CACHE_REL =
-  ".visual-delta/cache/canonical-build";
+export const CANONICAL_BUILD_CACHE_REL = ".visual-delta/cache/canonical-build";
 export const CANONICAL_BUILD_CACHE_MAX_ENTRIES = 2;
 
 type CanonicalBuildManifest = {
@@ -30,12 +34,7 @@ type CanonicalBuildManifest = {
 
 export type CanonicalBuildCacheResult = {
   restored: boolean;
-  reason:
-    | "disabled"
-    | "forced-rebuild"
-    | "missing"
-    | "invalid"
-    | "hit";
+  reason: "disabled" | "forced-rebuild" | "missing" | "invalid" | "hit";
 };
 
 function sha256(value: Buffer | string): string {
@@ -80,7 +79,10 @@ function completeStatic(root: string): boolean {
 
 function copyReadableStaticTree(source: string, destination: string): void {
   mkdirSync(destination, { recursive: true, mode: 0o755 });
-  const visit = (sourceDirectory: string, destinationDirectory: string): void => {
+  const visit = (
+    sourceDirectory: string,
+    destinationDirectory: string,
+  ): void => {
     for (const entry of readdirSync(sourceDirectory, { withFileTypes: true })) {
       const sourcePath = path.join(sourceDirectory, entry.name);
       const destinationPath = path.join(destinationDirectory, entry.name);
@@ -90,7 +92,9 @@ function copyReadableStaticTree(source: string, destination: string): void {
       } else if (entry.isFile()) {
         // Creating the destination from bytes avoids Docker Desktop translating
         // a cross-bind recursive copy into write-only (0200) host files.
-        writeFileSync(destinationPath, readFileSync(sourcePath), { mode: 0o644 });
+        writeFileSync(destinationPath, readFileSync(sourcePath), {
+          mode: 0o644,
+        });
       }
     }
   };
@@ -101,53 +105,9 @@ function entryPath(cacheRoot: string, fingerprint: string): string {
   return path.join(cacheRoot, "entries", fingerprint);
 }
 
-function entryCreatedAt(entry: string): number {
-  const manifest = readManifest(entry);
-  const parsed = manifest ? Date.parse(manifest.createdAt) : Number.NaN;
-  if (Number.isFinite(parsed)) return parsed;
-  try {
-    return statSync(entry).mtimeMs;
-  } catch {
-    return 0;
-  }
-}
-
-export function pruneCanonicalBuildCache(options: {
-  cacheRoot: string;
-  activeFingerprint: string;
-  maxEntries?: number;
-}): string[] {
-  const entriesRoot = path.join(options.cacheRoot, "entries");
-  if (!existsSync(entriesRoot)) return [];
-  const maxEntries = Math.max(
-    1,
-    Math.trunc(options.maxEntries ?? CANONICAL_BUILD_CACHE_MAX_ENTRIES),
-  );
-  const candidates = readdirSync(entriesRoot, { withFileTypes: true })
-    .filter(
-      (entry) => entry.isDirectory() && /^[a-f0-9]{64}$/i.test(entry.name),
-    )
-    .map((entry) => ({
-      fingerprint: entry.name,
-      path: path.join(entriesRoot, entry.name),
-      createdAt: entryCreatedAt(path.join(entriesRoot, entry.name)),
-    }))
-    .sort((left, right) => right.createdAt - left.createdAt);
-  const keep = new Set<string>([options.activeFingerprint]);
-  for (const candidate of candidates) {
-    if (keep.size >= maxEntries) break;
-    keep.add(candidate.fingerprint);
-  }
-  const removed: string[] = [];
-  for (const candidate of candidates) {
-    if (keep.has(candidate.fingerprint)) continue;
-    rmSync(candidate.path, { recursive: true, force: true });
-    removed.push(candidate.fingerprint);
-  }
-  return removed;
-}
-
-function readManifest(entry: string): CanonicalBuildManifest | null {
+export function readCanonicalBuildManifest(
+  entry: string,
+): CanonicalBuildManifest | null {
   try {
     const value = JSON.parse(
       readFileSync(path.join(entry, "manifest.json"), "utf8"),
@@ -173,7 +133,7 @@ function validEntry(options: {
   fingerprint: string;
   profileId: string;
 }): boolean {
-  const manifest = readManifest(options.entry);
+  const manifest = readCanonicalBuildManifest(options.entry);
   const staticRoot = path.join(options.entry, "storybook-static");
   const statsPath = path.join(options.entry, "preview-stats.json");
   if (
@@ -188,8 +148,8 @@ function validEntry(options: {
     return false;
   }
   const currentFiles = fileHashes(staticRoot);
-  const expectedEntries = Object.entries(manifest.staticFiles).sort(([a], [b]) =>
-    a.localeCompare(b),
+  const expectedEntries = Object.entries(manifest.staticFiles).sort(
+    ([a], [b]) => a.localeCompare(b),
   );
   const currentEntries = Object.entries(currentFiles).sort(([a], [b]) =>
     a.localeCompare(b),
@@ -201,10 +161,11 @@ export function resolveCanonicalBuildCacheRoot(
   root: string,
   environment = process.env,
 ): string | null {
-  const configured = environment[VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV]?.trim();
+  const configured =
+    environment[VISUAL_DELTA_CANONICAL_BUILD_CACHE_ENV]?.trim();
   return configured
     ? path.resolve(configured)
-    : path.join(path.resolve(root), CANONICAL_BUILD_CACHE_REL);
+    : path.join(captureCacheDir(root), "canonical-build");
 }
 
 export function restoreCanonicalBuildCache(options: {
@@ -214,12 +175,13 @@ export function restoreCanonicalBuildCache(options: {
   forceRebuild?: boolean;
   profileId?: string;
 }): CanonicalBuildCacheResult {
-  if (options.forceRebuild) return { restored: false, reason: "forced-rebuild" };
+  if (options.forceRebuild)
+    return { restored: false, reason: "forced-rebuild" };
   if (!options.cacheRoot || !options.fingerprint) {
     return { restored: false, reason: "disabled" };
   }
   const profileId =
-    options.profileId ?? CANONICAL_VISUAL_CAPTURE_PROFILE.id;
+    options.profileId ?? currentVisualCaptureProfile(options.root).id;
   const entry = entryPath(options.cacheRoot, options.fingerprint);
   if (!existsSync(entry)) return { restored: false, reason: "missing" };
   if (!validEntry({ entry, fingerprint: options.fingerprint, profileId })) {
@@ -236,10 +198,7 @@ export function restoreCanonicalBuildCache(options: {
     ".visual-delta/cache/preview-stats.json",
   );
   rmSync(staticTemporary, { recursive: true, force: true });
-  copyReadableStaticTree(
-    path.join(entry, "storybook-static"),
-    staticTemporary,
-  );
+  copyReadableStaticTree(path.join(entry, "storybook-static"), staticTemporary);
   rmSync(staticDestination, { recursive: true, force: true });
   renameSync(staticTemporary, staticDestination);
   mkdirSync(path.dirname(statsDestination), { recursive: true });
@@ -273,7 +232,7 @@ export function persistCanonicalBuildCache(options: {
       entry: destination,
       fingerprint: options.fingerprint,
       profileId:
-        options.profileId ?? CANONICAL_VISUAL_CAPTURE_PROFILE.id,
+        options.profileId ?? currentVisualCaptureProfile(options.root).id,
     })
   ) {
     pruneCanonicalBuildCache({
@@ -299,7 +258,7 @@ export function persistCanonicalBuildCache(options: {
       version: 1,
       fingerprint: options.fingerprint,
       profileId:
-        options.profileId ?? CANONICAL_VISUAL_CAPTURE_PROFILE.id,
+        options.profileId ?? currentVisualCaptureProfile(options.root).id,
       previewStatsSha256: sha256(readFileSync(statsPath)),
       staticFiles: fileHashes(staticRoot),
       createdAt: new Date().toISOString(),
@@ -320,3 +279,5 @@ export function persistCanonicalBuildCache(options: {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
+
+export { publishProfilePreviewGraph } from "./profile-preview-graph.js";

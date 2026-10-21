@@ -2,10 +2,7 @@ import type { VisualCaptureProfile } from "../shared/capture-profile.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
 import type { VisualTestFailureMode } from "../shared/failure-mode.js";
 
-export type VisualCaptureOperation =
-  | "test"
-  | "update"
-  | "interaction-update";
+export type VisualCaptureOperation = "test" | "update" | "interaction-update";
 
 export type VisualCaptureJobManifest = {
   schemaVersion: 1;
@@ -37,12 +34,13 @@ export type VisualCaptureRunnerResult = {
   stagedArtifacts?: Array<{
     relativePath: string;
     sha256: string;
+    originalSha256?: string | null;
   }>;
 };
 
 export type VisualDeltaCaptureRunner = {
   id: string;
-  kind: "docker" | "custom";
+  kind: "docker" | "native" | "custom";
   profile: VisualCaptureProfile;
   run(
     manifest: VisualCaptureJobManifest,
@@ -51,11 +49,11 @@ export type VisualDeltaCaptureRunner = {
   doctor?(): Promise<{ ok: boolean; diagnostics: string[] }>;
 };
 
-export function defineVisualDeltaCaptureRunner<T extends VisualDeltaCaptureRunner>(
-  runner: T,
-): T {
+export function defineVisualDeltaCaptureRunner<
+  T extends VisualDeltaCaptureRunner,
+>(runner: T): T {
   if (!runner?.id?.trim()) throw new Error("Capture runner id is required.");
-  if (runner.kind !== "docker" && runner.kind !== "custom") {
+  if (!["docker", "native", "custom"].includes(runner.kind)) {
     throw new Error('Capture runner kind must be "docker" or "custom".');
   }
   if (typeof runner.run !== "function") {
@@ -64,4 +62,8 @@ export function defineVisualDeltaCaptureRunner<T extends VisualDeltaCaptureRunne
   return runner;
 }
 
-export type { VisualCaptureProfile } from "../shared/capture-profile.js";
+export type {
+  VisualCaptureProfile,
+  NativeVisualCaptureProfile,
+  ContainerVisualCaptureProfile,
+} from "../shared/capture-profile.js";

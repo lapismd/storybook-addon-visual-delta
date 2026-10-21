@@ -3,7 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { PNG } from "pngjs";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import {
+  currentVisualCaptureProfile,
+  supportsPersistentCaptureReuse,
+} from "./capture-profile.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
 import type { VisualTestFailureMode } from "../shared/failure-mode.js";
 import {
@@ -29,7 +32,10 @@ function readResult(filePath: string): VisualDiffSidecar | null {
   }
 }
 
-function sameVariant(left: VisualDiffVariant | undefined, right: VisualDiffVariant): boolean {
+function sameVariant(
+  left: VisualDiffVariant | undefined,
+  right: VisualDiffVariant,
+): boolean {
   return Boolean(
     left &&
       left.kind === right.kind &&
@@ -72,6 +78,8 @@ export function recompareCachedActualSet(options: {
   renderFingerprint: string;
   failureMode: VisualTestFailureMode;
 }): CachedActualComparison | null {
+  if (!supportsPersistentCaptureReuse(options.root)) return null;
+  const profile = currentVisualCaptureProfile(options.root);
   const snapshotRoot = path.resolve(options.snapshotDir);
   const seedPaths = visualArtifactPaths({
     root: options.root,
@@ -85,10 +93,10 @@ export function recompareCachedActualSet(options: {
     seed.storyId !== options.storyId ||
     (seed.target?.browser ?? seed.browser) !== options.browser ||
     !seed.captureProfile ||
-    !isDeepStrictEqual(seed.captureProfile, CANONICAL_VISUAL_CAPTURE_PROFILE) ||
-    seed.viewport?.width !== CANONICAL_VISUAL_CAPTURE_PROFILE.viewport.width ||
-    seed.viewport?.height !== CANONICAL_VISUAL_CAPTURE_PROFILE.viewport.height ||
-    seed.deviceScaleFactor !== CANONICAL_VISUAL_CAPTURE_PROFILE.deviceScaleFactor ||
+    !isDeepStrictEqual(seed.captureProfile, profile) ||
+    seed.viewport?.width !== profile.viewport.width ||
+    seed.viewport?.height !== profile.viewport.height ||
+    seed.deviceScaleFactor !== profile.deviceScaleFactor ||
     seed.renderFingerprint !== options.renderFingerprint ||
     !seed.captureOperationId ||
     !seed.actualCapturedAt ||
@@ -137,10 +145,10 @@ export function recompareCachedActualSet(options: {
       !result.actualCapturedAt ||
       !result.captureConfigHash ||
       !isDeepStrictEqual(result.captureSet, seed.captureSet) ||
-      !isDeepStrictEqual(result.captureProfile, CANONICAL_VISUAL_CAPTURE_PROFILE) ||
-      result.viewport?.width !== CANONICAL_VISUAL_CAPTURE_PROFILE.viewport.width ||
-      result.viewport?.height !== CANONICAL_VISUAL_CAPTURE_PROFILE.viewport.height ||
-      result.deviceScaleFactor !== CANONICAL_VISUAL_CAPTURE_PROFILE.deviceScaleFactor ||
+      !isDeepStrictEqual(result.captureProfile, profile) ||
+      result.viewport?.width !== profile.viewport.width ||
+      result.viewport?.height !== profile.viewport.height ||
+      result.deviceScaleFactor !== profile.deviceScaleFactor ||
       !result.actualHash ||
       result.actualRel !== artifacts.actualRelative ||
       !existsSync(artifacts.actual)

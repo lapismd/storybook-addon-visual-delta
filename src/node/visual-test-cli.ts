@@ -1,3 +1,5 @@
+import { policyPassingStoryIds } from "./visual-test-outcomes.js";
+import { publishProfilePreviewGraph } from "./profile-preview-graph.js";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
@@ -23,10 +25,7 @@ import type { VisualDeltaBrowser } from "../shared/environments.js";
 import type { VisualTestFailureMode } from "../shared/failure-mode.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
 import { isStorybookStaticComplete } from "./static-build.js";
-import {
-  resolveBaselinePathMode,
-  resolveSnapshotDir,
-} from "./options.js";
+import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { baselinePngAbs } from "../playwright/write-diff-artifacts.js";
 import { loadStoryIndex } from "./visual-sidecars.js";
 import { recompareCachedActualSet } from "./cached-actual.js";
@@ -155,19 +154,6 @@ function planSelection(options: {
   return planAllVisualTests(options.root, options.hostOptions);
 }
 
-function variantKey(sidecar: {
-  variant?: { kind: string; id?: string };
-  mode?: string;
-}): string {
-  if (sidecar.variant?.kind === "mode") {
-    return `mode:${sidecar.variant.id ?? sidecar.mode ?? ""}`;
-  }
-  if (sidecar.variant?.kind === "interaction") {
-    return `interaction:${sidecar.variant.id ?? ""}`;
-  }
-  return sidecar.mode ? `mode:${sidecar.mode}` : "primary";
-}
-
 function captureTargetKey(
   storyId: string,
   browser: VisualDeltaBrowser,
@@ -203,63 +189,6 @@ function groupPendingCaptures(
   return [...groups.values()];
 }
 
-function policyPassingStoryIds(options: {
-  root: string;
-  snapshotDir: string;
-  baselinePathMode: ReturnType<typeof resolveBaselinePathMode>;
-  storyIds: readonly string[];
-  browsers: readonly VisualDeltaBrowser[];
-}): { passing: string[]; strictFailure: boolean } {
-  let strictFailure = false;
-  const passing = options.storyIds.filter((storyId) =>
-    options.browsers.every((browser) => {
-      const primary = loadSidecarForStoryId(
-        storyId,
-        options.root,
-        options.snapshotDir,
-        options.baselinePathMode,
-        browser,
-      );
-      if (!primary) {
-        strictFailure = true;
-        return false;
-      }
-      const sidecars = [
-        primary,
-        ...loadModeSidecarsForStoryId(
-          storyId,
-          options.root,
-          options.snapshotDir,
-          options.baselinePathMode,
-          browser,
-        ),
-      ];
-      const actualVariants = new Set(sidecars.map(variantKey));
-      const expectedVariants = new Set(
-        (primary.captureSet ?? []).map((item) => variantKey(item)),
-      );
-      const complete =
-        expectedVariants.size === 0 ||
-        [...expectedVariants].every((variant) => actualVariants.has(variant));
-      const failed = sidecars.some(
-        (sidecar) =>
-          sidecar.policyStatus === "failed" ||
-          sidecar.outcome === "error" ||
-          sidecar.passed === false,
-      );
-      if (failed || !complete) strictFailure = true;
-      return (
-        complete &&
-        sidecars.every(
-          (sidecar) =>
-            sidecar.passed === true && sidecar.policyStatus === "passed",
-        )
-      );
-    }),
-  );
-  return { passing, strictFailure };
-}
-
 /**
  * Packaged `visual-delta test` runner.
  * Every executable selection uses a verified canonical static Storybook.
@@ -277,7 +206,9 @@ export async function runVisualTestCli(
     (diagnostic) => diagnostic.severity === "error",
   );
   if (configErrors.length > 0) {
-    console.error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+    console.error(
+      configErrors.map((diagnostic) => diagnostic.message).join(" "),
+    );
     return 1;
   }
   const configuredBrowsers = projectConfig.browsers;
@@ -313,27 +244,33 @@ export async function runVisualTestCli(
   if (options.dryRun) {
     if (options.selection === "stories") {
       const runnable = new Set(plan.runnableStoryIds);
-      const missing = requestedStoryIds.filter((storyId) => !runnable.has(storyId));
+      const missing = requestedStoryIds.filter(
+        (storyId) => !runnable.has(storyId),
+      );
       if (missing.length > 0) {
-        console.error(`Stories are not runnable visual targets: ${missing.join(", ")}`);
+        console.error(
+          `Stories are not runnable visual targets: ${missing.join(", ")}`,
+        );
         return 1;
       }
     }
     return 0;
   }
   if (
-    options.selection === "affected" && plan.summary.noChange &&
+    options.selection === "affected" &&
+    plan.summary.noChange &&
     isStorybookStaticComplete(root)
   ) {
     recordAffectedVisualResultsForPlan(plan, [], hostOptions);
     return 0;
   }
 
-  let selectedStoryIds = options.selection === "all"
-    ? plan.runnableStoryIds
-    : options.selection === "stories"
-      ? requestedStoryIds
-      : plan.selectedStoryIds;
+  let selectedStoryIds =
+    options.selection === "all"
+      ? plan.runnableStoryIds
+      : options.selection === "stories"
+        ? requestedStoryIds
+        : plan.selectedStoryIds;
   const snapshotDir = resolveSnapshotDir(hostOptions, root);
   const baselinePathMode = resolveBaselinePathMode(hostOptions);
   const failureMode =
@@ -359,13 +296,7 @@ export async function runVisualTestCli(
               snapshotDir,
               ...options.baselineRelativePath.split("/"),
             )
-          : baselinePngAbs(
-              entry,
-              root,
-              snapshotDir,
-              baselinePathMode,
-              browser,
-            );
+          : baselinePngAbs(entry, root, snapshotDir, baselinePathMode, browser);
         if (options.interaction) {
           baselinePath = baselinePath.replace(
             `-${browser}.png`,
@@ -403,18 +334,16 @@ export async function runVisualTestCli(
         `[visual-delta] Reused canonical actuals for ${currentStoryIds.length} stor${currentStoryIds.length === 1 ? "y" : "ies"} across ${browsers.length} browser target${browsers.length === 1 ? "" : "s"}.`,
       );
     }
-    const passed = [...cached.values()].every(
-      (target) => target.result.passed,
-    );
+    const passed = [...cached.values()].every((target) => target.result.passed);
     const passingStoryIds = currentStoryIds.filter((storyId) =>
-        browsers.every((browser) => {
-          const target = cached.get(captureTargetKey(storyId, browser));
-          return target?.result.sidecars.every(
-            (sidecar) =>
-              sidecar.passed === true && sidecar.policyStatus === "passed",
-          );
-        }),
-      );
+      browsers.every((browser) => {
+        const target = cached.get(captureTargetKey(storyId, browser));
+        return target?.result.sidecars.every(
+          (sidecar) =>
+            sidecar.passed === true && sidecar.policyStatus === "passed",
+        );
+      }),
+    );
     recordAffectedVisualResultsForPlan(plan, passingStoryIds, hostOptions);
     return passed ? 0 : 1;
   };
@@ -425,7 +354,9 @@ export async function runVisualTestCli(
     if (cachedExit != null) return cachedExit;
   }
   if (reuseEnabled && selectedStoryIds.length > 0) {
-    console.log("[visual-delta] Cached actual set is stale or incomplete; launching canonical browser capture.");
+    console.log(
+      "[visual-delta] Cached actual set is stale or incomplete; launching browser capture.",
+    );
   }
 
   const cacheRoot = resolveCanonicalBuildCacheRoot(root);
@@ -443,8 +374,10 @@ export async function runVisualTestCli(
     );
     const build = await execute("pnpm", ["build-storybook"], root);
     if (build.code !== 0) return build.code;
+    publishProfilePreviewGraph(root);
     built = true;
   } else {
+    publishProfilePreviewGraph(root);
     console.log("[visual-delta] Restored verified canonical Storybook build.");
   }
   plan = planSelection({
@@ -502,11 +435,15 @@ export async function runVisualTestCli(
     const capturesWholeSelection =
       group.storyIds.length === selectedStoryIds.length &&
       group.storyIds.every((storyId) => selectedStoryIds.includes(storyId));
-    const grep = capturesWholeSelection &&
-        (options.selection === "all" ||
-          (options.selection === "affected" && plan.summary.fallbackReason))
-      ? undefined
-      : playwrightStoryIdGrep(group.storyIds);
+    const grep = options.interaction
+      ? playwrightStoryIdGrep([
+          `interaction ${options.interaction.storyId} / ${options.interaction.stepId}`,
+        ])
+      : capturesWholeSelection &&
+          (options.selection === "all" ||
+            (options.selection === "affected" && plan.summary.fallbackReason))
+        ? undefined
+        : playwrightStoryIdGrep(group.storyIds);
     const result = await execute(
       "pnpm",
       [
@@ -514,6 +451,7 @@ export async function runVisualTestCli(
           ? options.testArgs
           : DEFAULT_VISUAL_TEST_ARGS),
         "--reporter=list",
+        "--update-snapshots=none",
         ...group.browsers.flatMap((browser) => ["--project", browser]),
         ...(grep ? ["-g", grep] : []),
       ],
@@ -525,7 +463,11 @@ export async function runVisualTestCli(
         VISUAL_DELTA_FAILURE_MODE: failureMode,
         VISUAL_DELTA_DEFER_POLICY_FAILURES: "1",
         ...(options.interaction
-          ? { PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(options.interaction) }
+          ? {
+              PLAYWRIGHT_INTERACTION_CAPTURE: JSON.stringify(
+                options.interaction,
+              ),
+            }
           : {}),
         ...(options.baselineRelativePath
           ? { VISUAL_DELTA_BASELINE_OVERRIDE: options.baselineRelativePath }
@@ -539,14 +481,15 @@ export async function runVisualTestCli(
     }
   }
   const playwrightPassedStoryIds = selectedStoryIds.filter((storyId) =>
-    browsers.every((browser) =>
-      cachedTargets.has(captureTargetKey(storyId, browser)) ||
-      capturedResults.some(
-        (candidate) =>
-          candidate.storyId === storyId &&
-          candidate.browser === browser &&
-          candidate.status === "passed",
-      ),
+    browsers.every(
+      (browser) =>
+        cachedTargets.has(captureTargetKey(storyId, browser)) ||
+        capturedResults.some(
+          (candidate) =>
+            candidate.storyId === storyId &&
+            candidate.browser === browser &&
+            candidate.status === "passed",
+        ),
     ),
   );
   const policy = policyPassingStoryIds({
@@ -555,6 +498,7 @@ export async function runVisualTestCli(
     baselinePathMode,
     storyIds: selectedStoryIds,
     browsers,
+    interaction: options.interaction,
   });
   const passedByPlaywright = new Set(playwrightPassedStoryIds);
   recordAffectedVisualResultsForPlan(

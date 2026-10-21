@@ -1,6 +1,7 @@
 import {
   defineVisualPlaywrightConfig,
   visualScreenshotExpect,
+  visualPlaywrightWebServer,
 } from "./src/playwright/config.js";
 import { fileURLToPath } from "node:url";
 
@@ -17,10 +18,11 @@ const panelStorybookPort = Number(
 const panelVisualPort = Number(
   process.env.VISUAL_DELTA_PANEL_VISUAL_PORT ?? hostStorybookPort + 5,
 );
-const skipStaticBuild = process.env.VISUAL_DELTA_PANEL_SKIP_STATIC_BUILD === "1";
+const skipStaticBuild =
+  process.env.VISUAL_DELTA_PANEL_SKIP_STATIC_BUILD === "1";
 const staticServerCommand = skipStaticBuild
-  ? `python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`
-  : `pnpm build-storybook && python3 -m http.server ${staticPort} --directory storybook-static --bind 127.0.0.1`;
+  ? visualPlaywrightWebServer(staticPort).command
+  : `pnpm build-storybook && ${visualPlaywrightWebServer(staticPort).command}`;
 
 /** Shared webServer + ports for package Storybook acceptance. */
 export function visualDeltaPackageStorybookOverride(
@@ -48,9 +50,7 @@ export function visualDeltaPackageStorybookOverride(
       },
       {
         command: `VISUAL_DELTA_STORYBOOK_PORT=${panelStorybookPort} VISUAL_SERVER_PORT=${panelVisualPort}${
-          options.includeHostStubs
-            ? " VISUAL_DELTA_INCLUDE_HOST_STUBS=1"
-            : ""
+          options.includeHostStubs ? " VISUAL_DELTA_INCLUDE_HOST_STUBS=1" : ""
         } pnpm storybook:ci`,
         url: `http://127.0.0.1:${panelStorybookPort}/index.json`,
         cwd: packageRoot,

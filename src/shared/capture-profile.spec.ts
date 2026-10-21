@@ -26,7 +26,9 @@ describe("canonical capture profile", () => {
     expect(visualCaptureProfileImageReference()).toBe(
       "ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4",
     );
-    expect(validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE)).toEqual([]);
+    expect(
+      validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE),
+    ).toEqual([]);
   });
 
   it("builds an immutable reference for a locked profile", () => {
@@ -48,4 +50,30 @@ describe("canonical capture profile", () => {
       `${profile.image}@${digest}`,
     );
   });
+});
+
+it("accepts truthful native provenance without container or font locks", () => {
+  const profile = {
+    ...CANONICAL_VISUAL_CAPTURE_PROFILE,
+    schemaVersion: 2 as const,
+    kind: "native" as const,
+    id: "native-darwin-arm64",
+    os: "darwin" as const,
+    architecture: "arm64" as const,
+    osVersion: "27.0.0",
+    image: null,
+    imageDigest: null,
+    arm64ImageDigest: null,
+    fontManifestSha256: null,
+  };
+  expect(validateVisualCaptureProfile(profile)).toEqual([]);
+  expect(visualCaptureProfileImageReference(profile)).toBeNull();
+  expect(
+    validateVisualCaptureProfile({
+      ...profile,
+      playwrightVersion: "unavailable",
+    }),
+  ).toContain(
+    "Native capture runtime metadata is incomplete; install project Playwright dependencies.",
+  );
 });

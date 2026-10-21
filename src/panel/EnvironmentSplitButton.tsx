@@ -1,3 +1,7 @@
+import {
+  capturePresentation,
+  captureProfileLabel,
+} from "../shared/capture-presentation.js";
 import React, { useMemo, useState } from "react";
 import {
   BrowserIcon,
@@ -106,17 +110,24 @@ function EnvironmentMenu({
   );
 }
 
+export type EnvironmentSplitButtonProps = {
+  browser: string;
+  browsers: EnvironmentOption[];
+  onBrowserChange: (value: string) => void;
+  captureProfileId?: string;
+  captureProfileLabel?: string;
+};
+
 export function EnvironmentSplitButton({
   browser,
   browsers,
   onBrowserChange,
   captureProfileId = "visual-delta-linux-arm64-v1",
-}: {
-  browser: string;
-  browsers: EnvironmentOption[];
-  onBrowserChange: (value: string) => void;
-  captureProfileId?: string;
-}) {
+  captureProfileLabel: configuredLabel,
+}: EnvironmentSplitButtonProps) {
+  const label =
+    configuredLabel ??
+    captureProfileLabel(capturePresentation().captureProfile);
   const [open, setOpen] = useState<"browser" | null>(null);
   const browserLabel = useMemo(
     () => selectedLabel(browsers, browser),
@@ -126,11 +137,15 @@ export function EnvironmentSplitButton({
   return (
     <Split role="group" aria-label="Visual baseline target">
       <ProfileSegment
-        aria-label="Canonical capture profile: Linux ARM64"
-        title={`Canonical capture profile: Linux · ARM64 (${captureProfileId})`}
+        aria-label={
+          label === "Linux · ARM64"
+            ? "Canonical capture profile: Linux ARM64"
+            : `Capture profile: ${label}`
+        }
+        title={`${label === "Linux · ARM64" ? "Canonical capture profile" : "Capture profile"}: ${label} (${captureProfileId})`}
       >
-        <LinuxIcon />
-        <TriggerLabel>Linux · ARM64</TriggerLabel>
+        {label.startsWith("macOS") ? <BrowserIcon /> : <LinuxIcon />}
+        <TriggerLabel>{label}</TriggerLabel>
       </ProfileSegment>
       <PopoverProvider
         ariaLabel="Choose baseline browser"

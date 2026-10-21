@@ -10,7 +10,10 @@ import {
 } from "../constants.js";
 import { loadImage } from "./capture.js";
 import { buildFocusAssets } from "./diff-assets.js";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import {
+  capturePresentation,
+  type CapturePresentation,
+} from "../shared/capture-presentation.js";
 import { formatPlaywrightCaptureDiagnostics } from "./capture-diagnostics.js";
 
 const VISUAL_BASELINES_PREFIX = "/visual-baselines/";
@@ -27,12 +30,15 @@ function publicUrl(rel: string, cacheBust: number): string {
   return `${VISUAL_ARTIFACTS_PREFIX}${cleaned}?t=${cacheBust}`;
 }
 
-function artifactStem(baselineSrc: string): string | null {
+function artifactStem(baselineSrc: string, namespace = ""): string | null {
   const pathOnly = baselineSrc.split("?")[0] ?? baselineSrc;
-  if (!pathOnly.startsWith(VISUAL_BASELINES_PREFIX) || !/\.png$/i.test(pathOnly)) {
+  if (
+    !pathOnly.startsWith(VISUAL_BASELINES_PREFIX) ||
+    !/\.png$/i.test(pathOnly)
+  ) {
     return null;
   }
-  return `${VISUAL_ARTIFACTS_PREFIX}${pathOnly
+  return `${VISUAL_ARTIFACTS_PREFIX}${namespace ? `${namespace}/` : ""}${pathOnly
     .slice(VISUAL_BASELINES_PREFIX.length)
     .replace(/\.png$/i, "")}`;
 }
@@ -91,12 +97,15 @@ async function sha256Url(url: string): Promise<string | null> {
 export async function loadPlaywrightDiffResult(
   baselineSrc: string,
   cacheBust = Date.now(),
+  presentation: CapturePresentation = capturePresentation(),
 ): Promise<DiffResultData | null> {
   const stem = baselineStem(baselineSrc);
-  const derivedStem = artifactStem(baselineSrc);
+  const derivedStem = artifactStem(baselineSrc, presentation.artifactNamespace);
   if (!stem || !derivedStem) return null;
 
-  const sidecar = await fetchSidecar(`${derivedStem}.result.json?t=${cacheBust}`);
+  const sidecar = await fetchSidecar(
+    `${derivedStem}.result.json?t=${cacheBust}`,
+  );
   if (
     !sidecar ||
     sidecar.version !== 4 ||
@@ -109,7 +118,7 @@ export async function loadPlaywrightDiffResult(
     !sidecar.variant ||
     !sidecar.captureSet?.length ||
     JSON.stringify(sidecar.captureProfile) !==
-      JSON.stringify(CANONICAL_VISUAL_CAPTURE_PROFILE)
+      JSON.stringify(presentation.captureProfile)
   ) {
     return null;
   }
@@ -124,7 +133,8 @@ export async function loadPlaywrightDiffResult(
     sidecar.diffRel !== expectedDiffRel ||
     !sidecar.captureSet.some(
       (member) =>
-        member.baselineRelative === `${derivedRelativeStem}.png` &&
+        member.baselineRelative ===
+          `${baselineSrc.split("?")[0]!.slice(VISUAL_BASELINES_PREFIX.length)}` &&
         member.variant.kind === sidecar.variant?.kind &&
         (member.variant.kind === "primary" ||
           (sidecar.variant?.kind !== "primary" &&

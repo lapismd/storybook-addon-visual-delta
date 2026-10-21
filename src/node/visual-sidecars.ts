@@ -166,10 +166,7 @@ export function baselinePngPathForStoryId(
   const entry = loadStoryIndex(packageRoot)[storyId];
   if (!entry) return null;
   try {
-    return path.join(
-      snapshotDir,
-      snapshotFileName(entry, mode, project),
-    );
+    return path.join(snapshotDir, snapshotFileName(entry, mode, project));
   } catch {
     return null;
   }
@@ -296,20 +293,15 @@ export function loadModeSidecarsForStoryId(
   return readdirSync(directory)
     .filter(
       (name) =>
-        name.startsWith(prefix) &&
-        name.endsWith(`-${project}.result.json`),
+        name.startsWith(prefix) && name.endsWith(`-${project}.result.json`),
     )
     .map((name) => {
       const sidecar = readSidecar(path.join(directory, name));
       if (!sidecar) return null;
-      const artifactRelative = path
-        .relative(
-          resolveVisualArtifactRoot(packageRoot),
-          path.join(directory, name),
-        )
-        .replaceAll(path.sep, "/")
-        .replace(/\.result\.json$/i, ".png");
-      const png = path.resolve(snapshotDir, ...artifactRelative.split("/"));
+      const png = path.join(
+        path.dirname(primary),
+        name.replace(/\.result\.json$/i, ".png"),
+      );
       return sidecarMatchesBaseline(sidecar, png) ? sidecar : null;
     })
     .filter((sidecar): sidecar is VisualDiffSidecar =>

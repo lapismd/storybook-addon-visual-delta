@@ -1,3 +1,4 @@
+import { staticStorybookServerArgs } from "./static-storybook-command.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -75,7 +76,7 @@ export type WarmStaticServerResult = {
 };
 
 /**
- * Keep a long-lived `python3 -m http.server` on the Playwright static port so
+ * Keep a long-lived package-owned Node static server on the Playwright static port so
  * each Testing Module run can `reuseExistingServer` instead of cold-starting.
  */
 export async function ensureWarmStaticStorybookServer(
@@ -115,23 +116,11 @@ export async function ensureWarmStaticStorybookServer(
     warmServer = null;
   }
 
-  const child = spawn(
-    "python3",
-    [
-      "-m",
-      "http.server",
-      String(port),
-      "--directory",
-      "storybook-static",
-      "--bind",
-      "127.0.0.1",
-    ],
-    {
-      cwd: root,
-      detached: true,
-      stdio: "ignore",
-    },
-  );
+  const child = spawn(process.execPath, staticStorybookServerArgs(port), {
+    cwd: root,
+    detached: true,
+    stdio: "ignore",
+  });
   child.unref();
   warmServer = child;
 

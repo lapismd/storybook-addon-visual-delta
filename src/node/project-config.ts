@@ -1,3 +1,15 @@
+import { validateCaptureWorkspaceIgnore } from "./capture-workspace-ignore.js";
+export { validateCaptureWorkspaceIgnore } from "./capture-workspace-ignore.js";
+import {
+  readConfigurationInputs,
+  readCaptureConfiguration,
+  validateCaptureConfigurationInput,
+} from "./capture-configuration.js";
+import {
+  overlayLocalProjectConfig,
+  overlayCaptureProfileConfig,
+  sharedProjectWriteInput,
+} from "./local-project-config.js";
 import {
   existsSync,
   mkdirSync,
@@ -48,8 +60,7 @@ function cloneBuiltInWorkflow(): VisualDeltaWorkflowConfig {
   return {
     autoAcceptLiveStoryComparisons:
       BUILTIN_VISUAL_DELTA_WORKFLOW.autoAcceptLiveStoryComparisons,
-    visualTestFailureMode:
-      BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
+    visualTestFailureMode: BUILTIN_VISUAL_DELTA_WORKFLOW.visualTestFailureMode,
     reuseActualComparisons:
       BUILTIN_VISUAL_DELTA_WORKFLOW.reuseActualComparisons,
     vcs: { ...BUILTIN_VISUAL_DELTA_WORKFLOW.vcs },
@@ -88,7 +99,13 @@ function splitProjectConfig(input: unknown): {
       workflowPresent: "workflow" in record,
     };
   }
-  const { workflow, browsers, captureWorkspaceIgnore, ...defaults } = record;
+  const {
+    workflow,
+    browsers,
+    captureWorkspaceIgnore,
+    capture: _capture,
+    ...defaults
+  } = record;
   return {
     defaults,
     browsers,
@@ -98,63 +115,6 @@ function splitProjectConfig(input: unknown): {
     workflow,
     workflowPresent: "workflow" in record,
   };
-}
-
-export function validateCaptureWorkspaceIgnore(input: unknown): {
-  value: string[];
-  errors: string[];
-} {
-  if (input === undefined) return { value: [], errors: [] };
-  if (!Array.isArray(input)) {
-    return {
-      value: [],
-      errors: ["captureWorkspaceIgnore must be an array of relative directories."],
-    };
-  }
-  const value: string[] = [];
-  const errors: string[] = [];
-  for (const candidate of input) {
-    if (typeof candidate !== "string") {
-      errors.push("captureWorkspaceIgnore entries must be strings.");
-      continue;
-    }
-    const normalized = candidate
-      .trim()
-      .replaceAll("\\", "/")
-      .replace(/^\.\//, "")
-      .replace(/\/+$/, "");
-    const segments = normalized.split("/");
-    if (
-      !normalized ||
-      normalized === "." ||
-      normalized.startsWith("/") ||
-      /^[A-Za-z]:\//.test(normalized) ||
-      segments.some((segment) => !segment || segment === "." || segment === "..")
-    ) {
-      errors.push(
-        `captureWorkspaceIgnore entry ${JSON.stringify(candidate)} must be a root-relative directory without . or .. segments.`,
-      );
-      continue;
-    }
-    if (value.includes(normalized)) {
-      errors.push(`captureWorkspaceIgnore contains duplicate ${normalized}.`);
-      continue;
-    }
-    if (
-      normalized === ".visual-delta" ||
-      normalized === ".visual-delta/artifacts" ||
-      normalized.startsWith(".visual-delta/artifacts/") ||
-      normalized === ".visual-delta/cache" ||
-      normalized.startsWith(".visual-delta/cache/")
-    ) {
-      errors.push(
-        `captureWorkspaceIgnore cannot suppress package-owned directory ${normalized}.`,
-      );
-      continue;
-    }
-    value.push(normalized);
-  }
-  return { value, errors };
 }
 
 export function visualDeltaProjectConfigPath(root: string): string {
@@ -183,7 +143,7 @@ function readLegacyPassThreshold(root: string): number | null {
   }
 }
 
-export function readVisualDeltaProjectConfig(
+export function readSharedVisualDeltaProjectConfig(
   root: string,
 ): VisualDeltaProjectConfigResult {
   const path = visualDeltaProjectConfigPath(root);
@@ -191,7 +151,7 @@ export function readVisualDeltaProjectConfig(
   const diagnostics: VisualDeltaConfigDiagnostic[] = [];
   if (existsSync(path)) {
     try {
-      const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+      const parsed = readConfigurationInputs(root).project;
       const split = splitProjectConfig(parsed);
       const result = validateVisualDeltaProjectDefaults(split.defaults, {
         rejectUnknown: true,
@@ -288,12 +248,17 @@ export function writeVisualDeltaProjectConfig(
   root: string,
   input: unknown,
 ): VisualDeltaProjectConfigResult {
+  const shared = readSharedVisualDeltaProjectConfig(root);
+  input = sharedProjectWriteInput(root, input, shared);
+  validateCaptureConfigurationInput(
+    (input as Record<string, unknown>)?.capture,
+  );
   const split = splitProjectConfig(input);
   const result = validateVisualDeltaProjectDefaults(split.defaults, {
     requireAll: true,
     rejectUnknown: true,
   });
-  const current = readVisualDeltaProjectConfig(root);
+  const current = shared;
   const workflow = validateVisualDeltaWorkflowConfig(
     split.workflowPresent ? split.workflow : current.workflow,
     { rejectUnknown: true },
@@ -326,6 +291,9 @@ export function writeVisualDeltaProjectConfig(
         browsers: browsers.value,
         captureWorkspaceIgnore: captureWorkspaceIgnore.value,
         workflow: workflow.value,
+        ...((input as Record<string, unknown>).capture !== undefined
+          ? { capture: (input as Record<string, unknown>).capture }
+          : {}),
       },
       null,
       2,
@@ -334,4 +302,26 @@ export function writeVisualDeltaProjectConfig(
   );
   renameSync(temporaryPath, path);
   return readVisualDeltaProjectConfig(root);
+}
+
+export function readVisualDeltaProjectConfig(
+  root: string,
+): VisualDeltaProjectConfigResult {
+  const shared = readSharedVisualDeltaProjectConfig(root);
+  try {
+    const capture = readCaptureConfiguration(root);
+    overlayCaptureProfileConfig(shared, capture.profiles[capture.profile]!);
+    return overlayLocalProjectConfig(
+      shared,
+      readConfigurationInputs(root).local,
+    );
+  } catch (error) {
+    shared.diagnostics.push({
+      code: "capture-config-invalid",
+      severity: "error",
+      message: String(error),
+      setting: "capture",
+    });
+    return shared;
+  }
 }

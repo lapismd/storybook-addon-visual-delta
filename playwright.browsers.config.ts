@@ -1,4 +1,7 @@
-import { defineVisualPlaywrightConfig } from "./src/playwright/config.js";
+import {
+  defineVisualPlaywrightConfig,
+  visualPlaywrightWebServer,
+} from "./src/playwright/config.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
@@ -27,7 +30,7 @@ export default defineVisualPlaywrightConfig({
     snapshotPathTemplate:
       ".cache/visual-delta-matrix/snapshots/{arg}-{projectName}{ext}",
     webServer: {
-      command: `python3 -m http.server ${port} --directory storybook-static --bind 127.0.0.1`,
+      command: visualPlaywrightWebServer(port).command,
       cwd: VISUAL_MATRIX_FIXTURE_ROOT,
       url: `http://127.0.0.1:${port}/iframe.html`,
       reuseExistingServer: false,

@@ -1,4 +1,8 @@
 import {
+  capturePresentation,
+  captureProfileLabel,
+} from "../shared/capture-presentation.js";
+import {
   DEFAULT_VISUAL_DELTA_BROWSERS,
   parseVisualBaselineTarget,
   parseVisualBaselineEnvironment,
@@ -64,8 +68,8 @@ export function discoverVisualEnvironments(options: {
     })),
     platforms: [
       {
-        value: "linux",
-        label: "Linux · ARM64",
+        value: capturePresentation().captureProfile.os,
+        label: captureProfileLabel(capturePresentation().captureProfile),
         enabled: true,
       },
     ],

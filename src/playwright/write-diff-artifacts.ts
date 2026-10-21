@@ -1,3 +1,5 @@
+import { writeNativeBaselineIfApproved } from "./native-baseline-write.js";
+import { buildSidecarBase } from "./sidecar-provenance.js";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -16,7 +18,7 @@ import type {
 } from "../visual-diff-sidecar.js";
 import { compareBaselineToActualPng } from "./compare-pixels.js";
 import type { VisualDeltaBrowser } from "../shared/environments.js";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import { currentVisualCaptureProfile } from "../node/capture-profile.js";
 import {
   isWarningComparisonOutcome,
   type VisualTestFailureMode,
@@ -50,47 +52,6 @@ export function writeVisualDiffSidecar(
 ): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
-}
-
-function buildSidecarBase(
-  entry: StoryIndexEntry,
-  mode: BaselinePathMode,
-  status: VisualDiffSidecarStatus,
-  error?: string,
-  visualModeName?: string,
-  target?: { browser: VisualDeltaBrowser },
-): Omit<
-  VisualDiffSidecar,
-  | "imageWidth"
-  | "imageHeight"
-  | "viewport"
-  | "deviceScaleFactor"
-  | "diffPixels"
-  | "totalPixels"
-  | "diffPercent"
-  | "passThresholdPercent"
-  | "passed"
-  | "changeBounds"
-  | "diffHistogram"
-  | "actualRel"
-  | "diffRel"
-> {
-  return {
-    version: 4,
-    storyId: entry.id,
-    title: entry.title,
-    snapshotRel: screenshotRelativePath(entry, mode, visualModeName),
-    status,
-    runnerStatus: status,
-    ...(target ? { browser: target.browser, target } : {}),
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-    platform: CANONICAL_VISUAL_CAPTURE_PROFILE.os,
-    ...(visualModeName ? { mode: visualModeName } : {}),
-    ...(error ? { error } : {}),
-    generatedAt: new Date().toISOString(),
-    tool: "playwright",
-    operationId: randomUUID(),
-  };
 }
 
 function sha256(value: Buffer | string): string {
@@ -207,9 +168,17 @@ export function writeDiffArtifactsForBaseline(input: {
   const captureId = captureOperationId ?? operationId ?? randomUUID();
   const capturedAt = actualCapturedAt ?? new Date().toISOString();
   const base = {
-    ...buildSidecarBase(entry, mode, status, error, visualModeName, {
-      browser,
-    }),
+    ...buildSidecarBase(
+      entry,
+      mode,
+      status,
+      error,
+      visualModeName,
+      {
+        browser,
+      },
+      packageRoot,
+    ),
     viewport,
     deviceScaleFactor,
     operationId: operationId ?? captureId,
@@ -227,6 +196,7 @@ export function writeDiffArtifactsForBaseline(input: {
         ? { captureConfigHash: visualCaptureConfigHash(captureConfig) }
         : {}),
   };
+  writeNativeBaselineIfApproved(baselinePngAbsPath, actualPng, status);
   const baselineExists = existsSync(baselinePngAbsPath);
   if (!actualPng || !baselineExists) {
     const outcome = comparisonOutcome({
@@ -251,9 +221,7 @@ export function writeDiffArtifactsForBaseline(input: {
           : "failed",
       passed: false,
       ...(actualPng ? { actualHash: sha256(actualPng) } : {}),
-      ...(actualPng
-        ? { actualRel: artifacts.actualRelative }
-        : {}),
+      ...(actualPng ? { actualRel: artifacts.actualRelative } : {}),
     };
     writeVisualDiffSidecar(outPath, sidecar);
     return sidecar;

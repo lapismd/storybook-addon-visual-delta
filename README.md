@@ -11,7 +11,7 @@ Visual Delta is a local-first visual regression testing addon for Storybook. It 
 - A Storybook project using Vite
 - React, which renders the addon panel
 - Playwright for browser capture
-- Docker for the default authoritative Linux ARM64 capture runner
+- Docker for the default Linux ARM64 runner, or installed browsers for native capture
 
 Visual Delta supports Chromium, Firefox, and WebKit. New projects enable Chromium only.
 
@@ -165,7 +165,7 @@ Add `.visual-delta/config.json` when the built-in defaults are not suitable:
 }
 ```
 
-Install local browser binaries only when developing the host-local diagnostic capture path or invoking Playwright directly:
+Install local browser binaries for native capture, host-local diagnostics, or direct Playwright runs:
 
 ```bash
 pnpm exec playwright install chromium firefox webkit
@@ -181,6 +181,70 @@ The built-in comparison allows up to `0.063%` differing pixels and uses a
 values.
 
 The default runner executes authoritative comparisons in the pinned Linux ARM64 capture profile. Diff Browser, the Testing Module, and command-line tests all invoke the same packaged Playwright worker through that runner. Projects that cannot use Docker can provide `.visual-delta/runner.mjs` to transport the same capture job through another environment.
+
+## Native capture on your machine
+
+Create the ignored `.visual-delta/config.local.json` to run locally without
+Docker. Project configuration can use the same `capture` section.
+
+```json
+{
+  "capture": { "profile": "native" },
+  "browsers": ["chromium"],
+  "passThresholdPercent": 0.5
+}
+```
+
+The threshold above is an example local allowance; the built-in default remains
+`0.063%`. Local capture and comparison defaults overlay project settings, while
+explicit story values still win. Local settings cannot enable write or commit
+automation. CI ignores the local file, and `--no-local-config` disables it for
+a reproducible local invocation.
+
+Install the selected Playwright browsers, then create and verify an exact story:
+
+```bash
+pnpm exec playwright install chromium
+pnpm exec visual-delta doctor --runner --capture-profile native
+pnpm exec visual-delta update --story-id button--basic --approved --create-only
+pnpm exec visual-delta test --story-id button--basic --failure-mode strict --fresh
+```
+
+The default static server uses Node and does not require Python.
+
+Native capture uses the installed project dependencies on macOS or Linux, ARM64
+or x64. It preserves browser, mode and interaction variants. With the default
+snapshot directory, the macOS ARM64 primary PNG is persisted at:
+
+```text
+tests/visual/storybook.spec.ts-snapshots/profiles/native/darwin-arm64/button--basic-chromium.png
+.visual-delta/artifacts/profiles/native/darwin-arm64/button--basic-chromium.actual.png
+.visual-delta/artifacts/profiles/native/darwin-arm64/button--basic-chromium.diff.png
+.visual-delta/artifacts/profiles/native/darwin-arm64/button--basic-chromium.result.json
+```
+
+Diff Browser and the Testing Module use the same selected profile and PNGs.
+Restart Storybook after changing profiles. Native provenance records the actual
+OS, architecture, Node, Playwright and browser versions. Without a locked native
+font environment, runs capture fresh images and conservatively retain affected
+stories instead of reusing persistent passing evidence.
+
+For named configurations, define `capture.profiles` entries with an `adapter`
+(`docker`, `native`, or `custom`), optional `defaults`, `browsers`,
+`snapshotDir`, and a `runner` module
+for custom adapters. `--capture-profile <name>` wins over
+`VISUAL_DELTA_CAPTURE_PROFILE`, local configuration and project configuration.
+An explicit `--snapshot-dir` wins over a profile's directory default. Native
+baseline writes require a directory inside the project; external directories
+remain available for read-only comparison. Default Docker paths and existing
+`.visual-delta/runner.mjs` integrations remain compatible.
+
+Contributors can run `pnpm test:native` for an isolated Storybook-compatible
+example exercising capture, unchanged verification, mismatch and missing
+baseline outcomes. Its generated PNGs remain under
+`.visual-delta/cache/native-example/` for inspection. Set
+`VISUAL_DELTA_NATIVE_EXAMPLE_BROWSERS=chromium,firefox,webkit` to exercise the
+full installed native browser matrix.
 
 ## Further documentation
 

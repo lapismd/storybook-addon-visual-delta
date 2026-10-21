@@ -1,0 +1,34 @@
+name: Native capture
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native Playwright (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install native browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Verify native capture and persistent PNGs
+        env:
+          VISUAL_DELTA_NATIVE_EXAMPLE_BROWSERS: chromium,firefox,webkit
+        run: pnpm test:native

@@ -17,6 +17,8 @@ export {
   validateVisualCaptureProfile,
   visualCaptureProfileImageReference,
   type VisualCaptureProfile,
+  type NativeVisualCaptureProfile,
+  type ContainerVisualCaptureProfile,
 } from "../shared/capture-profile.js";
 export type { VisualTestFailureMode } from "../shared/failure-mode.js";
 export type {
@@ -255,3 +257,13 @@ export {
   ensureWarmStaticStorybookServer,
   type WarmStaticServerResult,
 } from "./visual-server.js";
+
+export { createNativeVisualDeltaCaptureRunner } from "./native-capture-runner.js";
+export {
+  readCaptureConfiguration,
+  captureNamespace,
+  VISUAL_DELTA_LOCAL_CONFIG_REL,
+  type CaptureConfiguration,
+  type CaptureProfileConfiguration,
+} from "./capture-configuration.js";
+export { currentVisualCaptureProfile } from "./capture-profile.js";
