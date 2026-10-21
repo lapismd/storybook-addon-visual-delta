@@ -160,6 +160,15 @@ The portable package is publicly released to `https://registry.npmjs.org`.
 Authors record release intent with Changesets on pull requests that change
 public package surface. Merges to `main` with pending Changesets open or update
 a Version Packages pull request. Merging that PR does not create a public tag.
+Before publication approval, the operator dispatches the read-only candidate
+qualification workflow from main with the exact Version Packages source. It
+MUST require canonical main ancestry, an exact checkout and no pending
+Changesets, run package/specification checks and clean full/production audits,
+and retain the inspected archive, source/lock/archive/payload identities, license
+and isolated packed-consumer evidence. This workflow MUST have only read
+permissions, no publication environment, no release credential and no tag or npm
+publication command. Qualification is not publication approval.
+
 After reviewing the exact candidate, the operator dispatches the release
 workflow from `main` with `source` set to its full SHA and `create_tag=true`.
 The default is false. The approved checkout must belong to canonical main

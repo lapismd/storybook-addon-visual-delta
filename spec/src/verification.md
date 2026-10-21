@@ -11,6 +11,11 @@ The subsequent [lint-driver audit repair](../records/2026-10-21-clean-markdown-l
 preserves all Markdown rules/scopes and required check lanes while removing the
 remaining vulnerable development glob graph. No new audit exception is enabled.
 
+The pre-publication candidate lane shares exact-source validation with tagging
+but grants no publication authority. Source-guard and workflow regressions in
+`check-release-source.spec.mjs` retain the approval boundary. See
+[candidate qualification evidence](../records/2026-10-21-release-candidate.md).
+
 This reference maps every stable requirement to implementation evidence, records the current conformance audit, and defines validation commands. A passing test is evidence for the specification, not permission to redefine it.
 
 ## Conformance states
