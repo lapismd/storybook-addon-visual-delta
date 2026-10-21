@@ -7,6 +7,9 @@ unprivileged cleanup. `visual-test-cold.spec.ts` and
 changing capture identity, baseline policy or publication approval.
 Commands and retained failed attempts are in
 [cold Linux evidence](../records/2026-10-21-cold-linux-capture.md).
+The subsequent [lint-driver audit repair](../records/2026-10-21-clean-markdown-lint.md)
+preserves all Markdown rules/scopes and required check lanes while removing the
+remaining vulnerable development glob graph. No new audit exception is enabled.
 
 This reference maps every stable requirement to implementation evidence, records the current conformance audit, and defines validation commands. A passing test is evidence for the specification, not permission to redefine it.
 

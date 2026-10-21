@@ -55,7 +55,7 @@ export default defineConfig(tableRequirements(), {
         "README.md",
       ],
     },
-    markdownlint: { config: ".markdownlint-cli2.jsonc" },
+    markdownlint: false,
     specFirst: {
       mode: "any",
       canonicalPattern: "^spec/src/(?!SUMMARY\\.md$).+\\.md$",
@@ -76,7 +76,7 @@ export default defineConfig(tableRequirements(), {
       protected: [
         "^src/.+\\.(?:[cm]?[jt]sx?|svelte|css)$",
         "^(?:playwright\\.panel\\.config\\.ts|tsconfig(?:\\.[^.]+)*\\.json|AGENTS\\.md)$",
-        "^(?:\\.markdownlint-cli2\\.jsonc|spec/(?:book\\.toml|Makefile))$",
+        "^(?:\\.markdownlint(?:-cli2\\.jsonc|\\.json)|spec/(?:book\\.toml|Makefile))$",
         "^(?:\\.dockerignore|docker/visual-delta-ci/Dockerfile)$",
         "^scripts/(?:check-ci-image(?:-source)?|ci-image-publication-policy)\\.mjs$",
         "^scripts/check-spec-.+\\.mjs$",
@@ -94,11 +94,18 @@ export default defineConfig(tableRequirements(), {
   check: {
     lanes: [
       {
+        name: "Markdown lint",
+        command: "corepack",
+        args: ["pnpm@10.32.1", "spec:lint"],
+      },
+      {
         name: "repository script tests",
         command: "node",
         args: [
           "--test",
           "./scripts/architecture.spec.mjs",
+          "./scripts/check-changesets-reader.spec.mjs",
+          "./scripts/check-markdown-lint.spec.mjs",
           "./scripts/capture-example-baselines.spec.mjs",
           "./scripts/check-ci-image.spec.mjs",
           "./scripts/check-ci-image-source.spec.mjs",
