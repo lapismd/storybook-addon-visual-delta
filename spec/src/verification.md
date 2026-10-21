@@ -1,5 +1,10 @@
 # Visual Delta verification
 
+The approved clean-audit 0.0.9 candidate and immutable publication execution are
+recorded in [release evidence](../records/2026-10-21-publication-009.md).
+VD-GOV-008/009/016, separate baseline approval and public-consumer gates remain
+unchanged; the consumed 0.0.8 audit exception is not reused.
+
 Mira Wave 3 exposes two cold Linux runner regressions: a missing static index
 was accepted as an empty cached run, and container-root stage files prevented
 unprivileged cleanup. `visual-test-cold.spec.ts` and
