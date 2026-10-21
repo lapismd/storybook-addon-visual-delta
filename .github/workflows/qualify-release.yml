@@ -1,0 +1,94 @@
+name: Qualify release candidate without publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Exact completed Version Packages commit or merge on main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  qualify:
+    if: github.repository == 'lapismd/storybook-addon-visual-delta' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71
+      env:
+        HOME: /root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Require a full source identity
+        env:
+          RELEASE_SOURCE: ${{ inputs.source }}
+        run: node -e 'if (!/^[a-f0-9]{40}$/.test(process.env.RELEASE_SOURCE || "")) throw Error("Exact source SHA required");'
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify main history before executing candidate tooling
+        env:
+          RELEASE_SOURCE: ${{ inputs.source }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE"
+          git merge-base --is-ancestor "$RELEASE_SOURCE" origin/main
+          node scripts/check-release-source.mjs --candidate
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
+      - name: Audit and retain the exact archive for approval
+        env:
+          GITHUB_SHA: ${{ inputs.source }}
+        run: |
+          version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')"
+          pnpm release:check --tag "v$version"
+          node scripts/check-release-audit.mjs
+          tar -tzvf .cache/release-audit/candidate.tgz > .cache/release-audit/contents.txt
+          tar -xOf .cache/release-audit/candidate.tgz package/LICENSE > .cache/release-audit/LICENSE
+          test -s .cache/release-audit/LICENSE
+          npm pack .cache/release-audit/candidate.tgz --dry-run --ignore-scripts --json > .cache/release-audit/inspection.json
+          jq -e '[.. | objects | select(.path? == "dist/node/cli.js" and .mode? == 493)] | length == 1' .cache/release-audit/inspection.json
+
+      - name: Verify the packed CLI and public exports outside the checkout
+        run: |
+          candidate="$GITHUB_WORKSPACE/.cache/release-audit/candidate.tgz"
+          evidence="$GITHUB_WORKSPACE/.cache/release-audit/consumer.log"
+          consumer_dir="$(mktemp -d "$RUNNER_TEMP/visual-delta-consumer.XXXXXX")"
+          : > "$consumer_dir/user.npmrc"
+          : > "$consumer_dir/global.npmrc"
+          export NPM_CONFIG_USERCONFIG="$consumer_dir/user.npmrc"
+          export NPM_CONFIG_GLOBALCONFIG="$consumer_dir/global.npmrc"
+          cd "$consumer_dir"
+          {
+            npm init --yes
+            npm install --ignore-scripts --registry=https://registry.npmjs.org "$candidate"
+            npm audit --registry=https://registry.npmjs.org
+            node --input-type=module -e 'await import("@lapismd/storybook-addon-visual-delta/node"); await import("@lapismd/storybook-addon-visual-delta/runner"); await import("@lapismd/storybook-addon-visual-delta/playwright");'
+            ./node_modules/.bin/visual-delta --help
+          } 2>&1 | tee "$evidence"
+
+      - name: Retain candidate, audits and inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-candidate-${{ inputs.source }}
+          path: .cache/release-audit/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90

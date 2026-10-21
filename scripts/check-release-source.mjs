@@ -8,33 +8,37 @@ import { isVersionPackagesReleaseCommit } from "./ensure-release-tag.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-export function validateReleaseApproval(context) {
+export function validateReleaseCandidate(context) {
   if (
     context.event !== "workflow_dispatch" ||
     context.ref !== "refs/heads/main" ||
-    context.repository !== "lapismd/storybook-addon-visual-delta" ||
-    context.approved !== "true"
+    context.repository !== "lapismd/storybook-addon-visual-delta"
   ) {
-    throw new Error("Release tags require explicit approval on canonical main");
+    throw new Error("Release qualification requires canonical main dispatch");
   }
   if (!/^[a-f0-9]{40}$/.test(context.source || "")) {
     throw new Error(
-      "Release approval requires an exact 40-character source SHA"
+      "Release qualification requires an exact 40-character source SHA",
     );
   }
   if (context.head !== context.source) {
-    throw new Error("Checked-out source differs from the approved source");
+    throw new Error("Checked-out source differs from the requested source");
+  }
+  if (!context.versionPackagesCommit || context.pendingChangesets.length) {
+    throw new Error("Source must be a completed Version Packages commit");
+  }
+}
+
+export function validateReleaseApproval(context) {
+  validateReleaseCandidate(context);
+  if (context.approved !== "true") {
+    throw new Error("Release tags require explicit approval on canonical main");
   }
   if (
     context.version === "0.0.8" &&
     context.auditApprovedSource !== context.source
   ) {
     throw new Error("0.0.8 requires its exact reviewed audit-exception source");
-  }
-  if (!context.versionPackagesCommit || context.pendingChangesets.length) {
-    throw new Error(
-      "Approved source must be a completed Version Packages commit"
-    );
   }
 }
 
@@ -47,9 +51,16 @@ function git(...args) {
 }
 
 function main() {
+  const args = process.argv.slice(2);
+  const candidateOnly = args.length === 1 && args[0] === "--candidate";
+  if (args.length && !candidateOnly)
+    throw new Error("Unknown release-source arguments");
+  const validate = candidateOnly
+    ? validateReleaseCandidate
+    : validateReleaseApproval;
   const head = git("rev-parse", "HEAD");
   const parents = git("rev-list", "--parents", "-n", "1", head).split(/\s+/);
-  validateReleaseApproval({
+  validate({
     event: process.env.GITHUB_EVENT_NAME,
     ref: process.env.GITHUB_REF,
     repository: process.env.GITHUB_REPOSITORY,
@@ -60,7 +71,7 @@ function main() {
       .version,
     auditApprovedSource: process.env.RELEASE_AUDIT_APPROVED_SOURCE,
     pendingChangesets: readdirSync(path.join(root, ".changeset")).filter(
-      (name) => name.endsWith(".md") && name !== "README.md"
+      (name) => name.endsWith(".md") && name !== "README.md",
     ),
     versionPackagesCommit: isVersionPackagesReleaseCommit({
       subject: git("log", "-1", "--pretty=%s", head),
@@ -70,7 +81,9 @@ function main() {
     }),
   });
   git("merge-base", "--is-ancestor", head, "origin/main");
-  console.log(`Approved main-history release source verified: ${head}`);
+  console.log(
+    `Exact main-history release source verified: ${head}; candidateOnly=${candidateOnly}`,
+  );
 }
 
 if (

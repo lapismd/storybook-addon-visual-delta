@@ -150,7 +150,10 @@ The repository and npm package must be public before the first release.
 3. Run `pnpm spec:check` and the affected package gates.
 4. Merge the reviewed pull request. `.github/workflows/release.yml` creates or
    updates the Version Packages pull request.
-5. Review and merge Version Packages, then prepare and review the candidate.
+5. Review and merge Version Packages. Dispatch `qualify-release.yml` from main
+   with its exact 40-character source SHA. Review the retained audit receipt,
+   archive, license, file inventory and isolated consumer results before approval.
+   This qualification-only workflow cannot tag or publish.
    After explicit publication approval, dispatch `release.yml` from `main` with
    the exact 40-character Version Packages commit or merge SHA as `source` and
    `create_tag=true`. Ordinary merges never create a public tag. The workflow
