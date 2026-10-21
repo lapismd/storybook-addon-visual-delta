@@ -1,5 +1,13 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.0.9
+
+### Patch Changes
+
+- [#35](https://github.com/lapismd/storybook-addon-visual-delta/pull/35) [`3ad36b9`](https://github.com/lapismd/storybook-addon-visual-delta/commit/3ad36b9854253a9659bf44a910666f3a57aaca1d) Thanks [@stevejuma](https://github.com/stevejuma)! - Build a missing canonical Storybook before resolving cold comparison targets,
+  and safely clean isolated Docker stages created by container root on Linux.
+  Keep dry-run and exact-empty scopes, baseline safety and capture identity intact.
+
 ## 0.0.8
 
 ### Patch Changes
