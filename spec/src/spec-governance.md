@@ -12,6 +12,17 @@ Maintained Changesets 3 and its changelog adapter retain the single-package pnpm
 reader contract. Patched same-major Vite/Markdown-it development resolutions do
 not authorize publication or transfer the consumed 0.0.8 audit exception.
 
+Markdown linting uses the maintained `markdownlint-cli` driver through an
+explicit specification check lane. It MUST preserve the original AGENTS,
+DEVELOPMENT, README and `spec/src` scope, default rules, MD013/MD060 disables and
+sibling-only MD024 configuration. Generated books remain outside that scope.
+Removing the vulnerable CLI2 glob graph MUST NOT remove Markdown lint from
+`spec:check` or relax its rule failures; both direct and aggregate lanes remain
+required, with passing/failing CLI fixtures checking the retained behavior.
+The driver's YAML and TOML dependencies remain on patched major 5 and major 1
+respectively. These development-only pins preserve parser APIs and require a
+fresh full audit; no audit exception is enabled by this migration.
+
 This reference defines how the specification leads implementation, which changes require a specification update, and how local and continuous-integration checks enforce that contract.
 
 ## Normative requirements
