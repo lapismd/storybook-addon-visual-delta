@@ -1,3 +1,11 @@
+import {
+  affectedOptions,
+  normalizedAffectedGlobs,
+  resolveCacheDir,
+  configFingerprint,
+  legacyConfigFingerprintCandidates,
+} from "./affected-config.js";
+import { allSummary } from "./affected-visual-summary.js";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -8,17 +16,15 @@ import {
 } from "node:fs";
 import path from "node:path";
 import type { AffectedVisualSummary } from "../shared/affected-types.js";
-import type {
-  AffectedVisualTestsOptions,
-  VisualDeltaHostOptions,
-} from "./options.js";
+import type { VisualDeltaHostOptions } from "./options.js";
 import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
-import { readVisualDeltaProjectConfig } from "./project-config.js";
-import { currentVisualCaptureProfile, supportsPersistentCaptureReuse, captureCacheDir } from "./capture-profile.js";
+import {
+  currentVisualCaptureProfile,
+  supportsPersistentCaptureReuse,
+} from "./capture-profile.js";
 
 const CACHE_VERSION = 3;
-const DEFAULT_CACHE_DIR = ".visual-delta/cache";
 const CACHE_FILE_NAME = "affected-state-v1.json";
 const STATS_FILE_NAME = "preview-stats.json";
 
@@ -85,6 +91,7 @@ type GraphSnapshot = {
   runnableStoryIds: string[];
   changedInputImporters: Map<string, Set<string>>;
   buildFingerprint: string;
+  supportsReuse?: boolean;
   /** Internal evidence used by focused one-read-per-input tests. */
   hashReadCounts: Record<string, number>;
   unsupportedReason?: string;
@@ -178,7 +185,10 @@ function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function createHashReader(root: string, snapshotDir: string): {
+function createHashReader(
+  root: string,
+  snapshotDir: string,
+): {
   hash: (key: string) => string;
   counts: Record<string, number>;
 } {
@@ -264,28 +274,6 @@ function walkFiles(directory: string, root = directory): string[] {
   };
   visit(directory);
   return out.sort();
-}
-
-function affectedOptions(
-  hostOptions: VisualDeltaHostOptions | undefined,
-): AffectedVisualTestsOptions {
-  return hostOptions?.affectedTests === false
-    ? {}
-    : (hostOptions?.affectedTests ?? {});
-}
-
-function normalizedAffectedGlobs(globs: string[] | undefined): string[] {
-  return [
-    ...new Set((globs ?? []).map((glob) => glob.trim()).filter(Boolean)),
-  ].sort();
-}
-
-function resolveCacheDir(
-  root: string,
-  hostOptions: VisualDeltaHostOptions | undefined,
-): string {
-  const configured = affectedOptions(hostOptions).cacheDir?.trim();
-  return captureCacheDir(root, configured || DEFAULT_CACHE_DIR);
 }
 
 function readStoryIndex(root: string): StoryIndexEntry[] {
@@ -435,67 +423,6 @@ function baselineFilesForStories(
   return byStory;
 }
 
-function configFingerprint(
-  root: string,
-  hostOptions: VisualDeltaHostOptions | undefined,
-): string {
-  const options = affectedOptions(hostOptions);
-  const project = readVisualDeltaProjectConfig(root);
-  return sha256(
-    JSON.stringify({
-      baselinePathMode: resolveBaselinePathMode(hostOptions),
-      externals: normalizedAffectedGlobs(options.externals),
-      untraced: normalizedAffectedGlobs(options.untraced),
-      browsers: project.browsers,
-      visualTestFailureMode: project.workflow.visualTestFailureMode,
-    }),
-  );
-}
-
-function legacyConfigFingerprintCandidates(
-  root: string,
-  hostOptions: VisualDeltaHostOptions | undefined,
-): Set<string> {
-  const options = affectedOptions(hostOptions);
-  const project = readVisualDeltaProjectConfig(root);
-  const snapshotAbsolute = resolveSnapshotDir(hostOptions, root);
-  const snapshotRelative = normalizeSlashes(path.relative(root, snapshotAbsolute));
-  const cacheAbsolute = resolveCacheDir(root, hostOptions);
-  const cacheRelative = normalizeSlashes(path.relative(root, cacheAbsolute));
-  const snapshotValues = new Set<string | null>([
-    hostOptions?.snapshotDir ?? null,
-    snapshotAbsolute,
-    snapshotRelative,
-    `/workspace/${snapshotRelative}`,
-    "/workspace/.visual-delta/capture-inputs/snapshot-dir",
-  ]);
-  const cacheValues = new Set<string | null>([
-    options.cacheDir ?? null,
-    cacheAbsolute,
-    cacheRelative,
-    `/workspace/${cacheRelative}`,
-  ]);
-  const fingerprints = new Set<string>();
-  for (const snapshotDir of snapshotValues) {
-    for (const cacheDir of cacheValues) {
-      fingerprints.add(
-        sha256(
-          JSON.stringify({
-            baselinePathMode: resolveBaselinePathMode(hostOptions),
-            cacheDir,
-            externals: normalizedAffectedGlobs(options.externals),
-            snapshotDir,
-            untraced: normalizedAffectedGlobs(options.untraced),
-            browsers: project.browsers,
-            visualTestFailureMode: project.workflow.visualTestFailureMode,
-          }),
-        ),
-      );
-    }
-  }
-  return fingerprints;
-}
-
 function buildGraphSnapshot(
   root: string,
   hostOptions: VisualDeltaHostOptions | undefined,
@@ -505,12 +432,18 @@ function buildGraphSnapshot(
   const statsPath = path.join(cacheDir, STATS_FILE_NAME);
   const snapshotDir = resolveSnapshotDir(hostOptions, root);
   const hashReader = createHashReader(root, snapshotDir);
+  const profile = currentVisualCaptureProfile(root);
+  const configurationFingerprint = configFingerprint(
+    root,
+    hostOptions,
+    profile,
+  );
   let entries: StoryIndexEntry[] = [];
   try {
     entries = readStoryIndex(root);
   } catch (error) {
     return {
-      configFingerprint: configFingerprint(root, hostOptions),
+      configFingerprint: configurationFingerprint,
       inputHashes: {},
       stories: {},
       storyFiles: [],
@@ -530,7 +463,7 @@ function buildGraphSnapshot(
     modules = readPreviewStats(statsPath);
   } catch (error) {
     return {
-      configFingerprint: configFingerprint(root, hostOptions),
+      configFingerprint: configurationFingerprint,
       inputHashes: {},
       stories: {},
       storyFiles: entries.map((entry) =>
@@ -554,7 +487,7 @@ function buildGraphSnapshot(
   );
   if (!hasViteBuilder) {
     return {
-      configFingerprint: configFingerprint(root, hostOptions),
+      configFingerprint: configurationFingerprint,
       inputHashes: {},
       stories: {},
       storyFiles: entries.map((entry) =>
@@ -669,14 +602,20 @@ function buildGraphSnapshot(
         .filter((file) => !baselineDependencies.has(file))
         .map(
           (file) =>
-            [file, inputHashes[file] ?? hashReader.hash(file)] as [string, string],
+            [file, inputHashes[file] ?? hashReader.hash(file)] as [
+              string,
+              string,
+            ],
         ),
     ]);
     story.fingerprint = fingerprintEntries([
       ["@render", story.renderFingerprint],
       ...story.dependencies.map(
         (file) =>
-          [file, inputHashes[file] ?? hashReader.hash(file)] as [string, string],
+          [file, inputHashes[file] ?? hashReader.hash(file)] as [
+            string,
+            string,
+          ],
       ),
     ]);
   }
@@ -691,14 +630,17 @@ function buildGraphSnapshot(
     [...importersByDependency.entries()].flatMap(([dependency, importers]) =>
       [...importers].map(
         (importer) =>
-          [`${dependency}\0${importer}`, sha256("preview-edge")] as [string, string],
+          [`${dependency}\0${importer}`, sha256("preview-edge")] as [
+            string,
+            string,
+          ],
       ),
     ),
   );
   const buildFingerprint = fingerprintEntries([
     ["@schema", sha256("canonical-build-v1")],
-    ["@profile", sha256(JSON.stringify(currentVisualCaptureProfile(root)))],
-    ["@config", configFingerprint(root, hostOptions)],
+    ["@profile", sha256(JSON.stringify(profile))],
+    ["@config", configurationFingerprint],
     ["@preview-graph", graphFingerprint],
     ...buildInputFiles.map(
       (file) => [file, hashReader.hash(file)] as [string, string],
@@ -706,7 +648,8 @@ function buildGraphSnapshot(
   ]);
 
   return {
-    configFingerprint: configFingerprint(root, hostOptions),
+    configFingerprint: configurationFingerprint,
+    supportsReuse: supportsPersistentCaptureReuse(root, profile),
     inputHashes,
     stories,
     storyFiles,
@@ -726,7 +669,9 @@ function readCache(cachePath: string): {
 } {
   if (!existsSync(cachePath)) return { error: "Affected cache is missing" };
   try {
-    const value = JSON.parse(readFileSync(cachePath, "utf8")) as ReadAffectedCache;
+    const value = JSON.parse(
+      readFileSync(cachePath, "utf8"),
+    ) as ReadAffectedCache;
     if (
       (value.version !== 2 && value.version !== CACHE_VERSION) ||
       !value.inputHashes ||
@@ -759,7 +704,11 @@ function revalidatedPassingFingerprints(
       ? cached.passingFingerprints
       : {};
   }
-  if (!legacyConfigFingerprintCandidates(root, hostOptions).has(cached.configFingerprint)) {
+  if (
+    !legacyConfigFingerprintCandidates(root, hostOptions).has(
+      cached.configFingerprint,
+    )
+  ) {
     return {};
   }
 
@@ -824,24 +773,6 @@ function globalFallbackReason(
   return undefined;
 }
 
-function allSummary(
-  selection: AffectedVisualSummary["selection"],
-  storyIds: string[],
-  fallbackReason?: string,
-  changed: string[] = [],
-): AffectedVisualSummary {
-  return {
-    selection,
-    selected: storyIds.length,
-    unchanged: 0,
-    total: storyIds.length,
-    noChange: !fallbackReason && storyIds.length === 0,
-    ...(fallbackReason ? { fallbackReason } : {}),
-    ...(changed.length ? { changedInputs: changed } : {}),
-    storyIds,
-  };
-}
-
 /**
  * Plan an affected run against the last passing local fingerprints.
  * This function never builds Storybook or launches Playwright.
@@ -861,9 +792,10 @@ export function planAffectedVisualTests(
   let fallbackReason = snapshot.unsupportedReason ?? cached.error;
   let changed: string[] = [];
   if (!fallbackReason && cached.value) {
-    changed = cached.value.version === CACHE_VERSION
-      ? changedInputs(cached.value.inputHashes, snapshot.inputHashes)
-      : [];
+    changed =
+      cached.value.version === CACHE_VERSION
+        ? changedInputs(cached.value.inputHashes, snapshot.inputHashes)
+        : [];
     if (
       cached.value.version === CACHE_VERSION &&
       cached.value.configFingerprint !== snapshot.configFingerprint
@@ -893,23 +825,26 @@ export function planAffectedVisualTests(
   }
 
   if (fallbackReason) {
-    return retainPlanSnapshot({
-      root: resolvedRoot,
-      cacheDir,
-      cachePath,
-      statsPath,
-      summary: allSummary(
-        "affected",
+    return retainPlanSnapshot(
+      {
+        root: resolvedRoot,
+        cacheDir,
+        cachePath,
+        statsPath,
+        summary: allSummary(
+          "affected",
+          runnableStoryIds,
+          fallbackReason,
+          changed,
+        ),
+        selectedStoryIds: runnableStoryIds,
         runnableStoryIds,
-        fallbackReason,
-        changed,
-      ),
-      selectedStoryIds: runnableStoryIds,
-      runnableStoryIds,
-      needsRebuild:
-        runnableStoryIds.length === 0 ||
-        fallbackReason.startsWith("New story cannot be resolved"),
-    }, snapshot);
+        needsRebuild:
+          runnableStoryIds.length === 0 ||
+          fallbackReason.startsWith("New story cannot be resolved"),
+      },
+      snapshot,
+    );
   }
 
   const passing = revalidatedPassingFingerprints(
@@ -918,31 +853,36 @@ export function planAffectedVisualTests(
     resolvedRoot,
     hostOptions,
   );
+  const reuseSupported = snapshot.supportsReuse === true;
   const selectedStoryIds = runnableStoryIds.filter(
     (storyId) =>
       !snapshot.stories[storyId] ||
-      !supportsPersistentCaptureReuse(resolvedRoot) || passing[storyId] !== snapshot.stories[storyId]!.fingerprint,
+      !reuseSupported ||
+      passing[storyId] !== snapshot.stories[storyId]!.fingerprint,
   );
   const unchanged = runnableStoryIds.length - selectedStoryIds.length;
   const noChange = selectedStoryIds.length === 0;
-  return retainPlanSnapshot({
-    root: resolvedRoot,
-    cacheDir,
-    cachePath,
-    statsPath,
-    summary: {
-      selection: "affected",
-      selected: selectedStoryIds.length,
-      unchanged,
-      total: runnableStoryIds.length,
-      noChange,
-      ...(changed.length ? { changedInputs: changed } : {}),
-      storyIds: selectedStoryIds,
+  return retainPlanSnapshot(
+    {
+      root: resolvedRoot,
+      cacheDir,
+      cachePath,
+      statsPath,
+      summary: {
+        selection: "affected",
+        selected: selectedStoryIds.length,
+        unchanged,
+        total: runnableStoryIds.length,
+        noChange,
+        ...(changed.length ? { changedInputs: changed } : {}),
+        storyIds: selectedStoryIds,
+      },
+      selectedStoryIds,
+      runnableStoryIds,
+      needsRebuild: !noChange,
     },
-    selectedStoryIds,
-    runnableStoryIds,
-    needsRebuild: !noChange,
-  }, snapshot);
+    snapshot,
+  );
 }
 
 /** Build the full-run summary used by CLI and middleware. */
@@ -956,16 +896,19 @@ export function planAllVisualTests(
   const statsPath = path.join(cacheDir, STATS_FILE_NAME);
   const snapshot = buildGraphSnapshot(resolvedRoot, hostOptions);
   const storyIds = snapshot.runnableStoryIds;
-  return retainPlanSnapshot({
-    root: resolvedRoot,
-    cacheDir,
-    cachePath,
-    statsPath,
-    summary: allSummary("all", storyIds),
-    selectedStoryIds: storyIds,
-    runnableStoryIds: storyIds,
-    needsRebuild: false,
-  }, snapshot);
+  return retainPlanSnapshot(
+    {
+      root: resolvedRoot,
+      cacheDir,
+      cachePath,
+      statsPath,
+      summary: allSummary("all", storyIds),
+      selectedStoryIds: storyIds,
+      runnableStoryIds: storyIds,
+      needsRebuild: false,
+    },
+    snapshot,
+  );
 }
 
 /** Build an exact selected-story plan without calculating every story fingerprint. */
@@ -992,7 +935,10 @@ export function planExactVisualTests(
     summary: {
       selection: "selected" as const,
       selected: selected.length,
-      unchanged: Math.max(0, snapshot.runnableStoryIds.length - selected.length),
+      unchanged: Math.max(
+        0,
+        snapshot.runnableStoryIds.length - selected.length,
+      ),
       total: snapshot.runnableStoryIds.length,
       noChange: selected.length === 0,
       storyIds: selected,
@@ -1047,12 +993,14 @@ function recordSnapshotResults(options: {
     options.root,
     options.hostOptions,
   );
-  const scoped = Object.keys(snapshot.stories).length < snapshot.runnableStoryIds.length;
+  const scoped =
+    Object.keys(snapshot.stories).length < snapshot.runnableStoryIds.length;
   for (const storyId of snapshot.runnableStoryIds) {
     const oldFingerprint =
       previousPassing[storyId] ??
-      (scoped && options.previous?.version === CACHE_VERSION
-        && options.previous.configFingerprint === snapshot.configFingerprint
+      (scoped &&
+      options.previous?.version === CACHE_VERSION &&
+      options.previous.configFingerprint === snapshot.configFingerprint
         ? options.previous.passingFingerprints[storyId]
         : undefined);
     if (oldFingerprint) passingFingerprints[storyId] = oldFingerprint;

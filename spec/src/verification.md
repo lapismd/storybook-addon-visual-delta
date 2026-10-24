@@ -820,3 +820,18 @@ Firefox and WebKit for source `ff27fc64902b074ac824a7a7bb7ab22527cd4e07`.
 Canonical ARM64 package, panel, browser-matrix and manager acceptance also pass
 in run `40071930818`. The subsequent Storybook security repair requires fresh
 qualification on its own source. No committed baseline replacement is approved.
+
+## 2026-10-24 native reuse parity
+
+VD-RUN-007/008 and VD-BASE-005/009 require native captured-actual reuse and
+passing affected exclusions when measured environment evidence is complete.
+`native-font-manifest.spec.ts` qualifies content-derived macOS/Linux font
+identity, registration/configuration changes and conservative probe failures.
+`native-artifact-inputs.spec.ts` qualifies active-profile artifact staging and
+symlink isolation. `native-capture-reuse.spec.ts` qualifies cached comparisons and profile
+invalidation. `native-affected-reuse.spec.ts` proves that changed fonts, browser
+versions and OS versions invalidate passing exclusions. The public native
+acceptance script covers full reruns, affected
+no-ops, modes, interactions, multiple browsers, corrupt actuals and fresh runs.
+Results and remaining qualification are recorded in
+[native parity evidence](../records/2026-10-24-native-reuse-parity.md).

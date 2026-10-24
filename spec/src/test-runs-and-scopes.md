@@ -163,6 +163,21 @@ Profile identity and effective capture configuration MUST enter build, affected
 and actual-reuse fingerprints. Incomplete native environment evidence MUST
 disable persistent actual reuse and passing-cache exclusions conservatively.
 
+Native macOS and Linux profiles MUST support the same checksum-verified actual
+reuse and affected-story exclusions as Docker when host evidence is complete.
+The font fingerprint MUST derive from the OS font inventory, registered font
+state and actual font-file contents; Linux MUST also include active Fontconfig
+configuration and font-related environment inputs. A changed font, registration
+or fallback configuration MUST invalidate reuse even when browser and story
+inputs are unchanged. Missing, empty, malformed, unreadable or timed-out font
+evidence MUST leave capture available with reuse disabled; a declared or
+invented font digest MUST NOT replace measured evidence. The selected native
+profile MUST freeze this evidence for the package worker and its browser jobs.
+Reuse selection MUST measure support once per plan, not once per story.
+Primary, mode, interaction and configured-browser capture sets MUST retain the
+same freshness, corruption, threshold, baseline-change and `--fresh` rules as
+Docker. Native results and image URLs remain in their existing profile paths. Native workers MUST stage reusable raw actuals and sidecars from only the active profile namespace as inputs before resolving reuse. Missing or unsafe artifact inputs MUST cause recapture, without exposing another profile or modifying durable input artifacts.
+
 Native writers MUST persist their settled raw PNG through the package-owned
 staged baseline writer, independently of the consumer's Playwright-generated
 snapshot template. Compare-only native runs MUST NOT invoke snapshot assertions

@@ -212,6 +212,15 @@ pnpm exec visual-delta test --story-id button--basic --failure-mode strict --fre
 
 The default static server uses Node and does not require Python.
 
+Native capture supports the same actual-image reuse, affected-story skipping,
+browser/mode/interaction variants and strict comparison policy as Docker.
+The addon measures the host font inventory and font-file contents on macOS,
+and also active Fontconfig settings on Linux. Changed environment evidence
+invalidates reuse automatically. If font evidence cannot be measured, capture
+still works and unchanged stories recapture conservatively; Linux requires the
+`fc-list` and `fc-conflist` tools for reuse. `--fresh` always requests new browser
+images. OS/architecture-separated native PNG paths and image URLs stay the same.
+
 Native capture uses the installed project dependencies on macOS or Linux, ARM64
 or x64. It preserves browser, mode and interaction variants. With the default
 snapshot directory, the macOS ARM64 primary PNG is persisted at:
