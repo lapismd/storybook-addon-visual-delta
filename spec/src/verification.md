@@ -1,5 +1,23 @@
 # Visual Delta verification
 
+The 2026-10-24 native-profile pre-release `pnpm audit --json` found two Storybook
+10.5.10 advisories: one critical (GHSA-f2ph-cmg5-wxc8) and one high
+(GHSA-px85-f4q5-jh77). The coupled 10.6.2 repair must rerun this exact audit,
+production audit, package checks and hosted panel, manager and browser acceptance
+before release. No audit exception or baseline update is approved.
+
+The first 10.6.2 manager run passed 54 cases, skipped the existing history case
+and failed `Visual Delta mobile review layout / opens the native addon drawer
+and restores its closed state`. Storybook omits `aria-controls` on its closed
+drawer button, so VD-UI-013 requires accessible-action discovery. The original
+browser regression and `review-layout.spec.ts` cover opening and state restoration.
+The new unit case first failed 1 of 7 tests, then all 7 passed after the fix.
+The exact failing browser target also passes from a fresh Storybook process.
+Full and production audits now report zero findings; the cold panel lane passes
+13 cases. The full manager lane must pass again on the patched release source.
+The final pinned Node 24.15.0/pnpm 10.32.1 package check passes 587 tests,
+158 script cases, seven specification lanes, types, build and package lint.
+
 The approved clean-audit 0.0.9 candidate and immutable publication execution are
 recorded in [release evidence](../records/2026-10-21-publication-009.md).
 VD-GOV-008/009/016, separate baseline approval and public-consumer gates remain
@@ -796,6 +814,9 @@ publishable manifests and lockfiles contain no local dependency references.
 Firefox was initially absent. After installation, a standalone Playwright
 launch still fails on this host with sandbox-extension and compositor errors.
 That external browser failure prevents completing the full browser-matrix lane
-locally. Linux native qualification awaits the new CI workflow, and the local
-Docker daemon is unavailable for a fresh container run. These limitations do
-not authorize publication or committed baseline replacement.
+locally, and the local Docker daemon is unavailable for a fresh container run.
+Hosted native run `40071930815` now passes on macOS and Linux with Chromium,
+Firefox and WebKit for source `ff27fc64902b074ac824a7a7bb7ab22527cd4e07`.
+Canonical ARM64 package, panel, browser-matrix and manager acceptance also pass
+in run `40071930818`. The subsequent Storybook security repair requires fresh
+qualification on its own source. No committed baseline replacement is approved.

@@ -154,6 +154,8 @@ story leaves.
 Review layout MAY expand the preview and panel for inspection. Desktop review
 uses the full-width bottom dock. Below Storybook's 600 CSS pixel breakpoint,
 review uses the native addon drawer and selects Visual Delta before opening it.
+The closed drawer's open control MUST be discoverable by its accessible action
+label without requiring `aria-controls`, which Storybook only supplies when open.
 Disabling review MUST restore the drawer's prior open or closed state as well as
 the prior Storybook layout. The prior layout MUST also be restored when the
 addon unmounts.

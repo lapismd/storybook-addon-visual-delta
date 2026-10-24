@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceCommit": "54d2ef4298d6893586fe03083e475c2f02fd6b20",
+  "sourceCommit": "e929db8b658269f1e85c9ceb13a3c5960cf38ff5",
   "limits": {
     "newProductionCountedLines": 300,
     "newTestCountedLines": 500,
@@ -345,14 +345,14 @@
       "forbiddenImportCount": 0
     },
     "src/manager/review-layout.spec.ts": {
-      "countedLines": 210,
-      "physicalLines": 235,
+      "countedLines": 229,
+      "physicalLines": 257,
       "kind": "test",
       "forbiddenImportCount": 0
     },
     "src/manager/review-layout.ts": {
-      "countedLines": 196,
-      "physicalLines": 243,
+      "countedLines": 195,
+      "physicalLines": 242,
       "kind": "production",
       "forbiddenImportCount": 0
     },

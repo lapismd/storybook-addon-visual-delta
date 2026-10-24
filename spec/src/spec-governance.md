@@ -206,6 +206,13 @@ updates a visual baseline.
 
 ## Dependency maintenance candidates
 
+The native-profile release candidate MUST upgrade the coupled Storybook core,
+React/Vite adapter, documentation addon and accessibility addon to 10.6.2.
+This repairs GHSA-f2ph-cmg5-wxc8 and GHSA-px85-f4q5-jh77 discovered by the
+2026-10-24 pre-release audit. VD-GOV-008 still requires clean full and production
+audits and complete package/browser qualification; the repair does not authorize
+baseline changes or alter the pinned Playwright capture profile.
+
 Review dependency proposals against the current default branch before a release
 source push. Consolidate compatible updates, upgrade tightly coupled Storybook
 and Playwright packages together, and record proposals already covered by newer
