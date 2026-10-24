@@ -3,6 +3,7 @@ import {
   stageNativeActualArtifacts,
 } from "./native-artifact-inputs.js";
 import { isCapturePathInside } from "./capture-path-safety.js";
+import { captureManifestSnapshotDir } from "./capture-profile-paths.js";
 import {
   cpSync,
   existsSync,
@@ -29,7 +30,6 @@ import {
 import {
   readCaptureConfiguration,
   readConfigurationInputs,
-  captureSnapshotDir,
   VISUAL_DELTA_CONFIG_SNAPSHOT_ENV,
 } from "./capture-configuration.js";
 import { runNativeCaptureProcess } from "./capture-process.js";
@@ -38,10 +38,6 @@ import {
   VISUAL_DELTA_NATIVE_STAGE_ENV,
 } from "./native-write-transaction.js";
 
-function flag(argv: readonly string[], name: string): string | undefined {
-  const index = argv.lastIndexOf(name);
-  return index < 0 ? undefined : argv[index + 1];
-}
 export function createNativeVisualDeltaCaptureRunner(
   root: string,
 ): VisualDeltaCaptureRunner {
@@ -107,10 +103,7 @@ export function createNativeVisualDeltaCaptureRunner(
             `Native ${browser} is unavailable. Run pnpm exec playwright install ${browser}.`,
           );
       }
-      const snapshotDir = captureSnapshotDir(
-        root,
-        flag(manifest.argv, "--snapshot-dir"),
-      );
+      const snapshotDir = captureManifestSnapshotDir(root, manifest.argv);
       const snapshotRelative = path.relative(root, snapshotDir);
       const external =
         path.isAbsolute(snapshotRelative) ||
@@ -154,6 +147,7 @@ export function createNativeVisualDeltaCaptureRunner(
           [VISUAL_DELTA_CAPTURE_PROFILE_METADATA_ENV]: JSON.stringify(profile),
           [VISUAL_DELTA_NATIVE_STAGE_ENV]: stage,
           VISUAL_DELTA_STAGED_SNAPSHOT_DIR: snapshots,
+          VISUAL_DELTA_SOURCE_SNAPSHOT_DIR: snapshotDir,
           VISUAL_DELTA_STAGED_ARTIFACT_ROOT: path.join(
             output,
             ".visual-delta/artifacts",

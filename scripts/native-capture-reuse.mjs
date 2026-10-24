@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+export const nativeSnapshotDir = "tests/visual/storybook.spec.ts-snapshots";
+export function nativeCapturePaths(root) {
+  const namespace = `profiles/native/${process.platform}-${process.arch}`;
+  const baselineRoot = path.join(root, nativeSnapshotDir, namespace);
+  return {
+    baselineRoot,
+    artifactRoot: path.join(root, ".visual-delta/artifacts", namespace),
+    baseline: path.join(baselineRoot, "native--basic-chromium.png"),
+  };
+}
+
 export function nativeCaptureResult(
   artifactRoot,
   browser = "chromium",
@@ -85,7 +96,7 @@ export function verifyNativeCaptureReuse({
     "test",
     "--all",
     "--snapshot-dir",
-    "snapshots",
+    nativeSnapshotDir,
     "--failure-mode",
     "strict",
   ]);
@@ -94,7 +105,7 @@ export function verifyNativeCaptureReuse({
     "test",
     "--affected",
     "--snapshot-dir",
-    "snapshots",
+    nativeSnapshotDir,
     "--explain",
   ]);
   assert.equal(unchanged.stdout.trim(), "Up to date · 1 unchanged");

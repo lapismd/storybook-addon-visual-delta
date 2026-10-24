@@ -4,6 +4,7 @@ import {
   resolveCacheDir,
   configFingerprint,
   legacyConfigFingerprintCandidates,
+  snapshotInputPredicate,
 } from "./affected-config.js";
 import { allSummary } from "./affected-visual-summary.js";
 import { createHash } from "node:crypto";
@@ -342,20 +343,6 @@ function reachesPreview(
   return false;
 }
 
-function isInsideSnapshotDir(
-  root: string,
-  file: string,
-  snapshotDir: string,
-): boolean {
-  if (file.startsWith("@snapshot:")) return true;
-  const absolute = absoluteFromKey(root, file, snapshotDir);
-  const relative = path.relative(snapshotDir, absolute);
-  return (
-    relative === "" ||
-    (!relative.startsWith("../") && !path.isAbsolute(relative))
-  );
-}
-
 function isBuiltInGlobalInput(file: string): boolean {
   return (
     file.startsWith(".storybook/") ||
@@ -432,6 +419,7 @@ function buildGraphSnapshot(
   const statsPath = path.join(cacheDir, STATS_FILE_NAME);
   const snapshotDir = resolveSnapshotDir(hostOptions, root);
   const hashReader = createHashReader(root, snapshotDir);
+  const isBaselineInput = snapshotInputPredicate(root, hostOptions);
   const profile = currentVisualCaptureProfile(root);
   const configurationFingerprint = configFingerprint(
     root,
@@ -568,7 +556,7 @@ function buildGraphSnapshot(
     ...new Set([
       ...allFiles.filter((file) => {
         if (matchesAffectedGlob(file, untraced)) return false;
-        if (isInsideSnapshotDir(root, file, snapshotDir)) return false;
+        if (isBaselineInput(file)) return false;
         return (
           isBuiltInGlobalInput(file) || matchesAffectedGlob(file, externals)
         );
@@ -756,10 +744,10 @@ function globalFallbackReason(
   const externals = normalizedAffectedGlobs(
     affectedOptions(hostOptions).externals,
   );
-  const snapshotDir = resolveSnapshotDir(hostOptions, root);
+  const isBaselineInput = snapshotInputPredicate(root, hostOptions);
   for (const file of changed) {
     // Baseline PNGs are explicitly mapped to their owning story.
-    if (isInsideSnapshotDir(root, file, snapshotDir)) continue;
+    if (isBaselineInput(file)) continue;
     if (matchesAffectedGlob(file, externals)) {
       return `Configured external changed: ${file}`;
     }

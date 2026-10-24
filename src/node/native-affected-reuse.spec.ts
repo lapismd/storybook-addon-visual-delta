@@ -1,5 +1,5 @@
 import { captureNamespace } from "./capture-configuration.js";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import {
 import {
   planAffectedVisualTests,
   recordAffectedVisualResults,
+  visualRenderFingerprints,
 } from "./affected-visual-tests.js";
 
 let root: string;
@@ -75,6 +76,35 @@ it("skips an unchanged passing native story", () => {
     noChange: true,
     unchanged: 1,
   });
+});
+
+it("preserves passing fingerprints across staged tests/visual baselines", () => {
+  const snapshots = path.join(
+    root,
+    "tests/visual/storybook.spec.ts-snapshots",
+    captureNamespace(root),
+  );
+  mkdirSync(snapshots, { recursive: true });
+  writeFileSync(path.join(snapshots, `${id}-chromium.png`), "baseline");
+  const staged = path.join(root, "stage-snapshots");
+  cpSync(snapshots, staged, { recursive: true });
+  vi.stubEnv("VISUAL_DELTA_STAGED_SNAPSHOT_DIR", staged);
+  vi.stubEnv("VISUAL_DELTA_SOURCE_SNAPSHOT_DIR", snapshots);
+  expect(visualRenderFingerprints(root, { snapshotDir: staged })).toEqual(
+    visualRenderFingerprints(root),
+  );
+  expect(recordAffectedVisualResults({ root, passedStoryIds: [id] })).toBe(
+    true,
+  );
+  vi.stubEnv("VISUAL_DELTA_STAGED_SNAPSHOT_DIR", "");
+  expect(planAffectedVisualTests(root).summary).toMatchObject({
+    noChange: true,
+    unchanged: 1,
+  });
+  writeFileSync(path.join(snapshots, `${id}-chromium.png`), "changed baseline");
+  const changed = planAffectedVisualTests(root);
+  expect(changed.selectedStoryIds).toEqual([id]);
+  expect(changed.summary.fallbackReason).toBeUndefined();
 });
 
 it.each(["font", "browser", "os"])(

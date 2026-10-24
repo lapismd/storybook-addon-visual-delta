@@ -8,11 +8,40 @@ import {
   type AffectedVisualTestsOptions,
   type VisualDeltaHostOptions,
 } from "./options.js";
-import { captureCacheDir } from "./capture-configuration.js";
+import {
+  captureCacheDir,
+  logicalCaptureSnapshotDir,
+} from "./capture-configuration.js";
 const DEFAULT_CACHE_DIR = ".visual-delta/cache";
 const normalizeSlashes = (value: string) => value.replaceAll("\\", "/");
 const sha256 = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+
+/** Baselines stay story-owned whether read from their source or staged copy. */
+export function snapshotInputPredicate(
+  root: string,
+  hostOptions?: VisualDeltaHostOptions,
+): (file: string) => boolean {
+  const directories = [
+    resolveSnapshotDir(hostOptions, root),
+    logicalCaptureSnapshotDir(root, hostOptions?.snapshotDir),
+  ];
+  return (file) => {
+    if (file.startsWith("@snapshot:")) return true;
+    const absolute = file.startsWith("@absolute:")
+      ? file.slice("@absolute:".length)
+      : path.resolve(root, file);
+    return directories.some((directory) => {
+      const relative = path.relative(directory, absolute);
+      return (
+        relative === "" ||
+        (relative !== ".." &&
+          !relative.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relative))
+      );
+    });
+  };
+}
 export function affectedOptions(
   hostOptions: VisualDeltaHostOptions | undefined,
 ): AffectedVisualTestsOptions {

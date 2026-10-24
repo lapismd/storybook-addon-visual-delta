@@ -1,5 +1,15 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.1
+
+### Patch Changes
+
+- [#47](https://github.com/lapismd/storybook-addon-visual-delta/pull/47) [`73b443e`](https://github.com/lapismd/storybook-addon-visual-delta/commit/73b443ee5f6706675fb72605a60f38032017ebad) Thanks [@stevejuma](https://github.com/stevejuma)! - Give native macOS and Linux captures the same cached-image reuse and affected-story skipping as Docker using measured host font manifests. Preserve capture availability when font evidence is incomplete, with conservative recapture instead of unsafe reuse.
+  
+  Stage prior native actuals and sidecars for reuse, and invalidate passing affected results when the measured font, browser or operating-system profile changes.
+
+- Preserve native baseline identity across worker and Playwright staging so images under tests/visual support the same cached comparisons and passing affected exclusions as host planning.
+
 ## 0.1.0
 
 ### Minor Changes

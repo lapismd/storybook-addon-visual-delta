@@ -190,40 +190,12 @@ export function readCaptureConfiguration(root: string): CaptureConfiguration {
     throw new Error(`Unknown capture profile ${JSON.stringify(profile)}.`);
   return { profile, profiles, source };
 }
-export function captureNamespace(root: string): string {
-  const config = readCaptureConfiguration(root);
-  if (config.source === "legacy" || config.profile === "docker") return "";
-  const native = config.profiles[config.profile]!.adapter === "native";
-  return `profiles/${config.profile}/${native ? process.platform : "linux"}-${native ? process.arch : "arm64"}`;
-}
-export function captureSnapshotDir(root: string, configured?: string): string {
-  const staged = process.env.VISUAL_DELTA_STAGED_SNAPSHOT_DIR;
-  if (staged) return staged;
-  const config = readCaptureConfiguration(root);
-  const base = path.resolve(
-    root,
-    configured?.trim() ||
-      config.profiles[config.profile]!.snapshotDir ||
-      "tests/visual/storybook.spec.ts-snapshots",
-  );
-  const namespace = captureNamespace(root);
-  // Explicit worker/host paths may already be fully resolved.
-  return namespace &&
-    !base.endsWith(`${path.sep}${namespace.replaceAll("/", path.sep)}`)
-    ? path.join(base, namespace)
-    : base;
-}
-export function captureCacheDir(
-  root: string,
-  configured = ".visual-delta/cache",
-): string {
-  const base = path.resolve(root, configured);
-  const namespace = captureNamespace(root);
-  return namespace &&
-    !base.endsWith(`${path.sep}${namespace.replaceAll("/", path.sep)}`)
-    ? path.join(base, namespace)
-    : base;
-}
+export {
+  captureNamespace,
+  captureSnapshotDir,
+  logicalCaptureSnapshotDir,
+  captureCacheDir,
+} from "./capture-profile-paths.js";
 
 export function validateCaptureConfigurationInput(input: unknown): void {
   const profiles: CaptureConfiguration["profiles"] = {
