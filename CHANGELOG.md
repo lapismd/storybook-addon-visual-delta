@@ -1,5 +1,15 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.0
+
+### Minor Changes
+
+- [#40](https://github.com/lapismd/storybook-addon-visual-delta/pull/40) [`ff27fc6`](https://github.com/lapismd/storybook-addon-visual-delta/commit/ff27fc64902b074ac824a7a7bb7ab22527cd4e07) Thanks [@stevejuma](https://github.com/stevejuma)! - Support native macOS and Linux Playwright capture with named profiles and ignored machine-local configuration. Persist and verify profile-specific PNGs through the CLI and Storybook while preserving the default Docker workflow and staged baseline-write approval.
+
+### Patch Changes
+
+- [#40](https://github.com/lapismd/storybook-addon-visual-delta/pull/40) [`768070f`](https://github.com/lapismd/storybook-addon-visual-delta/commit/768070fc91b129dcbb2ef87c114f7c99e3fa5cbf) Thanks [@stevejuma](https://github.com/stevejuma)! - Upgrade the development Storybook toolchain to 10.6.2 to fix preview and local-network code-injection advisories, and preserve mobile review drawer opening with its updated accessible controls.
+
 ## 0.0.9
 
 ### Patch Changes
