@@ -1,3 +1,7 @@
+import {
+  verifyNativeCaptureReuse,
+  nativeCaptureResult,
+} from "./native-capture-reuse.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -73,16 +77,15 @@ assert(
 );
 const bytes = readFileSync(baseline);
 run(compare);
-const result = JSON.parse(
-  readFileSync(
-    path.join(artifactRoot, "native--basic-chromium.result.json"),
-    "utf8",
-  ),
-);
-assert.equal(result.captureProfile.os, process.platform);
-assert.equal(result.captureProfile.kind, "native");
-assert.equal(result.outcome, "passed");
-assert.equal(result.passThresholdPercent, 0.5);
+const verifyInteractionReuse = verifyNativeCaptureReuse({
+  run,
+  compare,
+  browsers,
+  artifactRoot,
+  baselineRoot,
+  baseline,
+  bytes,
+});
 for (const browser of browsers)
   run([
     "interaction-update",
@@ -100,17 +103,10 @@ assert(
   existsSync(path.join(baselineRoot, "native--basic--active-chromium.png")),
 );
 run([...compare, "--step-id", "active"]);
+verifyInteractionReuse();
 writeFileSync(path.join(root, "color.json"), JSON.stringify([220, 80, 40]));
 run([...compare, "--rebuild"], 1);
-assert.equal(
-  JSON.parse(
-    readFileSync(
-      path.join(artifactRoot, "native--basic-chromium.result.json"),
-      "utf8",
-    ),
-  ).outcome,
-  "mismatch",
-);
+assert.equal(nativeCaptureResult(artifactRoot).outcome, "mismatch");
 assert.deepEqual(readFileSync(baseline), bytes);
 run(
   [
@@ -125,15 +121,7 @@ run(
   ],
   1,
 );
-assert.equal(
-  JSON.parse(
-    readFileSync(
-      path.join(artifactRoot, "native--basic-chromium.result.json"),
-      "utf8",
-    ),
-  ).outcome,
-  "missing-baseline",
-);
+assert.equal(nativeCaptureResult(artifactRoot).outcome, "missing-baseline");
 assert.deepEqual(readFileSync(baseline), bytes);
 assert(readdirSync(baselineRoot).every((file) => file.endsWith(".png")));
 console.log(`Native capture acceptance passed. Persistent example: ${root}`);

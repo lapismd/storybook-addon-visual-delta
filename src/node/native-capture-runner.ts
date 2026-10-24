@@ -1,10 +1,13 @@
+import {
+  nativeCaptureFiles as inventory,
+  stageNativeActualArtifacts,
+} from "./native-artifact-inputs.js";
 import { isCapturePathInside } from "./capture-path-safety.js";
 import {
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -35,19 +38,6 @@ import {
   VISUAL_DELTA_NATIVE_STAGE_ENV,
 } from "./native-write-transaction.js";
 
-function inventory(root: string): string[] {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
-    const absolute = path.join(root, entry.name);
-    if (entry.isSymbolicLink())
-      throw new Error(`Native output contains a symbolic link: ${absolute}`);
-    return entry.isDirectory()
-      ? inventory(absolute)
-      : entry.isFile()
-        ? [absolute]
-        : [];
-  });
-}
 function flag(argv: readonly string[], name: string): string | undefined {
   const index = argv.lastIndexOf(name);
   return index < 0 ? undefined : argv[index + 1];
@@ -152,6 +142,7 @@ export function createNativeVisualDeltaCaptureRunner(
           path.join(stage, "originals.json"),
           JSON.stringify(originals),
         );
+        stageNativeActualArtifacts(root, output);
         const env = {
           ...process.env,
           VISUAL_DELTA_CAPTURE_WORKER: "1",
