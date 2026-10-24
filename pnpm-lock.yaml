@@ -17,7 +17,7 @@ importers:
     dependencies:
       '@storybook/icons':
         specifier: ^2.1.0
-        version: 2.1.0(react@19.2.8)
+        version: 2.2.0(react@19.2.8)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -1163,8 +1163,8 @@ packages:
   '@storybook/global@5.0.0':
     resolution: {integrity: sha512-FcOqPAXACP0I3oJ/ws6/rrPT9WGhu915Cg8D02a9YxLo0DE9zI+a9A5gRGvmQ09fiWPukqI8ZAEoQEdWUKMQdQ==}
 
-  '@storybook/icons@2.1.0':
-    resolution: {integrity: sha512-Fxh9vYpX9bQqFeHRiY8h2ApeRGDzRSMLwJwNZ/AIRqnyOKHxRKL+yFe+ctEkVJmuptRE9u1Hrn8ZZNHyfDKKNg==}
+  '@storybook/icons@2.2.0':
+    resolution: {integrity: sha512-FpUB/xizIrV1ILhCIYFo+TtQNN9YEoLjfcnAW0JtOXL+BcM2aisSysI0B54JMWDnljriXySBHgN6ps4s9lb75A==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -3877,7 +3877,7 @@ snapshots:
   '@storybook/addon-docs@10.6.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(storybook@10.6.2(@types/react@19.2.18)(prettier@2.8.8)(react@19.2.8))':
     dependencies:
       '@mdx-js/react': 3.1.1(@types/react@19.2.18)(react@19.2.8)
-      '@storybook/icons': 2.1.0(react@19.2.8)
+      '@storybook/icons': 2.2.0(react@19.2.8)
       '@storybook/react-dom-shim': 10.6.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(storybook@10.6.2(@types/react@19.2.18)(prettier@2.8.8)(react@19.2.8))
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
@@ -3897,7 +3897,7 @@ snapshots:
 
   '@storybook/global@5.0.0': {}
 
-  '@storybook/icons@2.1.0(react@19.2.8)':
+  '@storybook/icons@2.2.0(react@19.2.8)':
     dependencies:
       react: 19.2.8
 
@@ -5812,7 +5812,7 @@ snapshots:
   storybook@10.6.2(@types/react@19.2.18)(prettier@2.8.8)(react@19.2.8):
     dependencies:
       '@storybook/global': 5.0.0
-      '@storybook/icons': 2.1.0(react@19.2.8)
+      '@storybook/icons': 2.2.0(react@19.2.8)
       '@testing-library/dom': 10.4.2
       '@testing-library/jest-dom': 6.9.1
       '@testing-library/user-event': 14.6.8(@testing-library/dom@10.4.2)
