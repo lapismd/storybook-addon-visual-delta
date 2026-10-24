@@ -1,3 +1,4 @@
+import { patchStoryFile, resolveStoriesPath } from "./story-source-file.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -54,14 +55,6 @@ export type StorySourceMutation =
       values: VisualDeltaStoryConfigPatch;
       unset: VisualDeltaStoryConfigKey[];
     };
-function resolveStoriesPath(
-  packageRoot: string,
-  importPath: string,
-): string | null {
-  const normalized = importPath.replace(/\\/g, "/").replace(/^\.\//, "");
-  const absolute = path.join(packageRoot, normalized);
-  return existsSync(absolute) ? absolute : null;
-}
 
 function parseStringArray(source: string): string[] {
   return [...source.matchAll(/["']([^"']+)["']/g)].map((match) => match[1]!);
@@ -840,35 +833,6 @@ export function patchStorySourceText(
     : patchTsStory(source, entry, mutation);
 }
 
-function patchStoryFile(
-  packageRoot: string,
-  entry: StoryIndexEntry,
-  mutation: StorySourceMutation,
-  formatter?: StorySourceFormatter,
-): { changed: boolean; error?: string } {
-  if (!entry.importPath) return { changed: false };
-  const filePath = resolveStoriesPath(packageRoot, entry.importPath);
-  if (!filePath) return { changed: false };
-  const source = readFileSync(filePath, "utf8");
-  const candidate = patchStorySourceText(source, entry, mutation);
-  if (candidate === source) return { changed: false };
-  try {
-    const next = formatStorySource({
-      packageRoot,
-      filePath,
-      source: candidate,
-      formatter,
-    });
-    writeFileSync(filePath, next, "utf8");
-    return { changed: true };
-  } catch (error) {
-    return {
-      changed: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 export function patchStorySkipVisual(options: {
   packageRoot: string;
   storyId: string;
@@ -1006,12 +970,14 @@ export function patchStoryVisualReviewStatuses(options: {
       });
       continue;
     }
-    const staged = stagedFiles.get(filePath) ?? (() => {
-      const source = readFileSync(filePath, "utf8");
-      const initial = { source, next: source, storyIds: new Set<string>() };
-      stagedFiles.set(filePath, initial);
-      return initial;
-    })();
+    const staged =
+      stagedFiles.get(filePath) ??
+      (() => {
+        const source = readFileSync(filePath, "utf8");
+        const initial = { source, next: source, storyIds: new Set<string>() };
+        stagedFiles.set(filePath, initial);
+        return initial;
+      })();
 
     const desired = visualReviewTagFor(update.status);
     const presentReviewTags = (entry.tags ?? []).filter((tag) =>

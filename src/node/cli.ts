@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 import {
+  readFlag,
+  readFlags,
+  hasFlag,
+  parseShared,
+  printHelp,
+  configureCaptureCli,
+} from "./cli-options.js";
+import {
   runBaselineUpdate,
   runInteractionUpdate,
   runSkipVisualTag,
@@ -37,126 +45,8 @@ import {
   visualDeltaDoctorExitCode,
 } from "./doctor.js";
 
-function readFlag(argv: string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
-  if (index < 0) return undefined;
-  return argv[index + 1];
-}
-
-function hasFlag(argv: string[], name: string): boolean {
-  return argv.includes(name);
-}
-
-function readFlags(argv: string[], name: string): string[] {
-  return argv.flatMap((value, index) =>
-    value === name && argv[index + 1] ? [argv[index + 1]!] : [],
-  );
-}
-
-function parseShared(argv: string[]): BaselineCliOptions {
-  const browser = readFlag(argv, "--browser");
-  const storySourceFormatterCommand = readFlag(
-    argv,
-    "--story-source-formatter-command",
-  );
-  return {
-    storyIds: readFlags(argv, "--story-id"),
-    storyId: readFlag(argv, "--story-id"),
-    component: readFlag(argv, "--component"),
-    stepLabel: readFlag(argv, "--step-label"),
-    stepId: readFlag(argv, "--step-id"),
-    captureCallId: readFlag(argv, "--capture-call-id"),
-    snapshotDir: readFlag(argv, "--snapshot-dir"),
-    baselinePathMode: readFlag(argv, "--baseline-path-mode") as
-      | "story-id"
-      | "nested-import"
-      | undefined,
-    visualServerPort: readFlag(argv, "--port")
-      ? Number(readFlag(argv, "--port"))
-      : undefined,
-    approved: hasFlag(argv, "--approved"),
-    updateReviewStatus: hasFlag(argv, "--update-status"),
-    allowDirty: hasFlag(argv, "--allow-dirty"),
-    skipBuild: hasFlag(argv, "--skip-build"),
-    forceRebuild: hasFlag(argv, "--rebuild"),
-    createOnly: hasFlag(argv, "--create-only"),
-    browser: isVisualDeltaBrowser(browser) ? browser : undefined,
-    storySourceFormatter: storySourceFormatterCommand
-      ? {
-          command: storySourceFormatterCommand,
-          args: readFlags(argv, "--story-source-formatter-arg"),
-        }
-      : undefined,
-  };
-}
-
-function printHelp(): void {
-  console.log(`visual-delta — packaged Visual Delta baseline CLI
-
-Usage:
-  visual-delta init [--force] [--port <n>]
-  visual-delta doctor [--runner] [--build] [--fix] [--strict] [--json] [--verbose]
-  visual-delta test --affected|--all|--story-id <id> [--browser <id> …] [--fresh] [--failure-mode warn|strict] [--dry-run] [--explain]
-  visual-delta update --story-id <id> [--story-id <id> …] [--create-only] [--approved] [--update-status] …
-  visual-delta interaction-update --story-id <id> --step-label <label> …
-  visual-delta harness doctor
-  visual-delta migrate-baselines [--snapshot-dir <path> …] [--dry-run|--apply --approved]
-  visual-delta skip --story-id <id>|--component <name>
-  visual-delta include --story-id <id>|--component <name>
-
-Commands:
-  init                      Scaffold suite, Playwright config, snapshot dir, scripts
-  doctor                    Validate installation, snapshots, artifacts, and caches
-  test                      Compare affected, all, or exact visual stories
-  update                    Create/overwrite primary baselines + CSF wiring
-  interaction-update        Mid-play interaction baseline
-  skip                      Add skip-visual (exclude from Playwright visual runs)
-  include                   Remove skip-visual
-  harness doctor            Validate Docker/custom runner and capture profile
-  migrate-baselines         Inventory or apply browser-only filename cutover
-
-Flags:
-  --force                   Overwrite existing scaffold files (init)
-  --config-dir <path>       Storybook configuration directory (doctor)
-  --affected                Trace from the last passing local run
-  --all                     Run every visual story and seed affected state
-  --browser <id>            chromium | firefox | webkit (repeatable for test)
-  --failure-mode <mode>     warn | strict (test only; default warn)
-  --fresh                   Force canonical browser capture; bypass reusable actuals
-  --dry-run                 Plan selection without building or capturing
-  --explain                 Print changed inputs, selected stories, and fallback
-  --cache-dir <path>        Override affected cache directory
-  --external <glob>         Full-run bailout input (repeatable)
-  --untraced <glob>         Ignore a known non-rendering input (repeatable; reduces coverage)
-  --story-id <id>           Exact Storybook story id (repeatable for test/update)
-  --component <name>        Grep / title substring (update / skip / include)
-  --step-label <label>      Play step label (interaction-update)
-  --step-id <id>            Override slugified step id
-  --capture-call-id <id>    Replay an exact Storybook Interactions call
-  --create-only             Missing PNGs only (no overwrite)
-  --approved                Required unless VISUAL_UPDATE_APPROVED=1
-  --update-status           Mark updated primary-baseline stories pending
-  --allow-dirty             Reserved (host git gates may use this)
-  --skip-build              Prefer existing storybook-static when complete
-  --rebuild                 Force build-storybook before capture (overrides --skip-build)
-  --snapshot-dir <path>     Override snapshot directory
-  --baseline-path-mode      story-id | nested-import
-  --story-source-formatter-command <command>
-                            Formatter executable for changed CSF source
-  --story-source-formatter-arg <arg>
-                            Repeatable formatter arg; include {filePath}
-  --runner                  Run the full capture-runner probe (doctor)
-  --build                   Rebuild Storybook before ownership checks (doctor)
-  --fix                     Move or quarantine safe derived state (doctor)
-  --strict                  Fail doctor when warnings remain
-  --json                    Print the complete versioned doctor report as JSON
-  --verbose                 Print every doctor finding path
-  --port <n>                Playwright static server port (default: STORYBOOK_PORT+1)
-  --apply                   Apply a migration plan after canonical recapture
-`);
-}
-
 async function main(argv: string[]): Promise<void> {
+  argv = configureCaptureCli(argv);
   const command = argv[0];
   if (!command || command === "-h" || command === "--help") {
     printHelp();
@@ -198,17 +88,16 @@ async function main(argv: string[]): Promise<void> {
     }
     const pathMode = readFlag(rest, "--baseline-path-mode");
     if (pathMode && pathMode !== "story-id" && pathMode !== "nested-import") {
-      throw new Error("--baseline-path-mode must be story-id or nested-import.");
+      throw new Error(
+        "--baseline-path-mode must be story-id or nested-import.",
+      );
     }
     const json = hasFlag(rest, "--json");
     const strict = hasFlag(rest, "--strict");
     const report = await runVisualDeltaDoctor({
       configDir: readFlag(rest, "--config-dir"),
       snapshotDir: readFlag(rest, "--snapshot-dir"),
-      baselinePathMode: pathMode as
-        | "story-id"
-        | "nested-import"
-        | undefined,
+      baselinePathMode: pathMode as "story-id" | "nested-import" | undefined,
       runner: hasFlag(rest, "--runner"),
       build: hasFlag(rest, "--build"),
       fix: hasFlag(rest, "--fix"),
@@ -314,7 +203,10 @@ async function main(argv: string[]): Promise<void> {
       },
     });
     console.log(
-      formatAffectedVisualSummary(preflight.summary, hasFlag(rest, "--explain")),
+      formatAffectedVisualSummary(
+        preflight.summary,
+        hasFlag(rest, "--explain"),
+      ),
     );
     if (preflight.summary.noChange) {
       recordAffectedVisualResultsForPlan(preflight, [], {
@@ -339,11 +231,12 @@ async function main(argv: string[]): Promise<void> {
       command === "interaction-update" ||
       command === "visual-interaction-update")
   ) {
-    const operation = command === "test"
-      ? "test"
-      : command === "update" || command === "visual-update"
-        ? "update"
-        : "interaction-update";
+    const operation =
+      command === "test"
+        ? "test"
+        : command === "update" || command === "visual-update"
+          ? "update"
+          : "interaction-update";
     const browserValues = readFlags(rest, "--browser").filter(
       isVisualDeltaBrowser,
     );
@@ -368,7 +261,8 @@ async function main(argv: string[]): Promise<void> {
     const affected = hasFlag(rest, "--affected");
     const all = hasFlag(rest, "--all");
     const storyIds = readFlags(rest, "--story-id");
-    const selections = Number(affected) + Number(all) + Number(storyIds.length > 0);
+    const selections =
+      Number(affected) + Number(all) + Number(storyIds.length > 0);
     if (selections !== 1) {
       throw new Error("Choose exactly one of --affected, --all, or --story-id");
     }
@@ -376,7 +270,9 @@ async function main(argv: string[]): Promise<void> {
       (readFlag(rest, "--step-id") || readFlag(rest, "--baseline-rel")) &&
       storyIds.length !== 1
     ) {
-      throw new Error("Interaction and baseline-target tests require one exact --story-id");
+      throw new Error(
+        "Interaction and baseline-target tests require one exact --story-id",
+      );
     }
     const browserValues = readFlags(rest, "--browser");
     const invalidBrowser = browserValues.find(

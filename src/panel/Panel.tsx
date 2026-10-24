@@ -1,3 +1,8 @@
+import { normalizePanelConfig } from "./resolved-config.js";
+import {
+  capturePresentation,
+  captureProfileLabel,
+} from "../shared/capture-presentation.js";
 import React, {
   memo,
   useCallback,
@@ -93,10 +98,7 @@ import {
   withVerifiedPreviewViewport,
 } from "./capture.js";
 import { compareLoadedImages } from "./image-comparison.js";
-import {
-  DiffCaptureDiagnostics,
-  DiffResult,
-} from "./DiffResult.js";
+import { DiffCaptureDiagnostics, DiffResult } from "./DiffResult.js";
 import { useOverlayHidden, useOverlayInfo, useStoryData } from "./hooks.js";
 import { loadPlaywrightDiffResult } from "./load-playwright-diff.js";
 import { formatPlaywrightCaptureDiagnostics } from "./capture-diagnostics.js";
@@ -221,31 +223,6 @@ function baselineUrlForComparison(source: string | undefined) {
   }
 }
 
-function normalizePanelConfig(
-  config: VisualDeltaResolvedConfig,
-): VisualDeltaResolvedConfig {
-  return {
-    ...config,
-    browsers:
-      Array.isArray(config.browsers) && config.browsers.length > 0
-        ? config.browsers
-        : ["chromium"],
-    runtimePlatform: config.runtimePlatform || "linux",
-    availableEnvironments: Array.isArray(config.availableEnvironments)
-      ? config.availableEnvironments
-      : [],
-    availableBrowsers: Array.isArray(config.availableBrowsers)
-      ? config.availableBrowsers
-      : [],
-    captureProfile: config.captureProfile ?? CANONICAL_VISUAL_CAPTURE_PROFILE,
-    captureRunner: config.captureRunner ?? {
-      kind: "docker",
-      available: false,
-      reason: "The canonical capture profile is not locked.",
-    },
-  };
-}
-
 export const Panel = memo(function Panel(props: { active?: boolean }) {
   const api = useStorybookApi();
   const { storyId: currentStoryId } = useStorybookState();
@@ -257,9 +234,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       ? initialEnvironment.current.browser
       : "chromium",
   );
-  const [selectedPlatform, setSelectedPlatform] = useState(
-    "linux",
-  );
+  const [selectedPlatform, setSelectedPlatform] = useState("linux");
   const [captureError, setCaptureError] = useState<string | null>(null);
   const {
     images: configuredImages,
@@ -334,8 +309,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               platform: selectedPlatform,
             },
             image.environment,
-          ) &&
-          !unavailableBaselineSources.has(baselineSourceStem(image.src)),
+          ) && !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
     [
       configuredImages,
@@ -355,8 +329,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               platform: selectedPlatform,
             },
             image.environment,
-          ) &&
-          !unavailableBaselineSources.has(baselineSourceStem(image.src)),
+          ) && !unavailableBaselineSources.has(baselineSourceStem(image.src)),
       ),
     [
       configuredPrimaryImages,
@@ -404,7 +377,9 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         ],
         declaredEnvironments: [
           ...configuredPrimaryImages.map((image) => image.environment),
-          ...configuredInteractions.map((interaction) => interaction.environment),
+          ...configuredInteractions.map(
+            (interaction) => interaction.environment,
+          ),
         ],
         availableEnvironments: resolvedConfig?.availableEnvironments,
         availableBrowsers: resolvedConfig?.availableBrowsers,
@@ -436,7 +411,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         if (cancelled) return;
         const normalized = normalizePanelConfig(config);
         setResolvedConfig(normalized);
-        setSelectedPlatform("linux");
+        setSelectedPlatform(
+          resolvedConfig?.captureProfile.os ??
+            capturePresentation().captureProfile.os,
+        );
       })
       .catch(() => {
         /* static/read-only surfaces retain discovered environment choices */
@@ -460,7 +438,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         (option) => option.value === selectedPlatform,
       )
     ) {
-      setSelectedPlatform("linux");
+      setSelectedPlatform(
+        resolvedConfig?.captureProfile.os ??
+          capturePresentation().captureProfile.os,
+      );
     }
   }, [
     environmentOptions.browsers,
@@ -507,9 +488,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     [configuredInteractions, configuredPrimaryImages],
   );
   const baselineSourcesKey = baselineSources.join("\0");
-  const hasNonCanonicalTeachingBaseline = !baselineSourcesAllowMutation(
-    baselineSources,
-  );
+  const hasNonCanonicalTeachingBaseline =
+    !baselineSourcesAllowMutation(baselineSources);
   const baselineMutationsAllowed =
     environmentCapabilities.writes && !hasNonCanonicalTeachingBaseline;
   const baselineMutationError = hasNonCanonicalTeachingBaseline
@@ -701,7 +681,8 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           : currentStoryId;
       const visualDeltaParams =
         entry && "parameters" in entry
-          ? (entry.parameters as { visualDelta?: VisualDeltaParams }).visualDelta
+          ? (entry.parameters as { visualDelta?: VisualDeltaParams })
+              .visualDelta
           : undefined;
       const fromConvention = baselineUrlForStoryRef(
         {
@@ -743,7 +724,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         const environment = visualDeltaParams?.environment;
         hydrateInteractions(
           interactions.map((interaction) =>
-            interaction.environment ?? !environment
+            (interaction.environment ?? !environment)
               ? interaction
               : {
                   ...interaction,
@@ -1336,9 +1317,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
         if (loadPersistedVisualStatusJob()) return;
         clearStaleVisualCreateProgress();
         setBaselineJob(null);
-        if (
-          testProviderStore.getState() === "test-provider-state:running"
-        ) {
+        if (testProviderStore.getState() === "test-provider-state:running") {
           testProviderStore.setState("test-provider-state:pending");
         }
       } finally {
@@ -1473,9 +1452,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       diffAbortRef.current = abort;
       setIsDiffing(true);
       setDiffProgressLabel(
-        engine === "chromium"
-          ? `Starting ${selectedBrowser}…`
-          : "Diffing…",
+        engine === "chromium" ? `Starting ${selectedBrowser}…` : "Diffing…",
       );
       setCaptureError(null);
       setDiffResult(null);
@@ -1549,8 +1526,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
             error: outcomePassed || warning ? undefined : "1 failed",
             scope: "story",
             results: [result],
-            logTail:
-              streamedLog || `Live ${selectedBrowser} story comparison`,
+            logTail: streamedLog || `Live ${selectedBrowser} story comparison`,
           });
           const stem =
             baselineSrcForDiff.split("?")[0] ??
@@ -1739,7 +1715,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [baselineMutationError, baselineMutationsAllowed, selectedBrowser, storyId]);
+  }, [
+    baselineMutationError,
+    baselineMutationsAllowed,
+    selectedBrowser,
+    storyId,
+  ]);
 
   const handleDeleteBaseline = useCallback(
     async (section: BaselineSection) => {
@@ -1855,7 +1836,12 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
     } catch {
       // Error/log surface via subscribeVisualCreateProgress.
     }
-  }, [baselineMutationError, baselineMutationsAllowed, selectedBrowser, storyId]);
+  }, [
+    baselineMutationError,
+    baselineMutationsAllowed,
+    selectedBrowser,
+    storyId,
+  ]);
 
   const refreshOnboarding = useCallback(async () => {
     try {
@@ -2019,7 +2005,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
       if (typeof api.updateGlobals === "function") {
         const clearedGlobals = Object.fromEntries(
           Object.values(modes).flatMap((definition) =>
-            Object.keys(definition.globals ?? {}).map((key) => [key, undefined]),
+            Object.keys(definition.globals ?? {}).map((key) => [
+              key,
+              undefined,
+            ]),
           ),
         );
         api.updateGlobals({
@@ -2546,9 +2535,7 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               captureDiagnostics={activeBrowserCaptureDiagnostics}
             />
           ) : (
-            <DiffCaptureDiagnostics
-              note={activeBrowserCaptureDiagnostics}
-            />
+            <DiffCaptureDiagnostics note={activeBrowserCaptureDiagnostics} />
           )}
         </>
       );
@@ -2605,47 +2592,47 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
           }
         : !environmentMutable
           ? {
-              description: `No canonical baseline exists for ${selectedBrowser}. This browser is view-only, or the Linux · ARM64 capture runner is unavailable.`,
+              description: `No canonical baseline exists for ${selectedBrowser}. This browser is view-only, or the selected capture runner is unavailable.`,
             }
-        : {
-            description: skipVisual
-              ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
-              : needsScaffold
-                ? (onboardingHint ??
-                  "Set up the Playwright suite and config, then create a baseline for this story.")
-                : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
-            footer:
-              needsScaffold && !skipVisual ? (
-                <Button
-                  size="small"
-                  ariaLabel="Set up Visual Delta Playwright suite"
-                  disabled={busy}
-                  onClick={() => void handleInitScaffold()}
-                >
-                  {isIniting ? "Setting up…" : "Set up Visual Delta"}
-                </Button>
-              ) : skipVisual ? (
-                <Button
-                  size="small"
-                  ariaLabel="Include in visual tests"
-                  disabled={!storyId || busy}
-                  onClick={() => void handleToggleSkipVisual()}
-                >
-                  Include in visual tests
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  ariaLabel="Create visual baseline"
-                  disabled={!storyId || busy}
-                  onClick={() => void handleCreateBaselines()}
-                >
-                  {isCreating
-                    ? (createProgress?.label ?? "Creating…")
-                    : "Create visual"}
-                </Button>
-              ),
-          }
+          : {
+              description: skipVisual
+                ? "This story is tagged skip-visual (excluded from Playwright visual runs). Use Include in visual tests in the header to opt in, then Create visual."
+                : needsScaffold
+                  ? (onboardingHint ??
+                    "Set up the Playwright suite and config, then create a baseline for this story.")
+                  : "Capture a Playwright baseline for this story, then compare live canvas to the PNG with overlay and diff tools. Or Skip visual tests from the header if this story should stay out of the suite.",
+              footer:
+                needsScaffold && !skipVisual ? (
+                  <Button
+                    size="small"
+                    ariaLabel="Set up Visual Delta Playwright suite"
+                    disabled={busy}
+                    onClick={() => void handleInitScaffold()}
+                  >
+                    {isIniting ? "Setting up…" : "Set up Visual Delta"}
+                  </Button>
+                ) : skipVisual ? (
+                  <Button
+                    size="small"
+                    ariaLabel="Include in visual tests"
+                    disabled={!storyId || busy}
+                    onClick={() => void handleToggleSkipVisual()}
+                  >
+                    Include in visual tests
+                  </Button>
+                ) : (
+                  <Button
+                    size="small"
+                    ariaLabel="Create visual baseline"
+                    disabled={!storyId || busy}
+                    onClick={() => void handleCreateBaselines()}
+                  >
+                    {isCreating
+                      ? (createProgress?.label ?? "Creating…")
+                      : "Create visual"}
+                  </Button>
+                ),
+            }
       : null;
 
   return (
@@ -2875,6 +2862,10 @@ export const Panel = memo(function Panel(props: { active?: boolean }) {
               if (isVisualDeltaBrowser(value)) setSelectedBrowser(value);
             },
             captureProfileId: resolvedConfig?.captureProfile.id,
+            captureProfileLabel: captureProfileLabel(
+              resolvedConfig?.captureProfile ??
+                capturePresentation().captureProfile,
+            ),
           },
           onStop:
             runInFlight || baselineJob?.running ? handleStopRun : undefined,

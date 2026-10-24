@@ -1,3 +1,4 @@
+import { pinCaptureConfiguration } from "./capture-configuration.js";
 import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { Plugin } from "vite";
@@ -7,7 +8,7 @@ import {
   visualBaselineVisualDeltaParameter,
 } from "./baseline-design.js";
 import {
-  DEFAULT_SNAPSHOT_DIR,
+  resolveSnapshotDir,
   resolveBaselinePathMode,
   resolveRoot,
   type VisualDeltaHostOptions,
@@ -237,9 +238,8 @@ export function visualBaselineVisualDeltaPlugin(
   options: VisualDeltaHostOptions = {},
 ): Plugin {
   const root = resolveRoot(options, process.cwd());
-  const snapshotDir = options.snapshotDir?.startsWith("/")
-    ? options.snapshotDir
-    : join(root, options.snapshotDir ?? DEFAULT_SNAPSHOT_DIR);
+  pinCaptureConfiguration(root);
+  const snapshotDir = resolveSnapshotDir(options, root);
   const baselineExists = createCommittedBaselineExists(snapshotDir);
   const mode = resolveBaselinePathMode(options);
 

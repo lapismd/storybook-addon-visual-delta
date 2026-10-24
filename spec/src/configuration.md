@@ -6,16 +6,17 @@ This reference defines every configuration layer and its precedence. It separate
 
 These requirements keep configuration precedence explicit and preserve safe defaults.
 
-| ID          | Requirement                                                                                                                                                                                     |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VD-CONF-001 | Effective capture settings MUST resolve in this order: explicit story value, project default, built-in default. An absent value falls through; a valid falsy value does not.                    |
-| VD-CONF-002 | Host options MUST configure integration capabilities and paths. They MUST NOT override an explicit story capture value. `snapshotDir` MAY resolve outside `root`; the built-in runner MUST stage that declared baseline directory as an isolated input without staging its parent repository. |
+| ID          | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VD-CONF-001 | Effective capture settings MUST resolve in this order: explicit story value, project default, built-in default. An absent value falls through; a valid falsy value does not.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| VD-CONF-002 | Host options MUST configure integration capabilities and paths. They MUST NOT override an explicit story capture value. `snapshotDir` MAY resolve outside `root`; the built-in runner MUST stage that declared baseline directory as an isolated input without staging its parent repository.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | VD-CONF-003 | `.visual-delta/config.json` MUST be the durable project configuration. `.visual-delta/artifacts/` and `.visual-delta/cache/` MUST be the only default package-owned derived-artifact and disposable-cache roots and SHOULD be ignored by version control independently so `config.json` and `runner.mjs` remain trackable. Change-set review data MUST use `.visual-delta/cache/change-sets`, and reusable canonical static output plus Linux build-cache state MUST use `.visual-delta/cache/canonical-build`; the former `.cache/visual-delta` root is migration-only and MUST NOT receive new state. A project MAY cache the derived roots. Physical cache and snapshot locations MUST NOT participate in semantic capture or affected fingerprints. `captureWorkspaceIgnore` MAY exclude validated root-relative directories but MUST NOT suppress these package-owned roots. The legacy `.visual-delta/playwright.json` MAY supply only the Playwright pass threshold when the project file does not. |
-| VD-CONF-004 | `parameters.visualDelta` MUST contain story-owned baseline wiring and story-specific overrides. Interaction entries MUST use `{ id, label, src }`.                                              |
-| VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.              |
-| VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                   |
-| VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Browser, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired. |
-| VD-CONF-008 | Project browser configuration MUST be a non-empty unique subset of `chromium`, `firefox`, and `webkit`, defaulting to only `chromium`. Visual test failure mode MUST be `warn` or `strict`, defaulting to `warn`; an explicit CLI value wins over `VISUAL_DELTA_FAILURE_MODE`, project workflow, and the built-in default. `workflow.reuseActualComparisons` MUST be boolean and default to `true`; an explicit fresh-capture request MUST bypass reuse without changing that setting. The built-in changed-pixel allowance MUST be `0.063%`; the independent built-in per-pixel `diffThreshold` MUST also be `0.063`. |
+| VD-CONF-004 | `parameters.visualDelta` MUST contain story-owned baseline wiring and story-specific overrides. Interaction entries MUST use `{ id, label, src }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| VD-CONF-005 | Browser storage MUST contain presentation or session preferences only. It MUST NOT authorize writes, change durable capture policy, establish review state, or alter action scope.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| VD-CONF-006 | Environment variables MAY select ports and explicitly authorized update modes. Compare-only entry points MUST force snapshot updates off regardless of inherited environment.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| VD-CONF-007 | Host options MAY force `readOnly: true`. When `readOnly` is true, or Storybook `CONFIG_TYPE` is not `DEVELOPMENT`, or development middleware capability discovery reports unsupported, the manager and panel MUST resolve a read-only capability set: writes, Diff Browser, runs, configuration mutation, change sets, init scaffolding, baseline history, and the Testing Module MUST be unavailable. Overlay, Diff HTML, Diff Result hydrate, and `/visual-baselines` serving MUST remain available when wired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| VD-CONF-008 | Project browser configuration MUST be a non-empty unique subset of `chromium`, `firefox`, and `webkit`, defaulting to only `chromium`. Visual test failure mode MUST be `warn` or `strict`, defaulting to `warn`; an explicit CLI value wins over `VISUAL_DELTA_FAILURE_MODE`, project workflow, and the built-in default. `workflow.reuseActualComparisons` MUST be boolean and default to `true`; an explicit fresh-capture request MUST bypass reuse without changing that setting. The built-in changed-pixel allowance MUST be `0.063%`; the independent built-in per-pixel `diffThreshold` MUST also be `0.063`.                                                                                                                                                                                                                                                                                                                                                                                     |
+| VD-CONF-009 | Named capture profiles and machine-local configuration MUST follow the native profile and local configuration contract below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## Configuration precedence
 
@@ -47,31 +48,31 @@ even if an ancestor cache directory would otherwise be ignored.
 
 The built-in project defaults are:
 
-| Setting                   | Built-in value   | Valid values                                |
-| ------------------------- | ---------------- | ------------------------------------------- |
-| `passThresholdPercent`    | `0.063`          | Number from `0` to `100`                    |
-| `diffThreshold`           | `0.063`          | Number from `0` to `1`                      |
-| `diffIncludeAntiAliasing` | `false`          | Boolean                                     |
-| `delay`                   | `0`              | Integer from `0` to `60000` ms              |
-| `deviceScaleFactor`       | `1`              | Integer from `1` to `8`                     |
-| `cropToViewport`          | `false`          | Boolean                                     |
-| `placement`               | `right`          | `left`, `right`, `above`, `below`, `center` |
-| `opacity`                 | `0.5`            | Number from `0` to `1`                      |
-| `baselineLabelOffset`     | `{ x: 0, y: 0 }` | Each value from `-1000` to `1000`           |
+| Setting                   | Built-in value   | Valid values                                                                                                                        |
+| ------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `passThresholdPercent`    | `0.063`          | Number from `0` to `100`                                                                                                            |
+| `diffThreshold`           | `0.063`          | Number from `0` to `1`                                                                                                              |
+| `diffIncludeAntiAliasing` | `false`          | Boolean                                                                                                                             |
+| `delay`                   | `0`              | Integer from `0` to `60000` ms                                                                                                      |
+| `deviceScaleFactor`       | `1`              | Integer from `1` to `8`                                                                                                             |
+| `cropToViewport`          | `false`          | Boolean                                                                                                                             |
+| `placement`               | `right`          | `left`, `right`, `above`, `below`, `center`                                                                                         |
+| `opacity`                 | `0.5`            | Number from `0` to `1`                                                                                                              |
+| `baselineLabelOffset`     | `{ x: 0, y: 0 }` | Each value from `-1000` to `1000`                                                                                                   |
 | `previewSplitZoomDefault` | `fit`            | `fit` or `100%` — applied when a split opens; follow-up INIT after config load MUST adopt this when zoom is still the prior default |
-| `diffResultZoomDefault`   | `100%`           | `fit` or `100%`                             |
+| `diffResultZoomDefault`   | `100%`           | `fit` or `100%`                                                                                                                     |
 
 An explicitly configured story value is a story override and wins over the project default of `0.063`. Package-generated wiring MUST omit a threshold so the project default applies unless the consumer deliberately supplies a story value. Implementations MUST expose the winning source so the panel can explain the effective value.
 
 The workflow defaults are:
 
-| Setting                                   | Built-in value                   | Meaning                                             |
-| ----------------------------------------- | -------------------------------- | --------------------------------------------------- |
-| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not Accept after Diff Browser / Story / Testing Module Run Diff  |
-| `workflow.visualTestFailureMode`           | `warn`                           | Report missing baselines and visual mismatches without a failing process |
-| `workflow.reuseActualComparisons`          | `true`                           | Recompare a proven-fresh canonical actual unless Fresh is requested |
-| `workflow.vcs.mode`                       | `off`                            | Do not prepare or create repository commits         |
-| `workflow.vcs.commitMessageTemplate`      | `Visual Delta: {action} {scope}` | Template for an allowed local commit                |
+| Setting                                   | Built-in value                   | Meaning                                                                  |
+| ----------------------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `workflow.autoAcceptLiveStoryComparisons` | `false`                          | Do not Accept after Diff Browser / Story / Testing Module Run Diff       |
+| `workflow.visualTestFailureMode`          | `warn`                           | Report missing baselines and visual mismatches without a failing process |
+| `workflow.reuseActualComparisons`         | `true`                           | Recompare a proven-fresh canonical actual unless Fresh is requested      |
+| `workflow.vcs.mode`                       | `off`                            | Do not prepare or create repository commits                              |
+| `workflow.vcs.commitMessageTemplate`      | `Visual Delta: {action} {scope}` | Template for an allowed local commit                                     |
 
 Valid commit message tokens are `{action}`, `{scope}`, `{storyId}`, `{storyName}`, and `{count}`.
 
@@ -105,22 +106,22 @@ Primary image entries MAY carry `deviceScaleFactor`, `viewport`, `mode`, `align`
 
 `options.visualDelta` MAY define:
 
-| Option                        | Purpose                                        | Default                                    |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------ |
-| `showToolbarStatusLabels`     | Show named toolbar review status               | `true`                                     |
-| `root`                        | Repository root for paths and spawned commands | Vite root or current working directory     |
-| `snapshotDir`                 | Baseline directory                             | `tests/visual/storybook.spec.ts-snapshots` |
-| `baselinePathMode`            | Baseline identity strategy                     | `story-id`                                 |
-| `addonSrcDir`                 | Local addon source watch path                  | unset                                      |
-| `visualUpdateArgs`            | Approved primary writer command; Storybook middleware appends the explicit review-status opt-in | Packaged `visual-delta update` |
-| `visualInteractionUpdateArgs` | Approved interaction writer command            | Packaged `visual-delta interaction-update` |
-| `visualTestArgs`              | Compare-only command                           | `pnpm exec playwright test`                |
-| `visualServerPort`            | Static Storybook server port                   | Storybook port plus one                    |
-| `allowRebuild`                | Permit middleware-triggered static builds      | `true`                                     |
-| `allowVcsWrites`              | Second gate for plugin-managed commits         | `false`                                    |
-| `readOnly`                    | Force static read-only preview capabilities    | unset (`false`); static builds imply read-only via `CONFIG_TYPE` |
-| `affectedTests`               | Affected cache, external, and untraced policy  | enabled with conservative defaults; `false` opts out |
-| `storySourceFormatter`        | Optional pre-write formatter command and arguments; arguments must include `{filePath}` | unset |
+| Option                        | Purpose                                                                                         | Default                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `showToolbarStatusLabels`     | Show named toolbar review status                                                                | `true`                                                           |
+| `root`                        | Repository root for paths and spawned commands                                                  | Vite root or current working directory                           |
+| `snapshotDir`                 | Baseline directory                                                                              | `tests/visual/storybook.spec.ts-snapshots`                       |
+| `baselinePathMode`            | Baseline identity strategy                                                                      | `story-id`                                                       |
+| `addonSrcDir`                 | Local addon source watch path                                                                   | unset                                                            |
+| `visualUpdateArgs`            | Approved primary writer command; Storybook middleware appends the explicit review-status opt-in | Packaged `visual-delta update`                                   |
+| `visualInteractionUpdateArgs` | Approved interaction writer command                                                             | Packaged `visual-delta interaction-update`                       |
+| `visualTestArgs`              | Compare-only command                                                                            | `pnpm exec playwright test`                                      |
+| `visualServerPort`            | Static Storybook server port                                                                    | Storybook port plus one                                          |
+| `allowRebuild`                | Permit middleware-triggered static builds                                                       | `true`                                                           |
+| `allowVcsWrites`              | Second gate for plugin-managed commits                                                          | `false`                                                          |
+| `readOnly`                    | Force static read-only preview capabilities                                                     | unset (`false`); static builds imply read-only via `CONFIG_TYPE` |
+| `affectedTests`               | Affected cache, external, and untraced policy                                                   | enabled with conservative defaults; `false` opts out             |
+| `storySourceFormatter`        | Optional pre-write formatter command and arguments; arguments must include `{filePath}`         | unset                                                            |
 
 `affectedTests.untraced` reduces coverage and MUST remain opt-in. Invalid affected configuration MUST fall back to a full eligible-story selection.
 
@@ -154,7 +155,7 @@ The supported process controls are:
 | `VISUAL_DELTA_PASS_THRESHOLD_PERCENT` | Explicit process override for the Playwright threshold               |
 | `VISUAL_DELTA_BASELINE_PATH_MODE`     | CLI-to-suite path mode                                               |
 | `VISUAL_DELTA_SNAPSHOT_DIR`           | CLI-to-suite snapshot directory                                      |
-| `VISUAL_DELTA_FAILURE_MODE`            | `warn` or `strict` compare-result process policy                     |
+| `VISUAL_DELTA_FAILURE_MODE`           | `warn` or `strict` compare-result process policy                     |
 | `PLAYWRIGHT_UPDATE_SNAPSHOTS`         | Enables writes only when exactly `1` and an approved writer set it   |
 | `PLAYWRIGHT_UPDATE_MODE`              | `missing` for create-only, otherwise all requested targets           |
 | `VISUAL_UPDATE_APPROVED`              | Explicit baseline-write approval when exactly `1`                    |
@@ -162,3 +163,24 @@ The supported process controls are:
 | `CI`                                  | Disables reused servers and limits workers through Playwright config |
 
 Related contracts: [Baseline model](./baseline-model.md), [Capture and comparison](./capture-and-comparison.md), [Mutations and review](./mutations-and-review.md), and [UI catalog host profile](./host-profile.md).
+
+## Native profiles and local configuration
+
+VD-CONF-009: Projects MAY configure `capture.profile` and named
+`capture.profiles` in `.visual-delta/config.json`. Built-in `docker` and
+`native` profiles MUST be available. A profile defines `adapter` (`docker`, `native`, or `custom`), optional `defaults` and `browsers`,
+an optional `snapshotDir`, and an optional `runner` module
+for a custom adapter. Profile identifiers MUST be traversal-safe slugs.
+Selection MUST prefer `--capture-profile`, `VISUAL_DELTA_CAPTURE_PROFILE`,
+local configuration, project configuration, the legacy runner module, then Docker.
+Unknown explicit profiles and invalid configuration MUST fail without fallback.
+
+An ignored `.visual-delta/config.local.json` MAY override capture profiles,
+browsers, capture defaults and comparison thresholds. It MUST NOT authorize
+writes, change workflow automation, or be copied into project configuration
+when the panel saves. Local flat settings overlay selected profile defaults, which overlay project
+defaults; explicit story
+values and existing explicit call overrides retain priority. CI MUST ignore
+the local file by default. `--no-local-config` MUST disable it in every child
+process. The selected configuration MUST be frozen for each capture job and
+shared by CLI and Storybook. Storybook profile changes require restart.

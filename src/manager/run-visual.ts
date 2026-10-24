@@ -1,3 +1,9 @@
+import { fetchVisualConfig } from "./visual-config.js";
+export { fetchVisualConfig } from "./visual-config.js";
+import {
+  capturePresentation,
+  rememberCapturePresentation,
+} from "../shared/capture-presentation.js";
 import { experimental_getStatusStore, type API } from "storybook/manager-api";
 import { buildArgsParam } from "storybook/internal/router";
 import {
@@ -1248,15 +1254,6 @@ export type VisualReviewResponse = {
   changes?: VisualDeltaChangeSetMutation;
 };
 
-/** Read resolved host options + onboarding status. */
-export async function fetchVisualConfig(): Promise<VisualDeltaResolvedConfig> {
-  const response = await fetch(VISUAL_DELTA_CONFIG_PATH);
-  if (!response.ok) {
-    throw new Error(`Config request failed (${response.status})`);
-  }
-  return (await response.json()) as VisualDeltaResolvedConfig;
-}
-
 export type VisualInitResponse = {
   ok: true;
   written: string[];
@@ -1648,7 +1645,7 @@ async function postVisualBaselineWrite(
   };
   const provenance = {
     target: { browser: body.browser ?? "chromium" } as VisualBaselineTarget,
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    captureProfile: capturePresentation().captureProfile,
   };
 
   activeVisualBaselineWriteRequests += 1;
@@ -2062,7 +2059,7 @@ export async function postVisualInteractionBaseline(body: {
   const storyIds = [body.storyId];
   const provenance = {
     target: { browser: body.browser ?? "chromium" } as VisualBaselineTarget,
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    captureProfile: capturePresentation().captureProfile,
   };
   emitVisualCreateProgress({
     running: true,

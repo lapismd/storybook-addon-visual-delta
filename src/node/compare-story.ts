@@ -24,7 +24,10 @@ import type {
   VisualDeltaBrowser,
 } from "../shared/environments.js";
 import { runVisualDeltaCaptureJob } from "./capture-runner.js";
-import { isVisualDiffSidecar, type VisualDiffSidecar } from "../visual-diff-sidecar.js";
+import {
+  isVisualDiffSidecar,
+  type VisualDiffSidecar,
+} from "../visual-diff-sidecar.js";
 import { visualArtifactPaths } from "./visual-artifacts.js";
 
 export function validateCompareStoryBaselineTarget(options: {
@@ -82,10 +85,7 @@ export function resolveCompareStoryBaselinePath(options: {
   const snapshotRoot = path.resolve(
     resolveSnapshotDir(options.hostOptions, options.root),
   );
-  const absolutePath = path.resolve(
-    snapshotRoot,
-    ...relativePath.split("/"),
-  );
+  const absolutePath = path.resolve(snapshotRoot, ...relativePath.split("/"));
   if (
     absolutePath !== snapshotRoot &&
     !absolutePath.startsWith(`${snapshotRoot}${path.sep}`)
@@ -114,10 +114,14 @@ export async function compareStoryInCaptureRunner(options: {
     (diagnostic) => diagnostic.severity === "error",
   );
   if (configErrors.length > 0) {
-    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+    throw new Error(
+      configErrors.map((diagnostic) => diagnostic.message).join(" "),
+    );
   }
   if (!projectConfig.browsers.includes(browser)) {
-    throw new Error(`Browser ${browser} is not enabled in project configuration.`);
+    throw new Error(
+      `Browser ${browser} is not enabled in project configuration.`,
+    );
   }
   const requestEntry = options.request.story;
   if (requestEntry && requestEntry.id !== storyId) {
@@ -166,10 +170,9 @@ export async function compareStoryInCaptureRunner(options: {
     ...(affectedOptions && affectedOptions.cacheDir
       ? ["--cache-dir", affectedOptions.cacheDir]
       : []),
-    ...((affectedOptions && affectedOptions.externals) ?? []).flatMap((glob) => [
-      "--external",
-      glob,
-    ]),
+    ...((affectedOptions && affectedOptions.externals) ?? []).flatMap(
+      (glob) => ["--external", glob],
+    ),
     ...((affectedOptions && affectedOptions.untraced) ?? []).flatMap((glob) => [
       "--untraced",
       glob,
@@ -182,7 +185,10 @@ export async function compareStoryInCaptureRunner(options: {
       : []),
     ...(options.request.fresh ? ["--fresh"] : []),
   ];
-  options.onProgress?.({ phase: "launching", label: "Starting capture runner…" });
+  options.onProgress?.({
+    phase: "launching",
+    label: "Starting capture runner…",
+  });
   const result = await runVisualDeltaCaptureJob({
     root: options.root,
     argv,
@@ -193,10 +199,16 @@ export async function compareStoryInCaptureRunner(options: {
     context: {
       onEvent(event) {
         if (event.type === "start") {
-          options.onProgress?.({ phase: "navigating", label: "Preparing canonical Storybook…" });
+          options.onProgress?.({
+            phase: "navigating",
+            label: "Preparing Storybook…",
+          });
         } else if (event.type === "log") {
           options.onLog?.(event.message);
-          options.onProgress?.({ phase: "capturing", label: "Running visual comparison…" });
+          options.onProgress?.({
+            phase: "capturing",
+            label: "Running visual comparison…",
+          });
         }
       },
     },
@@ -220,7 +232,9 @@ export async function compareStoryInCaptureRunner(options: {
   }
   const parsed = JSON.parse(readFileSync(sidecarPath, "utf8")) as unknown;
   if (!isVisualDiffSidecar(parsed)) {
-    throw new Error(`Capture runner returned an invalid sidecar for ${storyId}.`);
+    throw new Error(
+      `Capture runner returned an invalid sidecar for ${storyId}.`,
+    );
   }
   const sidecar: VisualDiffSidecar = parsed;
   if (
@@ -230,9 +244,14 @@ export async function compareStoryInCaptureRunner(options: {
     !isDeepStrictEqual(sidecar.captureProfile, result.profile) ||
     (options.request.mode != null && sidecar.mode !== options.request.mode)
   ) {
-    throw new Error(`Capture runner returned sidecar metadata for another target.`);
+    throw new Error(
+      `Capture runner returned sidecar metadata for another target.`,
+    );
   }
-  options.onProgress?.({ phase: "encoding", label: "Loading comparison result…" });
+  options.onProgress?.({
+    phase: "encoding",
+    label: "Loading comparison result…",
+  });
   return {
     ok: true,
     storyId,

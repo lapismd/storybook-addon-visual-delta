@@ -48,7 +48,7 @@ Visual Delta is a local, offline-capable Storybook integration. Its contract cov
 
 The contract also covers a **static read-only preview** surface: a built Storybook (no Vite middleware) MAY present wired baselines from `/visual-baselines`, overlay and split comparison, Diff HTML, and Diff Result hydration when sidecars exist. That surface MUST NOT enable middleware writes, Diff Browser, visual runs, accept/review mutations, configuration saves, change-set or VCS operations, init scaffolding, or the Testing Module. See [Panel and preview](./panel-and-preview.md) and [Configuration](./configuration.md).
 
-The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a hosted multi-browser farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. The canonical capture matrix is the configured subset of Chromium, Firefox, and WebKit inside the pinned Linux/ARM64 capture profile plus explicitly configured Storybook modes. Branded browser channels and device projects remain out of scope. Docker is the default transport; a project-owned runner adapter MAY transport the same frozen package worker through Podman, a VM, SSH, or a remote service without changing capture identity or comparison semantics.
+The system does not provide cloud authentication, project linking, billing, a hosted review queue, multi-tenant published-Storybook collaboration, or a hosted multi-browser farm. Serving a static Storybook build with the read-only preview surface is in scope; cloud product features beyond that are not. The capture matrix is the configured subset of Chromium, Firefox, and WebKit inside the selected capture profile plus explicitly configured Storybook modes. Docker retains the pinned Linux/ARM64 profile by default; an explicitly selected native adapter captures on macOS or Linux with the installed project dependencies and browsers. Branded browser channels and device projects remain out of scope. Docker is the default transport; a project-owned runner adapter MAY transport the same frozen package worker through Podman, a VM, SSH, or a remote service without changing capture identity or comparison semantics.
 
 Comparisons with third-party products are research evidence only. They do not define Visual Delta behavior or create a parity obligation.
 
@@ -81,7 +81,7 @@ These invariants apply across all component specifications:
 - The primary baseline, each configured mode baseline, and each wired interaction baseline MUST be treated as independent comparison targets
 - Review metadata, comparison outcome, baseline coverage, and skip eligibility MUST remain independent state dimensions
 - Live HTML comparison MAY aid diagnosis, but only a configured Playwright browser capture and Playwright comparison are authoritative
-- Browser baselines MUST remain independent; capture platform and CPU architecture are provenance and MUST NOT create or select another baseline
+- Browser baselines MUST remain independent; native profile namespaces MUST also separate operating system and CPU architecture, while existing Docker baseline paths remain compatible
 - Baseline path resolution MUST use one canonical contract across capture, injection, serving, sidecars, history, deletion, and hydration
 - Automation MUST default to off, and repository commits MUST require both project opt-in and host permission
 - Missing or unreliable affected-run evidence MUST select all eligible stories

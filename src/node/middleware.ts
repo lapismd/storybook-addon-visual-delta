@@ -1,3 +1,4 @@
+import { resolvedConfigPayload } from "./resolved-config.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -126,9 +127,7 @@ import {
   inspectVisualDeltaOnboarding,
   runVisualDeltaInit,
 } from "./init-scaffold.js";
-import {
-  parseListReporterProgress,
-} from "./playwright-results.js";
+import { parseListReporterProgress } from "./playwright-results.js";
 import { playwrightStoryIdGrep } from "./story-id-grep.js";
 export { parseListReporterProgress, stripAnsi } from "./playwright-results.js";
 import { writePlaywrightPassThresholdPercent } from "./playwright-threshold.js";
@@ -158,9 +157,7 @@ import { createBaselineHistoryEndpoint } from "./baseline-history-endpoint.js";
 import { VisualDeltaChangeSetStore } from "./change-set-store.js";
 import { detectVisualDeltaVcsKind } from "./change-set-vcs.js";
 import { deleteVisualBaseline } from "./delete-baseline.js";
-import {
-  planAffectedVisualTests,
-} from "./affected-visual-tests.js";
+import { planAffectedVisualTests } from "./affected-visual-tests.js";
 import {
   decideStorybookStaticBuild,
   invalidateStorybookStaticFreshness,
@@ -169,7 +166,10 @@ import {
   runStaticBuildSingleFlight,
   type StaticBuildReason,
 } from "./static-build.js";
-import { runVisualDeltaCaptureJob } from "./capture-runner.js";
+import {
+  resolveVisualDeltaCaptureRunner,
+  runVisualDeltaCaptureJob,
+} from "./capture-runner.js";
 
 type UpdateBody = {
   /** Exact story ids to write in one Playwright invocation. */
@@ -316,9 +316,7 @@ export function managerIndexedVisualRunScope(
 ): { storyIds: string[]; summary: AffectedVisualSummary } {
   const runnable = runnableVisualStoryIds(root);
   const storyIds =
-    selection === "selected"
-      ? [...new Set(requestedStoryIds)]
-      : runnable;
+    selection === "selected" ? [...new Set(requestedStoryIds)] : runnable;
   return {
     storyIds,
     summary: {
@@ -407,7 +405,7 @@ async function handleStoryFacts(
     generatedAt: Date.now(),
     availableBrowsers,
     requiredBrowsers,
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
+    captureProfile: (await resolveVisualDeltaCaptureRunner(root)).profile,
     stories: resolveVisualStoryFacts(
       stories,
       snapshotDir,
@@ -444,7 +442,8 @@ export function attachSidecars(
   const snapshotDir = resolveSnapshotDir(options, packageRoot);
   const mode = resolveBaselinePathMode(options);
   return results.map((item) => {
-    const browser = item.target?.browser ?? item.environment?.browser ?? "chromium";
+    const browser =
+      item.target?.browser ?? item.environment?.browser ?? "chromium";
     const sidecar = loadSidecarForStoryId(
       item.storyId,
       packageRoot,
@@ -480,10 +479,7 @@ export function attachSidecars(
       ...modeSidecars.map((modeSidecar) => {
         const modeBaseline = path.join(
           snapshotDir,
-          modeSidecar.snapshotRel.replace(
-            /\.png$/i,
-            `-${browser}.png`,
-          ),
+          modeSidecar.snapshotRel.replace(/\.png$/i, `-${browser}.png`),
         );
         return {
           mode: modeSidecar.mode ?? null,
@@ -1172,7 +1168,8 @@ async function handleRun(
     writeJson(res, 400, {
       ok: false,
       crashed: true,
-      error: "Canonical capture-runner comparisons require a static Storybook build",
+      error:
+        "Canonical capture-runner comparisons require a static Storybook build",
       exitCode: 1,
       rebuild: false,
       summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
@@ -1202,7 +1199,9 @@ async function handleRun(
     let failed = 0;
     let lineBuffer = "";
     const affectedConfig =
-      options.affectedTests === false ? undefined : (options.affectedTests ?? {});
+      options.affectedTests === false
+        ? undefined
+        : (options.affectedTests ?? {});
     const argv = [
       "test",
       ...(selection === "all"
@@ -1247,7 +1246,12 @@ async function handleRun(
         onEvent(event) {
           if (event.type === "start") {
             activeProfile = event.profile;
-            emitRun({ type: "start", total, affected, captureProfile: event.profile });
+            emitRun({
+              type: "start",
+              total,
+              affected,
+              captureProfile: event.profile,
+            });
             return;
           }
           if (event.type !== "log") return;
@@ -1313,11 +1317,12 @@ async function handleRun(
     if (runnerResult.exitCode === 0 || returnedTargets.size > 0) {
       staticStaleReason = null;
     }
-    const targetPairs = selection === "all"
-      ? [...returnedTargets.values()]
-      : storyIds.flatMap((storyId) =>
-          selectedBrowsers.map((browser) => ({ storyId, browser })),
-        );
+    const targetPairs =
+      selection === "all"
+        ? [...returnedTargets.values()]
+        : storyIds.flatMap((storyId) =>
+            selectedBrowsers.map((browser) => ({ storyId, browser })),
+          );
     const results = attachSidecars(
       targetPairs.map(({ storyId, browser }) => {
         const sidecar = loadSidecarForStoryId(
@@ -1465,7 +1470,8 @@ async function handleActionScope(
   await new Promise<void>((resolve) => setImmediate(resolve));
 
   const plan = body.affectedOnly ? affectedPlan(root, options) : null;
-  const runnableStoryIds = plan?.runnableStoryIds ?? runnableVisualStoryIds(root);
+  const runnableStoryIds =
+    plan?.runnableStoryIds ?? runnableVisualStoryIds(root);
   const preflightReason = plan?.needsRebuild
     ? ("affected-plan" as const)
     : (staticStaleReason ?? undefined);
@@ -1492,7 +1498,8 @@ async function handleActionScope(
 
   const canonicalRefreshRequired =
     body.affectedOnly &&
-    (buildDecision.shouldBuild || buildDecision.reason === "skip-build-missing");
+    (buildDecision.shouldBuild ||
+      buildDecision.reason === "skip-build-missing");
 
   const eligibleVisible = resolveVisualActionStoryIds({
     context: "global",
@@ -1522,8 +1529,7 @@ async function handleActionScope(
     noChange: storyIds.length === 0,
     ...(canonicalRefreshRequired || plan?.summary.fallbackReason
       ? {
-          fallbackReason:
-            plan?.summary.fallbackReason ?? buildDecision.message,
+          fallbackReason: plan?.summary.fallbackReason ?? buildDecision.message,
         }
       : {}),
     ...(plan?.summary.changedInputs?.length
@@ -1800,127 +1806,13 @@ async function handleDeleteBaseline(
   }
 }
 
-function resolvedConfigPayload(
-  root: string,
-  options: VisualDeltaHostOptions,
-  visualPort: number,
-): VisualDeltaResolvedConfig {
-  const snapshotDir = resolveSnapshotDir(options, root);
-  const onboardingStatus = inspectVisualDeltaOnboarding(root, snapshotDir);
-  const diagnostics: VisualDeltaConfigDiagnostic[] = [];
-  const projectConfig = readVisualDeltaProjectConfig(root);
-  const vcsKind = detectVisualDeltaVcsKind(root);
-  diagnostics.push(...projectConfig.diagnostics);
-  if (!existsSync(snapshotDir)) {
-    diagnostics.push({
-      code: "snapshot-dir-missing",
-      severity: "warning",
-      setting: "snapshotDir",
-      message: `Snapshot directory does not exist yet: ${snapshotDir}`,
-      suggestion: "Create the first visual baseline to initialize it.",
-    });
-  }
-  if (!onboardingStatus.ready) {
-    diagnostics.push({
-      code: "playwright-setup-incomplete",
-      severity: "error",
-      setting: "onboarding",
-      message: onboardingStatus.hint,
-      suggestion: "Run pnpm exec visual-delta init from the package root.",
-    });
-  }
-  const staticHint =
-    "Preset staticDirs mounts snapshotDir at /visual-baselines (or host maps it).";
-  diagnostics.push({
-    code: "static-baseline-mount",
-    severity: "info",
-    setting: "snapshotDir",
-    message: staticHint,
-  });
-  const payload: VisualDeltaResolvedConfig = {
-    ok: true,
-    options: {
-      root,
-      snapshotDir,
-      baselinePathMode: resolveBaselinePathMode(options),
-      visualServerPort: visualPort,
-      allowRebuild: options.allowRebuild !== false,
-      allowVcsWrites: options.allowVcsWrites === true,
-      visualUpdateArgs: [
-        ...(options.visualUpdateArgs ?? [...DEFAULT_VISUAL_UPDATE_ARGS]),
-      ],
-      visualInteractionUpdateArgs: [
-        ...(options.visualInteractionUpdateArgs ?? [
-          ...DEFAULT_VISUAL_INTERACTION_UPDATE_ARGS,
-        ]),
-      ],
-      visualTestArgs: [
-        ...(options.visualTestArgs ?? [...DEFAULT_VISUAL_TEST_ARGS]),
-      ],
-      addonSrcDir: options.addonSrcDir?.trim() || null,
-    },
-    playwrightPassThresholdPercent: projectConfig.defaults.passThresholdPercent,
-    projectDefaults: projectConfig.defaults,
-    browsers: projectConfig.browsers,
-    captureWorkspaceIgnore: projectConfig.captureWorkspaceIgnore,
-    runtimePlatform: process.platform,
-    availableEnvironments: [],
-    availableBrowsers: discoverSnapshotBrowsers(snapshotDir),
-    captureProfile: CANONICAL_VISUAL_CAPTURE_PROFILE,
-    captureRunner: {
-      kind: existsSync(path.join(root, ".visual-delta/runner.mjs"))
-        ? "custom"
-        : "docker",
-      available:
-        existsSync(path.join(root, ".visual-delta/runner.mjs")) ||
-        validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE).length ===
-          0,
-      ...(!existsSync(path.join(root, ".visual-delta/runner.mjs")) &&
-      validateVisualCaptureProfile(CANONICAL_VISUAL_CAPTURE_PROFILE).length
-        ? {
-            reason: validateVisualCaptureProfile(
-              CANONICAL_VISUAL_CAPTURE_PROFILE,
-            ).join(" "),
-          }
-        : {}),
-    },
-    workflow: projectConfig.workflow,
-    vcs: {
-      kind: vcsKind,
-      available: vcsKind != null,
-      writeAllowed: vcsKind != null && options.allowVcsWrites === true,
-      ...(!vcsKind
-        ? { reason: "No Git or Jujutsu repository was detected." }
-        : options.allowVcsWrites !== true
-          ? {
-              reason:
-                "VCS commits are disabled until allowVcsWrites is enabled in Storybook.",
-            }
-          : {}),
-    },
-    projectDefaultSources: projectConfig.sources,
-    projectConfigPath: projectConfig.path,
-    projectConfigExists: projectConfig.exists,
-    onboarding: {
-      suiteReady: onboardingStatus.suiteReady,
-      playwrightConfigReady: onboardingStatus.playwrightConfigReady,
-      snapshotDirExists: onboardingStatus.snapshotDirExists,
-      ready: onboardingStatus.ready,
-      hint: onboardingStatus.hint,
-    },
-    diagnostics,
-    warnings: diagnostics.map((diagnostic) => diagnostic.message),
-  };
-  return payload;
-}
-
-function handleConfigGet(
+async function handleConfigGet(
   res: ServerResponse,
   root: string,
   options: VisualDeltaHostOptions,
   visualPort: number,
 ) {
-  writeJson(res, 200, resolvedConfigPayload(root, options, visualPort));
+  writeJson(res, 200, await resolvedConfigPayload(root, options, visualPort));
 }
 
 async function handleConfigPut(
@@ -1954,7 +1846,7 @@ async function handleConfigPut(
     invalidateWarmStaticStorybookServer();
     const changes = await mutation.finish({ success: true });
     writeJson(res, 200, {
-      ...resolvedConfigPayload(root, options, visualPort),
+      ...(await resolvedConfigPayload(root, options, visualPort)),
       changes,
     });
     return true;
@@ -2493,7 +2385,7 @@ export function visualDeltaMiddlewarePlugin(
 
         if (url === VISUAL_DELTA_CONFIG_PATH) {
           if (req.method === "GET") {
-            handleConfigGet(res, root, options, visualPort);
+            await handleConfigGet(res, root, options, visualPort);
             return;
           }
           if (req.method === "PUT") {
@@ -2510,7 +2402,7 @@ export function visualDeltaMiddlewarePlugin(
               server.ws.send({
                 type: "custom",
                 event: "visual-delta-config-updated",
-                data: resolvedConfigPayload(root, options, visualPort),
+                data: await resolvedConfigPayload(root, options, visualPort),
               });
             }
             return;

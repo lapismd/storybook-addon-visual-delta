@@ -15,7 +15,7 @@ import type {
 import { resolveBaselinePathMode, resolveSnapshotDir } from "./options.js";
 import { snapshotFileName, type StoryIndexEntry } from "./snapshot-paths.js";
 import { readVisualDeltaProjectConfig } from "./project-config.js";
-import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../shared/capture-profile.js";
+import { currentVisualCaptureProfile, supportsPersistentCaptureReuse, captureCacheDir } from "./capture-profile.js";
 
 const CACHE_VERSION = 3;
 const DEFAULT_CACHE_DIR = ".visual-delta/cache";
@@ -285,7 +285,7 @@ function resolveCacheDir(
   hostOptions: VisualDeltaHostOptions | undefined,
 ): string {
   const configured = affectedOptions(hostOptions).cacheDir?.trim();
-  return path.resolve(root, configured || DEFAULT_CACHE_DIR);
+  return captureCacheDir(root, configured || DEFAULT_CACHE_DIR);
 }
 
 function readStoryIndex(root: string): StoryIndexEntry[] {
@@ -697,7 +697,7 @@ function buildGraphSnapshot(
   );
   const buildFingerprint = fingerprintEntries([
     ["@schema", sha256("canonical-build-v1")],
-    ["@profile", sha256(CANONICAL_VISUAL_CAPTURE_PROFILE.id)],
+    ["@profile", sha256(JSON.stringify(currentVisualCaptureProfile(root)))],
     ["@config", configFingerprint(root, hostOptions)],
     ["@preview-graph", graphFingerprint],
     ...buildInputFiles.map(
@@ -921,7 +921,7 @@ export function planAffectedVisualTests(
   const selectedStoryIds = runnableStoryIds.filter(
     (storyId) =>
       !snapshot.stories[storyId] ||
-      passing[storyId] !== snapshot.stories[storyId]!.fingerprint,
+      !supportsPersistentCaptureReuse(resolvedRoot) || passing[storyId] !== snapshot.stories[storyId]!.fingerprint,
   );
   const unchanged = runnableStoryIds.length - selectedStoryIds.length;
   const noChange = selectedStoryIds.length === 0;

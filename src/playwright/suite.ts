@@ -1,3 +1,11 @@
+import { assertNativeCaptureBrowser } from "./capture-browser-version.js";
+import {
+  resolveRoot,
+  resolveMode,
+  resolveSnapshotDirRel,
+  resolveBaselineOverride,
+} from "./suite-paths.js";
+import { captureSnapshotDir } from "../node/capture-configuration.js";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import type * as PlaywrightTest from "@playwright/test";
@@ -156,56 +164,6 @@ function applyFailurePolicy(options: {
     return;
   }
   options.failures.push(message);
-}
-
-function resolveRoot(options: VisualSuiteOptions): string {
-  return options.packageRoot?.trim() || process.cwd();
-}
-
-function resolveMode(options: VisualSuiteOptions): BaselinePathMode {
-  const fromEnv = process.env.VISUAL_DELTA_BASELINE_PATH_MODE?.trim();
-  if (fromEnv === "story-id" || fromEnv === "nested-import") return fromEnv;
-  return options.baselinePathMode ?? DEFAULT_BASELINE_PATH_MODE;
-}
-
-function resolveSnapshotDirRel(options: VisualSuiteOptions): string {
-  const fromEnv = process.env.VISUAL_DELTA_SNAPSHOT_DIR?.trim();
-  if (fromEnv) {
-    return path.isAbsolute(fromEnv)
-      ? path.relative(resolveRoot(options), fromEnv) || DEFAULT_SNAPSHOT_DIR
-      : fromEnv;
-  }
-  if (options.snapshotDir?.trim()) {
-    const dir = options.snapshotDir.trim();
-    return path.isAbsolute(dir)
-      ? path.relative(resolveRoot(options), dir) || DEFAULT_SNAPSHOT_DIR
-      : dir;
-  }
-  return DEFAULT_SNAPSHOT_DIR;
-}
-
-function resolveBaselineOverride(options: VisualSuiteOptions): string | null {
-  const relative = process.env.VISUAL_DELTA_BASELINE_OVERRIDE?.trim();
-  if (!relative) return null;
-  const normalized = relative.replaceAll("\\", "/");
-  if (
-    path.posix.isAbsolute(normalized) ||
-    normalized.split("/").includes("..") ||
-    !normalized.toLowerCase().endsWith(".png") ||
-    /\.(?:actual|diff)\.png$/i.test(normalized)
-  ) {
-    throw new Error(`Invalid VISUAL_DELTA_BASELINE_OVERRIDE: ${relative}`);
-  }
-  const root = resolveRoot(options);
-  const snapshotRoot = path.resolve(root, resolveSnapshotDirRel(options));
-  const absolute = path.resolve(snapshotRoot, ...normalized.split("/"));
-  if (
-    absolute !== snapshotRoot &&
-    !absolute.startsWith(`${snapshotRoot}${path.sep}`)
-  ) {
-    throw new Error(`VISUAL_DELTA_BASELINE_OVERRIDE escapes snapshotDir: ${relative}`);
-  }
-  return absolute;
 }
 
 type ShotTarget = {
@@ -390,6 +348,7 @@ async function screenshotStorySubject(
         : {}),
   };
 
+  compareWithPlaywrightSnapshot &&= !process.env.VISUAL_DELTA_NATIVE_STAGE;
   if (cropToViewport) {
     Object.assign(target, {
       subject: null,
@@ -494,7 +453,9 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
     (diagnostic) => diagnostic.severity === "error",
   );
   if (configErrors.length > 0) {
-    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+    throw new Error(
+      configErrors.map((diagnostic) => diagnostic.message).join(" "),
+    );
   }
   const projectDefaults = projectConfig.defaults;
   if (
@@ -525,8 +486,14 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
     const entry = stories.find((s) => s.id === interactionRequest.storyId);
     test(`interaction ${interactionRequest.storyId} / ${interactionRequest.stepId}`, async ({
       page,
+      browser: launchedBrowser,
     }, testInfo) => {
       const browser = browserForTest(testInfo);
+      assertNativeCaptureBrowser(
+        packageRoot,
+        browser,
+        launchedBrowser.version(),
+      );
       const captureOperationId = randomUUID();
       if (!entry) {
         throw new Error(
@@ -587,16 +554,18 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
           () => null,
         );
         // `{slug}--{stepId}-{browser}.png` beside the primary baseline.
-        const baselinePngAbsPath = baselineOverride ?? baselinePngAbs(
-          entry,
-          packageRoot,
-          snapshotDir,
-          mode,
-          browser,
-        ).replace(
-          `-${browser}.png`,
-          `--${interactionRequest.stepId}-${browser}.png`,
-        );
+        const baselinePngAbsPath =
+          baselineOverride ??
+          baselinePngAbs(
+            entry,
+            packageRoot,
+            snapshotDir,
+            mode,
+            browser,
+          ).replace(
+            `-${browser}.png`,
+            `--${interactionRequest.stepId}-${browser}.png`,
+          );
         const sidecar = writeDiffArtifactsForBaseline({
           entry,
           packageRoot,
@@ -633,8 +602,13 @@ export function defineVisualSuite(options: VisualSuiteOptions = {}): void {
   }
 
   for (const story of stories) {
-    test(story.id, async ({ page }, testInfo) => {
+    test(story.id, async ({ page, browser: launchedBrowser }, testInfo) => {
       const browser = browserForTest(testInfo);
+      assertNativeCaptureBrowser(
+        packageRoot,
+        browser,
+        launchedBrowser.version(),
+      );
       const captureOperationId = randomUUID();
       await prepareStoryPage(page, story.id, {
         projectDefaultDelay: projectDefaults.delay,

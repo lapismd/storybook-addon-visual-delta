@@ -1,3 +1,8 @@
+import { staticStorybookServerCommand } from "../node/static-storybook-command.js";
+import {
+  captureSnapshotDir,
+  readCaptureConfiguration,
+} from "../node/capture-configuration.js";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type * as PlaywrightTest from "@playwright/test";
@@ -79,7 +84,7 @@ export function visualPlaywrightUse(
 export function visualPlaywrightWebServer(port = resolveVisualServerPort()) {
   const baseURL = `http://127.0.0.1:${port}`;
   return {
-    command: `python3 -m http.server ${port} --directory storybook-static --bind 127.0.0.1`,
+    command: staticStorybookServerCommand(port),
     // Prefer iframe.html so a partial static tree (index.json only) is not
     // treated as a healthy Playwright webServer.
     url: `${baseURL}/iframe.html`,
@@ -172,5 +177,11 @@ export function defineVisualPlaywrightConfig(
     })),
     webServer: visualPlaywrightWebServer(port),
     ...options.override,
+    ...(process.env.VISUAL_DELTA_SNAPSHOT_DIR ||
+    readCaptureConfiguration(process.cwd()).profile !== "docker"
+      ? {
+          snapshotPathTemplate: `${captureSnapshotDir(process.cwd(), process.env.VISUAL_DELTA_SNAPSHOT_DIR).replaceAll("\\", "/")}/{arg}-{projectName}{ext}`,
+        }
+      : {}),
   });
 }

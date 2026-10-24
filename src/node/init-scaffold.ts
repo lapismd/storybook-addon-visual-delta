@@ -160,6 +160,7 @@ function ensureGeneratedVisualDeltaIgnored(packageRoot: string): void {
   const missing = [
     ".visual-delta/artifacts/",
     ".visual-delta/cache/",
+    ".visual-delta/config.local.json",
   ].filter((line) => !lines.has(line));
   if (missing.length === 0) return;
   const prefix = existing && !existing.endsWith("\n") ? "\n" : "";

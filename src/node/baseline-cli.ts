@@ -1,3 +1,4 @@
+import { ensureStorybookStatic } from "./baseline-static-build.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -11,6 +12,7 @@ import {
   DEFAULT_BASELINE_PATH_MODE,
   DEFAULT_SNAPSHOT_DIR,
   resolveVisualServerPort,
+  resolveSnapshotDir,
   type BaselinePathMode,
 } from "./options.js";
 import {
@@ -40,6 +42,7 @@ import { readVisualDeltaProjectConfig } from "./project-config.js";
 import { visualCanonicalBuildFingerprint } from "./affected-visual-tests.js";
 import {
   persistCanonicalBuildCache,
+  publishProfilePreviewGraph,
   resolveCanonicalBuildCacheRoot,
   restoreCanonicalBuildCache,
 } from "./canonical-build-cache.js";
@@ -78,23 +81,26 @@ function packageRootOf(options: BaselineCliOptions): string {
 }
 
 function snapshotDirOf(options: BaselineCliOptions, root: string): string {
-  const configured = options.snapshotDir?.trim();
-  if (!configured) return path.join(root, DEFAULT_SNAPSHOT_DIR);
-  return configured.startsWith("/") ? configured : path.join(root, configured);
+  return resolveSnapshotDir({ snapshotDir: options.snapshotDir }, root);
 }
 
 function pathModeOf(options: BaselineCliOptions): BaselinePathMode {
   return options.baselinePathMode ?? DEFAULT_BASELINE_PATH_MODE;
 }
 
-function browserOf(options: BaselineCliOptions, root: string): VisualDeltaBrowser {
+function browserOf(
+  options: BaselineCliOptions,
+  root: string,
+): VisualDeltaBrowser {
   const browser = options.browser ?? "chromium";
   const projectConfig = readVisualDeltaProjectConfig(root);
   const configErrors = projectConfig.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
   );
   if (configErrors.length > 0) {
-    throw new Error(configErrors.map((diagnostic) => diagnostic.message).join(" "));
+    throw new Error(
+      configErrors.map((diagnostic) => diagnostic.message).join(" "),
+    );
   }
   const enabled = projectConfig.browsers;
   if (!enabled.includes(browser)) {
@@ -113,62 +119,6 @@ function assertApproved(options: BaselineCliOptions, verb: string): void {
       `Set VISUAL_UPDATE_APPROVED=1 (or pass --approved) to ${verb}`,
     );
   }
-}
-
-function ensureStorybookStatic(
-  root: string,
-  options: {
-    skipBuild?: boolean;
-    forceRebuild?: boolean;
-    forceReason?: "unskip" | "explicit-rebuild";
-    storyIds?: string[];
-    component?: string;
-    snapshotDir?: string;
-    baselinePathMode?: BaselinePathMode;
-  } = {},
-): void {
-  const hostOptions = {
-    snapshotDir: options.snapshotDir,
-    baselinePathMode: options.baselinePathMode,
-  };
-  const cacheRoot = resolveCanonicalBuildCacheRoot(root);
-  const fingerprint = visualCanonicalBuildFingerprint(root, hostOptions);
-  const restored = restoreCanonicalBuildCache({
-    root,
-    cacheRoot,
-    fingerprint,
-    forceRebuild: options.forceRebuild,
-  });
-  if (restored.restored) return;
-  const decision = decideStorybookStaticBuild({
-    packageRoot: root,
-    skipBuild: Boolean(options.skipBuild),
-    forceRebuild: options.forceRebuild,
-    forceReason: options.forceReason,
-    storyIdPrefix: options.component ?? "",
-    storyIds: options.storyIds,
-  });
-  if (decision.reason === "skip-build-missing") {
-    throw new Error(decision.message);
-  }
-  if (!decision.shouldBuild) return;
-  execFileSync("pnpm", ["build-storybook"], {
-    cwd: root,
-    stdio: "inherit",
-  });
-  if (
-    !existsSync(path.join(root, "storybook-static", "index.json")) ||
-    !existsSync(path.join(root, "storybook-static", "iframe.html"))
-  ) {
-    throw new Error(
-      "build-storybook did not produce a complete storybook-static (index.json + iframe.html)",
-    );
-  }
-  persistCanonicalBuildCache({
-    root,
-    cacheRoot,
-    fingerprint: visualCanonicalBuildFingerprint(root, hostOptions),
-  });
 }
 
 function matchingEntries(
@@ -276,10 +226,7 @@ export async function runBaselineUpdate(
     ? targets.filter(
         (entry) =>
           !existsSync(
-            path.join(
-              snapshotDir,
-              snapshotFileName(entry, mode, browser),
-            ),
+            path.join(snapshotDir, snapshotFileName(entry, mode, browser)),
           ),
       )
     : [];
@@ -311,17 +258,16 @@ export async function runBaselineUpdate(
     ? targets.filter(
         (entry) =>
           !existsSync(
-            path.join(
-              snapshotDir,
-              snapshotFileName(entry, mode, browser),
-            ),
+            path.join(snapshotDir, snapshotFileName(entry, mode, browser)),
           ),
       )
     : [];
   if (options.createOnly && needingCreate.length === 0) return;
   const captureTargets = options.createOnly ? needingCreate : targets;
-  const warm = await ensureWarmStaticStorybookServer(root, port);
-  if (!warm.ok) await ensurePlaywrightWebServerPort(port);
+  if (!process.env.VISUAL_DELTA_NATIVE_STAGE) {
+    const warm = await ensureWarmStaticStorybookServer(root, port);
+    if (!warm.ok) await ensurePlaywrightWebServerPort(port);
+  }
 
   const grep = playwrightGrep(
     captureTargets.map((entry) => entry.id),
@@ -333,10 +279,7 @@ export async function runBaselineUpdate(
       baselinesExist: () =>
         captureTargets.every((entry) =>
           existsSync(
-            path.join(
-              snapshotDir,
-              snapshotFileName(entry, mode, browser),
-            ),
+            path.join(snapshotDir, snapshotFileName(entry, mode, browser)),
           ),
         ),
       capture: (updateMode) => {
@@ -357,8 +300,7 @@ export async function runBaselineUpdate(
             stdio: "inherit",
             env: {
               ...process.env,
-              PLAYWRIGHT_UPDATE_SNAPSHOTS:
-                updateMode === "none" ? "0" : "1",
+              PLAYWRIGHT_UPDATE_SNAPSHOTS: updateMode === "none" ? "0" : "1",
               PLAYWRIGHT_UPDATE_MODE: updateMode,
               VISUAL_UPDATE_APPROVED: "1",
               VISUAL_DELTA_BASELINE_PATH_MODE: mode,
@@ -397,17 +339,9 @@ export async function runBaselineUpdate(
   });
 
   for (const entry of captureTargets) {
-    const png = path.join(
-      snapshotDir,
-      snapshotFileName(entry, mode, browser),
-    );
+    const png = path.join(snapshotDir, snapshotFileName(entry, mode, browser));
     if (!existsSync(png)) continue;
-    const url = baselinePublicUrl(
-      entry,
-      mode,
-      undefined,
-      browser,
-    );
+    const url = baselinePublicUrl(entry, mode, undefined, browser);
     const patched = patchStoryBaselineImages({
       packageRoot: root,
       storyId: entry.id,
@@ -426,10 +360,7 @@ export async function runBaselineUpdate(
     const stillMissing = needingCreate.filter(
       (entry) =>
         !existsSync(
-          path.join(
-            snapshotDir,
-            snapshotFileName(entry, mode, browser),
-          ),
+          path.join(snapshotDir, snapshotFileName(entry, mode, browser)),
         ),
     );
     if (stillMissing.length) {
@@ -487,12 +418,7 @@ export async function runInteractionUpdate(
 
   const interactionPng = path.join(
     snapshotDir,
-    interactionSnapshotFileName(
-      entry,
-      stepId,
-      mode,
-      browser,
-    ),
+    interactionSnapshotFileName(entry, stepId, mode, browser),
   );
   const publicRel = path
     .relative(snapshotDir, interactionPng)
@@ -522,8 +448,10 @@ export async function runInteractionUpdate(
     });
   }
 
-  const warmInteraction = await ensureWarmStaticStorybookServer(root, port);
-  if (!warmInteraction.ok) await ensurePlaywrightWebServerPort(port);
+  if (!process.env.VISUAL_DELTA_NATIVE_STAGE) {
+    const warmInteraction = await ensureWarmStaticStorybookServer(root, port);
+    if (!warmInteraction.ok) await ensurePlaywrightWebServerPort(port);
+  }
 
   const capture = JSON.stringify({
     storyId,

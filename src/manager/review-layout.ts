@@ -4,7 +4,6 @@ import { PANEL_ID } from "../constants.js";
 export const REVIEW_LAYOUT_BOTTOM_RATIO = 0.42;
 export const STORYBOOK_MOBILE_REVIEW_QUERY = "(max-width: 599px)";
 
-const STORYBOOK_MOBILE_ADDON_PANEL_ID = "storybook-mobile-addon-panel";
 const STORYBOOK_MOBILE_ADDON_DIALOG =
   '[role="dialog"][aria-label="Addon panel"]';
 const MOBILE_DRAWER_RETRY_MS = 50;
@@ -70,7 +69,7 @@ function isMobileAddonDrawerOpen(): boolean {
 function mobileAddonDrawerButton(open: boolean): HTMLElement | null {
   if (typeof document === "undefined") return null;
   const selector = open
-    ? `[aria-controls="${STORYBOOK_MOBILE_ADDON_PANEL_ID}"][aria-expanded="false"]`
+    ? 'button[aria-label="Open addon panel"]'
     : `${STORYBOOK_MOBILE_ADDON_DIALOG} button[aria-label="Close addon panel"]`;
   const element = document.querySelector(selector);
   return element instanceof HTMLElement ? element : null;

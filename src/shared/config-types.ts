@@ -61,7 +61,12 @@ export type VisualDeltaProjectDefaults = {
   diffResultZoomDefault: VisualDeltaZoomDefault;
 };
 
-export type VisualDeltaProjectDefaultSource = "project" | "legacy" | "built-in";
+export type VisualDeltaProjectDefaultSource =
+  | "project"
+  | "local"
+  | "profile"
+  | "legacy"
+  | "built-in";
 
 /** Serializable host options exposed by GET /__visual-delta/config. */
 export type VisualDeltaResolvedConfig = {
@@ -97,8 +102,11 @@ export type VisualDeltaResolvedConfig = {
   availableBrowsers: import("./environments.js").VisualDeltaBrowser[];
   /** Canonical Linux/ARM64 capture provenance. */
   captureProfile: import("./capture-profile.js").VisualCaptureProfile;
+  artifactNamespace?: string;
+  captureConfiguration?: { profile: string; source: string };
+  localConfigPath?: string;
   captureRunner: {
-    kind: "docker" | "custom";
+    kind: "docker" | "native" | "custom";
     available: boolean;
     reason?: string;
   };

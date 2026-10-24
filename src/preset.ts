@@ -1,3 +1,9 @@
+import { currentVisualCaptureProfile } from "./node/capture-profile.js";
+import {
+  captureNamespace,
+  pinCaptureConfiguration,
+} from "./node/capture-configuration.js";
+import { renderCaptureManagerHead } from "./shared/capture-presentation.js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mkdirSync } from "node:fs";
@@ -5,7 +11,7 @@ import type { UserConfig } from "vite";
 import { visualBaselineVisualDeltaPlugin } from "./node/baseline-vite-plugin.js";
 import { visualDeltaMiddlewarePlugin } from "./node/middleware.js";
 import {
-  DEFAULT_SNAPSHOT_DIR,
+  resolveSnapshotDir,
   type VisualDeltaHostOptions,
 } from "./node/options.js";
 import {
@@ -62,17 +68,14 @@ export function managerHead(
 ): string {
   const host = resolveHostOptions(options);
   const enabled = resolveToolbarStatusEnabled(host.showToolbarStatusLabels);
-  return `${existing}${renderToolbarStatusManagerHead(enabled)}${renderReadOnlyManagerHead(host.readOnly === true)}`;
+  const root = host.root?.trim() || process.cwd();
+  pinCaptureConfiguration(root);
+  return `${existing}${renderToolbarStatusManagerHead(enabled)}${renderReadOnlyManagerHead(host.readOnly === true)}${renderCaptureManagerHead({ captureProfile: currentVisualCaptureProfile(root), artifactNamespace: captureNamespace(root) })}`;
 }
 
 function resolveSnapshotDirFromOptions(options: PresetOptions = {}): string {
   const host = resolveHostOptions(options);
-  const configured = host.snapshotDir?.trim();
-  if (configured?.startsWith("/")) return configured;
-  return path.join(
-    host.root?.trim() || process.cwd(),
-    configured || DEFAULT_SNAPSHOT_DIR,
-  );
+  return resolveSnapshotDir(host, host.root?.trim() || process.cwd());
 }
 
 type StaticDirEntry = string | { from: string; to: string };
@@ -87,6 +90,7 @@ export function staticDirs(
 ): StaticDirEntry[] {
   const host = resolveHostOptions(options);
   const root = host.root?.trim() || process.cwd();
+  pinCaptureConfiguration(root);
   const additions: StaticDirEntry[] = [];
   if (
     !existing.some(

@@ -1,3 +1,4 @@
+import { captureSnapshotDir } from "./capture-configuration.js";
 /**
  * Host wiring for Visual Delta Vite middleware + baseline inject.
  * Defaults target a portable consumer layout (package CLI + story-id PNGs).
@@ -192,12 +193,7 @@ export function resolveSnapshotDir(
   options: VisualDeltaHostOptions | undefined,
   root: string,
 ): string {
-  const configured = options?.snapshotDir?.trim();
-  if (!configured) {
-    return `${root}/${DEFAULT_SNAPSHOT_DIR}`.replace(/\/{2,}/g, "/");
-  }
-  if (configured.startsWith("/")) return configured;
-  return `${root}/${configured}`.replace(/\/{2,}/g, "/");
+  return captureSnapshotDir(root, options?.snapshotDir);
 }
 
 export function resolveRoot(

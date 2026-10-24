@@ -7,12 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  CheckIcon,
-  CopyIcon,
-  StopAltIcon,
-  SyncIcon,
-} from "@storybook/icons";
+import { CheckIcon, CopyIcon, StopAltIcon, SyncIcon } from "@storybook/icons";
 import { ScrollArea, useCopyButton } from "storybook/internal/components";
 import {
   ansiLogTail,
@@ -22,7 +17,10 @@ import {
 } from "../shared/ansi-log.js";
 import { lastMeaningfulLogLine } from "../shared/status-log.js";
 import { AnsiText } from "./AnsiText.js";
-import { EnvironmentSplitButton } from "./EnvironmentSplitButton.js";
+import {
+  EnvironmentSplitButton,
+  type EnvironmentSplitButtonProps,
+} from "./EnvironmentSplitButton.js";
 import {
   StatusBar,
   StatusLogBody,
@@ -83,12 +81,7 @@ export type PanelStatusBarProps = {
   } | null;
   /** Cancels an active run without depending on preview/header rendering. */
   onStop?: () => void;
-  environment?: {
-    browser: string;
-    browsers: Array<{ value: string; label: string }>;
-    onBrowserChange: (value: string) => void;
-    captureProfileId?: string;
-  };
+  environment?: EnvironmentSplitButtonProps;
 };
 
 type FixedPos = {
@@ -169,9 +162,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
   const hasLog = Boolean(parsedLog.text.trim());
   const idle = !running && !hasLog;
   const clipped =
-    clippedLine.text.trim() ||
-    label?.trim() ||
-    (idle ? "Ready" : "Working…");
+    clippedLine.text.trim() || label?.trim() || (idle ? "Ready" : "Working…");
   const statusLogAccessibleName = running
     ? `Progress: ${clipped}`
     : hasLog
@@ -193,10 +184,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
-      if (
-        target instanceof Node &&
-        !popoverRootRef.current?.contains(target)
-      ) {
+      if (target instanceof Node && !popoverRootRef.current?.contains(target)) {
         setOpen(false);
       }
     };
@@ -299,10 +287,7 @@ export const PanelStatusBar = memo(function PanelStatusBar({
           Stop
         </StatusStopButton>
       ) : null}
-      <StatusLogPopoverRoot
-        ref={popoverRootRef}
-        data-testid="status-popover"
-      >
+      <StatusLogPopoverRoot ref={popoverRootRef} data-testid="status-popover">
         <StatusProgressButton
           ref={progressButtonRef}
           type="button"

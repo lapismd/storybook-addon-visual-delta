@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceCommit": "e33b091e1259e5e0c4dbe5b96a07462c2143f687",
+  "sourceCommit": "e929db8b658269f1e85c9ceb13a3c5960cf38ff5",
   "limits": {
     "newProductionCountedLines": 300,
     "newTestCountedLines": 500,
@@ -62,6 +62,24 @@
       "kind": "script",
       "forbiddenImportCount": 0
     },
+    "scripts/check-changesets-reader.spec.mjs": {
+      "countedLines": 17,
+      "physicalLines": 18,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-ci-image-source.mjs": {
+      "countedLines": 46,
+      "physicalLines": 48,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-ci-image-source.spec.mjs": {
+      "countedLines": 64,
+      "physicalLines": 66,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
     "scripts/check-ci-image.mjs": {
       "countedLines": 559,
       "physicalLines": 600,
@@ -71,6 +89,18 @@
     "scripts/check-ci-image.spec.mjs": {
       "countedLines": 442,
       "physicalLines": 471,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-linux-stage-cleanup.mjs": {
+      "countedLines": 63,
+      "physicalLines": 64,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-markdown-lint.spec.mjs": {
+      "countedLines": 62,
+      "physicalLines": 63,
       "kind": "test",
       "forbiddenImportCount": 0
     },
@@ -86,6 +116,12 @@
       "kind": "test",
       "forbiddenImportCount": 0
     },
+    "scripts/check-release-audit.mjs": {
+      "countedLines": 125,
+      "physicalLines": 129,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
     "scripts/check-release-intent.mjs": {
       "countedLines": 108,
       "physicalLines": 116,
@@ -95,6 +131,48 @@
     "scripts/check-release-intent.spec.mjs": {
       "countedLines": 44,
       "physicalLines": 51,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-release-source.mjs": {
+      "countedLines": 92,
+      "physicalLines": 99,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/check-release-source.spec.mjs": {
+      "countedLines": 150,
+      "physicalLines": 161,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/ci-image-publication-policy.mjs": {
+      "countedLines": 73,
+      "physicalLines": 74,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/ci-image-publication-policy.spec.mjs": {
+      "countedLines": 91,
+      "physicalLines": 97,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "scripts/ci-workflow-contracts.mjs": {
+      "countedLines": 74,
+      "physicalLines": 74,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/complete-github-release.mjs": {
+      "countedLines": 155,
+      "physicalLines": 160,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/complete-github-release.spec.mjs": {
+      "countedLines": 177,
+      "physicalLines": 178,
       "kind": "test",
       "forbiddenImportCount": 0
     },
@@ -116,6 +194,12 @@
       "kind": "script",
       "forbiddenImportCount": 0
     },
+    "scripts/native-capture-fixture.mjs": {
+      "countedLines": 91,
+      "physicalLines": 93,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
     "scripts/package-storybook-build.spec.mjs": {
       "countedLines": 58,
       "physicalLines": 63,
@@ -134,6 +218,18 @@
       "kind": "test",
       "forbiddenImportCount": 0
     },
+    "scripts/release-audit-policy.mjs": {
+      "countedLines": 157,
+      "physicalLines": 163,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/release-audit-policy.spec.mjs": {
+      "countedLines": 221,
+      "physicalLines": 226,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
     "scripts/run-storybook.mjs": {
       "countedLines": 25,
       "physicalLines": 28,
@@ -143,6 +239,12 @@
     "scripts/test-browser-matrix.mjs": {
       "countedLines": 148,
       "physicalLines": 153,
+      "kind": "script",
+      "forbiddenImportCount": 0
+    },
+    "scripts/test-native-capture.mjs": {
+      "countedLines": 138,
+      "physicalLines": 139,
       "kind": "script",
       "forbiddenImportCount": 0
     },
@@ -243,14 +345,14 @@
       "forbiddenImportCount": 0
     },
     "src/manager/review-layout.spec.ts": {
-      "countedLines": 210,
-      "physicalLines": 235,
+      "countedLines": 229,
+      "physicalLines": 257,
       "kind": "test",
       "forbiddenImportCount": 0
     },
     "src/manager/review-layout.ts": {
-      "countedLines": 196,
-      "physicalLines": 243,
+      "countedLines": 195,
+      "physicalLines": 242,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -279,8 +381,14 @@
       "forbiddenImportCount": 0
     },
     "src/manager/run-visual.ts": {
-      "countedLines": 1915,
-      "physicalLines": 2166,
+      "countedLines": 1914,
+      "physicalLines": 2163,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/manager/visual-config.ts": {
+      "countedLines": 12,
+      "physicalLines": 13,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -405,8 +513,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/baseline-cli.ts": {
-      "countedLines": 576,
-      "physicalLines": 634,
+      "countedLines": 505,
+      "physicalLines": 562,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -470,6 +578,12 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/node/baseline-static-build.ts": {
+      "countedLines": 71,
+      "physicalLines": 71,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/node/baseline-vite-plugin.ts": {
       "countedLines": 252,
       "physicalLines": 286,
@@ -489,8 +603,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/cached-actual.ts": {
-      "countedLines": 184,
-      "physicalLines": 197,
+      "countedLines": 192,
+      "physicalLines": 205,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -501,9 +615,63 @@
       "forbiddenImportCount": 0
     },
     "src/node/canonical-build-cache.ts": {
-      "countedLines": 300,
-      "physicalLines": 322,
+      "countedLines": 262,
+      "physicalLines": 283,
       "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/canonical-build-retention.ts": {
+      "countedLines": 50,
+      "physicalLines": 51,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-artifact-validation.ts": {
+      "countedLines": 206,
+      "physicalLines": 208,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-configuration.spec.ts": {
+      "countedLines": 187,
+      "physicalLines": 190,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-configuration.ts": {
+      "countedLines": 233,
+      "physicalLines": 236,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-path-safety.ts": {
+      "countedLines": 24,
+      "physicalLines": 26,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-process-tree.ts": {
+      "countedLines": 32,
+      "physicalLines": 34,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-process.ts": {
+      "countedLines": 63,
+      "physicalLines": 66,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-profile.ts": {
+      "countedLines": 86,
+      "physicalLines": 89,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-runner-doctor.spec.ts": {
+      "countedLines": 31,
+      "physicalLines": 32,
+      "kind": "test",
       "forbiddenImportCount": 0
     },
     "src/node/capture-runner.spec.ts": {
@@ -513,14 +681,32 @@
       "forbiddenImportCount": 0
     },
     "src/node/capture-runner.ts": {
-      "countedLines": 1183,
-      "physicalLines": 1229,
+      "countedLines": 1142,
+      "physicalLines": 1185,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-stage-cleanup.spec.ts": {
+      "countedLines": 108,
+      "physicalLines": 113,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-stage-cleanup.ts": {
+      "countedLines": 62,
+      "physicalLines": 65,
       "kind": "production",
       "forbiddenImportCount": 0
     },
     "src/node/capture-subject.ts": {
       "countedLines": 321,
       "physicalLines": 360,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/capture-workspace-ignore.ts": {
+      "countedLines": 60,
+      "physicalLines": 60,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -548,9 +734,21 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/node/cli-options.spec.ts": {
+      "countedLines": 38,
+      "physicalLines": 38,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/cli-options.ts": {
+      "countedLines": 134,
+      "physicalLines": 142,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/node/cli.ts": {
-      "countedLines": 463,
-      "physicalLines": 484,
+      "countedLines": 367,
+      "physicalLines": 380,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -561,8 +759,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/compare-story.ts": {
-      "countedLines": 230,
-      "physicalLines": 248,
+      "countedLines": 249,
+      "physicalLines": 267,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -591,8 +789,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/index.ts": {
-      "countedLines": 257,
-      "physicalLines": 257,
+      "countedLines": 268,
+      "physicalLines": 269,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -603,14 +801,50 @@
       "forbiddenImportCount": 0
     },
     "src/node/init-scaffold.ts": {
-      "countedLines": 207,
-      "physicalLines": 234,
+      "countedLines": 208,
+      "physicalLines": 235,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/local-project-config.ts": {
+      "countedLines": 97,
+      "physicalLines": 99,
       "kind": "production",
       "forbiddenImportCount": 0
     },
     "src/node/middleware.ts": {
-      "countedLines": 2547,
-      "physicalLines": 2748,
+      "countedLines": 2440,
+      "physicalLines": 2640,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/native-capture-completion.ts": {
+      "countedLines": 65,
+      "physicalLines": 67,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/native-capture-runner.spec.ts": {
+      "countedLines": 54,
+      "physicalLines": 54,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/native-capture-runner.ts": {
+      "countedLines": 264,
+      "physicalLines": 266,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/native-write-transaction.spec.ts": {
+      "countedLines": 176,
+      "physicalLines": 179,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/native-write-transaction.ts": {
+      "countedLines": 35,
+      "physicalLines": 36,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -621,8 +855,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/options.ts": {
-      "countedLines": 97,
-      "physicalLines": 208,
+      "countedLines": 93,
+      "physicalLines": 204,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -656,6 +890,12 @@
       "kind": "test",
       "forbiddenImportCount": 0
     },
+    "src/node/profile-preview-graph.ts": {
+      "countedLines": 11,
+      "physicalLines": 13,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/node/project-config.spec.ts": {
       "countedLines": 151,
       "physicalLines": 164,
@@ -663,8 +903,14 @@
       "forbiddenImportCount": 0
     },
     "src/node/project-config.ts": {
-      "countedLines": 326,
-      "physicalLines": 337,
+      "countedLines": 316,
+      "physicalLines": 327,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/resolved-config.ts": {
+      "countedLines": 143,
+      "physicalLines": 143,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -734,6 +980,24 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/node/static-storybook-command.ts": {
+      "countedLines": 20,
+      "physicalLines": 20,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/static-storybook-server.spec.ts": {
+      "countedLines": 67,
+      "physicalLines": 67,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/static-storybook-server.ts": {
+      "countedLines": 97,
+      "physicalLines": 97,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/node/story-facts.spec.ts": {
       "countedLines": 204,
       "physicalLines": 214,
@@ -749,6 +1013,12 @@
     "src/node/story-id-grep.ts": {
       "countedLines": 15,
       "physicalLines": 21,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/story-source-file.ts": {
+      "countedLines": 51,
+      "physicalLines": 52,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -771,8 +1041,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/story-source.ts": {
-      "countedLines": 1225,
-      "physicalLines": 1309,
+      "countedLines": 1192,
+      "physicalLines": 1275,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -783,8 +1053,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/visual-artifacts.ts": {
-      "countedLines": 70,
-      "physicalLines": 76,
+      "countedLines": 80,
+      "physicalLines": 86,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -795,8 +1065,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/visual-server.ts": {
-      "countedLines": 130,
-      "physicalLines": 157,
+      "countedLines": 119,
+      "physicalLines": 146,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -807,8 +1077,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/visual-sidecars.ts": {
-      "countedLines": 290,
-      "physicalLines": 319,
+      "countedLines": 282,
+      "physicalLines": 311,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -819,8 +1089,20 @@
       "forbiddenImportCount": 0
     },
     "src/node/visual-test-cli.ts": {
-      "countedLines": 542,
-      "physicalLines": 567,
+      "countedLines": 488,
+      "physicalLines": 511,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-test-cold.spec.ts": {
+      "countedLines": 79,
+      "physicalLines": 81,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/node/visual-test-outcomes.ts": {
+      "countedLines": 125,
+      "physicalLines": 126,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1005,14 +1287,14 @@
       "forbiddenImportCount": 0
     },
     "src/panel/environment-selection.ts": {
-      "countedLines": 110,
-      "physicalLines": 122,
+      "countedLines": 114,
+      "physicalLines": 126,
       "kind": "production",
       "forbiddenImportCount": 0
     },
     "src/panel/EnvironmentSplitButton.tsx": {
-      "countedLines": 158,
-      "physicalLines": 167,
+      "countedLines": 172,
+      "physicalLines": 182,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1076,9 +1358,15 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/panel/load-playwright-diff.spec.ts": {
+      "countedLines": 109,
+      "physicalLines": 109,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
     "src/panel/load-playwright-diff.ts": {
-      "countedLines": 201,
-      "physicalLines": 222,
+      "countedLines": 211,
+      "physicalLines": 232,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1095,8 +1383,8 @@
       "forbiddenImportCount": 0
     },
     "src/panel/Panel.tsx": {
-      "countedLines": 2767,
-      "physicalLines": 2889,
+      "countedLines": 2759,
+      "physicalLines": 2880,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1119,8 +1407,8 @@
       "forbiddenImportCount": 0
     },
     "src/panel/PanelStatusBar.tsx": {
-      "countedLines": 327,
-      "physicalLines": 355,
+      "countedLines": 312,
+      "physicalLines": 340,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1157,6 +1445,12 @@
     "src/panel/RangeNumberInput.tsx": {
       "countedLines": 108,
       "physicalLines": 116,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/panel/resolved-config.ts": {
+      "countedLines": 27,
+      "physicalLines": 27,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1220,6 +1514,12 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/playwright/capture-browser-version.ts": {
+      "countedLines": 16,
+      "physicalLines": 17,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/playwright/compare-pixels.spec.ts": {
       "countedLines": 39,
       "physicalLines": 47,
@@ -1239,8 +1539,8 @@
       "forbiddenImportCount": 0
     },
     "src/playwright/config.ts": {
-      "countedLines": 132,
-      "physicalLines": 176,
+      "countedLines": 143,
+      "physicalLines": 187,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1250,9 +1550,39 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/playwright/native-baseline-write.spec.ts": {
+      "countedLines": 39,
+      "physicalLines": 39,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/native-baseline-write.ts": {
+      "countedLines": 36,
+      "physicalLines": 38,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/readiness.spec.ts": {
+      "countedLines": 30,
+      "physicalLines": 32,
+      "kind": "test",
+      "forbiddenImportCount": 0
+    },
     "src/playwright/readiness.ts": {
       "countedLines": 48,
       "physicalLines": 58,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/sidecar-provenance.ts": {
+      "countedLines": 53,
+      "physicalLines": 53,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "src/playwright/suite-paths.ts": {
+      "countedLines": 61,
+      "physicalLines": 64,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1263,8 +1593,8 @@
       "forbiddenImportCount": 0
     },
     "src/playwright/suite.ts": {
-      "countedLines": 725,
-      "physicalLines": 776,
+      "countedLines": 703,
+      "physicalLines": 750,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1275,14 +1605,14 @@
       "forbiddenImportCount": 0
     },
     "src/playwright/write-diff-artifacts.ts": {
-      "countedLines": 311,
-      "physicalLines": 323,
+      "countedLines": 280,
+      "physicalLines": 291,
       "kind": "production",
       "forbiddenImportCount": 0
     },
     "src/preset.ts": {
-      "countedLines": 105,
-      "physicalLines": 149,
+      "countedLines": 109,
+      "physicalLines": 153,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1371,8 +1701,8 @@
       "forbiddenImportCount": 0
     },
     "src/runner/index.ts": {
-      "countedLines": 59,
-      "physicalLines": 67,
+      "countedLines": 61,
+      "physicalLines": 69,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1466,15 +1796,21 @@
       "kind": "production",
       "forbiddenImportCount": 0
     },
+    "src/shared/capture-presentation.ts": {
+      "countedLines": 27,
+      "physicalLines": 27,
+      "kind": "production",
+      "forbiddenImportCount": 0
+    },
     "src/shared/capture-profile.spec.ts": {
-      "countedLines": 49,
-      "physicalLines": 51,
+      "countedLines": 76,
+      "physicalLines": 79,
       "kind": "test",
       "forbiddenImportCount": 0
     },
     "src/shared/capture-profile.ts": {
-      "countedLines": 108,
-      "physicalLines": 115,
+      "countedLines": 161,
+      "physicalLines": 169,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -1551,8 +1887,8 @@
       "forbiddenImportCount": 0
     },
     "src/shared/config-types.ts": {
-      "countedLines": 91,
-      "physicalLines": 119,
+      "countedLines": 99,
+      "physicalLines": 127,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -2046,6 +2382,12 @@
       "countedLines": 88,
       "physicalLines": 135,
       "kind": "production",
+      "forbiddenImportCount": 0
+    },
+    "tests/manager-captured-actual.spec.ts": {
+      "countedLines": 248,
+      "physicalLines": 264,
+      "kind": "test",
       "forbiddenImportCount": 0
     },
     "tests/manager-sidebar.spec.ts": {

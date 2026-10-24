@@ -124,7 +124,7 @@ export type VisualDeltaDoctorReport = {
     baselinePathMode: BaselinePathMode;
     browsers: VisualDeltaBrowser[];
     indexFresh: boolean;
-    runner?: { id: string; kind: "docker" | "custom" };
+    runner?: { id: string; kind: "docker" | "native" | "custom" };
   };
   summary: {
     pass: number;
@@ -1230,7 +1230,7 @@ async function inspectDoctor(
       severity: profileDiagnostics.length ? "error" : "pass",
       message: profileDiagnostics.length
         ? profileDiagnostics.join(" ")
-        : `Capture runner ${runner.id} has a valid canonical profile.`,
+        : `Capture runner ${runner.id} has a valid capture profile.`,
     });
     if (options.runner) {
       const result = runner.doctor

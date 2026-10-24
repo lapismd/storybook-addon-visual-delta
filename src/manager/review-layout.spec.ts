@@ -73,6 +73,7 @@ function installMobileAddonDrawer(initiallyOpen: boolean) {
   );
 
   const openButton = document.createElement("button");
+  openButton.setAttribute("aria-label", "Open addon panel");
   openButton.setAttribute("aria-controls", "storybook-mobile-addon-panel");
   openButton.setAttribute("aria-expanded", "false");
 
@@ -217,6 +218,27 @@ describe("review-layout", () => {
         '[aria-controls="storybook-mobile-addon-panel"][aria-expanded="false"]',
       ),
     ).not.toBeNull();
+  });
+
+  it("opens and restores the current Storybook drawer without closed controls attributes", () => {
+    vi.useFakeTimers();
+    installMobileAddonDrawer(false);
+    const button = document.querySelector('[aria-label="Open addon panel"]')!;
+    button.removeAttribute("aria-controls");
+    button.removeAttribute("aria-expanded");
+
+    enterReviewLayout(mockApi(), layout());
+    vi.runAllTimers();
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Addon panel"]'),
+    ).not.toBeNull();
+
+    exitReviewLayout(mockApi());
+    vi.runAllTimers();
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Addon panel"]'),
+    ).toBeNull();
+    expect(button.isConnected).toBe(true);
   });
 
   it("leaves a mobile addon drawer open when it was open before review", () => {
