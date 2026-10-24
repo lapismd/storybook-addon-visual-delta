@@ -243,8 +243,8 @@
       "forbiddenImportCount": 0
     },
     "scripts/test-native-capture.mjs": {
-      "countedLines": 126,
-      "physicalLines": 127,
+      "countedLines": 125,
+      "physicalLines": 126,
       "kind": "script",
       "forbiddenImportCount": 0
     },
@@ -501,8 +501,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/affected-visual-tests.ts": {
-      "countedLines": 1011,
-      "physicalLines": 1105,
+      "countedLines": 1000,
+      "physicalLines": 1093,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -639,8 +639,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/capture-configuration.ts": {
-      "countedLines": 233,
-      "physicalLines": 236,
+      "countedLines": 206,
+      "physicalLines": 208,
       "kind": "production",
       "forbiddenImportCount": 0
     },
@@ -831,8 +831,8 @@
       "forbiddenImportCount": 0
     },
     "src/node/native-capture-runner.ts": {
-      "countedLines": 255,
-      "physicalLines": 257,
+      "countedLines": 249,
+      "physicalLines": 251,
       "kind": "production",
       "forbiddenImportCount": 0
     },

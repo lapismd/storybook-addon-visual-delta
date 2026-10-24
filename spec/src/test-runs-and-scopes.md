@@ -115,6 +115,12 @@ The planner selects all eligible stories when:
 
 A full passing run seeds current fingerprints. Only successfully exercised stories advance their passing fingerprint.
 
+Staging a baseline directory MUST preserve those fingerprints. The configured
+source directory and its staged copy MUST remain baseline inputs owned by each
+story; neither location may also enter global capture inputs merely because it
+lives beneath a capture-infrastructure path such as `tests/visual`. Host and
+worker affected planning MUST agree for identical source and baseline bytes.
+
 When an affected plan is empty and its cache evidence is trustworthy, the CLI
 MUST return successfully before starting the capture runner. Omitted
 `affectedTests` host configuration uses this safe affected selection; hosts

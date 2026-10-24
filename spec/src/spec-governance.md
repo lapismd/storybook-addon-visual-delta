@@ -1,5 +1,12 @@
 # Visual Delta specification governance
 
+The user-authorized native staging follow-up consolidates the pending
+dependency update PRs and generated 0.1.1 version PR. The combined candidate
+MUST be generated through Changesets and retain ordinary package, browser,
+native and consumer qualification. Superseded PRs may close after their exact
+changes are incorporated and verified. This consolidation does not authorize
+package publication, tagging, image changes or skipped release gates.
+
 The cold Linux capture correction adds a native non-root ARM64 CI proof using
 the existing immutable canonical image. It creates genuinely root-owned private
 stage files, proves ordinary host deletion fails, and verifies bounded recovery

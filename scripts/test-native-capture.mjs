@@ -1,6 +1,8 @@
 import {
   verifyNativeCaptureReuse,
   nativeCaptureResult,
+  nativeCapturePaths,
+  nativeSnapshotDir,
 } from "./native-capture-reuse.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -44,16 +46,13 @@ const run = (args, expected = 0) => {
   assert.equal(result.status, expected, `visual-delta ${args.join(" ")}`);
   return result;
 };
-const namespace = `profiles/native/${process.platform}-${process.arch}`;
-const baselineRoot = path.join(root, "snapshots", namespace);
-const artifactRoot = path.join(root, ".visual-delta/artifacts", namespace);
-const baseline = path.join(baselineRoot, "native--basic-chromium.png");
+const { baselineRoot, artifactRoot, baseline } = nativeCapturePaths(root);
 const compare = [
   "test",
   "--story-id",
   "native--basic",
   "--snapshot-dir",
-  "snapshots",
+  nativeSnapshotDir,
   "--failure-mode",
   "strict",
   "--fresh",
@@ -67,7 +66,7 @@ for (const browser of browsers)
     "--story-id",
     "native--basic",
     "--snapshot-dir",
-    "snapshots",
+    nativeSnapshotDir,
     "--approved",
     "--create-only",
   ]);
@@ -96,7 +95,7 @@ for (const browser of browsers)
     "--step-label",
     "Active",
     "--snapshot-dir",
-    "snapshots",
+    nativeSnapshotDir,
     "--approved",
   ]);
 assert(

@@ -831,7 +831,14 @@ identity, registration/configuration changes and conservative probe failures.
 symlink isolation. `native-capture-reuse.spec.ts` qualifies cached comparisons and profile
 invalidation. `native-affected-reuse.spec.ts` proves that changed fonts, browser
 versions and OS versions invalidate passing exclusions. The public native
+acceptance uses committed `tests/visual` baseline paths, and its staged-input
+regression proves host/worker passing fingerprints agree while baseline edits
+remain story-owned rather than becoming global capture changes. The public native
 acceptance script covers full reruns, affected
 no-ops, modes, interactions, multiple browsers, corrupt actuals and fresh runs.
 Results and remaining qualification are recorded in
 [native parity evidence](../records/2026-10-24-native-reuse-parity.md).
+
+The user-authorized dependency and 0.1.1 version consolidation retains ordinary
+qualification and generated Changesets metadata; its inspected PR mapping and
+combined validation are recorded in [consolidated candidate evidence](../records/2026-10-24-consolidated-native-release.md).
