@@ -48,3 +48,33 @@ pnpm@10.32.1 check` passes 618 tests across 130 files under Vitest 5.0.5,
 Final candidate archive/native acceptance, hosted results and superseded-PR
 closure are recorded after execution. This is a generated release candidate,
 not permission to publish, tag, change CI images or approve visual baselines.
+
+## Completed combined qualification
+
+The exact candidate is signed commit
+`1b253cf053985666923e6dbb70d6469abdd8345b` in
+[follow-up PR 49](https://github.com/lapismd/storybook-addon-visual-delta/pull/49).
+
+- The 0.1.1 archive SHA-256 is
+  `b3e3c514bfd68bc542bd900f580951f654a36bc07a37cead34539583d63e6c2b`.
+  All 810 source/dist files equal the consumer's corrected 0.1.0 validation
+  archive byte-for-byte. Version/changelog and dependency metadata differ.
+- `VISUAL_DELTA_NATIVE_PACKAGE_ROOT=<extracted-0.1.1-package>
+VISUAL_DELTA_NATIVE_EXAMPLE_BROWSERS=chromium,webkit corepack pnpm@10.32.1
+test:native` passes the complete public-worker acceptance matrix from that
+  archive, including interactions, safe corruption recovery, changed-baseline
+  recomparison, strict failures and unchanged affected no-op.
+- Native workflow `40096890979` passes on macOS 15 and Ubuntu 24.04 with
+  Chromium, Firefox and WebKit.
+- CI `40096891059` passes package checks, canonical Docker
+  Chromium/Firefox/WebKit, panel and manager browser acceptance.
+- Specification-first `40096890960` and stage cleanup `40096890935` pass.
+- PRs 42, 43, 44, 45, 46 and 48 were re-read to confirm their reviewed heads,
+  then closed with links to PR 49 after the complete combined hosted result
+  passed. No branch is deleted and none of those PRs is merged separately.
+
+No functional, capture or dependency bytes change in this evidence follow-up.
+The jj-store ledger owns its 933 regenerated references, final strict results
+and cache-identity proof. Local Firefox launch limitations are environment
+specific; the hosted three-browser native proof is separate. Registry
+publication, immutable release tagging and human visual review remain pending.
