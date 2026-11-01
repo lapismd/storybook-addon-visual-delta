@@ -33,6 +33,12 @@ These requirements preserve ownership and trustworthy state across process bound
 
 ## End-to-end data flow
 
+The CI-image guard imports its exact audited Node action references from
+`scripts/ci-node-actions.mjs`. This host-policy extraction lowers the guard's
+existing counted-line budget under VD-ARCH-006; the notifier allowlist still
+requires its reviewed immutable revision. Specification tooling consumes the
+published Deno-free spec-validator 0.2 CLI.
+
 The normal comparison flow has one authoritative path:
 
 ```mermaid

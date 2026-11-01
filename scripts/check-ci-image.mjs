@@ -2,6 +2,7 @@
 
 import { publicationPolicyErrors } from "./ci-image-publication-policy.mjs";
 import { EXPECTED_CONSUMER_WORKFLOWS } from "./ci-workflow-contracts.mjs";
+import { AUDITED_NODE24_ACTIONS } from "./ci-node-actions.mjs";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -44,8 +45,6 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
   "find /ms-playwright -type f -name MiniBrowser",
 ];
 
-
-
 const TOOLCHAIN_CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
 const CANONICAL_ARM64_IMAGE_DIGEST =
@@ -72,19 +71,6 @@ const PROHIBITED_CONSUMER_INSTALLS = [
   [/\bplaywright\s+install\b/, "Playwright browser installation"],
   [/\bapt(?:-get)?\s+install\b/, "Linux package installation"],
 ];
-const AUDITED_NODE24_ACTIONS = new Set([
-  "actions/checkout@v5",
-  "actions/configure-pages@v6",
-  "actions/deploy-pages@v5",
-  "actions/upload-pages-artifact@v5",
-  "actions/upload-artifact@v6",
-  "peter-evans/create-pull-request@v8",
-  "docker/login-action@v4",
-  "docker/setup-qemu-action@v4",
-  "docker/setup-buildx-action@v4",
-  "docker/build-push-action@v7",
-]);
-
 const STORYBOOK_PAGES_URL =
   "https://lapismd.github.io/storybook-addon-visual-delta/";
 
