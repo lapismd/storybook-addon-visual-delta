@@ -9,6 +9,11 @@ permissions:
 
 env:
   VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
+  LAPIS_CI_EVENT: ${{ github.event_name }}
+  LAPIS_CI_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+  LAPIS_CI_PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+  LAPIS_CI_PR_HEAD: ${{ github.event.pull_request.head.ref }}
+  LAPIS_DEPENDENCY_BOT_LOGIN: ${{ vars.LAPIS_DEPENDENCY_BOT_LOGIN }}
 
 defaults:
   run:
@@ -39,13 +44,9 @@ jobs:
 
       - name: Run configured specification gate
         run: >-
-          pnpm spec:check
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha }}"
+          pnpm spec:check --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}"
 
       - name: Enforce public package release intent
         if: github.head_ref != 'changeset-release/main'
         run: >-
-          pnpm release:intent
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha }}"
+          pnpm release:intent --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}"

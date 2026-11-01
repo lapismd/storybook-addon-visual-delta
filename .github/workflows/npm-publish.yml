@@ -154,6 +154,8 @@ jobs:
           test -n "$NODE_AUTH_TOKEN"
           umask 077
           bootstrap_npmrc="$RUNNER_TEMP/visual-delta-bootstrap.npmrc"
+          # Keep the npm token placeholder literal; npm expands it at runtime.
+          # shellcheck disable=SC2016
           printf '%s\n' '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' > "$bootstrap_npmrc"
           NPM_CONFIG_USERCONFIG="$bootstrap_npmrc" \
             npm publish --provenance --access public --registry=https://registry.npmjs.org
@@ -213,10 +215,7 @@ jobs:
       - publish-bootstrap
       - publish-oidc
     if: >-
-      always() &&
-      needs.package-gate.result == 'success' &&
-      needs.visual-gate.result == 'success' &&
-      (needs.publish-bootstrap.result == 'success' || needs.publish-oidc.result == 'success')
+      always() && needs.package-gate.result == 'success' && needs.visual-gate.result == 'success' && (needs.publish-bootstrap.result == 'success' || needs.publish-oidc.result == 'success')
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
@@ -305,3 +304,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.package-gate.outputs.version }}
         run: node scripts/complete-github-release.mjs
+  notify-dependencies:
+    name: Notify dependency consumers
+    needs:
+      - verify-provenance
+    if: always() && needs.verify-provenance.result == 'success'
+    permissions:
+      contents: read
+    uses: lapismd/dependency-automation/.github/workflows/notify.yml@ea9d35b12b612467bbabf1c6271ffa41b5eda4ba
+    with:
+      automation-ref: ea9d35b12b612467bbabf1c6271ffa41b5eda4ba
+      source-sha: ${{ github.sha }}
+    secrets:
+      app-private-key: ${{ secrets.LAPIS_DEPENDENCY_APP_PRIVATE_KEY }}
