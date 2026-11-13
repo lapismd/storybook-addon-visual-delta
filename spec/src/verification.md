@@ -842,3 +842,17 @@ Results and remaining qualification are recorded in
 The user-authorized dependency and 0.1.1 version consolidation retains ordinary
 qualification and generated Changesets metadata; its inspected PR mapping and
 combined validation are recorded in [consolidated candidate evidence](../records/2026-10-24-consolidated-native-release.md).
+
+The jsdom 30.1 iframe-realm regression is covered by the original
+`capture.spec.ts` focus-restoration case and `capture-focus.spec.ts`, which
+proves preview focus is blurred only during capture and restored afterward.
+The exact original regression changed from one failure to zero; both capture
+files pass 13 tests and the full package check passes 619 tests. Panel browser
+acceptance passes 13 tests. Manager acceptance passes 55 tests with one existing
+skip after its chip-geometry observation waits for placement settlement.
+The complete browser-matrix acceptance passes in the pinned CI multi-architecture
+image on native x86 Linux, including Chromium, Firefox, WebKit, explicit project
+selection, warning-mode non-passing outcomes and fatal infrastructure failures.
+The native host lacks WebKit libraries; the ARM64 child image failed under
+emulation and is not qualification evidence. Consumer release acceptance remains
+a separate gate.

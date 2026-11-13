@@ -127,13 +127,15 @@ test.describe("Captured comparison presentation", () => {
     await expect(actual).toBeVisible();
     await expect(actualChip).toBeVisible();
     await expect(baselineChip).toBeVisible();
-    const [actualChipBox, baselineChipBox] = await Promise.all([
-      actualChip.boundingBox(),
-      baselineChip.boundingBox(),
-    ]);
-    expect(actualChipBox).not.toBeNull();
-    expect(baselineChipBox).not.toBeNull();
-    expect(actualChipBox!.x).toBeGreaterThan(baselineChipBox!.x);
+    await expect(async () => {
+      const [actualChipBox, baselineChipBox] = await Promise.all([
+        actualChip.boundingBox(),
+        baselineChip.boundingBox(),
+      ]);
+      expect(actualChipBox).not.toBeNull();
+      expect(baselineChipBox).not.toBeNull();
+      expect(actualChipBox!.x).toBeGreaterThan(baselineChipBox!.x);
+    }).toPass();
 
     await panel.getByRole("switch", { name: "Show live component" }).click();
     await expect(actual).toHaveCount(0);

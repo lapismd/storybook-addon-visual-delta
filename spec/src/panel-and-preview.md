@@ -103,7 +103,7 @@ height so even the last interaction can move away from the fixed footer.
 
 ## Comparison views
 
-Diff HTML captures the live preview in the manager browser. It restores iframe size, scroll positions, focus, temporary capture styles, and preview state even when capture fails.
+Diff HTML captures the live preview in the manager browser. It restores iframe size, scroll positions, focus, temporary capture styles, and preview state even when capture fails. Preview focus MUST be classified against the owning iframe realm, without a parent-window Element precheck; temporary capture preparation MUST blur and restore that same preview element.
 
 Diff Browser requests an exact-story `visual-delta test --story-id` comparison for the selected configured browser through the resolved canonical capture runner. It uses the same packaged suite, static Storybook inputs, thresholds, modes or interaction target, and browser configuration as the equivalent command-line request. Diff Result reads the matching runner-produced result, actual PNG, and diff PNG from `/visual-delta-artifacts` only after their capture profile matches the runner result.
 
@@ -173,3 +173,8 @@ Baseline-write progress identifies its exact story scope. When navigation leaves
 All channel handlers, DOM nodes, styles, resize observers, and scroll listeners MUST be removed when their owning surface becomes inactive. Docs mode MUST never retain a Visual Delta overlay.
 
 Related contracts: [Interfaces](./interfaces.md), [Capture and comparison](./capture-and-comparison.md), [Mutations and review](./mutations-and-review.md), and [Verification](./verification.md).
+
+Captured-actual chip geometry acceptance MUST observe both current chip nodes
+together after placement changes. Manager DOM replacement during placement
+settlement does not establish missing final chip geometry; visibility, non-null
+geometry and baseline-before-actual ordering remain required.
