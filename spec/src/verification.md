@@ -856,3 +856,9 @@ selection, warning-mode non-passing outcomes and fatal infrastructure failures.
 The native host lacks WebKit libraries; the ARM64 child image failed under
 emulation and is not qualification evidence. Consumer release acceptance remains
 a separate gate.
+
+CI also exercised the changed manager test's counted-line budget. Its geometry
+expectation now lives in `tests/manager-chip-geometry.ts`; the original file's
+recorded budget decreases from 248 to 243 counted lines. The architecture
+regression suite passes 20 tests and the complete captured-actual browser family
+passes three tests after extraction. No architecture limit or assertion changes.

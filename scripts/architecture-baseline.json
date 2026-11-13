@@ -2385,8 +2385,8 @@
       "forbiddenImportCount": 0
     },
     "tests/manager-captured-actual.spec.ts": {
-      "countedLines": 248,
-      "physicalLines": 264,
+      "countedLines": 243,
+      "physicalLines": 259,
       "kind": "test",
       "forbiddenImportCount": 0
     },
