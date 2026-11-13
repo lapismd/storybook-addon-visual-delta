@@ -1,5 +1,11 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.2
+
+### Patch Changes
+
+- [#50](https://github.com/lapismd/storybook-addon-visual-delta/pull/50) [`cb565e8`](https://github.com/lapismd/storybook-addon-visual-delta/commit/cb565e8549361bac65d642b8f12226959f540011) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update the pixelmatch runtime dependency to major version 8.
+
 ## 0.1.1
 
 ### Patch Changes
