@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { expectCapturedChipOrder } from "./manager-chip-geometry.js";
 import { readFileSync } from "node:fs";
 import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../src/shared/capture-profile.js";
 import {
@@ -127,13 +128,7 @@ test.describe("Captured comparison presentation", () => {
     await expect(actual).toBeVisible();
     await expect(actualChip).toBeVisible();
     await expect(baselineChip).toBeVisible();
-    const [actualChipBox, baselineChipBox] = await Promise.all([
-      actualChip.boundingBox(),
-      baselineChip.boundingBox(),
-    ]);
-    expect(actualChipBox).not.toBeNull();
-    expect(baselineChipBox).not.toBeNull();
-    expect(actualChipBox!.x).toBeGreaterThan(baselineChipBox!.x);
+    await expectCapturedChipOrder(actualChip, baselineChip);
 
     await panel.getByRole("switch", { name: "Show live component" }).click();
     await expect(actual).toHaveCount(0);
