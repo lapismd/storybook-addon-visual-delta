@@ -1,5 +1,11 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.4
+
+### Patch Changes
+
+- [#66](https://github.com/lapismd/storybook-addon-visual-delta/pull/66) [`44760e0`](https://github.com/lapismd/storybook-addon-visual-delta/commit/44760e0cf55328a9a5971a532e681d4ed29af94f) Thanks [@stevejuma](https://github.com/stevejuma)! - Use the qualified Playwright 1.65 browser image and its measured immutable ARM64 capture profile.
+
 ## 0.1.3
 
 ### Patch Changes
