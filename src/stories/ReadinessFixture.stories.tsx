@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import React from "react";
 import { expect, within } from "storybook/test";
+import {
+  ReadinessSubject,
+  waitForReadinessRelease,
+} from "./ReadinessFixture.js";
 
 const meta = {
   title: "Visual Delta/Readiness Fixture",
@@ -22,15 +26,9 @@ type Story = StoryObj;
 
 export const DelayedMissingBaseline: Story = {
   name: "Delayed missing baseline",
-  render: () => (
-    <div data-testid="delayed-missing-subject">
-      Delayed story without a baseline
-    </div>
-  ),
+  render: () => <ReadinessSubject />,
   play: async ({ canvasElement }) => {
-    canvasElement.dataset.visualDeltaDelayedMissing = "pending";
-    await new Promise((resolve) => window.setTimeout(resolve, 6_000));
-    canvasElement.dataset.visualDeltaDelayedMissing = "complete";
+    await waitForReadinessRelease(canvasElement);
     await expect(
       within(canvasElement).getByTestId("delayed-missing-subject"),
     ).toBeInTheDocument();

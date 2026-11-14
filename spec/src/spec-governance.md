@@ -372,3 +372,17 @@ Manager CI MUST retain Playwright traces and error contexts on a failing
 acceptance run so native ARM64 failures can be diagnosed from the actual DOM
 and event sequence. Evidence retention MUST preserve the original assertions,
 retry policy, timeouts and fatal gate; it does not establish a product repair.
+
+Manager acceptance navigation MUST wait for the document and explicit visible
+manager/tab state rather than global network quiescence. An unrelated pending
+request or normal background runtime polling cannot define UI readiness.
+Readiness-transition fixtures MUST keep story completion under explicit test
+control so slow startup cannot skip the provisional state being asserted.
+All provisional, completed-generation and missing-baseline assertions remain
+required, and controls must release the real Storybook play lifecycle.
+
+Ordinary manager acceptance MUST establish the exact selected story's finished
+marker and resolved panel state before exercising completed-story controls.
+Tests of provisional state MUST opt into that phase explicitly and release the
+controlled play themselves. Geometry assertions MUST wait for the existing
+ready marker before reading measured geometry; they retain their numeric bounds.

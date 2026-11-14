@@ -893,3 +893,11 @@ x64/ARM64 smoke and profile assembly. Its actual profile is retained in
 Before promotion the exact CI-image guard reports two package-version errors.
 Profile constants and strict drift fixtures advance to the measured image;
 functional/browser qualification remains required with baselines untouched.
+
+Manager navigation regression retains a deliberately pending unrelated fetch:
+the original shared helper times out once; navigation must instead reach the
+real visible manager. The delayed missing-baseline scenario explicitly releases
+its story play only after asserting provisional UI. These are test-harness
+repairs; the complete consuming manager suite and cold fixture/static/browser
+lanes remain required. See
+[manager readiness evidence](../records/2026-11-14-manager-readiness-boundaries.md).
