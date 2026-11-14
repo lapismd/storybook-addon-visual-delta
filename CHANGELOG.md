@@ -1,5 +1,17 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.3
+
+### Patch Changes
+
+- [#53](https://github.com/lapismd/storybook-addon-visual-delta/pull/53) [`7637d42`](https://github.com/lapismd/storybook-addon-visual-delta/commit/7637d420d2f763f0bdc1c2273d30935e01b965cf) Thanks [@dependabot](https://github.com/apps/dependabot)! - Restore and temporarily blur preview focus using the iframe's owning DOM realm during Diff HTML capture.
+
+## 0.1.2
+
+### Patch Changes
+
+- [#50](https://github.com/lapismd/storybook-addon-visual-delta/pull/50) [`cb565e8`](https://github.com/lapismd/storybook-addon-visual-delta/commit/cb565e8549361bac65d642b8f12226959f540011) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update the pixelmatch runtime dependency to major version 8.
+
 ## 0.1.1
 
 ### Patch Changes

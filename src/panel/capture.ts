@@ -477,7 +477,7 @@ async function withVerifiedPreviewViewportAttempt<T>(
       ? document.activeElement
       : null;
   const previewActive = asHtmlElement(
-    doc.activeElement instanceof Element ? doc.activeElement : null,
+    doc.activeElement,
     view,
   );
   const previewScroll = { x: view.scrollX, y: view.scrollY };
@@ -649,7 +649,7 @@ function preparePreviewForVisualCapture(
   doc.documentElement.appendChild(style);
 
   const active = asHtmlElement(
-    doc.activeElement instanceof Element ? doc.activeElement : null,
+    doc.activeElement,
     view,
   );
   active?.blur();
