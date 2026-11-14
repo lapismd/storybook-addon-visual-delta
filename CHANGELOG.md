@@ -1,5 +1,11 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.3
+
+### Patch Changes
+
+- [#53](https://github.com/lapismd/storybook-addon-visual-delta/pull/53) [`7637d42`](https://github.com/lapismd/storybook-addon-visual-delta/commit/7637d420d2f763f0bdc1c2273d30935e01b965cf) Thanks [@dependabot](https://github.com/apps/dependabot)! - Restore and temporarily blur preview focus using the iframe's owning DOM realm during Diff HTML capture.
+
 ## 0.1.2
 
 ### Patch Changes
