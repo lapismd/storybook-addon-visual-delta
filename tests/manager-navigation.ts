@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 export const MANAGER_FIXTURE =
   "visual-delta-panel-shell--manager-integration-fixture";
@@ -25,6 +25,7 @@ export async function waitForStoryFinished(page: Page, storyId: string) {
   await expect(previewFrame(page).locator("html")).toHaveAttribute(
     "data-visual-delta-story-finished",
     storyId,
+    { timeout: test.info().timeout },
   );
 }
 

@@ -19,6 +19,11 @@ test.describe("Visual Delta manager integration", () => {
     await openManager(page, DELAYED_MISSING_BASELINE_FIXTURE, DEV_STORYBOOK, {
       readiness: "provisional",
     });
+    await expect(
+      previewFrame(page).locator("[data-visual-delta-delayed-missing]"),
+    ).toHaveAttribute("data-visual-delta-delayed-missing", "pending", {
+      timeout: test.info().timeout,
+    });
 
     const panel = page.getByTestId("visual-delta-panel");
     await expect(
@@ -38,14 +43,15 @@ test.describe("Visual Delta manager integration", () => {
     await expect(
       panel.getByRole("status", { name: /Baseline missing/i }),
     ).toBeVisible({ timeout: 10_000 });
-    const createDefault = panel.getByRole("button", {
-      name: "Create Default baseline",
+    const baselines = panel.getByRole("region", {
+      name: "Visual baselines and interactions",
     });
-    await expect(createDefault).toHaveCount(2);
-    for (const control of await createDefault.all()) {
-      await expect(control).toBeVisible();
-      await expect(control).toBeEnabled();
-    }
+    const createDefault = baselines
+      .getByRole("button", { name: "Create Default baseline", exact: true })
+      .and(baselines.getByTitle("Create Default baseline", { exact: true }));
+    await expect(createDefault).toHaveCount(1);
+    await expect(createDefault).toBeVisible();
+    await expect(createDefault).toBeEnabled();
     await expect(
       panel.getByRole("button", { name: /Create .*baseline/i }),
     ).not.toHaveCount(0);

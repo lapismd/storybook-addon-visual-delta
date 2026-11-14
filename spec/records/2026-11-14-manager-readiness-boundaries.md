@@ -73,3 +73,24 @@ Logs are retained as `vd74-readiness-twelve-after`,
 private task evidence directory. Hosted native ARM64 qualification remains
 required on the resulting source commit before merge. The unfixed development
 audit finding and its separate release-approval boundary remain unchanged.
+
+## Native ARM64 follow-up
+
+Head 6e5825aa's hosted ARM64 run passed all original manager cases but failed
+the two new regressions (54 passing, two failing, one existing skip). The
+completion assertion accidentally used the five-second expectation default,
+shortening the original navigation budget during cold startup. It now uses
+the existing test deadline; no test timeout or retry is increased.
+The readiness case also assumed two globally named Create controls. The summary
+action remains available with its exact title, while an expanded section body
+may add a second identically named action. The assertion now binds to the
+summary action by role and title inside the baselines region, requiring exactly
+one visible, enabled target. It preserves whole-panel zero-action assertions
+before completion and explicitly observes the controlled play pending marker
+before releasing it. It does not depend on optional expanded-body controls.
+
+The two follow-up regressions pass locally after those contract corrections.
+The complete cold manager suite again passes 56 cases with the unchanged skip,
+and the cold panel and three-browser lanes pass. The full pinned package check
+passes 619 units, all seven specification lanes, typechecks, build and publint.
+Native capture/reuse qualification also passes before this follow-up is committed.
