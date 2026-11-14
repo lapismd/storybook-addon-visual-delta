@@ -351,3 +351,9 @@ the measured immutable manifests and browser inventory retained in
 `spec/records/2026-11-14-playwright-165-candidate.md`. Required ARM64 PR browser
 lanes must qualify these candidate pins before merge promotes the profile.
 The audit gate and separate baseline-mutation approval remain required.
+
+The follow-up tooling intake supersedes dependency proposals 68–72 with one
+compatible current cohort, including paired Playwright 1.65.1. VD-GOV-012/013
+still require immutable image publication and profile qualification before pin
+promotion. VD-GOV-008's full and production audit gates remain unchanged; no
+historical advisory exception is inherited by this candidate.

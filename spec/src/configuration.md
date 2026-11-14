@@ -189,3 +189,11 @@ The reviewed Docker-profile candidate selects paired Playwright 1.65.0 and the
 native ARM64 inventory retained by publication run `43540534442`. Required
 compare-only PR qualification precedes adoption; profile identity, browser
 metadata and immutable image digests travel together.
+
+The next tooling intake pairs Playwright 1.65.1 and qualifies Storybook 10.6.7,
+Vitest 5.1, Vite 8.3, Svelte's Vite plugin 7.3, Mermaid 12.3 and markdownlint
+0.50 together. The immutable multiarchitecture image MUST be built and its
+actual capture profile inspected before the reviewed Docker pins advance.
+No consumer job may install browsers to compensate for the old image. Existing
+committed baselines remain untouched and every functional capture gate remains
+required.

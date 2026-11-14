@@ -879,3 +879,10 @@ Before repair, `node scripts/check-ci-image.mjs` rejected both 1.65 package
 versions against the old image policy. Exact-pin guards and negative mutation
 tests advance together. Required hosted ARM64 panel, manager and three-browser
 acceptance remain pending on this candidate; no committed PNG changes.
+
+The follow-up tooling bootstrap retains the reviewed 1.65.0 profile until
+paired Playwright 1.65.1 has an inspected immutable image. Its exact two
+version-guard findings remain blocking; the pinned toolchain passes 619
+units, Node build and fresh static Storybook. See
+[bootstrap evidence](../records/2026-11-14-tooling-followup-bootstrap.md).
+No audit exception or baseline mutation is approved by that bootstrap.
