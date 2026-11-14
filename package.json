@@ -124,7 +124,7 @@
     "markdownlint-cli": "^0.49.1",
     "mermaid": "^11.17.2",
     "playwright": "1.65.0",
-    "postcss": "8.5.31",
+    "postcss": "8.5.32",
     "publint": "^0.3.24",
     "react": "^19.2.7",
     "react-dom": "^19.3.1",
