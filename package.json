@@ -95,7 +95,8 @@
     "release:intent": "node ./scripts/check-release-intent.mjs",
     "release:tag": "node ./scripts/ensure-release-tag.mjs",
     "release:version": "changeset version && corepack pnpm@10.32.1 install --lockfile-only",
-    "release:verify-provenance": "node ./scripts/verify-npm-provenance.mjs"
+    "release:verify-provenance": "node ./scripts/verify-npm-provenance.mjs",
+    "spec:search": "spec-validator search"
   },
   "dependencies": {
     "@storybook/icons": "^2.2.0",
@@ -126,7 +127,7 @@
     "postcss": "8.5.31",
     "publint": "^0.3.24",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "storybook": "10.6.5",
@@ -166,5 +167,14 @@
       "preact",
       "react-native"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "glob@13": "^14.0.6",
+      "minimatch@10": "^11.0.8",
+      "katex@0.16": "^0.18.2",
+      "js-yaml@5": "^5.4.1",
+      "smol-toml@1": "^1.9.0"
+    }
   }
 }
