@@ -322,3 +322,14 @@ Linux with Node 24.15.0, pnpm 10.32.1 and the exact project Playwright version.
 It MUST use disposable fixture baselines and MUST NOT publish an image or
 replace committed baseline PNGs. Existing canonical image and release jobs
 retain their toolchain and publication requirements.
+
+React development dependency updates MUST keep React and React DOM at the same
+exact resolved version. Dependabot groups both runtimes and their type packages
+so a compatible-looking lockfile update cannot leave an unusable rendering pair.
+The ordinary package and browser acceptance lanes remain required.
+
+Development-only transitive glob, minimatch, KaTeX, js-yaml and smol-toml
+resolutions use patched
+registry versions through version-qualified root overrides while their parent
+ranges catch up. Ordinary documentation, package and browser qualification
+remain required; these overrides do not change runtime exports.
