@@ -48,9 +48,9 @@ const REQUIRED_DOCKERFILE_SNIPPETS = [
 const TOOLCHAIN_CI_IMAGE =
   "ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest";
 const CANONICAL_ARM64_IMAGE_DIGEST =
-  "sha256:661cb2485c34efc928a3ab2b64b867ee02908a71145f6a2d8a61d6febfb8abc4";
+  "sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27";
 const CANONICAL_IMAGE_DIGEST =
-  "sha256:d96587d3f3eed2d1cbe63593566813b5f255576a28f27595dec6bb35e9936b71";
+  "sha256:6b8f1165410982f4b7a5573bceefd008a6d349c23c48825231ec51b0e89dd948";
 const CANONICAL_FONT_MANIFEST_DIGEST =
   "sha256:be624be721eecdf535a480ca7e0382cd6510f8060b849f604eb55144ed1c83d3";
 const CANONICAL_ARM64_CI_IMAGE = `ghcr.io/lapismd/storybook-addon-visual-delta-ci@${CANONICAL_ARM64_IMAGE_DIGEST}`;
@@ -372,9 +372,9 @@ export function validateCiImageSources({
 
   if (manifest) {
     for (const dependency of ["playwright", "@playwright/test"]) {
-      if (manifest.devDependencies?.[dependency] !== "1.62.1") {
+      if (manifest.devDependencies?.[dependency] !== "1.65.0") {
         errors.push(
-          `package.json: devDependencies.${dependency} must be exactly 1.62.1`,
+          `package.json: devDependencies.${dependency} must be exactly 1.65.0`,
         );
       }
     }
@@ -391,9 +391,9 @@ export function validateCiImageSources({
   for (const snippet of [
     `imageDigest:\n    "${CANONICAL_IMAGE_DIGEST}"`,
     `arm64ImageDigest:\n    "${CANONICAL_ARM64_IMAGE_DIGEST}"`,
-    'chromium: "151.0.7922.34"',
-    'firefox: "153.0"',
-    'webkit: "26.5"',
+    'chromium: "158.0.8127.18"',
+    'firefox: "159.0"',
+    'webkit: "27.2"',
     `fontManifestSha256:\n    "${CANONICAL_FONT_MANIFEST_DIGEST}"`,
   ]) {
     requireSnippet(errors, "capture profile", captureProfile ?? "", snippet);
