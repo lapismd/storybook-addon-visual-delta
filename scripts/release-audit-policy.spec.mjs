@@ -8,56 +8,7 @@ import {
   verifyReleaseAudit,
 } from "./release-audit-policy.mjs";
 
-const source = "a".repeat(40);
-function report(findings = []) {
-  return {
-    actions: [],
-    muted: [],
-    advisories: Object.fromEntries(
-      findings.map((finding, index) => [index, finding])
-    ),
-    metadata: {
-      totalDependencies: 741,
-      vulnerabilities: Object.fromEntries(
-        ["info", "low", "moderate", "high", "critical"].map((severity) => [
-          severity,
-          findings.filter((finding) => finding.severity === severity).length,
-        ])
-      ),
-    },
-  };
-}
-function candidate() {
-  return {
-    full: report(
-      AUDIT_EXCEPTION.findings.map((finding) => ({
-        github_advisory_id: finding.id,
-        module_name: finding.name,
-        severity: finding.severity,
-        patched_versions: "<0.0.0",
-        vulnerable_versions: `<=${finding.maximum}`,
-        deleted: null,
-        url: `https://github.com/advisories/${finding.id}`,
-        findings: [{ version: finding.version, paths: [finding.path] }],
-      }))
-    ),
-    production: report(),
-    fullStatus: 1,
-    productionStatus: 0,
-    version: "0.0.8",
-    now: Date.parse("2026-10-19T22:00:00Z"),
-    approvedSource: source,
-    source,
-    checkout: source,
-    repository: "lapismd/storybook-addon-visual-delta",
-    ref: "refs/tags/v0.0.8",
-    lock: AUDIT_EXCEPTION.lock,
-    artifact: AUDIT_EXCEPTION.artifact,
-    payload: AUDIT_EXCEPTION.payload,
-    publishedVersions: ["0.0.7"],
-    registryVersions: { braces: ["3.0.3"], "sprintf-js": ["1.0.3", "1.1.3"] },
-  };
-}
+import { candidate, report } from "./release-audit-test-fixtures.mjs";
 
 test("accepts only the approved bounded development graph", () => {
   assert.deepEqual(verifyReleaseAudit(candidate()), {
@@ -73,7 +24,7 @@ test("clean audits need no exception for future releases", () => {
       fullStatus: 0,
       productionStatus: 0,
     }),
-    { exception: false }
+    { exception: false },
   );
 });
 
@@ -112,22 +63,43 @@ const rejections = {
     value.payload = "changed";
   },
   "release already published": (value) => {
-    value.publishedVersions.push("0.0.8");
+    value.publishedVersions.push("0.1.5");
   },
   "missing registry response": (value) => {
     value.publishedVersions = [];
   },
   "invalid registry version list": (value) => {
-    value.registryVersions.braces = {};
+    value.registryVersions.deepmerge = {};
   },
   "new upstream release": (value) => {
-    value.registryVersions.braces.push("3.0.4");
+    value.registryVersions.deepmerge.push("4.3.2");
   },
   "new prerelease": (value) => {
-    value.registryVersions.braces.push("3.0.4-rc.1");
+    value.registryVersions.deepmerge.push("4.3.2-rc.1");
   },
   "new advisory fix": (value) => {
-    value.full.advisories[0].patched_versions = ">=3.0.4";
+    value.full.advisories[0].patched_versions = ">=4.3.2";
+  },
+  "changed vulnerable range": (value) => {
+    value.full.advisories[0].vulnerable_versions = "<=4.3.1";
+  },
+  "changed severity": (value) => {
+    value.full.advisories[0].severity = "moderate";
+    value.full = report(Object.values(value.full.advisories));
+  },
+  "additional moderate finding": (value) => {
+    value.full = report([
+      ...Object.values(value.full.advisories),
+      {
+        ...value.full.advisories[0],
+        github_advisory_id: "GHSA-unapproved-moderate",
+        severity: "moderate",
+      },
+    ]);
+  },
+  "replayed old exception": (value) => {
+    value.version = "0.0.8";
+    value.ref = "refs/tags/v0.0.8";
   },
   "different package": (value) => {
     value.full.advisories[0].module_name = "other";
@@ -136,10 +108,10 @@ const rejections = {
     value.full.advisories[0].github_advisory_id = "GHSA-other";
   },
   "different vulnerable version": (value) => {
-    value.full.advisories[0].findings[0].version = "3.0.2";
+    value.full.advisories[0].findings[0].version = "4.3.0";
   },
   "unreviewed path": (value) => {
-    value.full.advisories[0].findings[0].paths.push(".>runtime>braces");
+    value.full.advisories[0].findings[0].paths.push(".>runtime>deepmerge");
   },
   "production finding": (value) => {
     value.production = report([value.full.advisories[0]]);
@@ -152,7 +124,7 @@ const rejections = {
     ]);
   },
   "missing finding": (value) => {
-    value.full = report([value.full.advisories[0]]);
+    value.full = report();
   },
   "muted finding": (value) => {
     value.full.muted.push("anything");
@@ -164,7 +136,7 @@ const rejections = {
     value.full.advisories = null;
   },
   "false clean count": (value) => {
-    value.full.metadata.vulnerabilities.high = 0;
+    value.full.metadata.vulnerabilities.low = 0;
   },
   "audit process failure": (value) => {
     value.fullStatus = 2;
@@ -187,28 +159,28 @@ for (const [name, mutate] of Object.entries(rejections)) {
 test("tag gate and publisher retain exact source and audited tarball wiring", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/npm-publish.yml", import.meta.url),
-    "utf8"
+    "utf8",
   );
   assert.equal(
     workflow.match(/node scripts\/check-release-audit\.mjs/g)?.length,
-    2
+    2,
   );
   assert.match(
     workflow,
-    /RELEASE_AUDIT_APPROVED_SOURCE: \$\{\{ vars\.VD_008_AUDIT_APPROVED_SOURCE \}\}/
+    /RELEASE_AUDIT_APPROVED_SOURCE: \$\{\{ vars\.VD_015_AUDIT_APPROVED_SOURCE \}\}/,
   );
   assert.match(
     workflow,
-    /npm publish \.cache\/release-audit\/candidate\.tgz --provenance/
+    /npm publish \.cache\/release-audit\/candidate\.tgz --provenance/,
   );
   assert.match(workflow, /path: \.cache\/release-audit\//);
   const release = readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
-    "utf8"
+    "utf8",
   );
   assert.match(
     release,
-    /RELEASE_AUDIT_APPROVED_SOURCE: \$\{\{ vars\.VD_008_AUDIT_APPROVED_SOURCE \}\}/
+    /RELEASE_AUDIT_APPROVED_SOURCE: \$\{\{ vars\.VD_015_AUDIT_APPROVED_SOURCE \}\}/,
   );
 });
 
@@ -220,7 +192,7 @@ test("distinguishes gzip bytes while retaining exact tar payload identity", () =
   assert.equal(first.payload, second.payload);
   assert.notEqual(
     first.payload,
-    archiveIdentity(gzipSync(Buffer.from("changed"))).payload
+    archiveIdentity(gzipSync(Buffer.from("changed"))).payload,
   );
   assert.throws(() => archiveIdentity(Buffer.from("invalid gzip")));
 });

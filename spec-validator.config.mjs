@@ -115,6 +115,7 @@ export default defineConfig(tableRequirements(), {
           "./scripts/release-audit-policy.spec.mjs",
           "./scripts/check-release-intent.spec.mjs",
           "./scripts/check-release-source.spec.mjs",
+          "./scripts/release-workflows.spec.mjs",
           "./scripts/ensure-release-tag.spec.mjs",
           "./scripts/package-storybook-build.spec.mjs",
           "./scripts/prepare-cli-bin.spec.mjs",

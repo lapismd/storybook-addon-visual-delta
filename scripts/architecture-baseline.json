@@ -135,14 +135,14 @@
       "forbiddenImportCount": 0
     },
     "scripts/check-release-source.mjs": {
-      "countedLines": 92,
-      "physicalLines": 99,
+      "countedLines": 64,
+      "physicalLines": 69,
       "kind": "script",
       "forbiddenImportCount": 0
     },
     "scripts/check-release-source.spec.mjs": {
-      "countedLines": 150,
-      "physicalLines": 161,
+      "countedLines": 99,
+      "physicalLines": 108,
       "kind": "test",
       "forbiddenImportCount": 0
     },
@@ -225,8 +225,8 @@
       "forbiddenImportCount": 0
     },
     "scripts/release-audit-policy.spec.mjs": {
-      "countedLines": 221,
-      "physicalLines": 226,
+      "countedLines": 193,
+      "physicalLines": 198,
       "kind": "test",
       "forbiddenImportCount": 0
     },

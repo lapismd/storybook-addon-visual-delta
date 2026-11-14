@@ -55,10 +55,11 @@ jobs:
       - name: Audit and retain the exact archive for approval
         env:
           GITHUB_SHA: ${{ inputs.source }}
+          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_015_AUDIT_APPROVED_SOURCE }}
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')"
           pnpm release:check --tag "v$version"
-          node scripts/check-release-audit.mjs
+          GITHUB_REF="refs/tags/v$version" node scripts/check-release-audit.mjs
           tar -tzvf .cache/release-audit/candidate.tgz > .cache/release-audit/contents.txt
           tar -xOf .cache/release-audit/candidate.tgz package/LICENSE > .cache/release-audit/LICENSE
           test -s .cache/release-audit/LICENSE

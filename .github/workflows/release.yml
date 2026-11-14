@@ -109,13 +109,13 @@ jobs:
         env:
           RELEASE_SOURCE: ${{ inputs.source }}
           RELEASE_APPROVED: ${{ inputs.create_tag }}
-          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
+          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_015_AUDIT_APPROVED_SOURCE }}
         run: node scripts/check-release-source.mjs
 
       - name: Qualify exact audit and artifact before creating an immutable tag
         env:
           RELEASE_SOURCE: ${{ inputs.source }}
-          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
+          RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_015_AUDIT_APPROVED_SOURCE }}
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')"
           GITHUB_SHA="$RELEASE_SOURCE" GITHUB_REF="refs/tags/v$version" node scripts/check-release-audit.mjs

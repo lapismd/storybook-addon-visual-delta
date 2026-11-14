@@ -1,5 +1,13 @@
 # Visual Delta verification
 
+Current 2026-11-14 approval: VD-GOV-008 permits the separately reviewed,
+source/lock/archive-bound 0.1.5 LOW deepmerge development-only exception until
+November 21. The earlier MODERATE findings are fixed by the qualified tooling
+cohort; production audit remains clean. Historical preflight decisions below
+retain their original dates and do not widen this approval. The implementation
+and negative cases are recorded in
+[0.1.5 audit evidence](../records/2026-11-14-release-015-audit-decision.md).
+
 The 2026-10-24 native-profile pre-release `pnpm audit --json` found two Storybook
 10.5.10 advisories: one critical (GHSA-f2ph-cmg5-wxc8) and one high
 (GHSA-px85-f4q5-jh77). The coupled 10.6.2 repair must rerun this exact audit,
