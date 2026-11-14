@@ -28,7 +28,7 @@ jobs:
     name: Capture canonical ARM64 panel references
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd
       env:
         HOME: /root
       credentials:

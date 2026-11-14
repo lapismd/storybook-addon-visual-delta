@@ -880,9 +880,16 @@ versions against the old image policy. Exact-pin guards and negative mutation
 tests advance together. Required hosted ARM64 panel, manager and three-browser
 acceptance remain pending on this candidate; no committed PNG changes.
 
-The follow-up tooling bootstrap retains the reviewed 1.65.0 profile until
-paired Playwright 1.65.1 has an inspected immutable image. Its exact two
-version-guard findings remain blocking; the pinned toolchain passes 619
+During the follow-up tooling bootstrap the reviewed 1.65.0 profile stayed
+pinned until Playwright 1.65.1 had an inspected immutable image. Its exact two
+version-guard findings blocked promotion; the pinned toolchain passed 619
 units, Node build and fresh static Storybook. See
 [bootstrap evidence](../records/2026-11-14-tooling-followup-bootstrap.md).
 No audit exception or baseline mutation is approved by that bootstrap.
+
+The 1.65.1 immutable image workflow `43560743507` passed publication, native
+x64/ARM64 smoke and profile assembly. Its actual profile is retained in
+[image promotion evidence](../records/2026-11-14-playwright-1651-promotion.md).
+Before promotion the exact CI-image guard reports two package-version errors.
+Profile constants and strict drift fixtures advance to the measured image;
+functional/browser qualification remains required with baselines untouched.

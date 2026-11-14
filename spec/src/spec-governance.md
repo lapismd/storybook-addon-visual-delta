@@ -357,3 +357,13 @@ compatible current cohort, including paired Playwright 1.65.1. VD-GOV-012/013
 still require immutable image publication and profile qualification before pin
 promotion. VD-GOV-008's full and production audit gates remain unchanged; no
 historical advisory exception is inherited by this candidate.
+
+The Playwright 1.65.1 image was published from exact source
+`631e82c3c6eb96f25c40a4a5d2fea47952c6dd96` in run `43560743507`.
+Both native architecture smoke jobs and profile assembly passed. Its measured
+manifest is `sha256:07accec7a558224cf39ab8ea0d8e65cbee53837be1122cc9d6420cb12d637161`;
+the ARM64 child is `sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd`.
+Canonical pins, strict guards and negative mutation fixtures MUST advance
+together to this verified inventory. Required PR browser qualification and the
+unchanged audit gate precede merge/release; image success alone does not admit
+an advisory or approve baseline mutation.

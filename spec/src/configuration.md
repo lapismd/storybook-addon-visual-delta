@@ -185,10 +185,11 @@ the local file by default. `--no-local-config` MUST disable it in every child
 process. The selected configuration MUST be frozen for each capture job and
 shared by CLI and Storybook. Storybook profile changes require restart.
 
-The reviewed Docker-profile candidate selects paired Playwright 1.65.0 and the
-native ARM64 inventory retained by publication run `43540534442`. Required
-compare-only PR qualification precedes adoption; profile identity, browser
-metadata and immutable image digests travel together.
+The reviewed Docker-profile candidate selects paired Playwright 1.65.1 and the
+native ARM64 inventory retained by publication run `43560743507`. The measured
+Chromium version is `159.0.8154.6`; Firefox `159.0` and WebKit `27.2` remain
+paired with that image. Required compare-only PR qualification precedes adoption;
+profile identity, browser metadata and immutable image digests travel together.
 
 The next tooling intake pairs Playwright 1.65.1 and qualifies Storybook 10.6.7,
 Vitest 5.1, Vite 8.3, Svelte's Vite plugin 7.3, Mermaid 12.3 and markdownlint

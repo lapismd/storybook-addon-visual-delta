@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:6b8f1165410982f4b7a5573bceefd008a6d349c23c48825231ec51b0e89dd948
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:07accec7a558224cf39ab8ea0d8e65cbee53837be1122cc9d6420cb12d637161
       env:
         HOME: /root
       credentials:

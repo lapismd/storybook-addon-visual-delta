@@ -65,16 +65,16 @@ export const CANONICAL_VISUAL_CAPTURE_PROFILE: ContainerVisualCaptureProfile = {
   architecture: "arm64",
   image: VISUAL_DELTA_CI_IMAGE,
   imageDigest:
-    "sha256:6b8f1165410982f4b7a5573bceefd008a6d349c23c48825231ec51b0e89dd948",
+    "sha256:07accec7a558224cf39ab8ea0d8e65cbee53837be1122cc9d6420cb12d637161",
   arm64ImageDigest:
-    "sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27",
+    "sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd",
   nodeVersion: "24.15.0",
   npmVersion: "12.0.2",
   pnpmVersion: "10.32.1",
-  playwrightVersion: "1.65.0",
+  playwrightVersion: "1.65.1",
   browsers: ["chromium", "firefox", "webkit"],
   browserVersions: {
-    chromium: "158.0.8127.18",
+    chromium: "159.0.8154.6",
     firefox: "159.0",
     webkit: "27.2",
   },
