@@ -7,27 +7,20 @@ export function archiveIdentity(archive) {
 }
 
 export const AUDIT_EXCEPTION = Object.freeze({
-  version: "0.0.8",
-  expires: "2026-11-02T00:00:00.000Z",
-  lock: "7aef952f349b6fcc06b924d521d27cf9a6df1728d3d84c1e317032b99166d189",
-  artifact: "3d3c126cf7309e12ac1bc86adbad7ef97ffd67539cceb48f36a18b9068566bd5",
-  payload: "6f3aa1c5af1bf61448c823e58be3bec866acbdcde4017fa10cad5cba94d65ff1",
+  version: "0.1.5",
+  expires: "2026-11-21T00:00:00.000Z",
+  lock: "87944d75784e634a35084f8d9e45389dcb9cec8f10d7069836976c57eef044f6",
+  artifact: "4055f4f64705d3001422d93a3ba69772e5037f15d3c8fe2ac4e41e88704070b6",
+  payload: "408b3e72da1db8c7aa6be44641a9382e9fee1a785b20ba6f5bb6964a44292234",
   findings: [
     {
-      id: "GHSA-vfj7-8cjw-p6xm",
-      name: "braces",
-      version: "3.0.3",
-      maximum: "3.0.3",
-      severity: "high",
-      path: ".>@changesets/cli>@changesets/config>micromatch>braces",
-    },
-    {
-      id: "GHSA-hp3w-g68c-fv3c",
-      name: "sprintf-js",
-      version: "1.0.3",
-      maximum: "1.1.3",
-      severity: "moderate",
-      path: ".>@changesets/cli>@manypkg/get-packages>read-yaml-file>js-yaml>argparse>sprintf-js",
+      id: "GHSA-gcqx-w48m-w2h4",
+      name: "deepmerge",
+      version: "4.3.1",
+      maximum: "4.3.1",
+      vulnerable: ">=4.2.0 <=4.3.1",
+      severity: "low",
+      path: ".>@sveltejs/vite-plugin-svelte>deepmerge",
     },
   ],
 });
@@ -47,29 +40,29 @@ export function auditFindings(report, status) {
       Array.isArray(report.muted) &&
       report.muted.length === 0 &&
       !report.error,
-    "Incomplete audit report, muted findings or registry error"
+    "Incomplete audit report, muted findings or registry error",
   );
   const counts = report.metadata?.vulnerabilities;
   requireValue(
     counts &&
       ["info", "low", "moderate", "high", "critical"].every(
-        (key) => Number.isSafeInteger(counts[key]) && counts[key] >= 0
+        (key) => Number.isSafeInteger(counts[key]) && counts[key] >= 0,
       ) &&
       Number.isSafeInteger(report.metadata.totalDependencies) &&
       report.metadata.totalDependencies > 0,
-    "Incomplete audit metadata"
+    "Incomplete audit metadata",
   );
   const findings = Object.values(report.advisories);
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
   requireValue(
     total === findings.length && status === (findings.length ? 1 : 0),
-    "Audit outcome does not match its complete findings"
+    "Audit outcome does not match its complete findings",
   );
   for (const severity of Object.keys(counts)) {
     requireValue(
       findings.filter((finding) => finding?.severity === severity).length ===
         counts[severity],
-      "Audit severity counts differ from findings"
+      "Audit severity counts differ from findings",
     );
   }
   return findings;
@@ -78,21 +71,21 @@ export function auditFindings(report, status) {
 function noNewRelease(versions, maximum) {
   requireValue(
     Array.isArray(versions) && versions.includes(maximum),
-    "Missing registry versions"
+    "Missing registry versions",
   );
   const limit = maximum.split(".").map(Number);
   for (const version of versions) {
     requireValue(
       typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version),
-      "Unreviewed registry version"
+      "Unreviewed registry version",
     );
     const parts = version.split(".").map(Number);
     const firstDifference = parts.findIndex(
-      (part, index) => part !== limit[index]
+      (part, index) => part !== limit[index],
     );
     requireValue(
       firstDifference < 0 || parts[firstDifference] < limit[firstDifference],
-      "An upstream release may provide a fix; re-review required"
+      "An upstream release may provide a fix; re-review required",
     );
   }
 }
@@ -100,7 +93,7 @@ function noNewRelease(versions, maximum) {
 export function verifyReleaseAudit(context) {
   const production = auditFindings(
     context.production,
-    context.productionStatus
+    context.productionStatus,
   );
   requireValue(production.length === 0, "Production audit must be clean");
   const findings = auditFindings(context.full, context.fullStatus);
@@ -108,54 +101,54 @@ export function verifyReleaseAudit(context) {
   const policy = AUDIT_EXCEPTION;
   requireValue(
     context.version === policy.version,
-    "Exception is only for 0.0.8"
+    `Exception is only for ${policy.version}`,
   );
   requireValue(
     Number.isFinite(context.now) && context.now < Date.parse(policy.expires),
-    "Audit exception expired"
+    "Audit exception expired",
   );
   requireValue(
     /^[a-f0-9]{40}$/.test(context.approvedSource ?? "") &&
       context.source === context.approvedSource &&
       context.checkout === context.source &&
       context.repository === "lapismd/storybook-addon-visual-delta" &&
-      context.ref === "refs/tags/v0.0.8",
-    "Audit exception requires the exact reviewed release source and tag"
+      context.ref === `refs/tags/v${policy.version}`,
+    "Audit exception requires the exact reviewed release source and tag",
   );
   requireValue(
     context.lock === policy.lock &&
       context.artifact === policy.artifact &&
       context.payload === policy.payload,
-    "Reviewed lock or artifact differs"
+    "Reviewed lock or artifact differs",
   );
   requireValue(
     Array.isArray(context.publishedVersions) &&
       context.publishedVersions.length > 0 &&
       context.publishedVersions.every((value) => typeof value === "string") &&
       !context.publishedVersions.includes(policy.version),
-    "Exception ends when 0.0.8 is published; invalid registry response also rejects"
+    `Exception ends when ${policy.version} is published; invalid registry response also rejects`,
   );
   requireValue(
     findings.length === policy.findings.length,
-    "Unexpected audit findings"
+    "Unexpected audit findings",
   );
   for (const expected of policy.findings) {
     const actual = findings.find(
-      (finding) => finding?.github_advisory_id === expected.id
+      (finding) => finding?.github_advisory_id === expected.id,
     );
     requireValue(
       actual?.module_name === expected.name &&
         actual.severity === expected.severity &&
         actual.patched_versions === "<0.0.0" &&
         actual.url === `https://github.com/advisories/${expected.id}` &&
-        actual.vulnerable_versions === `<=${expected.maximum}` &&
+        actual.vulnerable_versions === expected.vulnerable &&
         actual.deleted === null &&
         Array.isArray(actual.findings) &&
         actual.findings.length === 1 &&
         actual.findings[0].version === expected.version &&
         JSON.stringify(actual.findings[0].paths) ===
           JSON.stringify([expected.path]),
-      `Unapproved finding or available fix: ${expected.id}`
+      `Unapproved finding or available fix: ${expected.id}`,
     );
     noNewRelease(context.registryVersions?.[expected.name], expected.maximum);
   }

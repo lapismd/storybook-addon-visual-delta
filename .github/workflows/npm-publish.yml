@@ -11,7 +11,7 @@ permissions:
 
 env:
   VISUAL_DELTA_CI_IMAGE: ghcr.io/lapismd/storybook-addon-visual-delta-ci:latest
-  RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_008_AUDIT_APPROVED_SOURCE }}
+  RELEASE_AUDIT_APPROVED_SOURCE: ${{ vars.VD_015_AUDIT_APPROVED_SOURCE }}
 
 defaults:
   run:
