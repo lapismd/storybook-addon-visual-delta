@@ -1,5 +1,11 @@
 # @lapismd/storybook-addon-visual-delta
 
+## 0.1.5
+
+### Patch Changes
+
+- [#74](https://github.com/lapismd/storybook-addon-visual-delta/pull/74) [`48f2f67`](https://github.com/lapismd/storybook-addon-visual-delta/commit/48f2f67da74ac6959bc4f59d1095f654a22de9af) Thanks [@stevejuma](https://github.com/stevejuma)! - Refresh the compatible Storybook, Vite, Svelte and test-tooling cohort and advance the reviewed paired Playwright capture profile after immutable image qualification.
+
 ## 0.1.4
 
 ### Patch Changes
