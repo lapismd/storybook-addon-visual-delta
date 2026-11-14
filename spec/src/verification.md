@@ -868,3 +868,14 @@ against the computed position reported by real Chromium (`50% 50%`). The
 original mode-selector target failed one of three cases before normalizing
 that expectation; its fit, positioning, selection and preview-open assertions
 remain enabled.
+
+### Playwright 1.65 candidate qualification
+
+Publication run `43540534442` passed the multi-platform build, native x64 and
+ARM64 smoke jobs, and capture-profile assembly for source
+`011fbe152a884c3b6e5afd8842d557775c33b4f9`. Candidate pins retain the actual
+profile artifact; the previous 1.62.1 evidence above stays historical.
+Before repair, `node scripts/check-ci-image.mjs` rejected both 1.65 package
+versions against the old image policy. Exact-pin guards and negative mutation
+tests advance together. Required hosted ARM64 panel, manager and three-browser
+acceptance remain pending on this candidate; no committed PNG changes.

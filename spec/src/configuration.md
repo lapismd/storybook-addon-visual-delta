@@ -184,3 +184,8 @@ values and existing explicit call overrides retain priority. CI MUST ignore
 the local file by default. `--no-local-config` MUST disable it in every child
 process. The selected configuration MUST be frozen for each capture job and
 shared by CLI and Storybook. Storybook profile changes require restart.
+
+The reviewed Docker-profile candidate selects paired Playwright 1.65.0 and the
+native ARM64 inventory retained by publication run `43540534442`. Required
+compare-only PR qualification precedes adoption; profile identity, browser
+metadata and immutable image digests travel together.
