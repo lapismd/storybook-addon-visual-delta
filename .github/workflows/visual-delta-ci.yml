@@ -121,4 +121,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run manager acceptance
-        run: pnpm test:manager
+        run: pnpm test:manager --trace=retain-on-failure
+
+      - name: Retain manager failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: manager-failure-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 7

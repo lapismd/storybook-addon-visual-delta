@@ -83,3 +83,23 @@ Markdown blank-line findings. Those were corrected and the exact full
 specification command then passed. No assertion, browser threshold, timeout,
 quarantine or committed visual baseline changed. Generated native fixture
 baselines remain confined to the ignored test cache.
+
+
+Hosted PR74 first qualification passed package/specification, ARM64 panel and
+three-browser acceptance, native macOS/Linux and non-root cleanup. The ARM64
+manager lane passed 54 cases with one existing skip and failed
+`tests/manager.spec.ts:1058` at its final Default choice: the mode-menu button
+was absent until the unchanged 60-second timeout. The first workflow retained
+no DOM context or trace. A cold exact Linux/x64 target with tracing passed
+1/1; it does not reproduce or explain the native ARM64 failure.
+
+The manager CI invocation now retains traces on failure and uploads its actual
+`test-results`/Playwright report on failure. This is diagnostic evidence, not
+a claimed race fix. Assertions, timeouts, skips, baseline mutation controls
+and retry policy remain unchanged. The complete manager lane and all hosted
+gates must pass before merge.
+
+The complete cold Linux/x64 manager command with failure tracing enabled passes
+55 cases with the same existing skip. All seven specification lanes pass with
+the diagnostic workflow change. The native ARM64 result remains a fresh PR
+gate; this evidence does not claim the timeout cause was repaired.

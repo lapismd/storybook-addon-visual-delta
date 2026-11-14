@@ -367,3 +367,8 @@ Canonical pins, strict guards and negative mutation fixtures MUST advance
 together to this verified inventory. Required PR browser qualification and the
 unchanged audit gate precede merge/release; image success alone does not admit
 an advisory or approve baseline mutation.
+
+Manager CI MUST retain Playwright traces and error contexts on a failing
+acceptance run so native ARM64 failures can be diagnosed from the actual DOM
+and event sequence. Evidence retention MUST preserve the original assertions,
+retry policy, timeouts and fatal gate; it does not establish a product repair.
