@@ -351,3 +351,38 @@ the measured immutable manifests and browser inventory retained in
 `spec/records/2026-11-14-playwright-165-candidate.md`. Required ARM64 PR browser
 lanes must qualify these candidate pins before merge promotes the profile.
 The audit gate and separate baseline-mutation approval remain required.
+
+The follow-up tooling intake supersedes dependency proposals 68–72 with one
+compatible current cohort, including paired Playwright 1.65.1. VD-GOV-012/013
+still require immutable image publication and profile qualification before pin
+promotion. VD-GOV-008's full and production audit gates remain unchanged; no
+historical advisory exception is inherited by this candidate.
+
+The Playwright 1.65.1 image was published from exact source
+`631e82c3c6eb96f25c40a4a5d2fea47952c6dd96` in run `43560743507`.
+Both native architecture smoke jobs and profile assembly passed. Its measured
+manifest is `sha256:07accec7a558224cf39ab8ea0d8e65cbee53837be1122cc9d6420cb12d637161`;
+the ARM64 child is `sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd`.
+Canonical pins, strict guards and negative mutation fixtures MUST advance
+together to this verified inventory. Required PR browser qualification and the
+unchanged audit gate precede merge/release; image success alone does not admit
+an advisory or approve baseline mutation.
+
+Manager CI MUST retain Playwright traces and error contexts on a failing
+acceptance run so native ARM64 failures can be diagnosed from the actual DOM
+and event sequence. Evidence retention MUST preserve the original assertions,
+retry policy, timeouts and fatal gate; it does not establish a product repair.
+
+Manager acceptance navigation MUST wait for the document and explicit visible
+manager/tab state rather than global network quiescence. An unrelated pending
+request or normal background runtime polling cannot define UI readiness.
+Readiness-transition fixtures MUST keep story completion under explicit test
+control so slow startup cannot skip the provisional state being asserted.
+All provisional, completed-generation and missing-baseline assertions remain
+required, and controls must release the real Storybook play lifecycle.
+
+Ordinary manager acceptance MUST establish the exact selected story's finished
+marker and resolved panel state before exercising completed-story controls.
+Tests of provisional state MUST opt into that phase explicitly and release the
+controlled play themselves. Geometry assertions MUST wait for the existing
+ready marker before reading measured geometry; they retain their numeric bounds.

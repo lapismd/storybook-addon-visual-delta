@@ -59,7 +59,7 @@ jobs:
     name: Panel browser acceptance
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd
       env:
         HOME: /root
       credentials:
@@ -80,7 +80,7 @@ jobs:
     name: Chromium, Firefox, and WebKit acceptance
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd
       env:
         HOME: /root
       credentials:
@@ -103,7 +103,7 @@ jobs:
     name: Manager browser acceptance
     runs-on: ubuntu-24.04-arm
     container:
-      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27
+      image: ghcr.io/lapismd/storybook-addon-visual-delta-ci@sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd
       env:
         HOME: /root
       credentials:
@@ -121,4 +121,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run manager acceptance
-        run: pnpm test:manager
+        run: pnpm test:manager --trace=retain-on-failure
+
+      - name: Retain manager failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: manager-failure-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 7

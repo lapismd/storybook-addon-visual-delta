@@ -2307,8 +2307,8 @@
       "forbiddenImportCount": 0
     },
     "src/stories/ReadinessFixture.stories.tsx": {
-      "countedLines": 35,
-      "physicalLines": 38,
+      "countedLines": 33,
+      "physicalLines": 36,
       "kind": "story",
       "forbiddenImportCount": 0
     },
@@ -2397,14 +2397,14 @@
       "forbiddenImportCount": 0
     },
     "tests/manager-test-support.ts": {
-      "countedLines": 380,
-      "physicalLines": 389,
+      "countedLines": 346,
+      "physicalLines": 353,
       "kind": "test",
       "forbiddenImportCount": 0
     },
     "tests/manager.spec.ts": {
-      "countedLines": 1891,
-      "physicalLines": 2028,
+      "countedLines": 1871,
+      "physicalLines": 2006,
       "kind": "test",
       "forbiddenImportCount": 0
     },

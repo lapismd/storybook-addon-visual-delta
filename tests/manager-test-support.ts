@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { CANONICAL_VISUAL_CAPTURE_PROFILE } from "../src/shared/capture-profile.js";
 import {
   DEFAULT_DIFF_THRESHOLD,
@@ -7,8 +7,12 @@ import {
 import type { VisualDeltaBrowser } from "../src/shared/environments.js";
 import type { VisualStoryFact } from "../src/shared/story-facts.js";
 
-export const MANAGER_FIXTURE =
-  "visual-delta-panel-shell--manager-integration-fixture";
+export {
+  MANAGER_FIXTURE,
+  openManager,
+  previewFrame,
+  waitForStoryFinished,
+} from "./manager-navigation.js";
 export const COMPONENT_OVERLAY_FIXTURE = "shadcn-actions-button--default";
 export const FULL_VIEWPORT_MANAGER_FIXTURE =
   "visual-delta-panel-shell--manager-full-viewport-integration-fixture";
@@ -330,20 +334,6 @@ export async function mockVisualBackend(
   return writes;
 }
 
-async function dismissStorybookChrome(page: Page) {
-  for (const name of [
-    "Dismiss notification",
-    "Close what's new dialog",
-    "Skip onboarding",
-    "Dismiss",
-  ]) {
-    const button = page.getByRole("button", { name }).first();
-    if (await button.isVisible().catch(() => false)) {
-      await button.click({ force: true }).catch(() => undefined);
-    }
-  }
-}
-
 /** Click a control that may sit under transient panel status chrome. */
 export async function clickThrough(locator: {
   click: (options?: { force?: boolean }) => Promise<void>;
@@ -361,29 +351,3 @@ export async function clickThrough(locator: {
   await locator.click({ force: true });
 }
 
-export async function openManager(
-  page: Page,
-  storyId = MANAGER_FIXTURE,
-  origin = "",
-) {
-  await page.goto(
-    `${origin}/?path=/story/${storyId}&panel=visual-delta%2Fpanel`,
-    {
-      waitUntil: "networkidle",
-    },
-  );
-  await dismissStorybookChrome(page);
-  const visualDeltaTab = page.getByRole("tab", { name: "Visual Delta" });
-  await expect(visualDeltaTab).toBeVisible();
-  if ((await visualDeltaTab.getAttribute("aria-selected")) !== "true") {
-    await visualDeltaTab.click();
-  }
-  await expect(
-    page.getByRole("tabpanel", { name: "Visual Delta" }),
-  ).toBeVisible();
-  await dismissStorybookChrome(page);
-}
-
-export function previewFrame(page: Page) {
-  return page.frameLocator('iframe[title="storybook-preview-iframe"]');
-}

@@ -249,7 +249,7 @@ test("requires ARM64 visual jobs to use the reviewed immutable profile", () => {
       [workflowPath]: sources.consumerWorkflows[workflowPath]
         .replace("runs-on: ubuntu-24.04-arm", "runs-on: ubuntu-latest")
         .replace(
-          "@sha256:1905b9652af6acc73e656193a78b9ee9a86a17c19a79bef0df60da133c375a27",
+          "@sha256:c45eaf81d375fcbf4fd275df6029d776c3bb452aba0e0be3188eaebf1b9201bd",
           "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ),
     },
@@ -279,7 +279,7 @@ test("requires the capture-profile source to match the reviewed publication", ()
   const result = validateCiImageSources({
     ...sources,
     captureProfile: sources.captureProfile.replace(
-      'chromium: "158.0.8127.18"',
+      'chromium: "159.0.8154.6"',
       'chromium: "unreviewed"',
     ),
   });
@@ -348,7 +348,7 @@ test("rejects drift in pinned runtime and browser versions", () => {
       "FROM node:latest",
     ),
     packageJson: sources.packageJson.replace(
-      '"playwright": "1.65.0"',
+      '"playwright": "1.65.1"',
       '"playwright": "latest"',
     ),
   });

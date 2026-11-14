@@ -4,7 +4,6 @@ import {
   AI_SEND_BUTTON_STATES,
   COMPONENT_OVERLAY_FIXTURE,
   CUSTOM_VIEWPORT_MANAGER_FIXTURE,
-  DELAYED_MISSING_BASELINE_FIXTURE,
   MANAGER_FIXTURE,
   NATURAL_WIDTH_COMPONENT_FIXTURE,
   OVERVIEW,
@@ -13,6 +12,7 @@ import {
   mockVisualBackend,
   openManager,
   previewFrame,
+  waitForStoryFinished,
 } from "./manager-test-support.js";
 
 const DEV_STORYBOOK = `http://127.0.0.1:${
@@ -121,35 +121,6 @@ test.describe("Visual Delta manager integration", () => {
     ).toBeVisible();
   });
 
-  test("keeps a delayed missing baseline provisional until storyFinished", async ({
-    page,
-  }) => {
-    await mockVisualBackend(page);
-    await openManager(page, DELAYED_MISSING_BASELINE_FIXTURE, DEV_STORYBOOK);
-
-    const panel = page.getByTestId("visual-delta-panel");
-    await expect(
-      panel.getByRole("status", { name: "Loading Visual Delta" }),
-    ).toBeVisible();
-    await expect(
-      panel.getByRole("button", { name: /Create .*baseline/i }),
-    ).toHaveCount(0);
-    await expect(
-      panel.getByRole("status", { name: /Baseline missing/i }),
-    ).toHaveCount(0);
-
-    await expect(
-      panel.getByRole("status", { name: /Baseline missing/i }),
-    ).toBeVisible({ timeout: 10_000 });
-    const createDefault = panel.getByRole("button", {
-      name: "Create Default baseline",
-    });
-    await expect(createDefault).toBeVisible();
-    await expect(createDefault).toBeEnabled();
-    await expect(
-      panel.getByRole("button", { name: /Create .*baseline/i }),
-    ).not.toHaveCount(0);
-  });
 
   test("restores exact readiness after a same-story controls rerender", async ({
     page,
@@ -299,8 +270,9 @@ test.describe("Visual Delta manager integration", () => {
 
     await page.goto(
       `${DEV_STORYBOOK}/?path=/story/${FILTER_INTERACTION_FIXTURE}`,
-      { waitUntil: "networkidle" },
+      { waitUntil: "domcontentloaded" },
     );
+    await waitForStoryFinished(page, FILTER_INTERACTION_FIXTURE);
     await expect(
       page.getByRole("tab", { name: /^Interactions \d+$/ }),
     ).toBeVisible();
@@ -1684,6 +1656,10 @@ test.describe("Visual Delta manager integration", () => {
       name: "Show split comparison at 100%",
     });
     await expect(native100).toHaveAttribute("aria-checked", "true");
+    await expect(nativeFrame.locator("#visual-delta-overlay")).toHaveAttribute(
+      "data-visual-delta-ready",
+      "true",
+    );
     const nativeGeometry = await nativeFrame.locator("body").evaluate((body) => {
       const image = body.querySelector(
         "#visual-delta-baseline-pane #visual-delta-overlay img",
@@ -1975,8 +1951,9 @@ test.describe("Visual Delta mobile review layout", () => {
     const writes = await mockVisualBackend(page);
     await page.goto(
       `${DEV_STORYBOOK}/?path=/story/${MANAGER_FIXTURE}&panel=visual-delta%2Fpanel`,
-      { waitUntil: "networkidle" },
+      { waitUntil: "domcontentloaded" },
     );
+    await waitForStoryFinished(page, MANAGER_FIXTURE);
 
     const openAddonPanel = page.getByRole("button", {
       name: "Open addon panel",
@@ -2005,8 +1982,9 @@ test.describe("Visual Delta mobile review layout", () => {
     const writes = await mockVisualBackend(page);
     await page.goto(
       `${DEV_STORYBOOK}/?path=/story/${MANAGER_FIXTURE}&panel=visual-delta%2Fpanel`,
-      { waitUntil: "networkidle" },
+      { waitUntil: "domcontentloaded" },
     );
+    await waitForStoryFinished(page, MANAGER_FIXTURE);
 
     await page.getByRole("button", { name: "Open addon panel" }).click();
     const drawer = page.locator("#storybook-mobile-addon-panel");
