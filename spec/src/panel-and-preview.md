@@ -178,3 +178,8 @@ Captured-actual chip geometry acceptance MUST observe both current chip nodes
 together after placement changes. Manager DOM replacement during placement
 settlement does not establish missing final chip geometry; visibility, non-null
 geometry and baseline-before-actual ordering remain required.
+
+Mode preview images remain contained and centered. Computed-style acceptance
+uses `object-fit: contain` and `object-position: 50% 50%`, the browser-computed
+equivalent of the authored `center` keyword; jsdom normalization must not
+change this visual contract.

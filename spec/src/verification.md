@@ -862,3 +862,9 @@ expectation now lives in `tests/manager-chip-geometry.ts`; the original file's
 recorded budget decreases from 248 to 243 counted lines. The architecture
 regression suite passes 20 tests and the complete captured-actual browser family
 passes three tests after extraction. No architecture limit or assertion changes.
+
+The jsdom 31 development intake verifies contained, centered mode thumbnails
+against the computed position reported by real Chromium (`50% 50%`). The
+original mode-selector target failed one of three cases before normalizing
+that expectation; its fit, positioning, selection and preview-open assertions
+remain enabled.

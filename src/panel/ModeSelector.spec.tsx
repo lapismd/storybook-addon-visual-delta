@@ -40,7 +40,7 @@ describe("ModeSelector", () => {
     );
     expect(preview.querySelector("img")).toHaveStyle({
       objectFit: "contain",
-      objectPosition: "center",
+      objectPosition: "50% 50%",
     });
     expect(preview).toHaveStyle({ width: "100%", height: "52px" });
 
@@ -70,7 +70,7 @@ describe("ModeSelector", () => {
     );
     expect(compact.querySelector("img")).toHaveStyle({
       objectFit: "contain",
-      objectPosition: "center",
+      objectPosition: "50% 50%",
     });
     await user.click(compact);
 

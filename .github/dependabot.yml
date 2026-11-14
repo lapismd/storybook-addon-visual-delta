@@ -16,6 +16,14 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      playwright-runtime:
+        patterns:
+          - "playwright"
+          - "@playwright/test"
+      storybook-runtime:
+        patterns:
+          - "storybook"
+          - "@storybook/*"
     ignore:
       - dependency-name: "@lapismd/*"
         update-types:
