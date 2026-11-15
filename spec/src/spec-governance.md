@@ -419,3 +419,9 @@ marker and resolved panel state before exercising completed-story controls.
 Tests of provisional state MUST opt into that phase explicitly and release the
 controlled play themselves. Geometry assertions MUST wait for the existing
 ready marker before reading measured geometry; they retain their numeric bounds.
+
+## Version pull request authority
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VD-GOV-018 | The version job MUST mint a disposable existing-App token only on canonical main pushes, scoped to this repository and contents/pull-request writes, and pass it as the sole Changesets credential. Its workflow token MUST be read-only, checkout MUST disable persisted credentials, and versioning MUST preserve the existing recipe and GitHub API commits without creating GitHub releases. |
