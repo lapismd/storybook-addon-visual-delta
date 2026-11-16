@@ -431,4 +431,13 @@ ready marker before reading measured geometry; they retain their numeric bounds.
 
 | ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| VD-GOV-018 | The version job MUST mint a disposable existing-App token only on canonical main pushes, scoped to this repository and contents/pull-request writes, and pass it as the sole Changesets credential. Its workflow token MUST be read-only, checkout MUST disable persisted credentials, and versioning MUST preserve the existing recipe and GitHub API commits without creating GitHub releases. |
+| VD-GOV-018 | The version job MUST mint a disposable existing-App token only on canonical main pushes, scoped to this repository and contents/pull-request writes, and pass it as the sole Changesets credential. Its workflow token MUST be read-only, checkout MUST disable persisted credentials, and versioning MUST preserve the existing recipe and GitHub API commits without creating GitHub releases. A pinned shared guard MUST validate the qualified Node/Changesets source inputs and actual release plan before minting; changed inputs MUST fail closed and empty maintenance notes alone MUST mint no token. |
+
+The source-owned version qualification retains Node 24.15.0, pnpm 10.32.1,
+Changesets 3.0.3 and the existing Corepack lockfile-only command. The source has
+no configured formatter: a new Prettier/EditorConfig declaration in its lookup
+ancestry MUST require requalification. Actual hosted whole-recipe proof and its
+immutable artifact receipt are recorded in
+[the version-runtime adoption record](../records/2026-11-16-version-runtime-guard.md).
+This workflow guard creates no runtime release intent and does not change tag,
+audit, signing, publication or baseline approval gates.

@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      has_changesets: ${{ steps.changesets.outputs.hasChangesets || 'false' }}
+      has_changesets: ${{ steps.version-runtime.outputs.hasChangesets }}
     steps:
       - name: Check out main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -52,9 +52,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Qualify source-owned version inputs and actual release intent
+        id: version-runtime
+        uses: lapismd/lapis-ci/actions/guard-version-runtime@fe24b7bf909106d957b179f351153505c41fa47c
+        with:
+          qualification-file: .github/versioning-runtime.json
+          detect-release-intent: "true"
+
       - name: Create repository version token
         id: version-app
-        if: github.event_name == 'push' && github.repository == 'lapismd/storybook-addon-visual-delta' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.repository == 'lapismd/storybook-addon-visual-delta' && github.ref == 'refs/heads/main' && steps.version-runtime.outputs.hasChangesets == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         with:
           client-id: ${{ vars.LAPIS_DEPENDENCY_APP_CLIENT_ID }}
@@ -66,6 +73,7 @@ jobs:
 
       - name: Create or update Version Packages pull request
         id: changesets
+        if: steps.version-runtime.outputs.hasChangesets == 'true'
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
           version: pnpm release:version

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createHash } from "node:crypto";
 
 test("workflow keeps automatic version PRs separate from approved tag creation", () => {
   const workflow = readFileSync(
@@ -145,5 +146,55 @@ test("version PR authority is confined to the canonical main App boundary", () =
   assert.ok(
     version.indexOf("Create repository version token") <
       version.indexOf("Create or update Version Packages"),
+  );
+});
+
+test("source-qualified version intent precedes every writer and empty notes mint no token", () => {
+  const read = (file) =>
+    readFileSync(new URL("../" + file, import.meta.url), "utf8");
+  const version = read(".github/workflows/release.yml").split("\n  tag:\n")[0];
+  const guard = version.match(
+    /- name: Qualify source-owned version inputs and actual release intent[\s\S]*?(?=\n      - )/,
+  )?.[0];
+  assert.ok(guard, "source/runtime guard exists before writer authority");
+  assert.match(guard, /id: version-runtime/);
+  assert.match(
+    guard,
+    /lapismd\/lapis-ci\/actions\/guard-version-runtime@fe24b7bf909106d957b179f351153505c41fa47c/,
+  );
+  assert.match(guard, /qualification-file: \.github\/versioning-runtime\.json/);
+  assert.match(guard, /detect-release-intent: "true"/);
+  for (const name of [
+    "Create repository version token",
+    "Create or update Version Packages pull request",
+  ]) {
+    const block = version
+      .slice(version.indexOf("- name: " + name))
+      .split(/\n      - /)[0];
+    assert.ok(version.indexOf("Qualify source-owned") < version.indexOf(name));
+    assert.match(
+      block,
+      /if: .*steps\.version-runtime\.outputs\.hasChangesets == 'true'/,
+    );
+  }
+  assert.match(
+    version,
+    /has_changesets: \$\{\{ steps\.version-runtime\.outputs\.hasChangesets \}\}/,
+  );
+  const qualification = JSON.parse(read(".github/versioning-runtime.json"));
+  const manifest = JSON.parse(read("package.json"));
+  assert.equal(qualification.nodeMajor, 24);
+  assert.equal(qualification.cliVersion, "3.0.3");
+  assert.equal(qualification.packageManager, manifest.packageManager);
+  assert.equal(
+    qualification.scripts["release:version"],
+    manifest.scripts["release:version"],
+  );
+  assert.equal(qualification.formatterPolicy, "unconfigured");
+  const sha = (file) => createHash("sha256").update(read(file)).digest("hex");
+  assert.equal(qualification.configSha256, sha(".changeset/config.json"));
+  assert.equal(
+    qualification.files["pnpm-workspace.yaml"],
+    sha("pnpm-workspace.yaml"),
   );
 });
