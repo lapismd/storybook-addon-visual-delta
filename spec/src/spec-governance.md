@@ -167,6 +167,13 @@ A runner-environment repair alone does not authorize replacing an audit tag.
 
 ## Package releases
 
+The root manifest declares `packageManager: pnpm@10.32.1`, matching the existing
+version command, workflow and CI-image toolchain. The Node-only specification
+validator resolves0.2.1; its doctor discovery correction preserves configured
+validation and intentional wrapper warnings. This development-tool declaration
+changes neither public package version nor runtime exports. Existing audit,
+Changeset, immutable tag, image and publication gates remain binding.
+
 The portable package is publicly released to `https://registry.npmjs.org`.
 Authors record release intent with Changesets on pull requests that change
 public package surface. Merges to `main` with pending Changesets open or update

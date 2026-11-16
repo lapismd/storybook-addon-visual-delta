@@ -1,5 +1,11 @@
 # Visual Delta verification
 
+The Node version-tooling declaration retains VD-GOV-011/012/016: the manifest
+now names the same pnpm10.32.1 already used by the source version workflow, and
+the development-only validator patch remains outside runtime exports. Its
+[preparation record](../records/2026-11-16-node-version-tooling.md) distinguishes
+metadata/source qualification from the still-pending whole-recipe guard proof.
+
 Current 2026-11-14 approval: VD-GOV-008 permits the separately reviewed,
 source/lock/archive-bound 0.1.5 LOW deepmerge development-only exception until
 November 21. The earlier MODERATE findings are fixed by the qualified tooling
