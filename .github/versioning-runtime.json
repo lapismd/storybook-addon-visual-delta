@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "nodeMajor": 24,
+  "cliVersion": "3.0.3",
+  "packageManager": "pnpm@10.32.1",
+  "formatterPolicy": "unconfigured",
+  "configSha256": "02acb80fd533bd2e6263aca0e7d0534a7bedb1a9d20a7d3e72f8d6c10630986c",
+  "scripts": {
+    "release:version": "changeset version && corepack pnpm@10.32.1 install --lockfile-only"
+  },
+  "files": {
+    "pnpm-workspace.yaml": "c66bd306059913d20d29ac5a0aef2e0168103f485f3ca07cc2195d360bd5788d"
+  }
+}
