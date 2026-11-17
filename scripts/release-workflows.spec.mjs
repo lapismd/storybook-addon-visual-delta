@@ -160,7 +160,7 @@ test("source-qualified version intent precedes every writer and empty notes mint
   assert.match(guard, /id: version-runtime/);
   assert.match(
     guard,
-    /lapismd\/lapis-ci\/actions\/guard-version-runtime@fe24b7bf909106d957b179f351153505c41fa47c/,
+    /lapismd\/lapis-ci\/actions\/guard-version-runtime@dc81ff65ba812bf005fb2a806eb3308bb8b5f71f/,
   );
   assert.match(guard, /qualification-file: \.github\/versioning-runtime\.json/);
   assert.match(guard, /detect-release-intent: "true"/);
@@ -193,8 +193,23 @@ test("source-qualified version intent precedes every writer and empty notes mint
   assert.equal(qualification.formatterPolicy, "unconfigured");
   const sha = (file) => createHash("sha256").update(read(file)).digest("hex");
   assert.equal(qualification.configSha256, sha(".changeset/config.json"));
+  assert.deepEqual(qualification.files, {});
+  assert.deepEqual(qualification.workspacePolicy.developmentOverride, {
+    dependency: "@lapismd/spec-validator",
+    series: "0.2",
+    minimumPatch: 1,
+  });
   assert.equal(
-    qualification.files["pnpm-workspace.yaml"],
-    sha("pnpm-workspace.yaml"),
+    qualification.workspacePolicy.sha256,
+    createHash("sha256")
+      .update(
+        read("pnpm-workspace.yaml").replace(
+          '  "@lapismd/spec-validator": "' +
+            manifest.devDependencies["@lapismd/spec-validator"] +
+            '"',
+          '  "@lapismd/spec-validator": "<development-override>"',
+        ),
+      )
+      .digest("hex"),
   );
 });

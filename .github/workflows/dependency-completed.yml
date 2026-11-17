@@ -1,0 +1,21 @@
+name: Notify dependency completion
+on:
+  workflow_run:
+    workflows:
+      - Visual Delta CI
+      - Visual Delta Spec First
+      - Publish Storybook to GitHub Pages
+      - Prepare version and approve release tag
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+jobs:
+  notify:
+    if: github.event.workflow_run.conclusion == 'success'
+    uses: lapismd/dependency-automation/.github/workflows/completion.yml@92e3e55d174498916c134f950850e1d572656cab
+    with:
+      automation-ref: 92e3e55d174498916c134f950850e1d572656cab
+    secrets:
+      app-private-key: ${{ secrets.LAPIS_DEPENDENCY_APP_PRIVATE_KEY }}

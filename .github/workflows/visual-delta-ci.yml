@@ -42,9 +42,22 @@ jobs:
     steps:
       - name: Check out the revision
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Trust source history for read-only intake checks
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Guard source-owned version inputs
+        uses: lapismd/lapis-ci/actions/guard-version-runtime@dc81ff65ba812bf005fb2a806eb3308bb8b5f71f
+        with:
+          qualification-file: .github/versioning-runtime.json
+
+      - name: Verify independent dependency facts
+        run: pnpm check:dependency-intake
 
       - name: Build node exports
         run: pnpm build:node

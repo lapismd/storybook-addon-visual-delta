@@ -38,5 +38,6 @@
 
 # Governance and conformance
 
+- [Dependency automation](dependency-automation.md)
 - [Specification governance](spec-governance.md)
 - [Verification](verification.md)

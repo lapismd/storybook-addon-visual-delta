@@ -441,3 +441,19 @@ immutable artifact receipt are recorded in
 [the version-runtime adoption record](../records/2026-11-16-version-runtime-guard.md).
 This workflow guard creates no runtime release intent and does not change tag,
 audit, signing, publication or baseline approval gates.
+
+## Shared dependency adoption
+
+| ID | Requirement |
+| --- | --- |
+| VD-GOV-019 | Compatible specification-validator development intake MUST preserve public dependencies, peers, exports, package version and release intent; independent offline checks MUST verify exact managed facts and reject changed policy, unrelated catalog/source changes or unsupported updates. Only a forward0.2 patch may change the selected registry coordinate and mechanical closure. |
+| VD-GOV-020 | Completion callbacks MUST use the exact reviewed coordinator source/policy and only existing CI, PR-specification, Pages and version workflow identities. Successful current source evidence MUST be verified before App minting; candidate code/artifacts/caches, inherited secrets and callback self-triggers MUST remain excluded. |
+| VD-GOV-021 | Specification discovery MUST use the owned system QMD collection when available, retain doctor/search diagnostics and avoid model downloads in CI. |
+
+The first adoption pins the already-resolved Node-only validator0.2.1. It adds
+no runtime release intent or audit authority. Current full audit reports one
+unapproved HIGH Changesets/picomatch finding; production audit is clean. The
+coordinator exception and historical LOW release exception cover no new path
+or source/lock binding. Per-repository activation follows source merge and
+passing acceptance under the operator's standing approval; all security and
+compare-only browser gates remain required.

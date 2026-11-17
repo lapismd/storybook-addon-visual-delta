@@ -18,6 +18,7 @@ export default defineConfig(tableRequirements(), {
     markdownlint: "VD-GOV-001",
     specFirst: "VD-GOV-004",
     internal: "VD-GOV-005",
+    qmd: "VD-GOV-021",
   },
   validators: {
     summary: true,
@@ -39,6 +40,7 @@ export default defineConfig(tableRequirements(), {
       statusMatch: "prefix",
     }),
     book: true,
+    qmd: { collection: "visual-delta-spec", configPath: ".qmd/index.yml" },
     repositoryLayout: {
       requiredFiles: [
         "AGENTS.md",
@@ -94,6 +96,11 @@ export default defineConfig(tableRequirements(), {
   check: {
     lanes: [
       {
+        name: "independent dependency intake",
+        command: "node",
+        args: ["scripts/dependency-automation/check-canonical-intake.mjs"],
+      },
+      {
         name: "Markdown lint",
         command: "corepack",
         args: ["pnpm@10.32.1", "spec:lint"],
@@ -104,10 +111,12 @@ export default defineConfig(tableRequirements(), {
         args: [
           "--test",
           "./scripts/architecture.spec.mjs",
+          "./scripts/dependency-automation/canonical-intake.spec.mjs",
           "./scripts/check-changesets-reader.spec.mjs",
           "./scripts/check-markdown-lint.spec.mjs",
           "./scripts/capture-example-baselines.spec.mjs",
           "./scripts/check-ci-image.spec.mjs",
+          "./scripts/ci-checkout-history.spec.mjs",
           "./scripts/check-ci-image-source.spec.mjs",
           "./scripts/ci-image-publication-policy.spec.mjs",
           "./scripts/check-npm-release.spec.mjs",

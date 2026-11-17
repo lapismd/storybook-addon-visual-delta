@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@lapismd/spec-validator': 0.2.1
   markdownlint-cli>js-yaml: '>=5.4.1 <6'
   markdownlint-cli>smol-toml: '>=1.9.0 <2'
   markdown-it@>=15.0.0 <15.0.3: '>=15.0.3 <16'
@@ -123,6 +124,9 @@ importers:
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
 packages:
 

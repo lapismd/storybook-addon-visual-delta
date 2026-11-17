@@ -11,7 +11,7 @@ export const EXPECTED_CONSUMER_WORKFLOWS = {
     arm64Runners: 3,
     canaryJobs: 0,
     pendingProfileLocks: 0,
-    trustedCheckoutJobs: ["manager"],
+    trustedCheckoutJobs: ["package", "manager"],
     allowedPermissions: new Set(["contents", "packages"]),
   },
   ".github/workflows/visual-delta-spec-first.yml": {
