@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { test } from "node:test";
 import { parse, stringify } from "yaml";
 import {
+  checkValidatorCanonicalIntake,
   validatorFacts,
   verifyValidatorCanonicalIntake,
 } from "./check-canonical-intake.mjs";
@@ -46,6 +57,14 @@ function input() {
 }
 test("actual released validator patch pair is independently verified", () =>
   assert.equal(verifyValidatorCanonicalIntake(input()).version, "0.2.1"));
+test("actual generated empty coordinator note preserves development-only intake", () => {
+  const candidate = input();
+  const path = ".changeset/lapis-dependencies-123456abcdef.md";
+  candidate.changedFiles.push(path);
+  candidate.files[path] =
+    "---\n---\n\nUpdate the specification validator development tool.\n";
+  assert.equal(verifyValidatorCanonicalIntake(candidate).version, "0.2.1");
+});
 for (const [name, mutate] of [
   [
     "stale facts",
@@ -138,3 +157,121 @@ for (const hasJj of [true, false])
   );
 test("source reader fails on unavailable ancestry", () =>
   assert.throws(() => sourceIntakeReader("/source", () => "", false)));
+
+const notePath = ".changeset/lapis-dependencies-123456abcdef.md";
+const note = (header = "", body = "Development tooling maintenance.") =>
+  "---\n" + (header ? header + "\n" : "") + "---\n\n" + body + "\n";
+function withNote(text = note(), path = notePath) {
+  const candidate = input();
+  candidate.changedFiles.push(path);
+  candidate.files[path] = text;
+  return candidate;
+}
+for (const [name, text] of [
+  ["blank YAML", note()],
+  ["empty YAML mapping", note("{}")],
+  ["CRLF", note("{}").replaceAll("\n", "\r\n")],
+  ["exact8192byte limit", "---\n---\n\n" + "x".repeat(8183)],
+])
+  test("accepts bounded maintenance note: " + name, () => {
+    const candidate = withNote(text);
+    const saved = structuredClone(candidate);
+    assert.equal(verifyValidatorCanonicalIntake(candidate).version, "0.2.1");
+    assert.deepEqual(candidate, saved);
+  });
+for (const [name, text] of [
+  ["release bump", note('"@lapismd/storybook-addon-visual-delta": patch')],
+  ["explicit null", note("null")],
+  ["YAML null shorthand", note("~")],
+  ["array", note("[]")],
+  ["scalar", note("maintenance")],
+  ["malformed YAML", note("[broken")],
+  ["unknown YAML tag", note("!arbitrary {}")],
+  ["duplicate YAML keys", note("package: patch\npackage: minor")],
+  ["missing body", note("{}", " \t")],
+  ["missing closing delimiter", "---\n{}\nMaintenance"],
+  ["missing opening delimiter", "{}\n---\nMaintenance"],
+  ["leading arbitrary text", "Unexpected\n" + note()],
+  ["oversized body", note("", "x".repeat(8192))],
+  ["oversized UTF8 body", note("", "é".repeat(4096))],
+])
+  test("rejects maintenance note: " + name, () => {
+    const candidate = withNote(text);
+    const saved = structuredClone(candidate);
+    assert.throws(
+      () => verifyValidatorCanonicalIntake(candidate),
+      /maintenance note/u,
+    );
+    assert.deepEqual(candidate, saved);
+  });
+for (const path of [
+  ".changeset/arbitrary.md",
+  ".changeset/lapis-dependencies-123456abcde.md",
+  ".changeset/lapis-dependencies-123456abcdef0.md",
+  ".changeset/lapis-dependencies-123456ABCDEF.md",
+  ".changeset/sub/lapis-dependencies-123456abcdef.md",
+])
+  test("rejects arbitrary maintenance path: " + path, () =>
+    assert.throws(() => verifyValidatorCanonicalIntake(withNote(note(), path))),
+  );
+for (const [name, mutate] of [
+  ["missing note bytes", (d) => delete d.files[notePath]],
+  [
+    "multiple notes",
+    (d) => {
+      const path = ".changeset/lapis-dependencies-abcdef123456.md";
+      d.changedFiles.push(path);
+      d.files[path] = note();
+    },
+  ],
+  ["duplicate note path", (d) => d.changedFiles.push(notePath)],
+  ["unrelated source beside note", (d) => d.changedFiles.push("src/index.ts")],
+])
+  test("rejects " + name, () => {
+    const candidate = withNote();
+    mutate(candidate);
+    assert.throws(() => verifyValidatorCanonicalIntake(candidate));
+  });
+
+test("real source reader verifies the regular generated note and rejects symlinks/directories", () => {
+  const root = mkdtempSync(join(tmpdir(), "visual-delta-empty-note-"));
+  const candidate = withNote();
+  const put = (path, bytes) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+  };
+  const jj = (args) =>
+    execFileSync("jj", ["--config", "signing.behavior=drop", ...args], {
+      cwd: root,
+      stdio: "pipe",
+    });
+  try {
+    jj(["git", "init", "--colocate"]);
+    for (const [path, bytes] of Object.entries(candidate.before))
+      put(path, bytes);
+    for (const [path, bytes] of Object.entries(candidate.baseDocuments))
+      put(path, bytes);
+    put(".github/dependency-automation/canonical-intake.json", policyBytes);
+    jj(["commit", "-m", "Actual released validator fixture baseline"]);
+    for (const [path, bytes] of Object.entries(candidate.files))
+      put(path, bytes);
+    for (const [path, bytes] of Object.entries(candidate.documents))
+      put(path, bytes);
+    assert.equal(checkValidatorCanonicalIntake(root).version, "0.2.1");
+    rmSync(join(root, notePath));
+    symlinkSync(join(root, "package.json"), join(root, notePath));
+    assert.throws(
+      () => checkValidatorCanonicalIntake(root),
+      /non-regular source path/u,
+    );
+    rmSync(join(root, notePath));
+    mkdirSync(join(root, notePath));
+    put(notePath + "/unexpected.md", note());
+    assert.throws(
+      () => checkValidatorCanonicalIntake(root),
+      /invalid empty maintenance note/u,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
