@@ -125,3 +125,32 @@ The host owns:
 - Aggregate gates for the product visual suite
 
 Related contracts: [Architecture](./architecture.md), [Configuration](./configuration.md), [Baseline model](./baseline-model.md), and [Verification](./verification.md).
+
+## Specification tooling intake
+
+VD-GOV-019 qualifies only the Deno-free specification validator in development.
+The catalog remains0.2.1 at adoption, with normal registry integrity and no
+public package release. The independent normal-package guard remains required
+when trusted dependency-bot specification checks are exempted.
+
+<!-- dependency-intake:validator-development:start -->
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "development-dependency-intake",
+  "dependency": "@lapismd/spec-validator",
+  "version": "0.2.1",
+  "peer": null,
+  "integrity": "sha512-aHLByppZkay1axSm8KvCwOJz0si8aDyZBXDGWW+d2VQw+66f1KLimw2rEMjYIpLdoSG9+yN5Kd1MKlAJw7xUVw==",
+  "importers": {
+    ".": {
+      "specifier": "0.2.1",
+      "version": "0.2.1"
+    }
+  },
+  "policySha256": "5a4682eb816c8a45d7da0f52000e1ccb8141bcae159ab97a0a4b2df2867fa442"
+}
+```
+
+<!-- dependency-intake:validator-development:end -->

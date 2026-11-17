@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "single-development-dependency",
+  "repository": "lapismd/storybook-addon-visual-delta",
+  "dependency": "@lapismd/spec-validator",
+  "slot": "validator-development",
+  "chapters": ["spec/src/dependency-automation.md", "spec/src/host-profile.md"]
+}

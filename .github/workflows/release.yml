@@ -54,7 +54,7 @@ jobs:
 
       - name: Qualify source-owned version inputs and actual release intent
         id: version-runtime
-        uses: lapismd/lapis-ci/actions/guard-version-runtime@fe24b7bf909106d957b179f351153505c41fa47c
+        uses: lapismd/lapis-ci/actions/guard-version-runtime@dc81ff65ba812bf005fb2a806eb3308bb8b5f71f
         with:
           qualification-file: .github/versioning-runtime.json
           detect-release-intent: "true"

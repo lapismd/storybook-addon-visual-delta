@@ -1,4 +1,6 @@
 export const AUDITED_NODE24_ACTIONS = new Set([
+  "lapismd/lapis-ci/actions/guard-version-runtime@dc81ff65ba812bf005fb2a806eb3308bb8b5f71f",
+  "lapismd/dependency-automation/.github/workflows/completion.yml@92e3e55d174498916c134f950850e1d572656cab",
   // The shared notifier pins Node 24.15.0 and its own action commit SHAs.
   "lapismd/dependency-automation/.github/workflows/notify.yml@ea9d35b12b612467bbabf1c6271ffa41b5eda4ba",
   "actions/checkout@v5",
