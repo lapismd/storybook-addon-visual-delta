@@ -1,5 +1,9 @@
 import { sourceIntakeReader } from "./source-intake-reader.mjs";
-import { readFileSync, realpathSync } from "node:fs";
+import {
+  isMaintenanceNotePath,
+  maintenanceNotePaths,
+} from "./maintenance-note.mjs";
+import { readCanonicalIntakeFiles } from "./source-intake-files.mjs";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual as equal } from "node:util";
 import { resolve } from "node:path";
@@ -200,6 +204,7 @@ export function verifyValidatorCanonicalIntake({
     Number(facts.version.split(".")[2]) <= Number(old.split(".")[2])
   )
     fail("missing, changed or stale source opt-in");
+  const notes = maintenanceNotePaths(files, changedFiles);
   if (
     changedFiles.some(
       (p) =>
@@ -208,6 +213,7 @@ export function verifyValidatorCanonicalIntake({
           "pnpm-workspace.yaml",
           "pnpm-lock.yaml",
           ...chapters,
+          ...notes,
         ].includes(p),
     )
   )
@@ -242,14 +248,12 @@ export function verifyValidatorCanonicalIntake({
   return facts;
 }
 export function checkValidatorCanonicalIntake(root = process.cwd()) {
-  const read = (path) => {
-    const target = resolve(root, path);
-    if (realpathSync(target) !== target) fail("non-regular source path");
-    return readFileSync(target, "utf8");
-  };
   const inputs = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"];
-  const files = Object.fromEntries(inputs.map((p) => [p, read(p)])),
-    documents = Object.fromEntries(chapters.map((p) => [p, read(p)]));
+  const changedFiles = changesFromVcs({}, root).map((c) => c.path);
+  const { files, documents, policyBytes } = readCanonicalIntakeFiles(
+    root,
+    changedFiles.filter(isMaintenanceNotePath),
+  );
   const base = sourceIntakeReader(root);
   const before = Object.fromEntries(inputs.map((p) => [p, base(p)]));
   let basePolicyBytes, baseDocuments;
@@ -262,12 +266,12 @@ export function checkValidatorCanonicalIntake(root = process.cwd()) {
   }
   return verifyValidatorCanonicalIntake({
     files,
-    policyBytes: read(policyPath),
+    policyBytes,
     documents,
     before,
     basePolicyBytes,
     baseDocuments,
-    changedFiles: changesFromVcs({}, root).map((c) => c.path),
+    changedFiles,
   });
 }
 if (

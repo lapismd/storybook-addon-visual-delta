@@ -131,7 +131,12 @@ Related contracts: [Architecture](./architecture.md), [Configuration](./configur
 VD-GOV-019 qualifies only the Deno-free specification validator in development.
 The catalog remains0.2.1 at adoption, with normal registry integrity and no
 public package release. The independent normal-package guard remains required
-when trusted dependency-bot specification checks are exempted.
+when trusted dependency-bot specification checks are exempted. A coordinator
+maintenance note MAY accompany the exact five managed paths only under the
+bounded name, 8192 byte limit, empty YAML release-map and nonempty-body contract in
+[Dependency automation](./dependency-automation.md). The host reads only regular
+matched note files into the independently verified candidate. An empty note
+MUST NOT create version/publish intent or change baseline/audit authority.
 
 <!-- dependency-intake:validator-development:start -->
 
