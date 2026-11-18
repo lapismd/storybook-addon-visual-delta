@@ -7,18 +7,17 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { test } from "node:test";
 import { parse, stringify } from "yaml";
 import {
-  checkValidatorCanonicalIntake,
   validatorFacts,
   verifyValidatorCanonicalIntake,
 } from "./check-canonical-intake.mjs";
 import { sourceIntakeReader } from "./source-intake-reader.mjs";
+import { readCanonicalIntakeFiles } from "./source-intake-files.mjs";
 const fixture = JSON.parse(
   gunzipSync(
     readFileSync(
@@ -240,37 +239,29 @@ test("real source reader verifies the regular generated note and rejects symlink
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(join(root, path), bytes);
   };
-  const jj = (args) =>
-    execFileSync("jj", ["--config", "signing.behavior=drop", ...args], {
-      cwd: root,
-      stdio: "pipe",
+  const check = () =>
+    verifyValidatorCanonicalIntake({
+      ...candidate,
+      ...readCanonicalIntakeFiles(root, [notePath]),
     });
   try {
-    jj(["git", "init", "--colocate"]);
     for (const [path, bytes] of Object.entries(candidate.before))
       put(path, bytes);
     for (const [path, bytes] of Object.entries(candidate.baseDocuments))
       put(path, bytes);
     put(".github/dependency-automation/canonical-intake.json", policyBytes);
-    jj(["commit", "-m", "Actual released validator fixture baseline"]);
     for (const [path, bytes] of Object.entries(candidate.files))
       put(path, bytes);
     for (const [path, bytes] of Object.entries(candidate.documents))
       put(path, bytes);
-    assert.equal(checkValidatorCanonicalIntake(root).version, "0.2.1");
+    assert.equal(check().version, "0.2.1");
     rmSync(join(root, notePath));
     symlinkSync(join(root, "package.json"), join(root, notePath));
-    assert.throws(
-      () => checkValidatorCanonicalIntake(root),
-      /non-regular source path/u,
-    );
+    assert.throws(() => check(), /non-regular source path/u);
     rmSync(join(root, notePath));
     mkdirSync(join(root, notePath));
     put(notePath + "/unexpected.md", note());
-    assert.throws(
-      () => checkValidatorCanonicalIntake(root),
-      /invalid empty maintenance note/u,
-    );
+    assert.throws(() => check(), /non-regular source path/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

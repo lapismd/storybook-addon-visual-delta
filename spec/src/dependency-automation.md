@@ -13,7 +13,10 @@ release maps, malformed YAML, missing body, multiple notes and arbitrary
 Changeset paths MUST fail closed. This note supplies maintenance explanation
 only, never package release intent; every existing catalog, public-contract,
 immutable-integrity, managed-slot and source-scope check remains required.
-Managed catalog facts follow below.
+The regular-file regression MUST run in the existing package/specification
+image without a Jujutsu installation. Filesystem safety and complete candidate
+verification remain exercised; separate ancestry tests cover read-only Git and
+Jujutsu command selection. Managed catalog facts follow below.
 
 <!-- dependency-intake:validator-development:start -->
 

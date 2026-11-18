@@ -2,6 +2,8 @@
 
 VD-GOV-019/020 bounded empty maintenance-note acceptance and failed attempts are
 recorded in the [source regression receipt](../records/2026-11-17-empty-maintenance-note.md).
+The same filesystem regression runs without a Jujutsu binary in the existing
+specification image; separate tests retain both read-only ancestry adapters.
 
 The Node version-tooling declaration retains VD-GOV-011/012/016: the manifest
 now names the same pnpm10.32.1 already used by the source version workflow, and
